@@ -1,0 +1,13 @@
+# 忽略本地环境变量与敏感凭据
+.env
+.env.local
+.env.*.local
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+
+# Node / JS 缓存与依赖
+node_modules/
+dist/
+.DS_Store
