@@ -18,6 +18,12 @@ function init_ashan_cn_sidebar() {
 
     const menu_tree = [
         {
+            title: "🏠 业务扩展总控主页",
+            id: "menu-home-main",
+            main_route: "/app/ashan-cn-procurement",
+            items: []
+        },
+        {
             title: "🛒 采购管理",
             id: "menu-procurement",
             main_route: "/app/buying",
