@@ -10,7 +10,7 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/ashan_cn_procurement/css/ashan_cn_procurement.css"
-# app_include_js = "/assets/ashan_cn_procurement/js/ashan_cn_procurement.js"
+app_include_js = "/assets/ashan_cn_procurement/js/ashan_cn_sidebar.js"
 
 # DocType Class
 # ---------------
