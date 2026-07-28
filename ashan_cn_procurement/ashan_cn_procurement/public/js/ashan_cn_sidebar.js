@@ -1,23 +1,60 @@
 // Copyright (c) 2026, Ashan CN Procurement
-// 全功能一二级级联侧边栏菜单 (支持不同用户个性化自定义标题与菜单)
+// 全功能一二级级联侧边栏菜单 (全页面多事件强力绑定与自适应渲染)
 
-$(document).on('app_ready page-change', function () {
-    init_ashan_cn_sidebar();
-});
+(function () {
+    function run_init() {
+        try {
+            init_ashan_cn_sidebar();
+        } catch (e) {
+            console.error('[Ashan Sidebar Error]', e);
+        }
+    }
+
+    // 绑定 Frappe Desk 多重生命周期事件
+    $(document).on('app_ready page-change route-change toolbar_setup', run_init);
+    $(document).ready(run_init);
+    window.addEventListener('DOMContentLoaded', run_init);
+
+    // 轮询保护：确保在 AJAX/SPA 路由切页面时也能自动感知渲染
+    setInterval(function() {
+        if ($('#ashan-cn-sidebar-container').length === 0 && find_sidebar_element()) {
+            run_init();
+        }
+    }, 1000);
+})();
+
+function find_sidebar_element() {
+    const selectors = [
+        '.workspace-sidebar .standard-sidebar-section',
+        '.body-sidebar .standard-sidebar-section',
+        '.workspace-sidebar',
+        '.body-sidebar',
+        '.layout-side-section',
+        '.standard-sidebar-section',
+        '.desk-sidebar'
+    ];
+    for (let s of selectors) {
+        let $el = $(s).first();
+        if ($el.length > 0) {
+            return $el;
+        }
+    }
+    return null;
+}
 
 function init_ashan_cn_sidebar() {
-    $('#ashan-cn-sidebar-container').remove();
+    const $sidebar = find_sidebar_element();
+    if (!$sidebar || !$sidebar.length) {
+        return;
+    }
 
-    const $sidebar = $('.workspace-sidebar .standard-sidebar-section, .body-sidebar .standard-sidebar-section').first();
-    if (!$sidebar.length) {
-        setTimeout(init_ashan_cn_sidebar, 400);
+    if ($('#ashan-cn-sidebar-container').length > 0) {
+        // 如果已存在且路径未变，不再重复插入
         return;
     }
 
     const current_user = (window.frappe && frappe.session && frappe.session.user) ? frappe.session.user : 'default';
     const storage_key = 'ashan_sidebar_title_' + current_user;
-    
-    // 获取当前登录用户自定义的标题，默认显示“我的业务”
     let custom_title = localStorage.getItem(storage_key) || '我的业务';
 
     const current_path = window.location.pathname;
@@ -111,8 +148,8 @@ function init_ashan_cn_sidebar() {
     `;
 
     menu_tree.forEach(group => {
-        const is_group_active = current_path.toLowerCase() === group.main_route.toLowerCase();
-        const has_active_child = group.items.some(item => current_path.toLowerCase() === item.route.toLowerCase());
+        const is_group_active = current_path.toLowerCase().includes(group.main_route.toLowerCase());
+        const has_active_child = group.items.some(item => current_path.toLowerCase().includes(item.route.toLowerCase()));
         const is_open = is_group_active || has_active_child;
         const display_style = is_open ? 'block' : 'none';
         const arrow_icon = is_open ? '▼' : '▶';
@@ -135,7 +172,7 @@ function init_ashan_cn_sidebar() {
         `;
 
         group.items.forEach(item => {
-            const is_active = current_path.toLowerCase() === item.route.toLowerCase();
+            const is_active = current_path.toLowerCase().includes(item.route.toLowerCase());
             const active_style = is_active 
                 ? 'background-color: var(--fg-hover-color); color: var(--primary-color, #2490ef); font-weight: 600; border-left: 3px solid var(--primary-color, #2490ef); padding-left: 11px;' 
                 : 'color: var(--text-muted);';
@@ -158,7 +195,7 @@ function init_ashan_cn_sidebar() {
 
     $sidebar.prepend(html);
 
-    // 绑定左上角自定义编辑标题按钮
+    // 绑定自定义编辑标题按钮
     $('#ashan-edit-sidebar-title-btn').off('click').on('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
@@ -185,7 +222,7 @@ function init_ashan_cn_sidebar() {
         }
     });
 
-    // 绑定右侧箭头单独控制折叠/展开
+    // 折叠展开按钮
     $('.ashan-toggle-btn').off('click').on('click', function (e) {
         e.stopPropagation();
         e.preventDefault();

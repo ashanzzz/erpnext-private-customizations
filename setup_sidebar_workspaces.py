@@ -19,40 +19,39 @@ def call_api(endpoint, method='GET', data=None):
             content = resp.read().decode('utf-8')
             return json.loads(content) if content else {}
     except Exception as e:
-        print(f"API Error on {method} {endpoint}: {e}")
+        print(f"API Exception: {e}")
         return None
 
-# 读取本地 ashan_cn_sidebar.js
+# 读取 JS 源码
 js_file_path = os.path.join('ashan_cn_procurement', 'ashan_cn_procurement', 'public', 'js', 'ashan_cn_sidebar.js')
-if not os.path.exists(js_file_path):
-    print("错误: 找不到侧边栏 JS 文件:", js_file_path)
-    sys.exit(1)
-
 with open(js_file_path, 'r', encoding='utf-8') as f:
     js_code = f.read()
 
-# 推送为 ERPNext 系统的全局 Client Script
-script_name = "Global Desk Two Level Sidebar"
-encoded_name = urllib.parse.quote(script_name)
+# 为多种场景绑定 Client Script，确保在 /app, /desk, /workspace 下全部执行
+target_doctypes = ["Workspace", "DocType", "User"]
 
-existing = call_api(f'/api/resource/Client%20Script/{encoded_name}')
-
-payload = {
-    "dt": "User",  # 绑到全局
-    "script": js_code,
-    "enabled": 1,
-    "view": "List"
-}
-
-if existing and 'data' in existing:
-    res = call_api(f'/api/resource/Client%20Script/{encoded_name}', method='PUT', data=payload)
-    action = "更新"
-else:
-    payload["name"] = script_name
-    res = call_api('/api/resource/Client%20Script', method='POST', data=payload)
-    action = "新建"
-
-if res and 'data' in res:
-    print(f" [SUCCESS] 成功{action}全局一二级侧边栏 Client Script: '{script_name}'")
-else:
-    print(f" [INFO] 提交全局 Client Script 完成")
+for dt in target_doctypes:
+    script_name = f"Global Desk Sidebar Menu for {dt}"
+    encoded_name = urllib.parse.quote(script_name)
+    
+    existing = call_api(f'/api/resource/Client%20Script/{encoded_name}')
+    
+    payload = {
+        "dt": dt,
+        "script": js_code,
+        "enabled": 1,
+        "view": "List"
+    }
+    
+    if existing and 'data' in existing:
+        res = call_api(f'/api/resource/Client%20Script/{encoded_name}', method='PUT', data=payload)
+        action = "更新"
+    else:
+        payload["name"] = script_name
+        res = call_api('/api/resource/Client%20Script', method='POST', data=payload)
+        action = "新建"
+        
+    if res and 'data' in res:
+        print(f" [SUCCESS] 成功{action} Client Script for {dt}")
+    else:
+        print(f" [INFO] 提交 Client Script for {dt} 完成")
