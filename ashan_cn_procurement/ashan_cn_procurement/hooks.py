@@ -12,9 +12,11 @@ app_license = "mit"
 # app_include_css = "/assets/ashan_cn_procurement/css/ashan_cn_procurement.css"
 app_include_js = "/assets/ashan_cn_procurement/js/ashan_cn_sidebar.js"
 
-# DocType Class
-# ---------------
-# Override standard doctype classes
-# override_doctype_class = {
-# 	"ToDo": "custom_app.overrides.CustomToDo"
-# }
+# App Switcher Dropdown Registration
+add_to_apps_screen = [
+    {
+        "name": "ashan_cn_procurement",
+        "title": "业务扩展",
+        "route": "/app/vehicle-fuel-hub"
+    }
+]
