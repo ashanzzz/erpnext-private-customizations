@@ -1,12 +1,11 @@
 // Copyright (c) 2026, Ashan CN Procurement
-// 全功能一二级级联侧边栏菜单 (Procurement, Stock, Accounting, Fuel & Compliance)
+// 全功能一二级级联侧边栏菜单 (一级菜单双重响应：点击名称跳转专属大盘，点击箭头折叠二级)
 
 $(document).on('app_ready page-change', function () {
     init_ashan_cn_sidebar();
 });
 
 function init_ashan_cn_sidebar() {
-    // 移除旧容器，实现响应式重绘与页面切换高亮更新
     $('#ashan-cn-sidebar-container').remove();
 
     const $sidebar = $('.workspace-sidebar .standard-sidebar-section, .body-sidebar .standard-sidebar-section').first();
@@ -21,6 +20,7 @@ function init_ashan_cn_sidebar() {
         {
             title: "🛒 采购管理",
             id: "menu-procurement",
+            main_route: "/app/buying",
             items: [
                 { label: "采购订单", route: "/app/purchase-order" },
                 { label: "采购入库单", route: "/app/purchase-receipt" },
@@ -32,6 +32,7 @@ function init_ashan_cn_sidebar() {
         {
             title: "📦 仓库与库存",
             id: "menu-stock",
+            main_route: "/app/stock",
             items: [
                 { label: "物料主数据", route: "/app/item" },
                 { label: "仓库管理", route: "/app/warehouse" },
@@ -43,6 +44,7 @@ function init_ashan_cn_sidebar() {
         {
             title: "💳 会计与财务",
             id: "menu-accounting",
+            main_route: "/app/invoicing",
             items: [
                 { label: "应付发票", route: "/app/purchase-invoice" },
                 { label: "应收发票", route: "/app/sales-invoice" },
@@ -56,6 +58,7 @@ function init_ashan_cn_sidebar() {
         {
             title: "⛽ 车油能耗管理",
             id: "menu-fuel",
+            main_route: "/app/vehicle-fuel-hub",
             items: [
                 { label: "油卡台账", route: "/app/oil-card" },
                 { label: "油卡充值记录", route: "/app/oil-card-recharge" },
@@ -68,6 +71,7 @@ function init_ashan_cn_sidebar() {
         {
             title: "🛡️ 企业合规中心",
             id: "menu-compliance",
+            main_route: "/app/company-compliance-center",
             items: [
                 { label: "环保合规项目", route: "/app/environmental-compliance-item" },
                 { label: "合规设备清单", route: "/app/compliance-equipment-item" },
@@ -78,6 +82,7 @@ function init_ashan_cn_sidebar() {
         {
             title: "⚙️ 权限与系统配置",
             id: "menu-access",
+            main_route: "/app/restricted-access-group",
             items: [
                 { label: "受限访问分组", route: "/app/restricted-access-group" },
                 { label: "车辆油耗参数配置", route: "/app/vehicle-fuel-settings" }
@@ -88,21 +93,30 @@ function init_ashan_cn_sidebar() {
     let html = `
     <div id="ashan-cn-sidebar-container" class="ashan-sidebar-wrapper" style="margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 8px;">
         <div class="sidebar-section-header" style="font-weight: 700; font-size: 11px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; padding: 0 12px; letter-spacing: 0.5px;">
-            业务全能导航 (一二级级联)
+            业务全能导航 (一二级双响应)
         </div>
     `;
 
     menu_tree.forEach(group => {
-        // 判断当前路由是否属于此分组
-        const has_active = group.items.some(item => current_path.toLowerCase() === item.route.toLowerCase());
-        const display_style = has_active ? 'block' : 'none';
-        const arrow_icon = has_active ? '▼' : '▶';
+        const is_group_active = current_path.toLowerCase() === group.main_route.toLowerCase();
+        const has_active_child = group.items.some(item => current_path.toLowerCase() === item.route.toLowerCase());
+        const is_open = is_group_active || has_active_child;
+        const display_style = is_open ? 'block' : 'none';
+        const arrow_icon = is_open ? '▼' : '▶';
+
+        const group_active_style = is_group_active
+            ? 'background-color: var(--fg-hover-color); color: var(--primary-color, #2490ef); font-weight: 700;'
+            : '';
 
         html += `
         <div class="ashan-menu-group" style="margin-bottom: 3px;">
-            <div class="ashan-group-header" data-toggle="${group.id}" style="cursor: pointer; padding: 7px 12px; font-weight: 600; font-size: 13px; border-radius: var(--border-radius-sm, 6px); display: flex; justify-content: space-between; align-items: center; color: var(--text-color); transition: background-color 0.2s;">
-                <span>${group.title}</span>
-                <span class="ashan-icon" style="font-size: 9px; transition: transform 0.2s; color: var(--text-muted);">${arrow_icon}</span>
+            <div class="ashan-group-header" style="padding: 7px 12px; font-size: 13px; border-radius: var(--border-radius-sm, 6px); display: flex; justify-content: space-between; align-items: center; color: var(--text-color); transition: background-color 0.2s; ${group_active_style}">
+                <a href="${group.main_route}" class="ashan-group-title-link" style="color: inherit; text-decoration: none; font-weight: inherit; flex-grow: 1;">
+                    ${group.title}
+                </a>
+                <span class="ashan-toggle-btn" data-toggle="${group.id}" style="cursor: pointer; padding: 2px 6px; font-size: 9px; transition: transform 0.2s; color: var(--text-muted);">
+                    ${arrow_icon}
+                </span>
             </div>
             <div id="${group.id}" class="ashan-group-items" style="display: ${display_style}; padding-left: 8px; margin-top: 2px;">
         `;
@@ -130,29 +144,27 @@ function init_ashan_cn_sidebar() {
 
     $sidebar.prepend(html);
 
-    // 折叠展开点击绑定
-    $('.ashan-group-header').off('click').on('click', function () {
+    // 绑定右侧箭头单独控制折叠/展开
+    $('.ashan-toggle-btn').off('click').on('click', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
         const targetId = $(this).attr('data-toggle');
         const $target = $('#' + targetId);
-        const $icon = $(this).find('.ashan-icon');
+        const $icon = $(this);
 
         $target.slideToggle(150);
-        if ($icon.text() === '▼') {
+        if ($icon.text().trim() === '▼') {
             $icon.text('▶');
         } else {
             $icon.text('▼');
         }
     });
 
-    // Hover 视觉提升
+    // Hover 效果
     $('.ashan-menu-item, .ashan-group-header').hover(
+        function() { $(this).css('background-color', 'var(--fg-hover-color)'); },
         function() {
-            if (!$(this).hasClass('active-route')) {
-                $(this).css('background-color', 'var(--fg-hover-color)');
-            }
-        },
-        function() {
-            if (!$(this).attr('style').includes('border-left')) {
+            if (!$(this).attr('style').includes('border-left') && !$(this).find('.ashan-group-title-link').hasClass('active-link')) {
                 $(this).css('background-color', 'transparent');
             }
         }
