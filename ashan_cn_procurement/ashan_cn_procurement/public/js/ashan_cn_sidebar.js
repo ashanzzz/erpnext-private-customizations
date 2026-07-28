@@ -1,5 +1,5 @@
 // Copyright (c) 2026, Ashan CN Procurement
-// 全功能一二级级联侧边栏菜单 (一级菜单双重响应：点击名称跳转专属大盘，点击箭头折叠二级)
+// 全功能一二级级联侧边栏菜单 (支持不同用户个性化自定义标题与菜单)
 
 $(document).on('app_ready page-change', function () {
     init_ashan_cn_sidebar();
@@ -13,6 +13,12 @@ function init_ashan_cn_sidebar() {
         setTimeout(init_ashan_cn_sidebar, 400);
         return;
     }
+
+    const current_user = (window.frappe && frappe.session && frappe.session.user) ? frappe.session.user : 'default';
+    const storage_key = 'ashan_sidebar_title_' + current_user;
+    
+    // 获取当前登录用户自定义的标题，默认显示“我的业务”
+    let custom_title = localStorage.getItem(storage_key) || '我的业务';
 
     const current_path = window.location.pathname;
 
@@ -98,8 +104,9 @@ function init_ashan_cn_sidebar() {
 
     let html = `
     <div id="ashan-cn-sidebar-container" class="ashan-sidebar-wrapper" style="margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 8px;">
-        <div class="sidebar-section-header" style="font-weight: 700; font-size: 11px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; padding: 0 12px; letter-spacing: 0.5px;">
-            业务全能导航 (一二级双响应)
+        <div class="sidebar-section-header" style="font-weight: 700; font-size: 11px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; padding: 0 12px; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center;">
+            <span id="ashan-sidebar-custom-title-text">${custom_title}</span>
+            <span id="ashan-edit-sidebar-title-btn" style="cursor: pointer; font-size: 11px; color: var(--text-muted);" title="点击自定义我的业务名称">✏️</span>
         </div>
     `;
 
@@ -120,11 +127,11 @@ function init_ashan_cn_sidebar() {
                 <a href="${group.main_route}" class="ashan-group-title-link" style="color: inherit; text-decoration: none; font-weight: inherit; flex-grow: 1;">
                     ${group.title}
                 </a>
-                <span class="ashan-toggle-btn" data-toggle="${group.id}" style="cursor: pointer; padding: 2px 6px; font-size: 9px; transition: transform 0.2s; color: var(--text-muted);">
-                    ${arrow_icon}
-                </span>
+                ${group.items.length > 0 ? `<span class="ashan-toggle-btn" data-toggle="${group.id}" style="cursor: pointer; padding: 2px 6px; font-size: 9px; transition: transform 0.2s; color: var(--text-muted);">${arrow_icon}</span>` : ''}
             </div>
+            ${group.items.length > 0 ? `
             <div id="${group.id}" class="ashan-group-items" style="display: ${display_style}; padding-left: 8px; margin-top: 2px;">
+            ` : ''}
         `;
 
         group.items.forEach(item => {
@@ -140,15 +147,43 @@ function init_ashan_cn_sidebar() {
             `;
         });
 
-        html += `
-            </div>
-        </div>
-        `;
+        if (group.items.length > 0) {
+            html += `</div>`;
+        }
+
+        html += `</div>`;
     });
 
     html += `</div>`;
 
     $sidebar.prepend(html);
+
+    // 绑定左上角自定义编辑标题按钮
+    $('#ashan-edit-sidebar-title-btn').off('click').on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.frappe && frappe.prompt) {
+            frappe.prompt({
+                label: '自定义您的业务栏目名称',
+                fieldname: 'custom_title',
+                fieldtype: 'Data',
+                default: custom_title
+            }, (values) => {
+                if (values.custom_title) {
+                    const new_title = values.custom_title.trim();
+                    localStorage.setItem(storage_key, new_title);
+                    $('#ashan-sidebar-custom-title-text').text(new_title);
+                    frappe.show_alert({ message: '侧边栏名称已成功个性化保存！', indicator: 'green' });
+                }
+            }, '个性化设置', '保存');
+        } else {
+            const new_title = prompt('自定义您的业务栏目名称:', custom_title);
+            if (new_title) {
+                localStorage.setItem(storage_key, new_title.trim());
+                $('#ashan-sidebar-custom-title-text').text(new_title.trim());
+            }
+        }
+    });
 
     // 绑定右侧箭头单独控制折叠/展开
     $('.ashan-toggle-btn').off('click').on('click', function (e) {
