@@ -11,3 +11,8 @@ __pycache__/
 node_modules/
 dist/
 .DS_Store
+
+# 临时抓取与截图
+desk_body.html
+*.png
+
