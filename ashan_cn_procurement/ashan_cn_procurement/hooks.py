@@ -10,13 +10,30 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/ashan_cn_procurement/css/ashan_cn_procurement.css"
-# app_include_js = "/assets/ashan_cn_procurement/js/ashan_cn_sidebar.js"
+# app_include_js = "/assets/ashan_cn_procurement/js/ashan_cn_boot_route.js"
 
 # App Switcher Dropdown Registration
 add_to_apps_screen = [
     {
         "name": "ashan_cn_procurement",
         "title": "业务扩展",
-        "route": "/app/vehicle-fuel-hub"
+        "route": "/app/my-business"
     }
 ]
+
+# Post-Login Default Page & Redirects (Dashboard / Workspace)
+on_session_creation = "ashan_cn_procurement.ashan_cn_procurement.boot.set_login_redirect"
+get_website_user_home_page = "ashan_cn_procurement.ashan_cn_procurement.boot.get_website_user_home_page"
+extend_bootinfo = "ashan_cn_procurement.ashan_cn_procurement.boot.boot_session"
+
+role_home_page = {
+    "System Manager": "app/my-business",
+    "All": "app/my-business"
+}
+
+website_redirects = [
+    {"source": r"/desk", "target": r"/app/my-business"}
+]
+
+
+
