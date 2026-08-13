@@ -15,4 +15,6 @@ dist/
 # 临时抓取与截图
 desk_body.html
 *.png
+*.zip
+
 

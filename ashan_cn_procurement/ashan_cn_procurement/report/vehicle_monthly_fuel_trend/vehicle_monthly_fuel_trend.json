@@ -2,7 +2,7 @@
   "name": "Vehicle Monthly Fuel Trend",
   "owner": "Administrator",
   "creation": "2026-07-05 10:00:00",
-  "modified": "2026-07-23 10:29:54.810347",
+  "modified": "2026-08-11 16:08:37.420482",
   "modified_by": "Administrator",
   "docstatus": 0,
   "idx": 0,
@@ -22,10 +22,10 @@
   "columns": [],
   "roles": [
     {
-      "name": "nisq267eqj",
+      "name": "t9mm01r4k2",
       "owner": "Administrator",
       "creation": "2026-07-05 10:00:00",
-      "modified": "2026-07-23 10:29:54.810347",
+      "modified": "2026-08-11 16:08:37.420482",
       "modified_by": "Administrator",
       "docstatus": 0,
       "idx": 1,
@@ -36,10 +36,10 @@
       "doctype": "Has Role"
     },
     {
-      "name": "nisoghnbib",
+      "name": "t9m33k4l9n",
       "owner": "Administrator",
       "creation": "2026-07-05 10:00:00",
-      "modified": "2026-07-23 10:29:54.810347",
+      "modified": "2026-08-11 16:08:37.420482",
       "modified_by": "Administrator",
       "docstatus": 0,
       "idx": 2,
@@ -50,10 +50,10 @@
       "doctype": "Has Role"
     },
     {
-      "name": "nis2g43krk",
+      "name": "t9m917hequ",
       "owner": "Administrator",
       "creation": "2026-07-05 10:00:00",
-      "modified": "2026-07-23 10:29:54.810347",
+      "modified": "2026-08-11 16:08:37.420482",
       "modified_by": "Administrator",
       "docstatus": 0,
       "idx": 3,
@@ -64,10 +64,10 @@
       "doctype": "Has Role"
     },
     {
-      "name": "nis35jadi5",
+      "name": "t9mgkn1fl2",
       "owner": "Administrator",
       "creation": "2026-07-05 10:00:00",
-      "modified": "2026-07-23 10:29:54.810347",
+      "modified": "2026-08-11 16:08:37.420482",
       "modified_by": "Administrator",
       "docstatus": 0,
       "idx": 4,
@@ -78,10 +78,10 @@
       "doctype": "Has Role"
     },
     {
-      "name": "nisb4hlfgq",
+      "name": "t9mikd5ktf",
       "owner": "Administrator",
       "creation": "2026-07-05 10:00:00",
-      "modified": "2026-07-23 10:29:54.810347",
+      "modified": "2026-08-11 16:08:37.420482",
       "modified_by": "Administrator",
       "docstatus": 0,
       "idx": 5,

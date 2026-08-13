@@ -2,7 +2,7 @@
   "name": "Vehicle Refuel Ledger",
   "owner": "Administrator",
   "creation": "2026-04-23 09:00:00",
-  "modified": "2026-07-23 10:29:54.705141",
+  "modified": "2026-08-11 16:08:37.495789",
   "modified_by": "Administrator",
   "docstatus": 0,
   "idx": 1,
@@ -22,10 +22,10 @@
   "columns": [],
   "roles": [
     {
-      "name": "nirr3c87ph",
+      "name": "t9mf05ke4p",
       "owner": "Administrator",
       "creation": "2026-04-23 09:00:00",
-      "modified": "2026-07-23 10:29:54.705141",
+      "modified": "2026-08-11 16:08:37.495789",
       "modified_by": "Administrator",
       "docstatus": 0,
       "idx": 1,
@@ -36,10 +36,10 @@
       "doctype": "Has Role"
     },
     {
-      "name": "nir372r21t",
+      "name": "t9m6v35rjb",
       "owner": "Administrator",
       "creation": "2026-04-23 09:00:00",
-      "modified": "2026-07-23 10:29:54.705141",
+      "modified": "2026-08-11 16:08:37.495789",
       "modified_by": "Administrator",
       "docstatus": 0,
       "idx": 2,
@@ -50,10 +50,10 @@
       "doctype": "Has Role"
     },
     {
-      "name": "nirhksvrnv",
+      "name": "t9monp7k6h",
       "owner": "Administrator",
       "creation": "2026-04-23 09:00:00",
-      "modified": "2026-07-23 10:29:54.705141",
+      "modified": "2026-08-11 16:08:37.495789",
       "modified_by": "Administrator",
       "docstatus": 0,
       "idx": 3,
@@ -64,10 +64,10 @@
       "doctype": "Has Role"
     },
     {
-      "name": "nirmb16gum",
+      "name": "t9mjas02tf",
       "owner": "Administrator",
       "creation": "2026-04-23 09:00:00",
-      "modified": "2026-07-23 10:29:54.705141",
+      "modified": "2026-08-11 16:08:37.495789",
       "modified_by": "Administrator",
       "docstatus": 0,
       "idx": 4,
@@ -78,10 +78,10 @@
       "doctype": "Has Role"
     },
     {
-      "name": "nirojuec9p",
+      "name": "t9mog4g97e",
       "owner": "Administrator",
       "creation": "2026-04-23 09:00:00",
-      "modified": "2026-07-23 10:29:54.705141",
+      "modified": "2026-08-11 16:08:37.495789",
       "modified_by": "Administrator",
       "docstatus": 0,
       "idx": 5,

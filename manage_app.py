@@ -102,59 +102,129 @@ def cmd_status():
         print("\n本地尚未生成 DocType 目录 Structure")
 
 
+WORKSPACE_DIR = os.path.join(APP_PACKAGE_DIR, 'workspace')
+CUSTOM_DIR = os.path.join(APP_PACKAGE_DIR, 'custom')
+
 def cmd_pull():
     print("=" * 60)
-    print(" 从 ERPNext 站点同步/拉取 ashan_cn_procurement 最新架构")
+    print(" 从 ERPNext 站点同步/拉取 ashan_cn_procurement 最新架构与配置")
     print("=" * 60)
     
-    # 查找 Ashan CN Procurement 模块下所有 DocType
+    # 查找 Ashan CN Procurement 模块下所有 Module Def
     modules_data = call_api('/api/resource/Module%20Def?fields=["name","app_name"]&limit_page_length=500')
     if not modules_data or 'data' not in modules_data:
         print("错误: 无法读取 Module Def 列表")
         return
         
     ashan_modules = [m['name'] for m in modules_data['data'] if m.get('app_name') == 'ashan_cn_procurement']
+    if not ashan_modules:
+        ashan_modules = ['Ashan CN Procurement']
     print(f"识别到的 App 模块名: {ashan_modules}")
     
-    # 读取 DocType 列表
+    # 1. 读取并拉取 DocType 列表
     doctypes_data = call_api('/api/resource/DocType?fields=["name","module"]&limit_page_length=1000')
-    if not doctypes_data or 'data' not in doctypes_data:
-        print("错误: 无法读取 DocType 列表")
-        return
+    if doctypes_data and 'data' in doctypes_data:
+        app_doctypes = [d['name'] for d in doctypes_data['data'] if d.get('module') in ashan_modules]
+        print(f"\n[DocType] 找到 {len(app_doctypes)} 个 App 所属 DocType")
+        os.makedirs(DOCTYPE_DIR, exist_ok=True)
         
-    app_doctypes = [d['name'] for d in doctypes_data['data'] if d.get('module') in ashan_modules]
-    print(f"找到 {len(app_doctypes)} 个 App 所属 DocType")
-    
-    os.makedirs(DOCTYPE_DIR, exist_ok=True)
-    
-    for dt_name in app_doctypes:
-        encoded = urllib.parse.quote(dt_name)
-        dt_res = call_api(f'/api/resource/DocType/{encoded}')
-        if dt_res and 'data' in dt_res:
-            folder = dt_name.lower().replace(' ', '_')
-            dt_folder_path = os.path.join(DOCTYPE_DIR, folder)
-            os.makedirs(dt_folder_path, exist_ok=True)
-            
-            # 写入 json
-            with open(os.path.join(dt_folder_path, f"{folder}.json"), 'w', encoding='utf-8') as f:
-                json.dump(dt_res['data'], f, ensure_ascii=False, indent=2)
+        for dt_name in app_doctypes:
+            encoded = urllib.parse.quote(dt_name)
+            dt_res = call_api(f'/api/resource/DocType/{encoded}')
+            if dt_res and 'data' in dt_res:
+                folder = dt_name.lower().replace(' ', '_')
+                dt_folder_path = os.path.join(DOCTYPE_DIR, folder)
+                os.makedirs(dt_folder_path, exist_ok=True)
                 
-            # Python 模板
-            py_file = os.path.join(dt_folder_path, f"{folder}.py")
-            if not os.path.exists(py_file):
-                cls_name = dt_name.replace(' ', '')
-                with open(py_file, 'w', encoding='utf-8') as f:
-                    f.write(f"# Copyright (c) 2026, Ashan CN Procurement and contributors\nimport frappe\nfrom frappe.model.document import Document\n\nclass {cls_name}(Document):\n\tpass\n")
+                # 写入 json
+                with open(os.path.join(dt_folder_path, f"{folder}.json"), 'w', encoding='utf-8') as f:
+                    json.dump(dt_res['data'], f, ensure_ascii=False, indent=2)
                     
-            # JS 模板
-            js_file = os.path.join(dt_folder_path, f"{folder}.js")
-            if not os.path.exists(js_file):
-                with open(js_file, 'w', encoding='utf-8') as f:
-                    f.write(f"// Copyright (c) 2026, Ashan CN Procurement and contributors\n// frappe.ui.form.on('{dt_name}', {{\n// \trefresh(frm) {{\n// \t}}\n// }});\n")
-                    
-            print(f"  [OK] Synced DocType: {dt_name}")
+                # Python 模板
+                py_file = os.path.join(dt_folder_path, f"{folder}.py")
+                if not os.path.exists(py_file):
+                    cls_name = dt_name.replace(' ', '')
+                    with open(py_file, 'w', encoding='utf-8') as f:
+                        f.write(f"# Copyright (c) 2026, Ashan CN Procurement and contributors\nimport frappe\nfrom frappe.model.document import Document\n\nclass {cls_name}(Document):\n\tpass\n")
+                        
+                # JS 模板
+                js_file = os.path.join(dt_folder_path, f"{folder}.js")
+                if not os.path.exists(js_file):
+                    with open(js_file, 'w', encoding='utf-8') as f:
+                        f.write(f"// Copyright (c) 2026, Ashan CN Procurement and contributors\n// frappe.ui.form.on('{dt_name}', {{\n// \trefresh(frm) {{\n// \t}}\n// }});\n")
+                        
+                print(f"  [OK] Synced DocType: {dt_name}")
 
-    print("\n同步完成！")
+    # 2. 读取并拉取 Report 列表
+    reports_data = call_api('/api/resource/Report?fields=["name","module"]&limit_page_length=1000')
+    if reports_data and 'data' in reports_data:
+        app_reports = [r['name'] for r in reports_data['data'] if r.get('module') in ashan_modules]
+        print(f"\n[Report] 找到 {len(app_reports)} 个 App 所属 Report")
+        os.makedirs(REPORT_DIR, exist_ok=True)
+        
+        for r_name in app_reports:
+            encoded = urllib.parse.quote(r_name)
+            r_res = call_api(f'/api/resource/Report/{encoded}')
+            if r_res and 'data' in r_res:
+                folder = r_name.lower().replace(' ', '_')
+                r_folder_path = os.path.join(REPORT_DIR, folder)
+                os.makedirs(r_folder_path, exist_ok=True)
+                
+                with open(os.path.join(r_folder_path, f"{folder}.json"), 'w', encoding='utf-8') as f:
+                    json.dump(r_res['data'], f, ensure_ascii=False, indent=2)
+                print(f"  [OK] Synced Report: {r_name}")
+
+    # 3. 读取并拉取 Workspace 列表
+    workspaces_data = call_api('/api/resource/Workspace?fields=["name","module","public"]&limit_page_length=1000')
+    if workspaces_data and 'data' in workspaces_data:
+        app_workspaces = [w['name'] for w in workspaces_data['data'] if w.get('module') in ashan_modules and w.get('public')]
+        print(f"\n[Workspace] 找到 {len(app_workspaces)} 个 App 公共 Workspace")
+        os.makedirs(WORKSPACE_DIR, exist_ok=True)
+        
+        for ws_name in app_workspaces:
+            encoded = urllib.parse.quote(ws_name)
+            ws_res = call_api(f'/api/resource/Workspace/{encoded}')
+            if ws_res and 'data' in ws_res:
+                folder = ws_name.lower().replace(' ', '_')
+                ws_folder_path = os.path.join(WORKSPACE_DIR, folder)
+                os.makedirs(ws_folder_path, exist_ok=True)
+                
+                with open(os.path.join(ws_folder_path, f"{folder}.json"), 'w', encoding='utf-8') as f:
+                    json.dump(ws_res['data'], f, ensure_ascii=False, indent=2)
+                print(f"  [OK] Synced Workspace: {ws_name}")
+
+    # 4. 读取并拉取 Client Scripts & Server Scripts
+    client_scripts = call_api('/api/resource/Client%20Script?fields=["name","dt","enabled"]&limit_page_length=100')
+    if client_scripts and 'data' in client_scripts:
+        cs_dir = os.path.join(CUSTOM_DIR, 'client_script')
+        os.makedirs(cs_dir, exist_ok=True)
+        ashan_cs = [c['name'] for c in client_scripts['data'] if 'Ashan' in c['name'] or 'Global Desk' in c['name']]
+        print(f"\n[Client Script] 找到 {len(ashan_cs)} 个相关 Client Script")
+        for cs_name in ashan_cs:
+            encoded = urllib.parse.quote(cs_name)
+            cs_res = call_api(f'/api/resource/Client%20Script/{encoded}')
+            if cs_res and 'data' in cs_res:
+                fname = cs_name.lower().replace(' ', '_') + '.json'
+                with open(os.path.join(cs_dir, fname), 'w', encoding='utf-8') as f:
+                    json.dump(cs_res['data'], f, ensure_ascii=False, indent=2)
+                print(f"  [OK] Synced Client Script: {cs_name}")
+
+    server_scripts = call_api('/api/resource/Server%20Script?fields=["name","script_type","disabled"]&limit_page_length=100')
+    if server_scripts and 'data' in server_scripts:
+        ss_dir = os.path.join(CUSTOM_DIR, 'server_script')
+        os.makedirs(ss_dir, exist_ok=True)
+        ashan_ss = [s['name'] for s in server_scripts['data'] if 'sidebar' in s['name'].lower() or 'ashan' in s['name'].lower()]
+        print(f"\n[Server Script] 找到 {len(ashan_ss)} 个相关 Server Script")
+        for ss_name in ashan_ss:
+            encoded = urllib.parse.quote(ss_name)
+            ss_res = call_api(f'/api/resource/Server%20Script/{encoded}')
+            if ss_res and 'data' in ss_res:
+                fname = ss_name.lower().replace(' ', '_') + '.json'
+                with open(os.path.join(ss_dir, fname), 'w', encoding='utf-8') as f:
+                    json.dump(ss_res['data'], f, ensure_ascii=False, indent=2)
+                print(f"  [OK] Synced Server Script: {ss_name}")
+
+    print("\n全量架构与配置拉取完成！")
 
 
 def cmd_test_api():

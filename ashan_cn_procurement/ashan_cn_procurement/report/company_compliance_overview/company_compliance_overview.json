@@ -2,7 +2,7 @@
   "name": "Company Compliance Overview",
   "owner": "Administrator",
   "creation": "2026-06-12 21:00:00",
-  "modified": "2026-07-23 10:29:54.840561",
+  "modified": "2026-08-11 16:08:37.686236",
   "modified_by": "Administrator",
   "docstatus": 0,
   "idx": 0,
@@ -22,10 +22,10 @@
   "columns": [],
   "roles": [
     {
-      "name": "nisqcf8p5p",
+      "name": "t9oi6m9qov",
       "owner": "Administrator",
       "creation": "2026-06-12 21:00:00",
-      "modified": "2026-07-23 10:29:54.840561",
+      "modified": "2026-08-11 16:08:37.686236",
       "modified_by": "Administrator",
       "docstatus": 0,
       "idx": 1,
@@ -36,10 +36,10 @@
       "doctype": "Has Role"
     },
     {
-      "name": "nisrqigbek",
+      "name": "t9ognqhb3j",
       "owner": "Administrator",
       "creation": "2026-06-12 21:00:00",
-      "modified": "2026-07-23 10:29:54.840561",
+      "modified": "2026-08-11 16:08:37.686236",
       "modified_by": "Administrator",
       "docstatus": 0,
       "idx": 2,
@@ -50,10 +50,10 @@
       "doctype": "Has Role"
     },
     {
-      "name": "nis6mo4ppe",
+      "name": "t9opacgr48",
       "owner": "Administrator",
       "creation": "2026-06-12 21:00:00",
-      "modified": "2026-07-23 10:29:54.840561",
+      "modified": "2026-08-11 16:08:37.686236",
       "modified_by": "Administrator",
       "docstatus": 0,
       "idx": 3,
