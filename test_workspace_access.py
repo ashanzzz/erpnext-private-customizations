@@ -1,3 +1,6 @@
+import os
+from playwright.sync_api import sync_playwright
+
 def load_env_file(env_path='.env'):
     if os.path.exists(env_path):
         with open(env_path, 'r', encoding='utf-8') as f:
