@@ -99,7 +99,7 @@ def wait_for_container_health():
     print("\n==================================================")
     print(" [STAGE 2] Waiting for ERPNext16 Service Ready")
     print("==================================================")
-    for i in range(25):
+    for i in range(40):
         try:
             with urllib.request.urlopen(f"{SITE_URL}/login", timeout=2) as resp:
                 if resp.status == 200:
@@ -188,7 +188,7 @@ def main():
     if wait_for_container_health():
         live_browser_acceptance()
     else:
-        print("❌ Container health check timed out.")
+        print("[ERROR] Container health check timed out.")
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,79 @@
+/* ==========================================================================
+   ERPNext 16 侧边栏视觉层级定制
+   一级菜单（一级标题）：明显加粗、字号突出、深色对比度、图标与折叠箭头醒目
+   二级菜单（二级标题）：纯文字、绝对无图标、整齐缩进、清晰易读
+   ========================================================================== */
+
+/* 1. 一级菜单 / 一级标题（顶层总控主页 与 各业务板块折叠头） */
+.body-sidebar .sidebar-items > .sidebar-item-container > .standard-sidebar-item .sidebar-item-label,
+.body-sidebar .sidebar-item-container.section-item > .standard-sidebar-item .sidebar-item-label {
+    font-weight: 700 !important;
+    font-size: 14px !important;
+    color: #111827 !important;
+    letter-spacing: 0.3px !important;
+}
+
+/* 一级菜单容器间距微调，使板块分隔更清晰 */
+.body-sidebar .sidebar-item-container.section-item {
+    margin-top: 6px !important;
+    margin-bottom: 2px !important;
+}
+
+.body-sidebar .sidebar-item-container.section-item > .standard-sidebar-item {
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+}
+
+/* 一级菜单折叠箭头显眼化 */
+.body-sidebar .sidebar-item-container.section-item .drop-icon svg {
+    stroke: #111827 !important;
+    width: 14px !important;
+    height: 14px !important;
+}
+
+/* 一级菜单图标 */
+.body-sidebar .sidebar-items > .sidebar-item-container > .standard-sidebar-item .sidebar-item-icon,
+.body-sidebar .sidebar-item-container.section-item > .standard-sidebar-item .sidebar-item-icon {
+    display: inline-flex !important;
+    color: #111827 !important;
+    margin-right: 6px !important;
+}
+
+/* 2. 二级菜单 / 二级标题（所有折叠展开后的子项） */
+/* 彻底隐藏所有二级菜单图标与占位 */
+.body-sidebar .nested-container .sidebar-item-icon,
+.body-sidebar .sidebar-child-item .sidebar-item-icon,
+.body-sidebar .nested-container .standard-sidebar-item .sidebar-item-icon {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* 二级菜单纯文字样式：常规字重、13px、深灰文字、整齐向右缩进 */
+.body-sidebar .nested-container .sidebar-item-label,
+.body-sidebar .sidebar-child-item .sidebar-item-label,
+.body-sidebar .nested-container .standard-sidebar-item .sidebar-item-label {
+    font-weight: 400 !important;
+    font-size: 13px !important;
+    color: #4b5563 !important;
+    padding-left: 20px !important;
+    line-height: 1.5 !important;
+    transition: color 0.15s ease, font-weight 0.15s ease;
+}
+
+/* 二级菜单悬停效果 */
+.body-sidebar .nested-container .standard-sidebar-item:hover .sidebar-item-label,
+.body-sidebar .sidebar-child-item .standard-sidebar-item:hover .sidebar-item-label {
+    color: #111827 !important;
+    font-weight: 500 !important;
+}
+
+/* 二级菜单当前选中激活项 */
+.body-sidebar .nested-container .sidebar-item-container.selected .sidebar-item-label,
+.body-sidebar .nested-container .standard-sidebar-item.active-sidebar .sidebar-item-label {
+    font-weight: 600 !important;
+    color: #000000 !important;
+}

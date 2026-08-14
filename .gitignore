@@ -6,6 +6,7 @@
 # Python 缓存
 __pycache__/
 *.py[cod]
+*.pyc
 
 # Node / JS 缓存与依赖
 node_modules/
@@ -14,8 +15,77 @@ dist/
 
 # 临时抓取与截图
 desk_body.html
+real_sidebar.html
+sidebar_dump.html
 *.png
 *.zip
 ashanzzz-docker-erpnext16-complete-fix/
+*.bat
+*.ps1
 
-
+# 根目录本地诊断与自动化测试脚本 (保留正式工具与 core 源码)
+acceptance_test.py
+capture_*.py
+check_*.py
+inspect_*.py
+test_*.py
+verify_*.py
+view_*.py
+read_*.py
+find_*.py
+grep_*.py
+clean_*.py
+deploy_*.py
+debug_*.py
+call_*.py
+probe_*.py
+trace_*.py
+sync_repo_files.py
+export_fixtures_bench.py
+export_all_sidebars.py
+export_sidebar_json.py
+run_*.py
+generate_*.py
+save_*.py
+scan_*.py
+search_*.py
+set_*.py
+setup_*.py
+sftp_*.py
+ssh_*.py
+sync_english_sidebars.py
+sync_to_erpnext.py
+wait_*.py
+add_*.py
+apply_*.py
+bench_*.py
+build_*.py
+cleanup_*.py
+clear_*.py
+compare_*.py
+create_*.py
+delete_*.py
+describe_*.py
+diagnose_*.py
+direct_*.py
+discover_*.py
+eval_*.py
+extract_*.py
+fetch_*.py
+final_*.py
+fix_*.py
+get_*.py
+inject_*.py
+introspect_*.py
+list_*.py
+locate_*.py
+neutralize_*.py
+overwrite_*.py
+purge_*.py
+push_*.py
+query_*.py
+register_*.py
+reload_*.py
+reproduce_*.py
+reset_*.py
+restart_*.py
