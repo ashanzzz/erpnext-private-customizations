@@ -5,10 +5,11 @@
 ## 开始开发前必须读取
 
 0. `PROJECT_MAP.md` (项目核心映射、App 命名与远程仓库规范)
-1. `docs/ai/ERPNext_PROJECT_RULES.md`
-2. `docs/ai/ERPNext16_LEARN.md`
-3. 需要选 API 时读取 `docs/ai/ERPNext16_API_MAP.md`
-4. 涉及页面和 UI 时读取 `docs/ai/ERPNext16_UI_GUIDE.md`
+1. `.agents/rules/dev_workflow.md` (本地修改 -> 直传容器 -> AI 浏览器验收 -> 用户确认后再推送 GitHub)
+2. `docs/ai/ERPNext_PROJECT_RULES.md`
+3. `docs/ai/ERPNext16_LEARN.md`
+4. 需要选 API 时读取 `docs/ai/ERPNext16_API_MAP.md`
+5. 涉及页面和 UI 时读取 `docs/ai/ERPNext16_UI_GUIDE.md`
 
 
 ## 版本原则
