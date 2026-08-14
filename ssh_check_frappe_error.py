@@ -1,0 +1,30 @@
+import os
+import paramiko
+
+def load_env_file(env_path='.env'):
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    k, v = line.split('=', 1)
+                    os.environ.setdefault(k.strip(), v.strip())
+
+load_env_file()
+
+HOST = os.getenv('UNRAID_SSH_HOST', '192.168.8.11')
+PORT = int(os.getenv('UNRAID_SSH_PORT', '22'))
+USER = os.getenv('UNRAID_SSH_USER', 'root')
+PASSWORD = os.getenv('UNRAID_SSH_PASSWORD', '')
+
+ssh = paramiko.SSHClient()
+ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+ssh.connect(HOST, port=PORT, username=USER, password=PASSWORD, timeout=10)
+
+stdin, stdout, stderr = ssh.exec_command("docker exec erpnext16 bash -c 'tail -n 60 /home/frappe/frappe-bench/logs/frappe.log || tail -n 60 /home/frappe/frappe-bench/sites/site1.local/logs/frappe.log || true'")
+print("=== FRAPPE LOGS ===")
+print(stdout.read().decode('utf-8'))
+print(stderr.read().decode('utf-8'))
+
+ssh.close()
+

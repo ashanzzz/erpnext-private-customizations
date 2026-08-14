@@ -22,9 +22,9 @@ add_to_apps_screen = [
 ]
 
 # Post-Login Default Page (Dashboard / Workspace)
-on_session_creation = "ashan_cn_procurement.ashan_cn_procurement.boot.set_login_redirect"
-get_website_user_home_page = "ashan_cn_procurement.ashan_cn_procurement.boot.get_website_user_home_page"
-extend_bootinfo = "ashan_cn_procurement.ashan_cn_procurement.boot.boot_session"
+on_session_creation = "ashan_cn_procurement.boot.set_login_redirect"
+get_website_user_home_page = "ashan_cn_procurement.boot.get_website_user_home_page"
+extend_bootinfo = "ashan_cn_procurement.boot.boot_session"
 
 role_home_page = {
     "System Manager": "app/my-business",

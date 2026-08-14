@@ -1,0 +1,397 @@
+<div class="body-sidebar" data-title="Ashan CN Procurement"><a class="sidebar-header" style="text-decoration: none; width: auto; cursor: pointer; padding-left: 8px; padding-right: 8px;"> <div class="sidebar-item-icon" style="background-color: var();">     <div class="header-logo">         <div class="icon-container" style="background-color: rgb(123, 128, 138);">
+				<svg fill="currentColor" class="desktop-alphabet icon text-ink-gray-7 icon-sm" stroke="none" style="color: var(--white);" aria-hidden="true">
+				<use class="" href="#A"></use>
+				</svg>
+			</div>     </div> </div> <div class="title-container">      <div class="sidebar-item-label header-title" data-name-style="">             Ashan CN Procurement     </div>     <div class="sidebar-item-label header-subtitle">         业务扩展     </div> </div> <button class="btn-reset drop-icon show-in-edit-mode">     <svg class="icon icon-sm" style="display: block;margin:auto;" aria-hidden="true">         <use class="" href="#icon-chevron-down"></use>     </svg> </button> </a>
+    <div id="ashan-cn-sidebar-container" class="ashan-sidebar-wrapper" style="margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 8px;">
+        <div class="sidebar-section-header" style="font-weight: 700; font-size: 11px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; padding: 0 12px; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center;">
+            <span id="ashan-sidebar-custom-title-text">我的业务</span>
+            <span id="ashan-edit-sidebar-title-btn" style="cursor: pointer; font-size: 11px; color: var(--text-muted);" title="点击自定义我的业务名称">✏️</span>
+        </div>
+    
+        <div class="ashan-menu-group" style="margin-bottom: 3px;">
+            <div class="ashan-group-header" style="padding: 7px 12px; font-size: 13px; border-radius: var(--border-radius-sm, 6px); display: flex; justify-content: space-between; align-items: center; color: var(--text-color); transition: background-color 0.2s; ">
+                <a href="/app/ashan-cn-procurement" class="ashan-group-title-link" style="color: inherit; text-decoration: none; font-weight: inherit; flex-grow: 1;">
+                    🏠 业务扩展总控主页
+                </a>
+                
+            </div>
+            
+        </div>
+        <div class="ashan-menu-group" style="margin-bottom: 3px;">
+            <div class="ashan-group-header" style="padding: 7px 12px; font-size: 13px; border-radius: var(--border-radius-sm, 6px); display: flex; justify-content: space-between; align-items: center; color: var(--text-color); transition: background-color 0.2s; ">
+                <a href="/app/buying" class="ashan-group-title-link" style="color: inherit; text-decoration: none; font-weight: inherit; flex-grow: 1;">
+                    🛒 采购管理
+                </a>
+                <span class="ashan-toggle-btn" data-toggle="menu-procurement" style="cursor: pointer; padding: 2px 6px; font-size: 9px; transition: transform 0.2s; color: var(--text-muted);">▶</span>
+            </div>
+            
+            <div id="menu-procurement" class="ashan-group-items" style="display: none; padding-left: 8px; margin-top: 2px;">
+            
+        
+                <a href="/app/purchase-order" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 采购订单
+                </a>
+            
+                <a href="/app/purchase-receipt" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 采购入库单
+                </a>
+            
+                <a href="/app/supplier" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 供应商管理
+                </a>
+            
+                <a href="/app/material-request" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 采购申请单
+                </a>
+            
+                <a href="/app/query-report/Purchase%20Order%20Analysis" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 采购分析对账表
+                </a>
+            </div></div>
+        <div class="ashan-menu-group" style="margin-bottom: 3px;">
+            <div class="ashan-group-header" style="padding: 7px 12px; font-size: 13px; border-radius: var(--border-radius-sm, 6px); display: flex; justify-content: space-between; align-items: center; color: var(--text-color); transition: background-color 0.2s; ">
+                <a href="/app/stock" class="ashan-group-title-link" style="color: inherit; text-decoration: none; font-weight: inherit; flex-grow: 1;">
+                    📦 仓库与库存
+                </a>
+                <span class="ashan-toggle-btn" data-toggle="menu-stock" style="cursor: pointer; padding: 2px 6px; font-size: 9px; transition: transform 0.2s; color: var(--text-muted);">▶</span>
+            </div>
+            
+            <div id="menu-stock" class="ashan-group-items" style="display: none; padding-left: 8px; margin-top: 2px;">
+            
+        
+                <a href="/app/item" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 物料主数据
+                </a>
+            
+                <a href="/app/warehouse" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 仓库管理
+                </a>
+            
+                <a href="/app/stock-entry" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 物料调拨与领用
+                </a>
+            
+                <a href="/app/delivery-note" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 销售出库单
+                </a>
+            
+                <a href="/app/query-report/Stock%20Ledger" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 库存台账明细
+                </a>
+            </div></div>
+        <div class="ashan-menu-group" style="margin-bottom: 3px;">
+            <div class="ashan-group-header" style="padding: 7px 12px; font-size: 13px; border-radius: var(--border-radius-sm, 6px); display: flex; justify-content: space-between; align-items: center; color: var(--text-color); transition: background-color 0.2s; ">
+                <a href="/app/invoicing" class="ashan-group-title-link" style="color: inherit; text-decoration: none; font-weight: inherit; flex-grow: 1;">
+                    💳 会计与财务
+                </a>
+                <span class="ashan-toggle-btn" data-toggle="menu-accounting" style="cursor: pointer; padding: 2px 6px; font-size: 9px; transition: transform 0.2s; color: var(--text-muted);">▶</span>
+            </div>
+            
+            <div id="menu-accounting" class="ashan-group-items" style="display: none; padding-left: 8px; margin-top: 2px;">
+            
+        
+                <a href="/app/purchase-invoice" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 应付发票
+                </a>
+            
+                <a href="/app/sales-invoice" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 应收发票
+                </a>
+            
+                <a href="/app/payment-entry" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 付款凭证
+                </a>
+            
+                <a href="/app/reimbursement-request" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 费用报销申请 (扩展)
+                </a>
+            
+                <a href="/app/reimbursement-invoice-item" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 报销发票明细 (扩展)
+                </a>
+            
+                <a href="/app/query-report/Unpaid%20Reimbursement%20List" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 未付报销清单
+                </a>
+            
+                <a href="/app/query-report/Reimbursement%20Payment%20Status" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 报销支付状态表
+                </a>
+            </div></div>
+        <div class="ashan-menu-group" style="margin-bottom: 3px;">
+            <div class="ashan-group-header" style="padding: 7px 12px; font-size: 13px; border-radius: var(--border-radius-sm, 6px); display: flex; justify-content: space-between; align-items: center; color: var(--text-color); transition: background-color 0.2s; ">
+                <a href="/app/vehicle-fuel-hub" class="ashan-group-title-link" style="color: inherit; text-decoration: none; font-weight: inherit; flex-grow: 1;">
+                    ⛽ 车油能耗管理
+                </a>
+                <span class="ashan-toggle-btn" data-toggle="menu-fuel" style="cursor: pointer; padding: 2px 6px; font-size: 9px; transition: transform 0.2s; color: var(--text-muted);">▶</span>
+            </div>
+            
+            <div id="menu-fuel" class="ashan-group-items" style="display: none; padding-left: 8px; margin-top: 2px;">
+            
+        
+                <a href="/app/oil-card" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 油卡台账
+                </a>
+            
+                <a href="/app/oil-card-recharge" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 油卡充值记录
+                </a>
+            
+                <a href="/app/oil-card-refuel-log" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 车辆加油日志
+                </a>
+            
+                <a href="/app/oil-card-invoice-batch" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 油卡开票批次
+                </a>
+            
+                <a href="/app/query-report/Vehicle%20Fuel%20Cost%20Summary" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 车辆油耗汇总表
+                </a>
+            
+                <a href="/app/query-report/Oil%20Card%20Monthly%20Ledger" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 油卡月度台账
+                </a>
+            </div></div>
+        <div class="ashan-menu-group" style="margin-bottom: 3px;">
+            <div class="ashan-group-header" style="padding: 7px 12px; font-size: 13px; border-radius: var(--border-radius-sm, 6px); display: flex; justify-content: space-between; align-items: center; color: var(--text-color); transition: background-color 0.2s; ">
+                <a href="/app/company-compliance-center" class="ashan-group-title-link" style="color: inherit; text-decoration: none; font-weight: inherit; flex-grow: 1;">
+                    🛡️ 企业合规中心
+                </a>
+                <span class="ashan-toggle-btn" data-toggle="menu-compliance" style="cursor: pointer; padding: 2px 6px; font-size: 9px; transition: transform 0.2s; color: var(--text-muted);">▶</span>
+            </div>
+            
+            <div id="menu-compliance" class="ashan-group-items" style="display: none; padding-left: 8px; margin-top: 2px;">
+            
+        
+                <a href="/app/environmental-compliance-item" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 环保合规项目
+                </a>
+            
+                <a href="/app/compliance-equipment-item" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 合规设备清单
+                </a>
+            
+                <a href="/app/employee-certificate-item" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 员工证书管理
+                </a>
+            
+                <a href="/app/query-report/Compliance%20Expiry%20Trend" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 合规到期预警趋势
+                </a>
+            </div></div>
+        <div class="ashan-menu-group" style="margin-bottom: 3px;">
+            <div class="ashan-group-header" style="padding: 7px 12px; font-size: 13px; border-radius: var(--border-radius-sm, 6px); display: flex; justify-content: space-between; align-items: center; color: var(--text-color); transition: background-color 0.2s; ">
+                <a href="/app/restricted-access-group" class="ashan-group-title-link" style="color: inherit; text-decoration: none; font-weight: inherit; flex-grow: 1;">
+                    ⚙️ 权限与系统配置
+                </a>
+                <span class="ashan-toggle-btn" data-toggle="menu-access" style="cursor: pointer; padding: 2px 6px; font-size: 9px; transition: transform 0.2s; color: var(--text-muted);">▶</span>
+            </div>
+            
+            <div id="menu-access" class="ashan-group-items" style="display: none; padding-left: 8px; margin-top: 2px;">
+            
+        
+                <a href="/app/restricted-access-group" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 受限访问分组
+                </a>
+            
+                <a href="/app/vehicle-fuel-settings" class="ashan-menu-item" style="display: block; padding: 5px 12px; font-size: 12.5px; border-radius: var(--border-radius-sm, 4px); text-decoration: none; margin: 1px 0; transition: all 0.15s; color: var(--text-muted);">
+                    • 车辆油耗参数配置
+                </a>
+            </div></div></div>    <div class="standard-items-sections">     <div class="dropdown-notifications hidden">      <div class="notifications-list" role="menu">       <div class="notification-list-header">        <div class="header-items"><ul class="notification-item-tabs nav nav-tabs" role="tablist"><li class="notifications-category active" id="notifications" data-toggle="collapse">Notifications</li><li class="notifications-category" id="todays_events" data-toggle="collapse">Events</li><li class="notifications-category" id="changelog_feed" data-toggle="collapse">What's New</li></ul></div>        <div class="header-actions"><span class="notification-settings" data-action="go_to_settings" title="" data-original-title="Notification Settings">
+			<svg class="icon  icon-sm" style="" aria-hidden="true">
+			<use class="" href="#icon-setting-gear">
+			</use>
+		</svg>
+		</span><span class="mark-all-read" data-action="mark_all_as_read" title="" data-original-title="Mark all as read">
+			<svg class="icon  icon-sm" style="" aria-hidden="true">
+			<use class="" href="#icon-mark-as-read">
+			</use>
+		</svg>
+		</span><span class="close-notification-dialogue pull-right">
+			<svg class="icon  icon-sm" style="" aria-hidden="true">
+			<use class="" href="#icon-x">
+			</use>
+		</svg>
+		</span></div>       </div>       <div class="notification-list-body">        <div class="panel-notifications"><div style=""><div class="notification-null-state">
+					<div class="text-center">
+						<img src="/assets/frappe/images/ui-states/notification-empty-state.svg" alt="Generic Empty State" class="null-state">
+						<div class="title">No New notifications</div>
+						<div class="subtitle">
+							Looks like you haven’t received any notifications.
+					</div></div></div></div></div>        <div class="panel-events"><div style="display: none;">
+				<div class="notification-null-state">
+					<div class="text-center">
+					<img src="/assets/frappe/images/ui-states/event-empty-state.svg" alt="Generic Empty State" class="null-state">
+					<div class="title">No Upcoming Events</div>
+					<div class="subtitle">
+						There are no upcoming events for you.
+				</div></div></div>
+			</div></div>        <div class="panel-changelog-feed"><div style="display: none;"><div class="notification-null-state">
+						<div class="text-center">
+							<img src="/assets/frappe/images/ui-states/notification-empty-state.svg" alt="Generic Empty State" class="null-state">
+							<div class="title">Nothing New</div>
+							<div class="subtitle">
+								There is nothing new to show you right now.
+							</div>
+						</div>
+					</div>
+					</div></div>       </div>      </div>     </div>    <div class="navbar-search-bar" item-name="Search" data-id="Search" title="Search" data-toggle="tooltip" data-placement="right" id="navbar-modal-search">     <div class="standard-sidebar-item ">                       <a class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="search">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-search">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Search</span>                                       <span class="sidebar-item-suffix"><span class="keyboard-shortcut">Ctrl+K</span></span>                                                   <div class="sidebar-item-control"></div>                              </a>                       </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-notification" item-name="Notification" data-id="Notification" title="Notification" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="bell">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-bell">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Notification</span>                                       <span class="sidebar-item-suffix"><span class="sidebar-notification-count hidden" aria-live="polite"></span></span>                                                   <div class="sidebar-item-control"></div>                              </a>                       </div>     <div class="sidebar-child-item nested-container"></div> </div></div>    <div class="body-sidebar-top">     <div class="sidebar-items"><div class="sidebar-item-container  " item-name="Ashan CN Procurement" data-id="Ashan CN Procurement" title="Ashan CN Procurement" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/ashan-cn-procurement" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="wallpaper">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-wallpaper">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Ashan CN Procurement</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Ashan CN Procurement" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Vehicle Fuel Hub" data-id="Vehicle Fuel Hub" title="Vehicle Fuel Hub" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/vehicle-fuel-hub" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="wallpaper">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-wallpaper">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Vehicle Fuel Hub</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Vehicle Fuel Hub" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Company Compliance Center" data-id="Company Compliance Center" title="Company Compliance Center" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/company-compliance-center" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="wallpaper">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-wallpaper">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Company Compliance Center</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Company Compliance Center" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="查看所有物料" data-id="查看所有物料" title="查看所有物料" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/查看所有物料" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="wallpaper">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-wallpaper">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">查看所有物料</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="查看所有物料" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="My Business" data-id="My Business" title="My Business" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item active-sidebar">                       <a href="/desk/my-business" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="wallpaper">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-wallpaper">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">My Business</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="My Business" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Procurement Management" data-id="Procurement Management" title="Procurement Management" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/procurement-management" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="wallpaper">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-wallpaper">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Procurement Management</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Procurement Management" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Stock and Inventory" data-id="Stock and Inventory" title="Stock and Inventory" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/stock-and-inventory" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="wallpaper">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-wallpaper">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Stock and Inventory</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Stock and Inventory" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Accounting and Finance" data-id="Accounting and Finance" title="Accounting and Finance" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/accounting-and-finance" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="wallpaper">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-wallpaper">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Accounting and Finance</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Accounting and Finance" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  section-item" item-name="Reports" data-id="Reports" title="Reports" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <div class="divider hidden"></div>             <div class="item-anchor section-break">                 <span class="sidebar-item-label">Reports</span>                 <div class="sidebar-item-control"><button class="btn-reset drop-icon"><svg class="icon  icon-sm" stroke="#7c7c7c" style="" aria-hidden="true">
+			<use class="" href="#icon-chevron-down" stroke="#7c7c7c">
+			</use>
+		</svg></button></div>             </div>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Reports" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"><div class="sidebar-item-container  " item-name="Oil Card Card Summary" data-id="Oil Card Card Summary" title="Oil Card Card Summary" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/query-report/Oil Card Card Summary" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="table">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-table">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Oil Card Card Summary</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Oil Card Card Summary" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Vehicle Refuel Ledger" data-id="Vehicle Refuel Ledger" title="Vehicle Refuel Ledger" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/query-report/Vehicle Refuel Ledger" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="table">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-table">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Vehicle Refuel Ledger</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Vehicle Refuel Ledger" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Oil Card Recharge Ledger" data-id="Oil Card Recharge Ledger" title="Oil Card Recharge Ledger" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/query-report/Oil Card Recharge Ledger" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="table">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-table">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Oil Card Recharge Ledger</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Oil Card Recharge Ledger" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Vehicle Fuel Cost Summary" data-id="Vehicle Fuel Cost Summary" title="Vehicle Fuel Cost Summary" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/query-report/Vehicle Fuel Cost Summary" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="table">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-table">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Vehicle Fuel Cost Summary</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Vehicle Fuel Cost Summary" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Oil Card Operating Summary" data-id="Oil Card Operating Summary" title="Oil Card Operating Summary" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/query-report/Oil Card Operating Summary" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="table">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-table">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Oil Card Operating Summary</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Oil Card Operating Summary" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Oil Supplier Invoice Summary" data-id="Oil Supplier Invoice Summary" title="Oil Supplier Invoice Summary" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/query-report/Oil Supplier Invoice Summary" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="table">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-table">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Oil Supplier Invoice Summary</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Oil Supplier Invoice Summary" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Reimbursement Payment Status" data-id="Reimbursement Payment Status" title="Reimbursement Payment Status" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/query-report/Reimbursement Payment Status" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="table">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-table">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Reimbursement Payment Status</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Reimbursement Payment Status" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Oil Card Monthly Ledger" data-id="Oil Card Monthly Ledger" title="Oil Card Monthly Ledger" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/query-report/Oil Card Monthly Ledger" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="table">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-table">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Oil Card Monthly Ledger</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Oil Card Monthly Ledger" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Company Compliance Overview" data-id="Company Compliance Overview" title="Company Compliance Overview" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/query-report/Company Compliance Overview" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="table">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-table">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Company Compliance Overview</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Company Compliance Overview" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Company Compliance Pending Purchase" data-id="Company Compliance Pending Purchase" title="Company Compliance Pending Purchase" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/query-report/Company Compliance Pending Purchase" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="table">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-table">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Company Compliance Pending Purchase</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Company Compliance Pending Purchase" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Unpaid Reimbursement List" data-id="Unpaid Reimbursement List" title="Unpaid Reimbursement List" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/query-report/Unpaid Reimbursement List" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="table">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-table">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Unpaid Reimbursement List</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Unpaid Reimbursement List" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Compliance Expiry Trend" data-id="Compliance Expiry Trend" title="Compliance Expiry Trend" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/query-report/Compliance Expiry Trend" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="table">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-table">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Compliance Expiry Trend</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Compliance Expiry Trend" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Vehicle Monthly Fuel Trend" data-id="Vehicle Monthly Fuel Trend" title="Vehicle Monthly Fuel Trend" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/query-report/Vehicle Monthly Fuel Trend" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="table">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-table">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Vehicle Monthly Fuel Trend</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Vehicle Monthly Fuel Trend" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div><div class="sidebar-item-container  " item-name="Oil Card Balance Reconciliation" data-id="Oil Card Balance Reconciliation" title="Oil Card Balance Reconciliation" data-toggle="tooltip" data-placement="right">     <div class="standard-sidebar-item ">                       <a href="/desk/query-report/Oil Card Balance Reconciliation" target="" class="item-anchor">                                       <span class="sidebar-item-icon text-ink-gray-7" item-icon="table">                                              <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-table">
+			</use>
+		</svg>                                      </span>                 <span class="sidebar-item-label">Oil Card Balance Reconciliation</span>                                                   <div class="sidebar-item-control"></div>                              </a>                           <div class="sidebar-item-edit-controls edit-mode hidden">             <button class="btn btn-secondary btn-sm drag-handle">                 <svg class="es-icon es-line icon-xs" aria-hidden="true">                     <use href="#es-line-drag"></use>                 </svg>             </button>             <button data-menu="Oil Card Balance Reconciliation" class="btn btn-secondary btn-xs setting-btn edit-menu" title="" style="cursor: pointer;">                 <svg class="icon  icon-xs" style="" aria-hidden="true">
+			<use class="" href="#icon-dot-horizontal">
+			</use>
+		</svg>             </button>         </div>              </div>     <div class="sidebar-child-item nested-container"></div> </div></div> </div></div>     <div class="edit-mode standard-sidebar-item hidden" data-name="add-sidebar-item">      <a class="item-anchor">       <span class="sidebar-item-icon text-ink-gray-7">        <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-add">
+			</use>
+		</svg>       </span>       <span class="sidebar-item-label">Add Sidebar Item<span>      </span></span></a>     </div>    </div>    <div class="body-sidebar-cards"></div>    <div class="body-sidebar-bottom">     <div class="edit-mode bottom-edit-controls hidden">      <button class="btn-outline btn-sm discard-button">       Discard      </button>      <button class="btn btn-primary btn-sm save-sidebar">       Save      </button>     </div>     <div class="promotional-banners" style="display: none;"></div>     <p>      <a class="onboarding-sidebar px-2 hidden">       <svg class="icon text-ink-gray-7 current-color icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-user-check">
+			</use>
+		</svg>        <span> Getting Started </span>      </a>     </p>     <div class="nav-item dropdown dropdown-navbar-user dropdown-mobile mt-3">      <a class="align-center btn-reset flex nav-link sidebar-user-button" style="width: 100%; min-height: 40px;" onclick="return frappe.ui.toolbar.route_to_user()" aria-label="User Menu">       <div> <span class="avatar avatar-medium-2" title="孟祥山">
+			<div class="avatar-frame standard-image" style="background-color: var(--pink-avatar-bg); color: var(--pink-avatar-color)" title="孟祥山">
+					孟
+			</div>
+		</span> </div>       <div class="avatar-name-email text-small overflow-hidden w-75" style="margin-left: 8px;">        <span class="d-block text-truncate">         孟祥山        </span>        <span class="d-block text-secondary text-truncate" style="margin-top: -1px;">         ashanzzz1213@gmail.com        </span>       </div>       </a>     </div>    </div>    <button class="collapse-sidebar-link sidebar-toggle-btn" aria-label="Toggle Sidebar" data-placement="right">     <svg class="icon  icon-sm" stroke="currentColor" style="" aria-hidden="true">
+			<use class="" href="#icon-chevron-left">
+			</use>
+		</svg>    </button>    <div class="sidebar-resize-handle"></div>   </div>

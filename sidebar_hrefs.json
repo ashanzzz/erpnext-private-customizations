@@ -1,0 +1,824 @@
+[
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#A",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-chevron-down",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "🏠 业务扩展总控主页",
+    "href": "/app/ashan-cn-procurement",
+    "class": "ashan-group-title-link"
+  },
+  {
+    "tag": "A",
+    "text": "🛒 采购管理",
+    "href": "/app/buying",
+    "class": "ashan-group-title-link"
+  },
+  {
+    "tag": "A",
+    "text": "• 采购订单",
+    "href": "/app/purchase-order",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 采购入库单",
+    "href": "/app/purchase-receipt",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 供应商管理",
+    "href": "/app/supplier",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 采购申请单",
+    "href": "/app/material-request",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 采购分析对账表",
+    "href": "/app/query-report/Purchase%20Order%20Analysis",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "📦 仓库与库存",
+    "href": "/app/stock",
+    "class": "ashan-group-title-link"
+  },
+  {
+    "tag": "A",
+    "text": "• 物料主数据",
+    "href": "/app/item",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 仓库管理",
+    "href": "/app/warehouse",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 物料调拨与领用",
+    "href": "/app/stock-entry",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 销售出库单",
+    "href": "/app/delivery-note",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 库存台账明细",
+    "href": "/app/query-report/Stock%20Ledger",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "💳 会计与财务",
+    "href": "/app/invoicing",
+    "class": "ashan-group-title-link"
+  },
+  {
+    "tag": "A",
+    "text": "• 应付发票",
+    "href": "/app/purchase-invoice",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 应收发票",
+    "href": "/app/sales-invoice",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 付款凭证",
+    "href": "/app/payment-entry",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 费用报销申请 (扩展)",
+    "href": "/app/reimbursement-request",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 报销发票明细 (扩展)",
+    "href": "/app/reimbursement-invoice-item",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 未付报销清单",
+    "href": "/app/query-report/Unpaid%20Reimbursement%20List",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 报销支付状态表",
+    "href": "/app/query-report/Reimbursement%20Payment%20Status",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "⛽ 车油能耗管理",
+    "href": "/app/vehicle-fuel-hub",
+    "class": "ashan-group-title-link"
+  },
+  {
+    "tag": "A",
+    "text": "• 油卡台账",
+    "href": "/app/oil-card",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 油卡充值记录",
+    "href": "/app/oil-card-recharge",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 车辆加油日志",
+    "href": "/app/oil-card-refuel-log",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 油卡开票批次",
+    "href": "/app/oil-card-invoice-batch",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 车辆油耗汇总表",
+    "href": "/app/query-report/Vehicle%20Fuel%20Cost%20Summary",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 油卡月度台账",
+    "href": "/app/query-report/Oil%20Card%20Monthly%20Ledger",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "🛡️ 企业合规中心",
+    "href": "/app/company-compliance-center",
+    "class": "ashan-group-title-link"
+  },
+  {
+    "tag": "A",
+    "text": "• 环保合规项目",
+    "href": "/app/environmental-compliance-item",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 合规设备清单",
+    "href": "/app/compliance-equipment-item",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 员工证书管理",
+    "href": "/app/employee-certificate-item",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 合规到期预警趋势",
+    "href": "/app/query-report/Compliance%20Expiry%20Trend",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "⚙️ 权限与系统配置",
+    "href": "/app/restricted-access-group",
+    "class": "ashan-group-title-link"
+  },
+  {
+    "tag": "A",
+    "text": "• 受限访问分组",
+    "href": "/app/restricted-access-group",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "A",
+    "text": "• 车辆油耗参数配置",
+    "href": "/app/vehicle-fuel-settings",
+    "class": "ashan-menu-item"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-setting-gear",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-mark-as-read",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-x",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-search",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-bell",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Ashan CN Procurement",
+    "href": "/desk/ashan-cn-procurement",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-wallpaper",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Vehicle Fuel Hub",
+    "href": "/desk/vehicle-fuel-hub",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-wallpaper",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Company Compliance Center",
+    "href": "/desk/company-compliance-center",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-wallpaper",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "查看所有物料",
+    "href": "/desk/查看所有物料",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-wallpaper",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "My Business",
+    "href": "/desk/my-business",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-wallpaper",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Procurement Management",
+    "href": "/desk/procurement-management",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-wallpaper",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Stock and Inventory",
+    "href": "/desk/stock-and-inventory",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-wallpaper",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Accounting and Finance",
+    "href": "/desk/accounting-and-finance",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-wallpaper",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-chevron-down",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Oil Card Card Summary",
+    "href": "/desk/query-report/Oil Card Card Summary",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-table",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Vehicle Refuel Ledger",
+    "href": "/desk/query-report/Vehicle Refuel Ledger",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-table",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Oil Card Recharge Ledger",
+    "href": "/desk/query-report/Oil Card Recharge Ledger",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-table",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Vehicle Fuel Cost Summary",
+    "href": "/desk/query-report/Vehicle Fuel Cost Summary",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-table",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Oil Card Operating Summary",
+    "href": "/desk/query-report/Oil Card Operating Summary",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-table",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Oil Supplier Invoice Summary",
+    "href": "/desk/query-report/Oil Supplier Invoice Summary",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-table",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Reimbursement Payment Status",
+    "href": "/desk/query-report/Reimbursement Payment Status",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-table",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Oil Card Monthly Ledger",
+    "href": "/desk/query-report/Oil Card Monthly Ledger",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-table",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Company Compliance Overview",
+    "href": "/desk/query-report/Company Compliance Overview",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-table",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Company Compliance Pending Purchase",
+    "href": "/desk/query-report/Company Compliance Pending Purchase",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-table",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Unpaid Reimbursement List",
+    "href": "/desk/query-report/Unpaid Reimbursement List",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-table",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Compliance Expiry Trend",
+    "href": "/desk/query-report/Compliance Expiry Trend",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-table",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Vehicle Monthly Fuel Trend",
+    "href": "/desk/query-report/Vehicle Monthly Fuel Trend",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-table",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "A",
+    "text": "Oil Card Balance Reconciliation",
+    "href": "/desk/query-report/Oil Card Balance Reconciliation",
+    "class": "item-anchor"
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-table",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#es-line-drag",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-dot-horizontal",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-add",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-user-check",
+    "class": {}
+  },
+  {
+    "tag": "use",
+    "text": "",
+    "href": "#icon-chevron-left",
+    "class": {}
+  }
+]
