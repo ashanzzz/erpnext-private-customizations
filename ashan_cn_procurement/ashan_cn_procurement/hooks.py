@@ -10,7 +10,10 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 app_include_css = "/assets/ashan_cn_procurement/css/ashan_cn_procurement.css"
-app_include_js = "/assets/ashan_cn_procurement/js/ashan_cn_sidebar.js"
+app_include_js = [
+    "/assets/ashan_cn_procurement/js/ashan_cn_sidebar.js",
+    "/assets/ashan_cn_procurement/js/purchase_invoice_tax_calculator.js"
+]
 
 # App Switcher Dropdown Registration
 add_to_apps_screen = [
@@ -31,6 +34,15 @@ role_home_page = {
     "All": "app/my-business"
 }
 
+# DocType Specific Client Scripts
+doctype_js = {
+    "Purchase Invoice": "public/js/purchase_invoice_tax_calculator.js"
+}
 
-
-
+# Doc Events / Server Hooks
+doc_events = {
+    "Purchase Invoice": {
+        "before_validate": "ashan_cn_procurement.overrides.purchase_invoice_tax.calculate_china_line_taxes",
+        "validate": "ashan_cn_procurement.overrides.purchase_invoice_tax.validate_purchase_invoice_taxes"
+    }
+}
