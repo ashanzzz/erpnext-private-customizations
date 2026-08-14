@@ -267,10 +267,10 @@
 })();
 
 /* ==========================================================================
-   ERPNext 16 采购发票 - 极简中文化布局、发票类型/防重联动、纯数字金额与全双向智能倒算引擎
-   1. 纯净数字金额与表头去 CNY：
-      - 覆盖明细表格 Currency 格式化，仅展示标准格式化数字 (如 100.00, 200.00)，彻底去除多余的 (CNY) 货币后缀
-      - 表头彻底去 (CNY)：物料、规格型号、数量、含税单价、税率 (%)、不含税单价、金额、税额、价税合计
+   ERPNext 16 采购发票 - 极简中文化布局、发票类型/防重联动、0闪烁纯数字金额与全双向智能倒算引擎
+   1. 彻底根治表头与单元格 (CNY) 闪烁（源头拦截法）：
+      - 拦截 frappe.ui.form.Form.prototype.set_currency_labels，在采购发票 items 子表头生成前直接阻止拼接 (CNY)，从源头实现 0 毫秒无闪烁！
+      - 全局拦截 frappe.form.formatters.Currency，采购发票明细表格中仅返回格式化的纯财务数字 (如 100.00, 200.00)，彻底去除多余的 (CNY) 后缀
    2. 仅展示核心字段与清晰分类：
       - 【基本信息】：单据编号 (naming_series)、记账日期 (posting_date)、记账时间 (posting_time)、修改单据日期 (set_posting_time)、业务模式 (custom_biz_mode)、受限单据 (custom_is_restricted_doc)、受限组 (custom_restriction_group)
       - 【供应商与发票信息】：供应商 (supplier)、发票类型 (custom_invoice_type)、发票号 (bill_no)、发票日期 (bill_date)
@@ -293,8 +293,25 @@ ashan.tax.format_money = function(val) {
     });
 };
 
-// 1. 全局拦截并覆盖 Currency 格式化器，在采购发票明细表格中仅显示纯数字（无 CNY 后缀）
-if (frappe.form && frappe.form.formatters && !frappe.form.formatters._ashan_patched) {
+// -------------------------------------------------------------
+// 1. 【源头级 0 毫秒拦截】彻底防止表头与单元格 CNY 闪烁
+// -------------------------------------------------------------
+
+// (1) 拦截表单表头 Currency 标签拼接，阻止 ERPNext 向 items 字段追加 (CNY)
+if (frappe.ui && frappe.ui.form && frappe.ui.form.Form && !frappe.ui.form.Form.prototype._ashan_currency_intercepted) {
+    const orig_set_currency_labels = frappe.ui.form.Form.prototype.set_currency_labels;
+    frappe.ui.form.Form.prototype.set_currency_labels = function(fields_list, currency, parentfield) {
+        if (this.doc && this.doc.doctype === "Purchase Invoice" && parentfield === "items") {
+            // 采购发票明细表格保持纯净标签，直接返回，绝不拼接 (CNY)
+            return;
+        }
+        return orig_set_currency_labels.apply(this, arguments);
+    };
+    frappe.ui.form.Form.prototype._ashan_currency_intercepted = true;
+}
+
+// (2) 拦截 Currency 单元格格式化器，在采购发票明细中仅输出纯数字
+if (frappe.form && frappe.form.formatters && !frappe.form.formatters._ashan_currency_patched) {
     const orig_currency_formatter = frappe.form.formatters.Currency;
     frappe.form.formatters.Currency = function(value, df, options, doc) {
         if (df && (df.parent === "Purchase Invoice Item" || (doc && doc.doctype === "Purchase Invoice Item"))) {
@@ -303,7 +320,7 @@ if (frappe.form && frappe.form.formatters && !frappe.form.formatters._ashan_patc
         }
         return orig_currency_formatter(value, df, options, doc);
     };
-    frappe.form.formatters._ashan_patched = true;
+    frappe.form.formatters._ashan_currency_patched = true;
 }
 
 // 获取公司进项税科目
@@ -326,7 +343,7 @@ ashan.tax.get_vat_account = function(frm, callback) {
     });
 };
 
-// 去除子表格表头中的 (CNY) 与货币后缀
+// 子表格表头标签深度净化
 ashan.tax.clean_grid_headers = function(frm) {
     const label_map = {
         "item_code": "物料",
@@ -340,21 +357,13 @@ ashan.tax.clean_grid_headers = function(frm) {
         "custom_gross_amount": "价税合计"
     };
 
-    const do_clean = function() {
-        $('[data-fieldname="items"] .grid-heading-row .grid-static-col').each(function() {
-            const fn = $(this).attr("data-fieldname");
-            if (label_map[fn]) {
-                $(this).attr("title", label_map[fn]);
-                $(this).find(".static-area").text(label_map[fn]);
-            }
-        });
-    };
-
-    do_clean();
-    setTimeout(do_clean, 100);
-    setTimeout(do_clean, 300);
-    setTimeout(do_clean, 800);
-    setTimeout(do_clean, 1500);
+    $('[data-fieldname="items"] .grid-heading-row .grid-static-col').each(function() {
+        const fn = $(this).attr("data-fieldname");
+        if (label_map[fn]) {
+            $(this).attr("title", label_map[fn]);
+            $(this).find(".static-area").text(label_map[fn]);
+        }
+    });
 };
 
 // 发票类型与发票号联动控制
@@ -481,7 +490,7 @@ ashan.tax.simplify_invoice_form = function(frm) {
     frm.toggle_display("supplier_invoice_details", true);
     frm.toggle_display("items_section", true);
 
-    // 4. 清理 items 明细中的 CNY 后缀与纯数字格式化
+    // 4. 清理 items 明细表头
     ashan.tax.clean_grid_headers(frm);
 
     // 5. 联动发票类型规则
