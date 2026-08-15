@@ -16,12 +16,15 @@ body {
 
 body:not(.full-width) .std-form-layout .section-head,
 body:not(.full-width) .std-form-layout .section-body,
-body:not(.full-width) [data-page-route="Workspaces"] .layout-main,
-body:not(.full-width) .form-section-description,
-body:not(.full-width) .tree-children,
-body:not(.full-width) .form-section,
-body:not(.full-width) .layout-main-section {
-    max-width: 1200px !important;
+body:not(.full-width) .form-section-description {
+    max-width: var(--page-max-width) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+body:not(.full-width) [data-page-route="Workspaces"] .layout-main {
+    max-width: var(--page-max-width) !important;
+    margin: auto !important;
 }
 
 /* -------------------------------------------------------------

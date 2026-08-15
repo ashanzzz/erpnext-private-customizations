@@ -244,18 +244,20 @@ ashan.tax.inject_form_css = function() {
     if ($("#ashan-simplified-invoice-style").length) return;
     const css = `
     <style id="ashan-simplified-invoice-style">
-        /* 全局默认容器宽度提升为 1200px */
+        /* 全局默认容器宽度提升为 1200px 并保持完美居中 */
         :root, [data-theme="light"], [data-theme="dark"], body {
             --page-max-width: 1200px !important;
         }
         body:not(.full-width) .std-form-layout .section-head,
         body:not(.full-width) .std-form-layout .section-body,
-        body:not(.full-width) [data-page-route="Workspaces"] .layout-main,
-        body:not(.full-width) .form-section-description,
-        body:not(.full-width) .tree-children,
-        body:not(.full-width) .form-section,
-        body:not(.full-width) .layout-main-section {
-            max-width: 1200px !important;
+        body:not(.full-width) .form-section-description {
+            max-width: var(--page-max-width) !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+        }
+        body:not(.full-width) [data-page-route="Workspaces"] .layout-main {
+            max-width: var(--page-max-width) !important;
+            margin: auto !important;
         }
 
         /* 针对采购发票页面隐藏头部 tabs、due_date、总数行 */
