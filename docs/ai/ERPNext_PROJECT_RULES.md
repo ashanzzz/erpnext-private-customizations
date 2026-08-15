@@ -31,30 +31,14 @@ bench --site <site> list-apps
 
 ## 3. 已确认的自定义字段
 
-### 规格型号
+### 物料说明
 
-标准字段名：
-
-```text
-custom_guige_xinghao
-```
-
-已知使用位置包括：
+本项目不使用独立“规格型号”字段。物料、采购订单、采购收货、采购发票、物料需求计划和报销明细统一使用 `description`。
 
 ```text
-Item
-Purchase Receipt Item
-Purchase Invoice Item
+description 的字段类型统一为 Data（单行文本），界面标签统一为“规格”。
+不得创建、读取或回填 custom_guige_xinghao、custom_spec_model 等规格型号字段。
 ```
-
-规则：
-
-```text
-规格型号为空就保持为空。
-禁止自动回退到 description。
-```
-
-AI 不得为了“有内容”自行使用 `description` 替代规格型号。
 
 ### 备注
 
@@ -97,7 +81,7 @@ custom_fapiao_leixing
 禁止：
 
 ```text
-看到中文“规格型号”就自己猜 custom_specification
+看到中文“规格型号”就自己猜 custom_guige_xinghao、custom_spec_model 或 custom_specification
 看到中文“备注”就自己猜 custom_beizhu
 ```
 
