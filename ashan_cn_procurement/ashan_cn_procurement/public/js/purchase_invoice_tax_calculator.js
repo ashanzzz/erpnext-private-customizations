@@ -246,7 +246,7 @@ ashan.tax.simplify_grid_row_form = function(frm) {
     const grid = frm.fields_dict.items.grid;
 
     const ALLOWED_ITEM_FIELDS = [
-        "item_code", "item_name", "custom_spec_model", "uom",
+        "item_code", "item_name", "custom_spec_model", "description_section", "description", "uom",
         "qty", "rate", "custom_tax_rate", "custom_gross_rate", "amount",
         "custom_tax_amount", "custom_gross_amount", "custom_line_remark",
         "col_break1", "col_break7", "quantity_and_rate", "col_break2", "sec_break2", "col_break4"
@@ -262,10 +262,11 @@ ashan.tax.simplify_grid_row_form = function(frm) {
         });
     }
 
-    // 优化关键字段中文标签（精确对齐 12 个核心财税业务字段）
+    // 优化关键字段中文标签（精确对齐核心财税业务字段）
     grid.set_df_property("item_code", "label", "物料编码");
     grid.set_df_property("item_name", "label", "物料名称");
     grid.set_df_property("custom_spec_model", "label", "规格型号");
+    grid.set_df_property("description", "label", "说明 (Description)");
     grid.set_df_property("uom", "label", "单位");
     grid.set_df_property("quantity_and_rate", "label", "数量、单价与财税金额");
     grid.set_df_property("qty", "label", "数量");
