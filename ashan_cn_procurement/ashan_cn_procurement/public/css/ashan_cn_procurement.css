@@ -1,10 +1,32 @@
 /* ==========================================================================
-   ERPNext 16 侧边栏视觉层级定制
-   一级菜单（一级标题）：明显加粗、字号突出、深色对比度、图标与折叠箭头醒目
-   二级菜单（二级标题）：纯文字、绝对无图标、整齐缩进、清晰易读
+   ERPNext 16 业务扩展视觉定制
+   1. 侧边栏视觉层级定制（一级加粗突出、二级整齐缩进纯文字）
+   2. 全局默认容器宽度提升至 1200px（解决默认 900px 过窄问题）
    ========================================================================== */
 
-/* 1. 一级菜单 / 一级标题（顶层总控主页 与 各业务板块折叠头） */
+/* -------------------------------------------------------------
+   1. 全局默认宽度提升为 1200px
+   ------------------------------------------------------------- */
+:root,
+[data-theme="light"],
+[data-theme="dark"],
+body {
+    --page-max-width: 1200px !important;
+}
+
+body:not(.full-width) .std-form-layout .section-head,
+body:not(.full-width) .std-form-layout .section-body,
+body:not(.full-width) [data-page-route="Workspaces"] .layout-main,
+body:not(.full-width) .form-section-description,
+body:not(.full-width) .tree-children,
+body:not(.full-width) .form-section,
+body:not(.full-width) .layout-main-section {
+    max-width: 1200px !important;
+}
+
+/* -------------------------------------------------------------
+   2. 一级菜单 / 一级标题（顶层总控主页 与 各业务板块折叠头）
+   ------------------------------------------------------------- */
 .body-sidebar .sidebar-items > .sidebar-item-container > .standard-sidebar-item .sidebar-item-label,
 .body-sidebar .sidebar-item-container.section-item > .standard-sidebar-item .sidebar-item-label {
     font-weight: 700 !important;
@@ -39,7 +61,9 @@
     margin-right: 6px !important;
 }
 
-/* 2. 二级菜单 / 二级标题（所有折叠展开后的子项） */
+/* -------------------------------------------------------------
+   3. 二级菜单 / 二级标题（所有折叠展开后的子项）
+   ------------------------------------------------------------- */
 /* 彻底隐藏所有二级菜单图标与占位 */
 .body-sidebar .nested-container .sidebar-item-icon,
 .body-sidebar .sidebar-child-item .sidebar-item-icon,
