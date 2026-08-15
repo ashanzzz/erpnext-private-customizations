@@ -5,7 +5,7 @@ from frappe.utils import flt
 def execute():
     """
     1. 为 Purchase Invoice 创建 custom_items_summary 字段
-    2. 优化列表展示列 (in_list_view)
+    2. 优化列表展示列 (in_list_view): 显示 ID, naming_series, supplier, posting_date, bill_no, custom_items_summary
     3. 批量回填历史单据的物料摘要
     """
     cf_name = "Purchase Invoice-custom_items_summary"
@@ -35,10 +35,13 @@ def execute():
         cf.columns = 3
         cf.save(ignore_permissions=True)
 
-    # 列表列优化
-    frappe.db.set_value("DocField", {"parent": "Purchase Invoice", "fieldname": "due_date"}, "in_list_view", 0)
+    # 列表列优化：清空 title_field 让第一列始终展示单据编号 (ID)，并开启 naming_series, supplier, grand_total, bill_no
+    frappe.db.set_value("DocType", "Purchase Invoice", "title_field", "")
+    frappe.db.set_value("DocField", {"parent": "Purchase Invoice", "fieldname": "naming_series"}, "in_list_view", 1)
+    frappe.db.set_value("DocField", {"parent": "Purchase Invoice", "fieldname": "supplier"}, "in_list_view", 1)
     frappe.db.set_value("DocField", {"parent": "Purchase Invoice", "fieldname": "grand_total"}, "in_list_view", 1)
     frappe.db.set_value("DocField", {"parent": "Purchase Invoice", "fieldname": "bill_no"}, "in_list_view", 1)
+    frappe.db.set_value("DocField", {"parent": "Purchase Invoice", "fieldname": "due_date"}, "in_list_view", 0)
 
     # 历史单据回填
     invoices = frappe.get_all("Purchase Invoice", fields=["name"])
