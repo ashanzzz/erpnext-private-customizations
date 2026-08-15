@@ -46,11 +46,10 @@ def execute():
 
     # 精简 Purchase Invoice Item 子表字段
     KEEP_VISIBLE_FIELDS = [
-        "item_code", "item_name", "custom_spec_model", "uom", "description",
-        "qty", "custom_gross_rate", "custom_tax_rate", "rate", "amount",
+        "item_code", "item_name", "custom_spec_model", "uom",
+        "qty", "rate", "custom_tax_rate", "custom_gross_rate", "amount",
         "custom_tax_amount", "custom_gross_amount", "custom_line_remark",
-        "col_break1", "col_break2", "col_break4", "col_break7",
-        "quantity_and_rate", "description_section"
+        "col_break1", "col_break7", "quantity_and_rate", "col_break2", "sec_break2", "col_break4"
     ]
     docfields = frappe.db.get_all("DocField", filters={"parent": "Purchase Invoice Item"}, fields=["name", "fieldname"])
     for df in docfields:
@@ -61,15 +60,19 @@ def execute():
             frappe.db.set_value("DocField", df.name, "hidden", 0)
 
     label_updates = {
+        "item_code": "物料编码",
+        "item_name": "物料名称",
+        "custom_spec_model": "规格型号",
+        "uom": "单位",
+        "quantity_and_rate": "数量、单价与财税金额",
         "qty": "数量",
-        "custom_gross_rate": "含税单价",
-        "custom_tax_rate": "税率(%)",
         "rate": "不含税单价",
-        "amount": "金额 (未税)",
+        "custom_tax_rate": "税率(%)",
+        "custom_gross_rate": "含税单价",
+        "amount": "总金额 (未税)",
         "custom_tax_amount": "税额",
         "custom_gross_amount": "价税合计",
-        "custom_line_remark": "行备注",
-        "custom_spec_model": "规格型号"
+        "custom_line_remark": "备注"
     }
     for fn, lbl in label_updates.items():
         if frappe.db.exists("DocField", {"parent": "Purchase Invoice Item", "fieldname": fn}):
