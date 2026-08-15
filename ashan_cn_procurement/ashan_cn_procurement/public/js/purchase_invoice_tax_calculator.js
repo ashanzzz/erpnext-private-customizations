@@ -229,14 +229,50 @@ ashan.tax.simplify_invoice_form = function(frm) {
     frm.toggle_display("supplier_invoice_details", true);
     frm.toggle_display("items_section", true);
 
-    // 4. 清理 items 明细表头
+    // 4. 清理 items 明细表头与行抽屉字段
     ashan.tax.clean_grid_headers(frm);
+    ashan.tax.simplify_grid_row_form(frm);
 
     // 5. 联动发票类型规则
     ashan.tax.handle_invoice_type(frm);
 
     // 6. 注入优化样式
     ashan.tax.inject_form_css();
+};
+
+// 精简子表明细行编辑抽屉 (Grid Row Form)
+ashan.tax.simplify_grid_row_form = function(frm) {
+    if (!frm || !frm.fields_dict || !frm.fields_dict.items || !frm.fields_dict.items.grid) return;
+    const grid = frm.fields_dict.items.grid;
+
+    const ALLOWED_ITEM_FIELDS = [
+        "item_code", "item_name", "custom_spec_model", "uom", "description",
+        "qty", "custom_gross_rate", "custom_tax_rate", "rate", "amount",
+        "custom_tax_amount", "custom_gross_amount", "custom_line_remark",
+        "col_break1", "col_break7", "quantity_and_rate", "col_break2", "sec_break2", "col_break4"
+    ];
+
+    if (grid.docfields) {
+        grid.docfields.forEach(df => {
+            if (!ALLOWED_ITEM_FIELDS.includes(df.fieldname)) {
+                df.hidden = 1;
+            } else {
+                df.hidden = 0;
+            }
+        });
+    }
+
+    // 优化关键字段中文标签
+    grid.set_df_property("quantity_and_rate", "label", "数量、价格与税额");
+    grid.set_df_property("qty", "label", "数量");
+    grid.set_df_property("custom_gross_rate", "label", "含税单价");
+    grid.set_df_property("custom_tax_rate", "label", "税率(%)");
+    grid.set_df_property("rate", "label", "不含税单价");
+    grid.set_df_property("amount", "label", "金额 (未税)");
+    grid.set_df_property("custom_tax_amount", "label", "税额");
+    grid.set_df_property("custom_gross_amount", "label", "价税合计");
+    grid.set_df_property("custom_line_remark", "label", "行备注");
+    grid.set_df_property("custom_spec_model", "label", "规格型号");
 };
 
 // 注入极简表单 CSS
@@ -281,6 +317,22 @@ ashan.tax.inject_form_css = function() {
             padding-bottom: 8px !important;
             margin-top: 16px !important;
             border-bottom: 1.5px solid #e2e8f0 !important;
+        }
+
+        /* 子表行编辑抽屉美化 */
+        .grid-row-open .form-in-grid {
+            background-color: #fafbfc;
+            border-radius: 8px;
+            padding: 16px !important;
+            border: 1px solid #e2e8f0;
+        }
+        .grid-row-open .section-head {
+            font-size: 13.5px !important;
+            font-weight: 700 !important;
+            color: #1e293b !important;
+            padding-bottom: 6px !important;
+            margin-top: 10px !important;
+            border-bottom: 1px solid #e2e8f0 !important;
         }
     </style>
     `;
@@ -517,6 +569,9 @@ frappe.ui.form.on("Purchase Invoice", {
 });
 
 frappe.ui.form.on("Purchase Invoice Item", {
+    form_render: function(frm, cdt, cdn) {
+        ashan.tax.simplify_grid_row_form(frm);
+    },
     item_code: function(frm, cdt, cdn) {
         const row = locals[cdt][cdn];
         let updates = {};

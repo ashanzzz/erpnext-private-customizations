@@ -7,6 +7,7 @@ def execute():
     1. 为 Purchase Invoice 创建 custom_items_summary 字段
     2. 优化列表展示列 (in_list_view): 显示 ID, naming_series, supplier, posting_date, bill_no, custom_items_summary
     3. 批量回填历史单据的物料摘要
+    4. 精简 Purchase Invoice Item 子表字段与行抽屉 (隐藏 90+ 冗余字段)
     """
     cf_name = "Purchase Invoice-custom_items_summary"
     if not frappe.db.exists("Custom Field", cf_name):
@@ -42,6 +43,39 @@ def execute():
     frappe.db.set_value("DocField", {"parent": "Purchase Invoice", "fieldname": "grand_total"}, "in_list_view", 1)
     frappe.db.set_value("DocField", {"parent": "Purchase Invoice", "fieldname": "bill_no"}, "in_list_view", 1)
     frappe.db.set_value("DocField", {"parent": "Purchase Invoice", "fieldname": "due_date"}, "in_list_view", 0)
+
+    # 精简 Purchase Invoice Item 子表字段
+    KEEP_VISIBLE_FIELDS = [
+        "item_code", "item_name", "custom_spec_model", "uom", "description",
+        "qty", "custom_gross_rate", "custom_tax_rate", "rate", "amount",
+        "custom_tax_amount", "custom_gross_amount", "custom_line_remark",
+        "col_break1", "col_break2", "col_break4", "col_break7",
+        "quantity_and_rate", "description_section"
+    ]
+    docfields = frappe.db.get_all("DocField", filters={"parent": "Purchase Invoice Item"}, fields=["name", "fieldname"])
+    for df in docfields:
+        fn = df.fieldname
+        if fn and fn not in KEEP_VISIBLE_FIELDS:
+            frappe.db.set_value("DocField", df.name, "hidden", 1)
+        elif fn in KEEP_VISIBLE_FIELDS:
+            frappe.db.set_value("DocField", df.name, "hidden", 0)
+
+    label_updates = {
+        "qty": "数量",
+        "custom_gross_rate": "含税单价",
+        "custom_tax_rate": "税率(%)",
+        "rate": "不含税单价",
+        "amount": "金额 (未税)",
+        "custom_tax_amount": "税额",
+        "custom_gross_amount": "价税合计",
+        "custom_line_remark": "行备注",
+        "custom_spec_model": "规格型号"
+    }
+    for fn, lbl in label_updates.items():
+        if frappe.db.exists("DocField", {"parent": "Purchase Invoice Item", "fieldname": fn}):
+            frappe.db.set_value("DocField", {"parent": "Purchase Invoice Item", "fieldname": fn}, "label", lbl)
+        if frappe.db.exists("Custom Field", {"dt": "Purchase Invoice Item", "fieldname": fn}):
+            frappe.db.set_value("Custom Field", {"dt": "Purchase Invoice Item", "fieldname": fn}, "label", lbl)
 
     # 历史单据回填
     invoices = frappe.get_all("Purchase Invoice", fields=["name"])
