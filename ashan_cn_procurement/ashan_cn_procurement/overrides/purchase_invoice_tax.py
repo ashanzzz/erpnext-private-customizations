@@ -69,8 +69,33 @@ def check_bill_no_duplicate(bill_no, docname=None):
         }
     return {"is_duplicate": False}
 
+def update_items_summary(doc):
+    """
+    自动汇总发票明细物料至 custom_items_summary 字段，便于在列表页快速查看与搜索
+    """
+    if not getattr(doc, "items", None):
+        doc.custom_items_summary = ""
+        return
+
+    item_strs = []
+    for it in doc.items:
+        name = (it.item_name or it.item_code or "").strip()
+        if not name:
+            continue
+        qty = flt(it.qty)
+        qty_str = f"{qty:g}"
+        item_strs.append(f"{name} (x{qty_str})")
+
+    if not item_strs:
+        doc.custom_items_summary = ""
+    elif len(item_strs) > 3:
+        doc.custom_items_summary = "、".join(item_strs[:3]) + f" 等共{len(item_strs)}项"
+    else:
+        doc.custom_items_summary = "、".join(item_strs)
+
 def calculate_china_line_taxes(doc, method=None):
     if not doc.items:
+        update_items_summary(doc)
         return
 
     net_total = 0.0
@@ -193,8 +218,13 @@ def calculate_china_line_taxes(doc, method=None):
     doc.base_rounded_total = grand_total
     doc.outstanding_amount = grand_total
 
+    # 4. 自动生成开票物料明细摘要
+    update_items_summary(doc)
+
 def validate_purchase_invoice_taxes(doc, method=None):
     # 1. 校验发票类型与发票号
     validate_invoice_type_and_bill_no(doc)
     # 2. 计算多税率与进项税额
     calculate_china_line_taxes(doc, method)
+    # 3. 自动更新物料明细摘要
+    update_items_summary(doc)

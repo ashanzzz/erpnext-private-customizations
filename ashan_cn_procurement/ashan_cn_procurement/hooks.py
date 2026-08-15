@@ -39,6 +39,10 @@ doctype_js = {
     "Purchase Invoice": "public/js/purchase_invoice_tax_calculator.js"
 }
 
+doctype_list_js = {
+    "Purchase Invoice": "public/js/purchase_invoice_list.js"
+}
+
 # Doc Events / Server Hooks
 doc_events = {
     "Purchase Invoice": {
