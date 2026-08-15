@@ -79,7 +79,7 @@ ashan.tax.get_vat_account = function(frm, callback) {
 ashan.tax.clean_grid_headers = function(frm) {
     const label_map = {
         "item_code": "物料",
-        "custom_spec_model": "规格型号",
+        "description": "规格",
         "qty": "数量",
         "custom_gross_rate": "含税单价",
         "custom_tax_rate": "税率 (%)",
@@ -229,54 +229,14 @@ ashan.tax.simplify_invoice_form = function(frm) {
     frm.toggle_display("supplier_invoice_details", true);
     frm.toggle_display("items_section", true);
 
-    // 4. 清理 items 明细表头与行抽屉字段
+    // 4. 刷新 items 表头；字段可见性由服务端集中配置，不在 JS 中隐藏。
     ashan.tax.clean_grid_headers(frm);
-    ashan.tax.simplify_grid_row_form(frm);
 
     // 5. 联动发票类型规则
     ashan.tax.handle_invoice_type(frm);
 
     // 6. 注入优化样式
     ashan.tax.inject_form_css();
-};
-
-// 精简子表明细行编辑抽屉 (Grid Row Form)
-ashan.tax.simplify_grid_row_form = function(frm) {
-    if (!frm || !frm.fields_dict || !frm.fields_dict.items || !frm.fields_dict.items.grid) return;
-    const grid = frm.fields_dict.items.grid;
-
-    const ALLOWED_ITEM_FIELDS = [
-        "item_code", "item_name", "custom_spec_model", "description_section", "description", "uom",
-        "qty", "rate", "custom_tax_rate", "custom_gross_rate", "amount",
-        "custom_tax_amount", "custom_gross_amount", "custom_line_remark",
-        "col_break1", "col_break7", "quantity_and_rate", "col_break2", "sec_break2", "col_break4"
-    ];
-
-    if (grid.docfields) {
-        grid.docfields.forEach(df => {
-            if (!ALLOWED_ITEM_FIELDS.includes(df.fieldname)) {
-                df.hidden = 1;
-            } else {
-                df.hidden = 0;
-            }
-        });
-    }
-
-    // 优化关键字段中文标签（精确对齐核心财税业务字段）
-    grid.set_df_property("item_code", "label", "物料编码");
-    grid.set_df_property("item_name", "label", "物料名称");
-    grid.set_df_property("custom_spec_model", "label", "规格型号");
-    grid.set_df_property("description", "label", "说明 (Description)");
-    grid.set_df_property("uom", "label", "单位");
-    grid.set_df_property("quantity_and_rate", "label", "数量、单价与财税金额");
-    grid.set_df_property("qty", "label", "数量");
-    grid.set_df_property("rate", "label", "不含税单价");
-    grid.set_df_property("custom_tax_rate", "label", "税率(%)");
-    grid.set_df_property("custom_gross_rate", "label", "含税单价");
-    grid.set_df_property("amount", "label", "总金额 (未税)");
-    grid.set_df_property("custom_tax_amount", "label", "税额");
-    grid.set_df_property("custom_gross_amount", "label", "价税合计");
-    grid.set_df_property("custom_line_remark", "label", "备注");
 };
 
 // 注入极简表单 CSS
@@ -574,7 +534,6 @@ frappe.ui.form.on("Purchase Invoice", {
 
 frappe.ui.form.on("Purchase Invoice Item", {
     form_render: function(frm, cdt, cdn) {
-        ashan.tax.simplify_grid_row_form(frm);
     },
     item_code: function(frm, cdt, cdn) {
         const row = locals[cdt][cdn];

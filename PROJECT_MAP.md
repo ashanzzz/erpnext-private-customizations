@@ -11,6 +11,7 @@
 - **App 标题 (Title)**: `业务扩展` (ERPNext 16 采购、报销、油卡与受限单据业务扩展)
 - **App 核心代码目录**: `ashan_cn_procurement/ashan_cn_procurement`
 - **入口 Hooks**: `ashan_cn_procurement/ashan_cn_procurement/hooks.py`
+- **Frappe 模块元数据目录**: `ashan_cn_procurement/ashan_cn_procurement/ashan_cn_procurement/`
 - **安装包元数据**: `ashan_cn_procurement/pyproject.toml`
 
 ---
@@ -50,11 +51,15 @@ d:\SynologyDrive团队\antigravity\erpnext16/
 ├── ashan_cn_procurement/             # ⭐️ 核心 App 模块源码 (Doctype/Custom/Hooks/Public)
 │   ├── pyproject.toml
 │   └── ashan_cn_procurement/
-│       ├── custom/                   # 字段与单据 Custom 属性
-│       ├── doctype/                  # 自定义 DocType 模块
+│       ├── custom/                   # 字段与单据 Custom 属性（App 级）
+│       ├── reimbursement/            # API / 业务服务（App 级）
 │       ├── public/                   # 前端 JS/CSS 静态资源与侧边栏
-│       ├── workspace/                # Workspace 布局配置
-│       └── hooks.py                  # App 核心钩子文件
+│       ├── hooks.py                  # App 核心钩子文件
+│       └── ashan_cn_procurement/     # Frappe 模块（必须保持此层）
+│           ├── doctype/              # 自定义 DocType 模块
+│           ├── report/               # 标准报表
+│           ├── workspace/            # Workspace 布局配置
+│           └── workspace_sidebar/    # Workspace Sidebar 配置
 │
 ├── ashanzzz-docker-erpnext16-complete-fix/ # 🐳 给 ashanzzz/docker 仓库准备的 CI/Dockerfile 完整修复包
 │   ├── README_FIX.md                 # 包含 Docker 镜像构建失败修复指南

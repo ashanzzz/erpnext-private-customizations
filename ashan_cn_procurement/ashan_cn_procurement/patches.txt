@@ -1,2 +1,9 @@
+[pre_model_sync]
+execute:pass
+
+[post_model_sync]
 ashan_cn_procurement.patches.v1_0.transplant_home_dashboard
 ashan_cn_procurement.patches.v1_0.add_pi_items_summary_column
+ashan_cn_procurement.patches.v1_1.unify_description_fields
+ashan_cn_procurement.patches.v1_2.unify_reimbursement_description_metadata
+ashan_cn_procurement.patches.v1_3.unify_purchase_invoice_item_layout
