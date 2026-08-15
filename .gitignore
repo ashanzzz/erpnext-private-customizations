@@ -26,3 +26,6 @@ ashanzzz-docker-erpnext16-complete-fix/
 # 根目录本地诊断与自动化测试脚本 (只保留 ashan_cn_procurement 核心包与 Markdown 文档)
 /*.py
 user_translations.csv
+
+# 容器热同步前生成的可回退 App 备份
+/backups/

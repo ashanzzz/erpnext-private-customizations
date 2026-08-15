@@ -32,4 +32,4 @@
 
 ## 当前状态
 
-当前只完成领域边界与工程入口。未付款发票选择弹窗、草稿占用和 Payment Entry 关联将以本包为唯一实现位置。
+已完成 8888 参考站的复盘与 v16 设计，见 `docs/designs/reimbursement_unpaid_invoice_v16_design.md`。未付款发票选择弹窗、草稿占用和 Payment Entry 关联仍未实现，将以本包为唯一实现位置。

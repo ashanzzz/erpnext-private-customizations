@@ -12,7 +12,8 @@ app_license = "mit"
 app_include_css = "/assets/ashan_cn_procurement/css/ashan_cn_procurement.css"
 app_include_js = [
     "/assets/ashan_cn_procurement/js/ashan_cn_sidebar.js",
-    "/assets/ashan_cn_procurement/js/purchase_invoice_tax_calculator.js"
+    "/assets/ashan_cn_procurement/js/purchase_invoice_tax_calculator.js",
+    "/assets/ashan_cn_procurement/js/reimbursement_request.js",
 ]
 
 # App Switcher Dropdown Registration
@@ -36,7 +37,7 @@ role_home_page = {
 
 # DocType Specific Client Scripts
 doctype_js = {
-    "Purchase Invoice": "public/js/purchase_invoice_tax_calculator.js"
+    "Purchase Invoice": "public/js/purchase_invoice_tax_calculator.js",
 }
 
 doctype_list_js = {
