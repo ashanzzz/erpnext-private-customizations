@@ -20,7 +20,7 @@ add_to_apps_screen = [
     {
         "name": "ashan_cn_procurement",
         "title": "业务扩展",
-        "route": "/app/my-business"
+        "route": "/app/home"
     }
 ]
 
@@ -30,8 +30,8 @@ get_website_user_home_page = "ashan_cn_procurement.boot.get_website_user_home_pa
 extend_bootinfo = "ashan_cn_procurement.boot.boot_session"
 
 role_home_page = {
-    "System Manager": "app/my-business",
-    "All": "app/my-business"
+    "System Manager": "app/home",
+    "All": "app/home"
 }
 
 # DocType Specific Client Scripts

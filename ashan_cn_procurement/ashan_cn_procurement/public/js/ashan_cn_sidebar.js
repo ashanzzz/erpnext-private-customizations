@@ -10,11 +10,11 @@
     // 0. 路由全局重定向规则
     if (window.frappe) {
         frappe.re_route = frappe.re_route || {};
-        frappe.re_route[""] = "desk/my-business";
-        frappe.re_route["desk"] = "desk/my-business";
-        frappe.re_route["app"] = "desk/my-business";
-        frappe.re_route["Workspaces"] = "desk/my-business";
-        frappe.re_route["workspaces"] = "desk/my-business";
+        frappe.re_route[""] = "desk/home";
+        frappe.re_route["desk"] = "desk/home";
+        frappe.re_route["app"] = "desk/home";
+        frappe.re_route["Workspaces"] = "desk/home";
+        frappe.re_route["workspaces"] = "desk/home";
     }
 
     // 1. 一级标题 → 对应 Workspace 映射
@@ -31,13 +31,16 @@
         "公司治理": "company-compliance-center",
         "财务与报销": "accounting-and-finance",
         "财务": "accounting-and-finance",
-        "我的业务 (总主页)": "my-business",
-        "我的业务 (总控主页)": "my-business",
-        "我的业务 (总看板)": "my-business",
-        "我的业务": "my-business"
+        "我的业务 (总主页)": "home",
+        "我的业务 (总控主页)": "home",
+        "我的业务 (总看板)": "home",
+        "我的业务": "home",
+        "Home": "home",
+        "home": "home"
     };
 
     const ALL_WS_KEYS = [
+        "home", "Home",
         "my business", "my-business",
         "stock and inventory", "stock-and-inventory",
         "procurement management", "procurement-management",
@@ -48,7 +51,7 @@
         "业务扩展"
     ];
 
-    // 2. 深度拦截 Frappe Sidebar 解析，确保在任意单据页刷新（F5）均保持 My Business
+    // 2. 深度拦截 Frappe Sidebar 解析，确保在任意单据页刷新（F5）均保持 Home 业务侧边栏
     function patch_sidebar_resolver() {
         if (!window.frappe || !frappe.ui || !frappe.ui.Sidebar) return false;
         const Sidebar = frappe.ui.Sidebar;
@@ -56,20 +59,20 @@
 
         const orig_resolve_sidebar = Sidebar.prototype.resolve_sidebar;
         Sidebar.prototype.resolve_sidebar = function(doctype, module) {
-            // 当处于采购、库存、财务等业务单据或标准模块时，统一解析为 My Business 侧边栏
+            // 当处于采购、库存、财务等业务单据或标准模块时，统一解析为 Home 侧边栏
             const mod_lower = (module || "").toLowerCase();
-            if (!module || mod_lower === "buying" || mod_lower === "stock" || mod_lower === "accounts" || mod_lower === "hr" || mod_lower === "ashan_cn_procurement" || mod_lower === "ashan cn procurement") {
-                return "My Business";
+            if (!module || mod_lower === "setup" || mod_lower === "buying" || mod_lower === "stock" || mod_lower === "accounts" || mod_lower === "hr" || mod_lower === "ashan_cn_procurement" || mod_lower === "ashan cn procurement") {
+                return "Home";
             }
             const res = orig_resolve_sidebar ? orig_resolve_sidebar.apply(this, arguments) : null;
-            return res || "My Business";
+            return res || "Home";
         };
 
         const orig_choose_app_name = Sidebar.prototype.choose_app_name;
         Sidebar.prototype.choose_app_name = function() {
             if (orig_choose_app_name) orig_choose_app_name.apply(this, arguments);
             const title_lower = (this.sidebar_title || "").toLowerCase();
-            if (title_lower === "my business" || ALL_WS_KEYS.includes(title_lower)) {
+            if (title_lower === "home" || title_lower === "my business" || ALL_WS_KEYS.includes(title_lower)) {
                 this.header_subtitle = "业务扩展";
                 if (this.sidebar_header && this.sidebar_header.find) {
                     this.sidebar_header.find(".sidebar-header-subtitle").text("业务扩展");
