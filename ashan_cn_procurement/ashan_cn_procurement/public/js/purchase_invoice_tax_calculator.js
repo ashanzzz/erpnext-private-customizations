@@ -42,27 +42,7 @@ if (frappe.ui && frappe.ui.form && frappe.ui.form.Form && !frappe.ui.form.Form.p
     frappe.ui.form.Form.prototype._ashan_currency_intercepted = true;
 }
 
-// (2) 拦截 Form.prototype.setup_naming_series 阻止自动隐藏 naming_series
-if (frappe.ui && frappe.ui.form && frappe.ui.form.Form && !frappe.ui.form.Form.prototype._ashan_ns_intercepted) {
-    const orig_setup_naming_series = frappe.ui.form.Form.prototype.setup_naming_series;
-    frappe.ui.form.Form.prototype.setup_naming_series = function() {
-        if (this.doc && this.doc.doctype === "Purchase Invoice") {
-            if (this.fields_dict["naming_series"]) {
-                this.toggle_display("naming_series", true);
-                this.set_df_property("naming_series", "hidden", 0);
-                this.set_df_property("naming_series", "label", "单据编号 (Series)");
-                if (!this.doc.__islocal) {
-                    this.set_df_property("naming_series", "read_only", 1);
-                }
-            }
-            return;
-        }
-        return orig_setup_naming_series.apply(this, arguments);
-    };
-    frappe.ui.form.Form.prototype._ashan_ns_intercepted = true;
-}
-
-// (3) 拦截 Currency 单元格格式化器，在采购发票明细中仅输出纯数字
+// (2) 拦截 Currency 单元格格式化器，在采购发票明细中仅输出纯数字
 if (frappe.form && frappe.form.formatters && !frappe.form.formatters._ashan_currency_patched) {
     const orig_currency_formatter = frappe.form.formatters.Currency;
     frappe.form.formatters.Currency = function(value, df, options, doc) {
@@ -213,11 +193,14 @@ ashan.tax.simplify_invoice_form = function(frm) {
 
     // 2. 显式释放并展示受限单据、受限组、修改单据日期等核心字段
     const FIELDS_TO_SHOW = [
-        "naming_series", "posting_date", "posting_time", "set_posting_time",
+        "posting_date", "posting_time", "set_posting_time",
         "custom_biz_mode", "custom_invoice_type",
         "custom_is_restricted_doc", "custom_restriction_group",
         "supplier", "bill_no", "bill_date", "items"
     ];
+    if (frm.is_new()) {
+        FIELDS_TO_SHOW.push("naming_series");
+    }
     FIELDS_TO_SHOW.forEach(f => {
         if (frm.fields_dict[f]) {
             frm.toggle_display(f, true);
@@ -225,17 +208,8 @@ ashan.tax.simplify_invoice_form = function(frm) {
         }
     });
 
-    // 显式确保 naming_series 无论在新建还是已有单据下都保持展示
-    if (frm.fields_dict["naming_series"]) {
-        frm.toggle_display("naming_series", true);
-        frm.set_df_property("naming_series", "hidden", 0);
+    if (frm.is_new() && frm.fields_dict["naming_series"]) {
         frm.set_df_property("naming_series", "label", "单据编号 (Series)");
-        if (!frm.is_new()) {
-            frm.set_df_property("naming_series", "read_only", 1);
-        }
-        if (frm.fields_dict["naming_series"].$wrapper) {
-            frm.fields_dict["naming_series"].$wrapper.show().removeClass("hide-control hide");
-        }
     }
 
     // 3. 优化标签名与分类标题
@@ -528,12 +502,6 @@ frappe.ui.form.on("Purchase Invoice", {
     refresh: function(frm) {
         ashan.tax.simplify_invoice_form(frm);
         ashan.tax.sync_taxes_and_totals(frm);
-        setTimeout(function() {
-            ashan.tax.simplify_invoice_form(frm);
-        }, 100);
-    },
-    onload_post_render: function(frm) {
-        ashan.tax.simplify_invoice_form(frm);
     },
     custom_invoice_type: function(frm) {
         ashan.tax.handle_invoice_type(frm);
