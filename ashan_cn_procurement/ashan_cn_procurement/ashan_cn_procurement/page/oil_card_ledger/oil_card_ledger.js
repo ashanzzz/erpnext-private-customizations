@@ -202,21 +202,6 @@ class UnifiedOilCardLedgerConsole {
 							</table>
 						</div>
 
-						<!-- 油票与发票开票管理模块 (仅油卡管理员可见) -->
-						<div id="invoice-mgmt-section" style="display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-top: 4px;">
-							<div style="display: flex; justify-content: space-between; align-items: center;">
-								<div>
-									<div style="font-size: 13.5px; font-weight: 700; color: #0f172a; margin-bottom: 3px;">🧾 油票与发票开票关联 (管理员专享)</div>
-									<div style="font-size: 11.5px; color: #64748b;">
-										当前油卡累计未开票金额：<b id="disp-uninvoiced-amt" style="color:#dc2626; font-size:13px;">¥ 0.00</b>
-									</div>
-								</div>
-								<button class="btn-cmd-primary" id="btn-goto-batch-invoice" style="padding: 6px 14px; font-size: 12px;">
-									<span>📑</span> 打开油票批量录入向导 ➔
-								</button>
-							</div>
-						</div>
-
 					</div>
 				</div>
 			</div>
@@ -469,15 +454,6 @@ class UnifiedOilCardLedgerConsole {
 					},
 				});
 			});
-		});
-
-		// 前往油票批量录入
-		this.wrapper.on("click", "#btn-goto-batch-invoice", function () {
-			if (self.activeCard) {
-				frappe.set_route("List", "Oil Card Invoice Batch", { oil_card: self.activeCard.name });
-			} else {
-				frappe.set_route("List", "Oil Card Invoice Batch");
-			}
 		});
 	}
 
@@ -897,11 +873,8 @@ class UnifiedOilCardLedgerConsole {
 		// 管理员高级模块展示
 		if (this.isManager) {
 			this.wrapper.find(".mgr-col").show();
-			this.wrapper.find("#invoice-mgmt-section").show();
-			this.wrapper.find("#disp-uninvoiced-amt").text(formatMoney(card.uninvoiced_amount || 0));
 		} else {
 			this.wrapper.find(".mgr-col").hide();
-			this.wrapper.find("#invoice-mgmt-section").hide();
 		}
 
 		// Zone 3: 渲染合流流水表格
