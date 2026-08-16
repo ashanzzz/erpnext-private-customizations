@@ -1,0 +1,403 @@
+/* ============================================================ */
+/* 💳 油卡综合台账明细台 (Oil Card Comprehensive Ledger) 样式    */
+/* ============================================================ */
+
+.oil-console-layout {
+  display: flex;
+  gap: 20px;
+  min-height: calc(100vh - 120px);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #1e293b;
+}
+
+/* ===== 左侧油卡导航栏 ===== */
+.oil-cards-sidebar {
+  width: 280px;
+  min-width: 280px;
+  max-width: 280px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.sidebar-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.btn-add-card {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-add-card:hover {
+  background: #dbeafe;
+}
+
+.card-search-box {
+  margin-bottom: 12px;
+}
+.card-search-input {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  box-sizing: border-box;
+  outline: none;
+}
+.card-search-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.cards-list-container {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.oil-card-item {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.oil-card-item:hover {
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+}
+
+.oil-card-item.is-active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 1.5px #2563eb;
+}
+
+.card-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.card-item-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-item-badge {
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.card-item-mid {
+  font-size: 11.5px;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.card-item-bot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.card-item-supplier {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.card-item-balance {
+  font-size: 13px;
+  font-weight: 700;
+  color: #059669;
+}
+
+/* ===== 右侧主控制台 ===== */
+.oil-console-main {
+  flex: 1;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 20px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 顶部操作与筛选栏 */
+.console-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.current-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.meta-card-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.meta-card-no {
+  font-size: 12px;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.console-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.filter-select {
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  outline: none;
+  cursor: pointer;
+}
+
+.btn-action-primary {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.15s ease;
+}
+.btn-action-primary:hover { background: #1d4ed8; }
+
+.btn-action-secondary {
+  background: #f8fafc;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+.btn-action-secondary:hover { background: #f1f5f9; border-color: #94a3b8; }
+
+/* 4 大财务结转指标看板 */
+.kpi-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.kpi-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
+
+.kpi-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.kpi-card-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.kpi-card-count {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.kpi-card-value {
+  font-size: 20px;
+  font-weight: 800;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.kpi-card-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.kpi-blue { border-top: 3px solid #3b82f6; }
+.kpi-blue .kpi-card-value { color: #1d4ed8; }
+
+.kpi-emerald { border-top: 3px solid #10b981; }
+.kpi-emerald .kpi-card-value { color: #047857; }
+
+.kpi-amber { border-top: 3px solid #f59e0b; }
+.kpi-amber .kpi-card-value { color: #b45309; }
+
+.kpi-purple { border-top: 3px solid #8b5cf6; }
+.kpi-purple .kpi-card-value { color: #6d28d9; }
+
+/* 标签页导航与内容 */
+.tabs-header-nav {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-top: 4px;
+}
+
+.tab-nav-btn {
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  padding: 8px 14px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.tab-nav-btn:hover {
+  color: #0f172a;
+}
+
+.tab-nav-btn.is-active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+}
+
+.tab-content-pane {
+  display: none;
+  flex: 1;
+}
+.tab-content-pane.is-active {
+  display: block;
+}
+
+/* 现代化数据表格 */
+.oil-data-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.oil-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+
+.oil-data-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 700;
+  padding: 9px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.oil-data-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+  white-space: nowrap;
+}
+
+.oil-data-table tr:hover td {
+  background: #f8fafc;
+}
+
+.oil-data-table tfoot td {
+  background: #f8fafc;
+  font-weight: 700;
+  border-top: 2px solid #e2e8f0;
+  color: #0f172a;
+}
+
+.status-pill-subtle {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.status-pill-green { background: #dcfce7; color: #15803d; }
+.status-pill-amber { background: #fef3c7; color: #b45309; }
+.status-pill-blue { background: #dbeafe; color: #1d4ed8; }
+
+.empty-placeholder {
+  text-align: center;
+  padding: 40px 20px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+.empty-placeholder-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
