@@ -249,7 +249,7 @@ class UnifiedOilCardLedgerConsole {
 
 		// 切换油卡
 		this.wrapper.on("click", ".oil-card-item", function () {
-			const cardName = $(this).data("name");
+			const cardName = String($(this).attr("data-name"));
 			self.selectCard(cardName);
 		});
 
@@ -261,8 +261,8 @@ class UnifiedOilCardLedgerConsole {
 		// 删除油卡档案 (单页确认，零跳转)
 		this.wrapper.on("click", ".btn-delete-card", function (e) {
 			e.stopPropagation();
-			const cardId = $(this).data("name");
-			const cardTitle = $(this).data("title") || cardId;
+			const cardId = String($(this).attr("data-name"));
+			const cardTitle = String($(this).attr("data-title") || cardId);
 			frappe.confirm(
 				`确定要彻底删除油卡【<b>${cardTitle}</b>】吗？<br><br><span style="color:#dc2626;">警告：该操作将删除该油卡档案，请确认该卡无未结清账目。</span>`,
 				function () {
@@ -272,7 +272,7 @@ class UnifiedOilCardLedgerConsole {
 						callback: function (r) {
 							if (r.message && r.message.status === "ok") {
 								frappe.show_alert({ message: r.message.message, indicator: "green" }, 3);
-								if (self.activeCard && self.activeCard.name === cardId) {
+								if (self.activeCard && String(self.activeCard.name) === cardId) {
 									self.activeCard = null;
 								}
 								self.loadCards();
@@ -861,25 +861,30 @@ class UnifiedOilCardLedgerConsole {
 
 		let html = "";
 		this.cards.forEach((c) => {
-			const isActive = this.activeCard && this.activeCard.name === c.name ? "is-active" : "";
-			const bal = formatMoney(c.current_balance || 0);
+			const strName = String(c.name);
+			const isActive = this.activeCard && String(this.activeCard.name) === strName ? "is-active" : "";
+			const currentBal = flt(c.current_balance || 0);
+			const bal = formatMoney(currentBal);
 			const cardNo = c.card_no_masked || c.card_code || "";
+			const balClass = currentBal === 0 ? "balance-zero" : "";
 
 			html += `
-				<div class="oil-card-item ${isActive}" data-name="${c.name}">
+				<div class="oil-card-item ${isActive}" data-name="${strName}">
 					<div class="card-item-top">
 						<span class="card-item-name" title="${c.card_name}">${c.card_name}</span>
 						<div class="card-top-right-group">
 							<span class="card-item-badge">${c.card_type || "油卡"}</span>
-							<span class="btn-delete-card" data-name="${c.name}" data-title="${c.card_name}" title="删除油卡档案">🗑️</span>
+							<button type="button" class="btn-delete-card" data-name="${strName}" data-title="${c.card_name}" title="删除油卡档案">
+								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+							</button>
 						</div>
 					</div>
 					<div class="card-item-mid">
 						<span>${cardNo}</span>
 					</div>
 					<div class="card-item-bot">
-						<span class="card-item-supplier">${c.supplier || ""}</span>
-						<span class="card-item-balance">${bal}</span>
+						<span class="card-item-supplier" title="${c.supplier || c.company || ''}">${c.supplier || c.company || ""}</span>
+						<span class="card-item-balance ${balClass}">${bal}</span>
 					</div>
 				</div>
 			`;
@@ -900,9 +905,10 @@ class UnifiedOilCardLedgerConsole {
 	}
 
 	selectCard(cardName) {
-		this.activeCard = this.cards.find((c) => c.name === cardName) || null;
+		const strName = String(cardName);
+		this.activeCard = this.cards.find((c) => String(c.name) === strName) || null;
 		this.wrapper.find(".oil-card-item").removeClass("is-active");
-		this.wrapper.find(`.oil-card-item[data-name="${cardName}"]`).addClass("is-active");
+		this.wrapper.find(`.oil-card-item[data-name="${strName}"]`).addClass("is-active");
 
 		if (this.activeCard) {
 			this.wrapper.find("#main-empty-placeholder").hide();

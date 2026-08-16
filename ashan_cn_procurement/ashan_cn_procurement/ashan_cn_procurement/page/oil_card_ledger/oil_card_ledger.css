@@ -76,62 +76,84 @@
 .cards-list-container {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 6px 12px 6px;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
 }
 
 .oil-card-item {
-  background: #fff;
+  background: #ffffff;
   border: 1px solid #e2e8f0;
+  border-left: 3.5px solid #cbd5e1;
   border-radius: 8px;
-  padding: 9px 11px;
+  padding: 10px 12px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.18s ease;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 .oil-card-item:hover {
   border-color: #94a3b8;
+  border-left-color: #64748b;
   transform: translateY(-1px);
-  box-shadow: 0 3px 5px -1px rgba(0,0,0,0.05);
+  background: #f8fafc;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.06);
 }
 
 .oil-card-item.is-active {
-  border-color: #2563eb;
-  background: #eff6ff;
-  box-shadow: 0 0 0 1.5px #2563eb;
+  border-color: #bfdbfe;
+  border-left: 4px solid #2563eb;
+  background: #f0f7ff;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.08);
+}
+
+.oil-card-item.is-active .card-item-name {
+  color: #1d4ed8;
 }
 
 .card-item-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 .card-top-right-group {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  flex-shrink: 0;
 }
 
 .btn-delete-card {
-  opacity: 0.35;
-  font-size: 11px;
+  opacity: 0;
+  visibility: hidden;
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: #94a3b8;
   cursor: pointer;
-  padding: 1px 3px;
-  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
   transition: all 0.15s ease;
-  color: #ef4444;
 }
 
-.oil-card-item:hover .btn-delete-card {
-  opacity: 0.85;
+.oil-card-item:hover .btn-delete-card,
+.oil-card-item.is-active .btn-delete-card {
+  opacity: 1;
+  visibility: visible;
 }
 
 .btn-delete-card:hover {
-  opacity: 1 !important;
-  background: #fee2e2;
+  color: #ef4444 !important;
+  background: #fee2e2 !important;
 }
 
 .card-item-name {
@@ -141,20 +163,29 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  margin-right: 6px;
 }
 
 .card-item-badge {
-  font-size: 10px;
-  padding: 1px 5px;
+  font-size: 10.5px;
+  padding: 1px 6px;
   border-radius: 4px;
   background: #f1f5f9;
   color: #475569;
+  font-weight: 600;
+}
+
+.oil-card-item.is-active .card-item-badge {
+  background: #dbeafe;
+  color: #1e40af;
 }
 
 .card-item-mid {
-  font-size: 11.5px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   color: #64748b;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .card-item-bot {
@@ -166,12 +197,21 @@
 .card-item-supplier {
   font-size: 11px;
   color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 130px;
 }
 
 .card-item-balance {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 800;
-  color: #059669;
+  color: #047857;
+}
+
+.card-item-balance.balance-zero {
+  color: #64748b;
+  font-weight: 700;
 }
 
 /* ===== 右侧主控制台 ===== */
