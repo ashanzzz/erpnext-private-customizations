@@ -377,23 +377,52 @@ class UnifiedOilCardLedgerConsole {
 			self.updateInlineRechargeCalculations();
 		});
 
-		// 车辆切换时自动带出燃料类型与最后里程
-		this.wrapper.on("change", "#inline-refuel-vehicle", function () {
-			const vehName = $(this).val();
-			const veh = self.meta.vehicles.find((v) => v.name === vehName);
-			if (veh) {
-				if (veh.fuel_type) {
-					self.wrapper.find("#inline-refuel-grade").val(veh.fuel_type);
-				}
-				if (veh.last_odometer) {
-					self.wrapper.find("#inline-refuel-odo").attr("placeholder", `上期:${veh.last_odometer}km`);
-				}
-			}
-			self.updateInlineRefuelCalculations();
+		// 车辆智能搜索与下拉选项交互
+		this.wrapper.on("focus input", "#inline-refuel-vehicle-input", function () {
+			const q = $(this).val();
+			self.renderVehicleDropdown(q);
 		});
 
-		// 回车保存，ESC取消
-		this.wrapper.on("keydown", ".row-inline-entry input", function (e) {
+		this.wrapper.on("click", ".vehicle-dropdown-item", function () {
+			const vehName = $(this).data("name");
+			const veh = self.meta.vehicles.find((v) => String(v.name) === String(vehName));
+			if (veh) {
+				self.applyVehicleToInlineEntry(veh);
+			}
+		});
+
+		this.wrapper.on("click", "#btn-quick-add-vehicle-from-dropdown", function (e) {
+			e.stopPropagation();
+			$("#vehicle-autocomplete-dropdown").hide();
+			const currentText = $("#inline-refuel-vehicle-input").val();
+			self.openCreateVehicleDialog(currentText);
+		});
+
+		// 点击其他区域关闭下拉
+		$(document).on("click.vehicleDropdown", function (e) {
+			if (!$(e.target).closest(".vehicle-combobox-wrapper").length) {
+				$("#vehicle-autocomplete-dropdown").hide();
+			}
+		});
+
+		// 车辆输入框回车：模糊匹配车牌（如9527自动匹配津AF9527）
+		this.wrapper.on("keydown", "#inline-refuel-vehicle-input", function (e) {
+			if (e.which === 13) {
+				e.preventDefault();
+				e.stopPropagation();
+				const text = $(this).val().trim();
+				const match = self.fuzzyMatchVehicle(text);
+				if (match) {
+					self.applyVehicleToInlineEntry(match);
+				} else if (text) {
+					$("#vehicle-autocomplete-dropdown").hide();
+					self.openCreateVehicleDialog(text);
+				}
+			}
+		});
+
+		// 其它行内输入框回车保存，ESC取消
+		this.wrapper.on("keydown", ".row-inline-entry input:not(#inline-refuel-vehicle-input)", function (e) {
 			if (e.which === 13) {
 				const isRefuel = $("#btn-inline-save-refuel").length > 0;
 				if (isRefuel) self.saveInlineRefuel();
@@ -501,43 +530,47 @@ class UnifiedOilCardLedgerConsole {
 
 		let html = "";
 		if (type === "refuel") {
-			// 加油行内录入
-			let vehicleOptions = '<option value="">-- 车辆(必填) --</option>';
-			this.meta.vehicles.forEach((v) => {
-				vehicleOptions += `<option value="${v.name}">${v.license_plate || v.name}</option>`;
-			});
-
+			// 加油行内录入 (支持智能模糊匹配车牌、直接输入油号与快捷新建车辆)
 			html = `
 				<tr id="row-inline-entry" class="row-inline-entry">
 					<td>
-						<input type="date" id="inline-refuel-date" class="inline-input-sm" value="${defaultDate}" required style="width:125px;">
+						<input type="date" id="inline-refuel-date" class="inline-input-sm" value="${defaultDate}" required style="width:115px;">
 					</td>
 					<td><span class="status-pill-subtle status-pill-amber">⛽ 新增加油</span></td>
-					<td>
-						<select id="inline-refuel-vehicle" class="inline-input-sm" style="width:130px;" required>
-							${vehicleOptions}
-						</select>
+					<td style="position:relative;">
+						<div class="vehicle-combobox-wrapper">
+							<input type="text" id="inline-refuel-vehicle-input" class="inline-input-sm" placeholder="输入车牌/9527..." autocomplete="off" style="width:130px; font-weight:600;" required>
+							<input type="hidden" id="inline-refuel-vehicle-val">
+							<div id="vehicle-autocomplete-dropdown" class="vehicle-dropdown-popup" style="display:none;"></div>
+						</div>
 					</td>
 					<td>
-						<select id="inline-refuel-grade" class="inline-input-sm" style="width:65px;">
-							<option value="92">92#</option>
-							<option value="95" selected>95#</option>
-							<option value="98">98#</option>
-							<option value="0#">0#</option>
+						<input type="text" id="inline-refuel-grade" class="inline-input-sm" list="fuel-grades-list" placeholder="油号" value="95#" style="width:65px; font-weight:600;">
+						<datalist id="fuel-grades-list">
+							<option value="92#">92# 汽油</option>
+							<option value="95#">95# 汽油</option>
+							<option value="98#">98# 汽油</option>
+							<option value="0#">0# 柴油</option>
+							<option value="-10#">-10# 柴油</option>
+							<option value="92">92</option>
+							<option value="95">95</option>
+							<option value="98">98</option>
+							<option value="0">0#</option>
 							<option value="柴油">柴油</option>
-						</select>
+							<option value="汽油">汽油</option>
+						</datalist>
 					</td>
 					<td>
-						<input type="number" id="inline-refuel-odo" class="inline-input-sm" placeholder="当前里程" required style="width:90px;">
+						<input type="number" id="inline-refuel-odo" class="inline-input-sm" placeholder="当前里程" required style="width:85px;">
 					</td>
 					<td>
-						<input type="number" step="0.01" id="inline-refuel-liters" class="inline-input-sm" placeholder="升数" required style="width:75px;">
+						<input type="number" step="0.01" id="inline-refuel-liters" class="inline-input-sm" placeholder="升数" required style="width:70px;">
 					</td>
 					<td>
-						<input type="number" step="0.01" id="inline-refuel-amount" class="inline-input-sm" placeholder="金额¥" required style="width:85px;">
+						<input type="number" step="0.01" id="inline-refuel-amount" class="inline-input-sm" placeholder="金额¥" required style="width:80px;">
 					</td>
 					<td>
-						<b id="inline-preview-balance" style="color:#1d4ed8; font-size:13px;">${formatMoney(this.currentEndingBalance)}</b>
+						<b id="inline-preview-balance" style="color:#1d4ed8; font-size:12.5px;">${formatMoney(this.currentEndingBalance)}</b>
 					</td>
 					${isMgr ? `
 						<td class="mgr-col" id="inline-preview-dist" style="color:#64748b;">--</td>
@@ -545,11 +578,11 @@ class UnifiedOilCardLedgerConsole {
 						<td class="mgr-col"><span class="status-pill-subtle status-pill-amber">未开票</span></td>
 					` : ""}
 					<td>
-						<input type="text" id="inline-refuel-remark" class="inline-input-sm" placeholder="备注(选填)" style="width:95px;">
+						<input type="text" id="inline-refuel-remark" class="inline-input-sm" placeholder="备注(选填)" style="width:85px;">
 					</td>
 					<td style="white-space:nowrap;">
-						<button class="btn-save-inline" id="btn-inline-save-refuel">💾 保存</button>
-						<button class="btn-cancel-inline" id="btn-inline-cancel">❌ 取消</button>
+						<button class="btn-save-inline" id="btn-inline-save-refuel" title="保存 (Enter)">💾 保存</button>
+						<button class="btn-cancel-inline" id="btn-inline-cancel" title="取消 (Esc)">❌ 取消</button>
 					</td>
 				</tr>
 			`;
@@ -563,7 +596,7 @@ class UnifiedOilCardLedgerConsole {
 			html = `
 				<tr id="row-inline-entry" class="row-inline-entry">
 					<td>
-						<input type="date" id="inline-recharge-date" class="inline-input-sm" value="${defaultDate}" required style="width:125px;">
+						<input type="date" id="inline-recharge-date" class="inline-input-sm" value="${defaultDate}" required style="width:115px;">
 					</td>
 					<td><span class="status-pill-subtle status-pill-green">💳 新增充值</span></td>
 					<td>
@@ -575,10 +608,10 @@ class UnifiedOilCardLedgerConsole {
 					<td>--</td>
 					<td>--</td>
 					<td>
-						<input type="number" step="0.01" id="inline-recharge-amount" class="inline-input-sm" placeholder="+金额¥" required style="width:90px;">
+						<input type="number" step="0.01" id="inline-recharge-amount" class="inline-input-sm" placeholder="+金额¥" required style="width:80px;">
 					</td>
 					<td>
-						<b id="inline-preview-balance" style="color:#059669; font-size:13px;">${formatMoney(this.currentEndingBalance)}</b>
+						<b id="inline-preview-balance" style="color:#059669; font-size:12.5px;">${formatMoney(this.currentEndingBalance)}</b>
 					</td>
 					${isMgr ? `
 						<td class="mgr-col">--</td>
@@ -586,18 +619,18 @@ class UnifiedOilCardLedgerConsole {
 						<td class="mgr-col">--</td>
 					` : ""}
 					<td>
-						<input type="text" id="inline-recharge-remark" class="inline-input-sm" placeholder="备注(选填)" style="width:95px;">
+						<input type="text" id="inline-recharge-remark" class="inline-input-sm" placeholder="备注(选填)" style="width:85px;">
 					</td>
 					<td style="white-space:nowrap;">
-						<button class="btn-save-inline" id="btn-inline-save-recharge">💾 保存</button>
-						<button class="btn-cancel-inline" id="btn-inline-cancel">❌ 取消</button>
+						<button class="btn-save-inline" id="btn-inline-save-recharge" title="保存 (Enter)">💾 保存</button>
+						<button class="btn-cancel-inline" id="btn-inline-cancel" title="取消 (Esc)">❌ 取消</button>
 					</td>
 				</tr>
 			`;
 		}
 
 		tbody.append(html);
-		const targetInput = type === "refuel" ? $("#inline-refuel-vehicle") : $("#inline-recharge-amount");
+		const targetInput = type === "refuel" ? $("#inline-refuel-vehicle-input") : $("#inline-recharge-amount");
 		targetInput.focus();
 
 		// 滚动到该行
@@ -605,17 +638,222 @@ class UnifiedOilCardLedgerConsole {
 		tableWrapper.scrollTop(tableWrapper[0].scrollHeight);
 	}
 
+	renderVehicleDropdown(q) {
+		const dropdown = $("#vehicle-autocomplete-dropdown");
+		const query = (q || "").trim().toLowerCase();
+		let matches = this.meta.vehicles || [];
+		if (query) {
+			matches = matches.filter((v) => {
+				const plate = (v.license_plate || v.name || "").toLowerCase();
+				const model = (v.model || "").toLowerCase();
+				return plate.includes(query) || model.includes(query);
+			});
+		}
+
+		let itemsHtml = "";
+		if (matches.length > 0) {
+			matches.forEach((v) => {
+				const isDiesel = v.fuel_type === "Diesel" || (v.fuel_type && v.fuel_type.toLowerCase().includes("diesel"));
+				const fuelTag = isDiesel ? '<span class="veh-fuel-tag tag-diesel">柴油(0#)</span>' : '<span class="veh-fuel-tag tag-petrol">汽油(95#)</span>';
+				const modelTag = v.model ? `<span class="veh-model-tag">${v.model}</span>` : '';
+				const odoText = v.last_odometer ? `${v.last_odometer}km` : '0km';
+
+				itemsHtml += `
+					<div class="vehicle-dropdown-item" data-name="${v.name}">
+						<div class="veh-item-left">
+							<span class="veh-plate-text">${v.license_plate || v.name}</span>
+							${modelTag}
+							${fuelTag}
+						</div>
+						<div class="veh-item-right">${odoText}</div>
+					</div>
+				`;
+			});
+		} else {
+			itemsHtml = `<div class="vehicle-dropdown-empty">未匹配到车辆 "${q}"</div>`;
+		}
+
+		const fullHtml = `
+			<div class="vehicle-dropdown-items-scroll">${itemsHtml}</div>
+			<div class="vehicle-dropdown-footer" id="btn-quick-add-vehicle-from-dropdown">
+				<span>➕ 快速新建车辆档案...</span>
+			</div>
+		`;
+
+		dropdown.html(fullHtml).show();
+	}
+
+	applyVehicleToInlineEntry(v) {
+		if (!v) return;
+		$("#inline-refuel-vehicle-input").val(v.license_plate || v.name);
+		$("#inline-refuel-vehicle-val").val(v.name);
+		$("#vehicle-autocomplete-dropdown").hide();
+
+		// 自动联动推荐动力油号
+		const isDiesel = v.fuel_type === "Diesel" || (v.fuel_type && v.fuel_type.toLowerCase().includes("diesel"));
+		if (isDiesel) {
+			$("#inline-refuel-grade").val("0#");
+		} else {
+			$("#inline-refuel-grade").val("95#");
+		}
+
+		// 提示上期里程
+		if (v.last_odometer) {
+			$("#inline-refuel-odo").attr("placeholder", `上期:${v.last_odometer}km`);
+		}
+
+		this.updateInlineRefuelCalculations();
+		$("#inline-refuel-odo").focus();
+	}
+
+	fuzzyMatchVehicle(text) {
+		if (!text) return null;
+		const q = text.trim().toLowerCase();
+		let match = this.meta.vehicles.find((v) => (v.license_plate || "").toLowerCase() === q || (v.name || "").toLowerCase() === q);
+		if (match) return match;
+		match = this.meta.vehicles.find((v) => (v.license_plate || "").toLowerCase().includes(q) || (v.name || "").toLowerCase().includes(q));
+		return match || null;
+	}
+
+	openCreateVehicleDialog(prefillPlate = "") {
+		const self = this;
+		const companyDefault = self.meta.default_company || (self.meta.companies && self.meta.companies.length ? self.meta.companies[0].name : "");
+
+		const d = new frappe.ui.Dialog({
+			title: __("🚗 快速新建车辆档案"),
+			fields: [
+				{
+					label: __("车牌号码"),
+					fieldname: "license_plate",
+					fieldtype: "Data",
+					reqd: 1,
+					default: prefillPlate,
+					placeholder: "如：津AF9527、粤B·8888",
+				},
+				{
+					fieldtype: "Column Break",
+				},
+				{
+					label: __("车型分类"),
+					fieldname: "vehicle_category",
+					fieldtype: "Select",
+					options: ["货车 / 卡车", "轿车 / 乘用车", "SUV / 越野车", "商务车 / MPV", "客车 / 大巴", "特种作业车"],
+					default: "货车 / 卡车",
+					reqd: 1,
+				},
+				{
+					fieldtype: "Section Break",
+				},
+				{
+					label: __("动力燃油类型"),
+					fieldname: "fuel_type",
+					fieldtype: "Select",
+					options: ["Diesel (柴油)", "Petrol (汽油)", "Natural Gas (天然气)", "Electric (纯电/插混)"],
+					default: "Diesel (柴油)",
+					reqd: 1,
+				},
+				{
+					fieldtype: "Column Break",
+				},
+				{
+					label: __("当前表显里程 (km)"),
+					fieldname: "last_odometer",
+					fieldtype: "Int",
+					default: 0,
+					placeholder: "初始里程基准",
+				},
+				{
+					fieldtype: "Section Break",
+				},
+				{
+					fieldname: "fuel_match_alert_html",
+					fieldtype: "HTML",
+				},
+			],
+			primary_action_label: __("💾 立即创建车辆"),
+			primary_action(values) {
+				frappe.call({
+					method: "ashan_cn_procurement.ashan_cn_procurement.page.oil_card_ledger.oil_card_ledger.quick_create_vehicle",
+					args: {
+						license_plate: values.license_plate,
+						vehicle_category: values.vehicle_category,
+						fuel_type: values.fuel_type,
+						last_odometer: values.last_odometer || 0,
+						company: companyDefault,
+					},
+					callback: function (r) {
+						if (r.message && r.message.status === "ok") {
+							frappe.show_alert({ message: r.message.message, indicator: "green" }, 3);
+							d.hide();
+							const veh = r.message.vehicle;
+							self.meta.vehicles.push(veh);
+							self.applyVehicleToInlineEntry(veh);
+						}
+					},
+				});
+			},
+		});
+
+		function updateFuelWarning() {
+			const cat = d.get_value("vehicle_category") || "";
+			const fuel = d.get_value("fuel_type") || "";
+			const wrapper = d.fields_dict.fuel_match_alert_html.$wrapper;
+
+			let html = "";
+			if (cat.includes("货车") || cat.includes("卡车") || cat.includes("特种")) {
+				if (fuel.includes("Petrol") || fuel.includes("汽油")) {
+					html = `<div style="background:#fef2f2; border:1.5px solid #ef4444; border-radius:6px; padding:9px 12px; color:#b91c1c; font-size:12px; font-weight:700;">
+						⚠️ <b>【动力匹配警示】</b>：您选择的车型是【${cat}】，该车型在实际运营中通常为【柴油】动力。请再次核实该车辆是否确为汽油发动机！
+					</div>`;
+				} else {
+					html = `<div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:7px 12px; color:#15803d; font-size:11.5px;">
+						✓ 动力匹配正常：货车已默认配置为【柴油动力（0#）】。
+					</div>`;
+				}
+			} else if (cat.includes("轿车") || cat.includes("SUV") || cat.includes("商务车")) {
+				if (fuel.includes("Diesel") || fuel.includes("柴油")) {
+					html = `<div style="background:#fef2f2; border:1.5px solid #ef4444; border-radius:6px; padding:9px 12px; color:#b91c1c; font-size:12px; font-weight:700;">
+						⚠️ <b>【动力匹配警示】</b>：您选择的车型是【${cat}】，乘用车通常为【汽油】动力。请再次核实该车辆是否确为柴油动力！
+					</div>`;
+				} else {
+					html = `<div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:7px 12px; color:#15803d; font-size:11.5px;">
+						✓ 动力匹配正常：乘用车已默认配置为【汽油动力（95#/92#）】。
+					</div>`;
+				}
+			}
+			wrapper.html(html);
+		}
+
+		// 联动车型与动力
+		d.fields_dict.vehicle_category.$input.on("change", function () {
+			const cat = $(this).val() || "";
+			if (cat.includes("货车") || cat.includes("卡车") || cat.includes("特种")) {
+				d.set_value("fuel_type", "Diesel (柴油)");
+			} else {
+				d.set_value("fuel_type", "Petrol (汽油)");
+			}
+			updateFuelWarning();
+		});
+
+		d.fields_dict.fuel_type.$input.on("change", function () {
+			updateFuelWarning();
+		});
+
+		d.show();
+		updateFuelWarning();
+	}
+
 	updateInlineRefuelCalculations() {
 		const amt = parseFloat($("#inline-refuel-amount").val()) || 0;
 		const lit = parseFloat($("#inline-refuel-liters").val()) || 0;
 		const odo = parseFloat($("#inline-refuel-odo").val()) || 0;
-		const vehName = $("#inline-refuel-vehicle").val();
+		const vehName = $("#inline-refuel-vehicle-val").val() || $("#inline-refuel-vehicle-input").val();
 
 		const previewBal = this.currentEndingBalance - amt;
 		$("#inline-preview-balance").text(formatMoney(previewBal));
 
 		if (this.isManager && vehName) {
-			const veh = this.meta.vehicles.find((v) => v.name === vehName);
+			const veh = this.meta.vehicles.find((v) => String(v.name) === String(vehName) || String(v.license_plate) === String(vehName));
 			if (veh && odo > (veh.last_odometer || 0)) {
 				const dist = odo - (veh.last_odometer || 0);
 				$("#inline-preview-dist").text(`${dist} km`);
@@ -641,7 +879,17 @@ class UnifiedOilCardLedgerConsole {
 	saveInlineRefuel() {
 		const self = this;
 		const dateVal = $("#inline-refuel-date").val();
-		const vehVal = $("#inline-refuel-vehicle").val();
+		let vehVal = $("#inline-refuel-vehicle-val").val();
+		const vehInput = $("#inline-refuel-vehicle-input").val();
+		if (!vehVal && vehInput) {
+			const match = self.fuzzyMatchVehicle(vehInput);
+			if (match) {
+				vehVal = match.name;
+			} else {
+				vehVal = vehInput;
+			}
+		}
+
 		const odoVal = $("#inline-refuel-odo").val();
 		const litVal = $("#inline-refuel-liters").val();
 		const amtVal = $("#inline-refuel-amount").val();
@@ -653,7 +901,7 @@ class UnifiedOilCardLedgerConsole {
 		$(".inline-input-sm").removeClass("input-invalid");
 
 		if (!dateVal) { $("#inline-refuel-date").addClass("input-invalid"); hasErr = true; }
-		if (!vehVal) { $("#inline-refuel-vehicle").addClass("input-invalid"); hasErr = true; }
+		if (!vehVal) { $("#inline-refuel-vehicle-input").addClass("input-invalid"); hasErr = true; }
 		if (!odoVal || parseFloat(odoVal) <= 0) { $("#inline-refuel-odo").addClass("input-invalid"); hasErr = true; }
 		if (!litVal || parseFloat(litVal) <= 0) { $("#inline-refuel-liters").addClass("input-invalid"); hasErr = true; }
 		if (!amtVal || parseFloat(amtVal) <= 0) { $("#inline-refuel-amount").addClass("input-invalid"); hasErr = true; }

@@ -611,21 +611,129 @@
   box-shadow: 0 1px 2px rgba(5,150,105,0.25);
   transition: background 0.12s ease;
 }
-.btn-save-inline:hover { background: #047857; }
+.btn-save-inline:hover { background: #1d4ed8; }
 
 .btn-cancel-inline {
-  background: #fff;
-  color: #64748b;
+  background: #f1f5f9;
   border: 1px solid #cbd5e1;
-  font-size: 11.5px;
+  color: #475569;
+  font-size: 11px;
   font-weight: 600;
-  padding: 4px 7px;
+  padding: 4px 8px;
   border-radius: 4px;
   cursor: pointer;
-  margin-left: 4px;
-  transition: all 0.12s ease;
+  transition: all 0.15s ease;
 }
-.btn-cancel-inline:hover { background: #f1f5f9; color: #1e293b; }
+
+.btn-cancel-inline:hover { background: #e2e8f0; }
+
+/* ===== 车辆智能下拉组合框 ===== */
+.vehicle-combobox-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.vehicle-dropdown-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 270px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.15), 0 4px 8px -2px rgba(0, 0, 0, 0.08);
+  z-index: 99999;
+  margin-top: 3px;
+  overflow: hidden;
+}
+
+.vehicle-dropdown-items-scroll {
+  max-height: 185px;
+  overflow-y: auto;
+}
+
+.vehicle-dropdown-item {
+  padding: 6px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.vehicle-dropdown-item:hover {
+  background: #eff6ff;
+}
+
+.veh-item-left {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.veh-plate-text {
+  font-weight: 700;
+  color: #1e293b;
+  font-size: 12px;
+}
+
+.veh-model-tag {
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.veh-fuel-tag {
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.veh-fuel-tag.tag-diesel {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.veh-fuel-tag.tag-petrol {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.veh-item-right {
+  font-size: 11px;
+  color: #64748b;
+  font-family: monospace;
+}
+
+.vehicle-dropdown-empty {
+  padding: 10px;
+  font-size: 11.5px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.vehicle-dropdown-footer {
+  padding: 8px 10px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  color: #2563eb;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: background 0.12s ease;
+}
+
+.vehicle-dropdown-footer:hover {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
 
 .oil-data-table tfoot td {
   background: #f8fafc;

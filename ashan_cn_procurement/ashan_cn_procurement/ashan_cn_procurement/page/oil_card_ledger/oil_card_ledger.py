@@ -50,7 +50,7 @@ def get_quick_entry_meta():
 	"""
 	vehicles = frappe.get_all(
 		"Vehicle",
-		fields=["name", "license_plate", "fuel_type", "last_odometer"],
+		fields=["name", "license_plate", "model", "make", "fuel_type", "last_odometer"],
 		order_by="license_plate asc",
 	)
 	modes = frappe.get_all("Mode of Payment", fields=["name"], filters={"enabled": 1})
@@ -68,6 +68,59 @@ def get_quick_entry_meta():
 		"suppliers": suppliers,
 		"default_company": default_company,
 		"default_supplier": default_supplier,
+	}
+
+
+@frappe.whitelist()
+def quick_create_vehicle(license_plate, vehicle_category="货车 / 卡车", fuel_type="Diesel (柴油)", last_odometer=0, make=None, company=None):
+	"""
+	单页极速新建车辆档案（零跳转）
+	"""
+	if not license_plate:
+		frappe.throw("车牌号码为必填项！")
+
+	plate = license_plate.strip().upper()
+	if frappe.db.exists("Vehicle", plate):
+		frappe.throw(f"车牌号为【{plate}】的车辆已存在！")
+
+	if not company or not frappe.db.exists("Company", company):
+		company = frappe.defaults.get_user_default("Company") or frappe.db.get_single_value("Global Defaults", "default_company")
+		if not company or not frappe.db.exists("Company", company):
+			companies = frappe.get_all("Company", fields=["name"], limit=1)
+			company = companies[0].name if companies else None
+
+	# 规范化 fuel_type
+	fuel_norm = "Diesel"
+	if "petrol" in fuel_type.lower() or "汽油" in fuel_type:
+		fuel_norm = "Petrol"
+	elif "natural" in fuel_type.lower() or "气" in fuel_type:
+		fuel_norm = "Natural Gas"
+	elif "electric" in fuel_type.lower() or "电" in fuel_type:
+		fuel_norm = "Electric"
+
+	# 规范化车型
+	model_val = vehicle_category.split("/")[0].strip() if "/" in vehicle_category else vehicle_category.strip()
+
+	doc = frappe.new_doc("Vehicle")
+	doc.license_plate = plate
+	doc.make = make or ""
+	doc.model = model_val or "货车"
+	doc.company = company
+	doc.last_odometer = int(flt(last_odometer))
+	doc.fuel_type = fuel_norm
+	doc.insert(ignore_permissions=True)
+	frappe.db.commit()
+
+	return {
+		"status": "ok",
+		"message": f"车辆【{doc.license_plate}】已成功创建！",
+		"vehicle": {
+			"name": doc.name,
+			"license_plate": doc.license_plate,
+			"model": doc.model,
+			"fuel_type": doc.fuel_type,
+			"last_odometer": doc.last_odometer,
+		},
 	}
 
 
@@ -380,15 +433,18 @@ def quick_add_refuel(oil_card, posting_date, vehicle, odometer, liters, amount, 
 	dist = odo - flt(veh.last_odometer) if odo > flt(veh.last_odometer) else 0
 	consum = round((lit / dist) * 100, 2) if dist > 0 and lit > 0 else 0
 
-	# 油品标号标准化映射
+	# 油品标号标准化映射与容错 (支持92, 92#, 0, 0#, 柴油, 汽油等任意自由输入)
 	grade_map = {
 		"92#": "92", "92": "92",
 		"95#": "95", "95": "95",
 		"98#": "98", "98": "98",
-		"0#": "0#", "-10#": "-10#",
-		"Petrol": "95", "Diesel": "0#", "汽油": "汽油", "柴油": "柴油"
+		"0#": "0#", "0": "0#",
+		"-10#": "-10#", "-10": "-10#",
+		"Petrol": "95", "Diesel": "0#",
+		"汽油": "95", "柴油": "0#"
 	}
-	norm_grade = grade_map.get(fuel_grade or veh.fuel_type, "95")
+	clean_grade = str(fuel_grade).strip() if fuel_grade else ""
+	norm_grade = grade_map.get(clean_grade) or grade_map.get(clean_grade.upper()) or grade_map.get(veh.fuel_type, "95")
 
 	doc = frappe.new_doc("Oil Card Refuel Log")
 	doc.naming_series = "OCRL-.YYYY.-.#####"
