@@ -247,6 +247,15 @@ def get_unified_ledger_data(oil_card, year=None, month=None):
 	}
 
 
+# 兼容旧版本 API 调用
+@frappe.whitelist()
+def get_oil_card_ledger_data(oil_card, year=None, month=None):
+	"""
+	兼容旧版接口别名
+	"""
+	return get_unified_ledger_data(oil_card, year, month)
+
+
 @frappe.whitelist()
 def lock_monthly_ledger(oil_card, year, month, remark=None):
 	"""
