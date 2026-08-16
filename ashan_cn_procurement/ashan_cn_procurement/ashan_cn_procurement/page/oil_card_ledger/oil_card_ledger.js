@@ -253,9 +253,34 @@ class UnifiedOilCardLedgerConsole {
 			self.selectCard(cardName);
 		});
 
-		// 新建油卡
+		// 新建油卡 (单页弹窗，零跳转)
 		this.wrapper.on("click", "#btn-create-card", function () {
-			frappe.new_doc("Oil Card");
+			self.openCreateOilCardDialog();
+		});
+
+		// 删除油卡档案 (单页确认，零跳转)
+		this.wrapper.on("click", ".btn-delete-card", function (e) {
+			e.stopPropagation();
+			const cardId = $(this).data("name");
+			const cardTitle = $(this).data("title") || cardId;
+			frappe.confirm(
+				`确定要彻底删除油卡【<b>${cardTitle}</b>】吗？<br><br><span style="color:#dc2626;">警告：该操作将删除该油卡档案，请确认该卡无未结清账目。</span>`,
+				function () {
+					frappe.call({
+						method: "ashan_cn_procurement.ashan_cn_procurement.page.oil_card_ledger.oil_card_ledger.delete_oil_card",
+						args: { oil_card: cardId },
+						callback: function (r) {
+							if (r.message && r.message.status === "ok") {
+								frappe.show_alert({ message: r.message.message, indicator: "green" }, 3);
+								if (self.activeCard && self.activeCard.name === cardId) {
+									self.activeCard = null;
+								}
+								self.loadCards();
+							}
+						},
+					});
+				}
+			);
 		});
 
 		// 年月变更
@@ -704,7 +729,100 @@ class UnifiedOilCardLedgerConsole {
 		this.wrapper.find("#sel-month").val(this.selectedMonth);
 	}
 
-	loadCards() {
+	openCreateOilCardDialog() {
+		const self = this;
+		const companyDefault = self.meta.default_company || (self.meta.companies && self.meta.companies.length ? self.meta.companies[0].name : "");
+
+		const d = new frappe.ui.Dialog({
+			title: __("💳 新建企业油卡档案"),
+			fields: [
+				{
+					label: __("油卡名称"),
+					fieldname: "card_name",
+					fieldtype: "Data",
+					reqd: 1,
+					placeholder: "如：粤B·8888 专车油卡、应急车队副卡",
+				},
+				{
+					fieldtype: "Column Break",
+				},
+				{
+					label: __("卡类型"),
+					fieldname: "card_type",
+					fieldtype: "Select",
+					options: ["主卡", "副卡", "单卡"],
+					default: "主卡",
+					reqd: 1,
+				},
+				{
+					fieldtype: "Section Break",
+				},
+				{
+					label: __("实体油卡卡号"),
+					fieldname: "card_no",
+					fieldtype: "Data",
+					reqd: 1,
+					placeholder: "如：1000118888888888",
+				},
+				{
+					fieldtype: "Column Break",
+				},
+				{
+					label: __("油企 / 供应商"),
+					fieldname: "supplier",
+					fieldtype: "Link",
+					options: "Supplier",
+					default: self.meta.default_supplier || "",
+					placeholder: "选择或输入油企",
+				},
+				{
+					fieldtype: "Section Break",
+				},
+				{
+					label: __("所属公司"),
+					fieldname: "company",
+					fieldtype: "Link",
+					options: "Company",
+					default: companyDefault,
+					reqd: 1,
+				},
+				{
+					fieldtype: "Column Break",
+				},
+				{
+					label: __("期初建账余额 (¥)"),
+					fieldname: "opening_balance",
+					fieldtype: "Currency",
+					default: 0,
+					description: "建账时的初始可用余额",
+				},
+			],
+			primary_action_label: __("💾 立即创建"),
+			primary_action(values) {
+				frappe.call({
+					method: "ashan_cn_procurement.ashan_cn_procurement.page.oil_card_ledger.oil_card_ledger.quick_create_oil_card",
+					args: {
+						card_name: values.card_name,
+						card_no: values.card_no,
+						card_type: values.card_type,
+						company: values.company,
+						supplier: values.supplier,
+						opening_balance: values.opening_balance,
+					},
+					callback: function (r) {
+						if (r.message && r.message.status === "ok") {
+							frappe.show_alert({ message: r.message.message, indicator: "green" }, 3);
+							d.hide();
+							self.loadCards(r.message.name);
+						}
+					},
+				});
+			},
+		});
+		d.show();
+	}
+
+	loadCards(targetCardName) {
 		const self = this;
 		frappe.call({
 			method: "ashan_cn_procurement.ashan_cn_procurement.page.oil_card_ledger.oil_card_ledger.get_all_oil_cards",
@@ -713,10 +831,15 @@ class UnifiedOilCardLedgerConsole {
 				self.renderCardsList();
 
 				if (self.cards.length > 0) {
-					if (!self.activeCard) {
+					if (targetCardName && self.cards.some((c) => c.name === targetCardName)) {
+						self.selectCard(targetCardName);
+					} else if (!self.activeCard || !self.cards.some((c) => c.name === self.activeCard.name)) {
 						self.selectCard(self.cards[0].name);
+					} else {
+						self.selectCard(self.activeCard.name);
 					}
 				} else {
+					self.activeCard = null;
 					self.wrapper.find("#main-empty-placeholder").show();
 					self.wrapper.find("#main-content-pane").hide();
 				}
@@ -746,7 +869,10 @@ class UnifiedOilCardLedgerConsole {
 				<div class="oil-card-item ${isActive}" data-name="${c.name}">
 					<div class="card-item-top">
 						<span class="card-item-name" title="${c.card_name}">${c.card_name}</span>
-						<span class="card-item-badge">${c.card_type || "油卡"}</span>
+						<div class="card-top-right-group">
+							<span class="card-item-badge">${c.card_type || "油卡"}</span>
+							<span class="btn-delete-card" data-name="${c.name}" data-title="${c.card_name}" title="删除油卡档案">🗑️</span>
+						</div>
 					</div>
 					<div class="card-item-mid">
 						<span>${cardNo}</span>

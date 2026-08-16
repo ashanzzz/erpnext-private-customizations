@@ -46,7 +46,7 @@ def get_all_oil_cards():
 @frappe.whitelist()
 def get_quick_entry_meta():
 	"""
-	获取行内快速补录所需的车辆档案与付款方式元数据
+	获取行内快速补录与新建油卡所需的车辆档案、付款方式、公司及供应商元数据
 	"""
 	vehicles = frappe.get_all(
 		"Vehicle",
@@ -56,10 +56,89 @@ def get_quick_entry_meta():
 	modes = frappe.get_all("Mode of Payment", fields=["name"], filters={"enabled": 1})
 	mode_names = [m.name for m in modes] if modes else ["Cheque", "Cash", "银行转账", "微信支付", "支付宝"]
 
+	companies = frappe.get_all("Company", fields=["name", "company_name"])
+	suppliers = frappe.get_all("Supplier", fields=["name", "supplier_name"], order_by="name asc", limit=100)
+	default_company = frappe.defaults.get_user_default("Company") or (companies[0].name if companies else "")
+	default_supplier = suppliers[0].name if suppliers else ""
+
 	return {
 		"vehicles": vehicles,
 		"modes_of_payment": mode_names,
+		"companies": companies,
+		"suppliers": suppliers,
+		"default_company": default_company,
+		"default_supplier": default_supplier,
 	}
+
+
+@frappe.whitelist()
+def quick_create_oil_card(card_name, card_no, card_code=None, card_type="主卡", company=None, supplier=None, opening_balance=0):
+	"""
+	单页模态对话框极速新建油卡档案（零跳转）
+	"""
+	if not card_name or not card_no:
+		frappe.throw("油卡名称与卡号为必填项！")
+
+	if not company or not frappe.db.exists("Company", company):
+		company = frappe.defaults.get_user_default("Company") or frappe.db.get_single_value("Global Defaults", "default_company")
+		if not company or not frappe.db.exists("Company", company):
+			companies = frappe.get_all("Company", fields=["name"], limit=1)
+			company = companies[0].name if companies else None
+
+	if not supplier or not frappe.db.exists("Supplier", supplier):
+		suppliers = frappe.get_all("Supplier", fields=["name"], limit=1)
+		supplier = suppliers[0].name if suppliers else None
+
+	# 若未指定系统卡号/编码，则按序号或规则自动生成
+	if not card_code:
+		count = frappe.db.count("Oil Card") + 1
+		card_code = f"CARD-{count:03d}"
+		while frappe.db.exists("Oil Card", card_code):
+			count += 1
+			card_code = f"CARD-{count:03d}"
+
+	# 生成脱敏卡号
+	clean_no = str(card_no).strip()
+	if len(clean_no) >= 10:
+		masked_no = clean_no[:6] + "******" + clean_no[-4:]
+	else:
+		masked_no = clean_no
+
+	op_bal = flt(opening_balance)
+
+	doc = frappe.new_doc("Oil Card")
+	doc.card_code = card_code
+	doc.card_name = card_name.strip()
+	doc.card_no = clean_no
+	doc.card_no_masked = masked_no
+	doc.card_type = card_type or "主卡"
+	doc.company = company
+	doc.supplier = supplier
+	doc.status = "Active"
+	doc.opening_balance = op_bal
+	doc.current_balance = op_bal
+	doc.insert(ignore_permissions=True)
+	frappe.db.commit()
+
+	return {"status": "ok", "message": f"油卡【{doc.card_name}】已成功创建！", "name": doc.name}
+
+
+@frappe.whitelist()
+def delete_oil_card(oil_card):
+	"""
+	单页极速删除油卡档案（零跳转）
+	"""
+	if not is_oil_card_manager():
+		frappe.throw("权限不足：只有管理员才可以删除油卡档案！")
+
+	if not oil_card or not frappe.db.exists("Oil Card", oil_card):
+		frappe.throw("指定的油卡不存在或已被删除！")
+
+	card_name = frappe.db.get_value("Oil Card", oil_card, "card_name") or oil_card
+	frappe.delete_doc("Oil Card", oil_card, ignore_permissions=True)
+	frappe.db.commit()
+
+	return {"status": "ok", "message": f"油卡【{card_name}】已成功删除！"}
 
 
 @frappe.whitelist()

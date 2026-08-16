@@ -109,6 +109,31 @@
   margin-bottom: 2px;
 }
 
+.card-top-right-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-delete-card {
+  opacity: 0.35;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 1px 3px;
+  border-radius: 3px;
+  transition: all 0.15s ease;
+  color: #ef4444;
+}
+
+.oil-card-item:hover .btn-delete-card {
+  opacity: 0.85;
+}
+
+.btn-delete-card:hover {
+  opacity: 1 !important;
+  background: #fee2e2;
+}
+
 .card-item-name {
   font-size: 13px;
   font-weight: 700;
