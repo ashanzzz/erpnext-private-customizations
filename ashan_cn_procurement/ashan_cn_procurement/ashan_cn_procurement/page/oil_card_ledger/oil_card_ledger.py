@@ -43,6 +43,24 @@ def get_all_oil_cards():
 	return cards
 
 
+def get_fuel_label(fuel_type):
+	"""燃油动力类型纯中文转换"""
+	if not fuel_type:
+		return "汽油"
+	f = str(fuel_type).strip()
+	if f in ["Diesel", "柴油"]:
+		return "柴油"
+	if f in ["Petrol", "汽油"]:
+		return "汽油"
+	if "混动" in f or "Hybrid" in f:
+		return "插电混动"
+	if "纯电" in f or "Electric" in f:
+		return "纯电动"
+	if "气" in f or "Gas" in f:
+		return "天然气"
+	return f
+
+
 @frappe.whitelist()
 def get_quick_entry_meta():
 	"""
@@ -53,6 +71,9 @@ def get_quick_entry_meta():
 		fields=["name", "license_plate", "model", "make", "fuel_type", "last_odometer"],
 		order_by="license_plate asc",
 	)
+	for v in vehicles:
+		v["fuel_type_label"] = get_fuel_label(v.get("fuel_type"))
+
 	modes = frappe.get_all("Mode of Payment", fields=["name"], filters={"enabled": 1})
 	mode_names = [m.name for m in modes] if modes else ["Cheque", "Cash", "银行转账", "微信支付", "支付宝"]
 
@@ -72,9 +93,9 @@ def get_quick_entry_meta():
 
 
 @frappe.whitelist()
-def quick_create_vehicle(license_plate, vehicle_category="货车 / 卡车", fuel_type="Diesel (柴油)", last_odometer=0, make=None, company=None):
+def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="柴油", last_odometer=0, make=None, company=None):
 	"""
-	单页极速新建车辆档案（零跳转）
+	单页极速新建车辆档案（零跳转，纯中文）
 	"""
 	if not license_plate:
 		frappe.throw("车牌号码为必填项！")
@@ -89,14 +110,17 @@ def quick_create_vehicle(license_plate, vehicle_category="货车 / 卡车", fuel
 			companies = frappe.get_all("Company", fields=["name"], limit=1)
 			company = companies[0].name if companies else None
 
-	# 规范化 fuel_type
+	# 规范化 ERPNext 标准 fuel_type 字段
 	fuel_norm = "Diesel"
-	if "petrol" in fuel_type.lower() or "汽油" in fuel_type:
+	fuel_label = get_fuel_label(fuel_type)
+	if fuel_label == "汽油" or fuel_label == "插电混动":
 		fuel_norm = "Petrol"
-	elif "natural" in fuel_type.lower() or "气" in fuel_type:
-		fuel_norm = "Natural Gas"
-	elif "electric" in fuel_type.lower() or "电" in fuel_type:
+	elif fuel_label == "纯电动":
 		fuel_norm = "Electric"
+	elif fuel_label == "天然气":
+		fuel_norm = "Natural Gas"
+	else:
+		fuel_norm = "Diesel"
 
 	# 规范化车型
 	model_val = vehicle_category.split("/")[0].strip() if "/" in vehicle_category else vehicle_category.strip()
@@ -119,6 +143,7 @@ def quick_create_vehicle(license_plate, vehicle_category="货车 / 卡车", fuel
 			"license_plate": doc.license_plate,
 			"model": doc.model,
 			"fuel_type": doc.fuel_type,
+			"fuel_type_label": fuel_label,
 			"last_odometer": doc.last_odometer,
 		},
 	}
@@ -433,15 +458,17 @@ def quick_add_refuel(oil_card, posting_date, vehicle, odometer, liters, amount, 
 	dist = odo - flt(veh.last_odometer) if odo > flt(veh.last_odometer) else 0
 	consum = round((lit / dist) * 100, 2) if dist > 0 and lit > 0 else 0
 
-	# 油品标号标准化映射与容错 (支持92, 92#, 0, 0#, 柴油, 汽油等任意自由输入)
+	# 油品标号标准化映射与容错 (支持92, 92#, 92# 汽油, 0, 0#, 0# 柴油, -10#, -20#, -35#, 柴油, 汽油, CNG天然气等任意自由输入)
 	grade_map = {
-		"92#": "92", "92": "92",
-		"95#": "95", "95": "95",
-		"98#": "98", "98": "98",
-		"0#": "0#", "0": "0#",
-		"-10#": "-10#", "-10": "-10#",
-		"Petrol": "95", "Diesel": "0#",
-		"汽油": "95", "柴油": "0#"
+		"92#": "92", "92": "92", "92# 汽油": "92", "92号": "92", "92号汽油": "92",
+		"95#": "95", "95": "95", "95# 汽油": "95", "95号": "95", "95号汽油": "95",
+		"98#": "98", "98": "98", "98# 汽油": "98", "98号": "98", "98号汽油": "98",
+		"0#": "0#", "0": "0#", "0# 柴油": "0#", "0号": "0#", "0号柴油": "0#",
+		"-10#": "-10#", "-10": "-10#", "-10# 柴油": "-10#", "-10号柴油": "-10#",
+		"-20#": "-20#", "-20": "-20#", "-20# 柴油": "-20#", "-20号柴油": "-20#",
+		"-35#": "-35#", "-35": "-35#", "-35# 柴油": "-35#", "-35号柴油": "-35#",
+		"CNG": "CNG", "CNG 天然气": "CNG", "天然气": "CNG", "LNG": "LNG", "LNG 液化天然气": "LNG",
+		"Petrol": "95", "Diesel": "0#", "汽油": "95", "柴油": "0#"
 	}
 	clean_grade = str(fuel_grade).strip() if fuel_grade else ""
 	norm_grade = grade_map.get(clean_grade) or grade_map.get(clean_grade.upper()) or grade_map.get(veh.fuel_type, "95")

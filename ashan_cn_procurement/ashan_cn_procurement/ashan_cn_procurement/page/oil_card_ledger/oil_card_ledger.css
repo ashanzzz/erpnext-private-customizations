@@ -627,32 +627,37 @@
 
 .btn-cancel-inline:hover { background: #e2e8f0; }
 
-/* ===== 车辆智能下拉组合框 ===== */
-.vehicle-combobox-wrapper {
+/* ===== 车辆与油标智能下拉组合框 (向上弹出 Dropup，杜绝被表格底部遮挡或触发内部滚动条) ===== */
+.vehicle-combobox-wrapper,
+.grade-combobox-wrapper {
   position: relative;
   width: 100%;
 }
 
-.vehicle-dropdown-popup {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  width: 270px;
+.vehicle-dropdown-popup,
+.grade-dropdown-popup {
+  position: fixed;
+  width: 275px;
   background: #ffffff;
   border: 1px solid #cbd5e1;
   border-radius: 7px;
-  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.15), 0 4px 8px -2px rgba(0, 0, 0, 0.08);
-  z-index: 99999;
-  margin-top: 3px;
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.2), 0 4px 8px -2px rgba(0, 0, 0, 0.1);
+  z-index: 2147483647;
   overflow: hidden;
 }
 
-.vehicle-dropdown-items-scroll {
+.grade-dropdown-popup {
+  width: 200px;
+}
+
+.vehicle-dropdown-items-scroll,
+.grade-dropdown-items-scroll {
   max-height: 185px;
   overflow-y: auto;
 }
 
-.vehicle-dropdown-item {
+.vehicle-dropdown-item,
+.grade-dropdown-item {
   padding: 6px 10px;
   display: flex;
   justify-content: space-between;
@@ -662,25 +667,29 @@
   transition: background 0.12s ease;
 }
 
-.vehicle-dropdown-item:hover {
+.vehicle-dropdown-item:hover,
+.grade-dropdown-item:hover {
   background: #eff6ff;
 }
 
-.veh-item-left {
+.veh-item-left,
+.grade-item-left {
   display: flex;
   align-items: center;
   gap: 5px;
 }
 
-.veh-plate-text {
+.veh-plate-text,
+.grade-title-text {
   font-weight: 700;
   color: #1e293b;
   font-size: 12px;
 }
 
-.veh-model-tag {
+.veh-model-tag,
+.grade-badge-tag {
   font-size: 10px;
-  padding: 1px 4px;
+  padding: 1px 5px;
   border-radius: 3px;
   background: #f1f5f9;
   color: #475569;
@@ -688,28 +697,38 @@
 
 .veh-fuel-tag {
   font-size: 10px;
-  padding: 1px 4px;
+  padding: 1px 5px;
   border-radius: 3px;
   font-weight: 600;
 }
 
-.veh-fuel-tag.tag-diesel {
+.veh-fuel-tag.tag-diesel,
+.grade-badge-tag.tag-diesel {
   background: #fef3c7;
   color: #92400e;
 }
 
-.veh-fuel-tag.tag-petrol {
+.veh-fuel-tag.tag-petrol,
+.grade-badge-tag.tag-petrol {
   background: #dbeafe;
   color: #1e40af;
 }
 
-.veh-item-right {
+.veh-fuel-tag.tag-gas,
+.grade-badge-tag.tag-gas {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.veh-item-right,
+.grade-item-right {
   font-size: 11px;
   color: #64748b;
   font-family: monospace;
 }
 
-.vehicle-dropdown-empty {
+.vehicle-dropdown-empty,
+.grade-dropdown-empty {
   padding: 10px;
   font-size: 11.5px;
   color: #94a3b8;
