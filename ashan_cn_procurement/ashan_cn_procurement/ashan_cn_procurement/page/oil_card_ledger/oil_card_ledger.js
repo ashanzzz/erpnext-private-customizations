@@ -178,17 +178,17 @@ class UnifiedOilCardLedgerConsole {
 								<thead>
 									<tr id="thead-row">
 										<th>日期</th>
-										<th>业务类型</th>
-										<th>车辆 / 交易对象</th>
+										<th>类型</th>
+										<th>车辆 / 摘要</th>
 										<th>油号</th>
 										<th>当前里程</th>
-										<th>加油升数</th>
-										<th>变动金额</th>
-										<th class="col-balance">实时余额</th>
+										<th>升数(L)</th>
+										<th>变动金额(¥)</th>
+										<th class="col-balance">实时余额(¥)</th>
 										<!-- 高级列 (管理员可见) -->
 										<th class="mgr-col">行驶里程</th>
 										<th class="mgr-col">百公里油耗</th>
-										<th class="mgr-col">开票状态</th>
+										<th class="mgr-col">开票</th>
 										<th>备注</th>
 										<th>操作</th>
 									</tr>
@@ -951,9 +951,7 @@ class UnifiedOilCardLedgerConsole {
 				const odoFmt = t.odometer ? `${t.odometer} km` : "--";
 				const fuelGrade = t.fuel_grade && t.fuel_grade !== "--" ? `<span class="status-pill-subtle status-pill-blue">${t.fuel_grade}</span>` : "--";
 
-				const targetLink = isRefuel && t.target
-					? `<a href="/desk/vehicle/${t.target}" onclick="frappe.set_route('Form', 'Vehicle', '${t.target}'); return false;">${t.target}</a>`
-					: `<span>${t.target || "--"}</span>`;
+				const targetLink = `<span>${t.target || "--"}</span>`;
 
 				// 高级列内容
 				const distFmt = t.distance ? `${t.distance} km` : "--";
@@ -962,13 +960,10 @@ class UnifiedOilCardLedgerConsole {
 					? '<span class="status-pill-subtle status-pill-green">已开票</span>'
 					: '<span class="status-pill-subtle status-pill-amber">未开票</span>';
 
-				// 操作列
-				const formUrl = isRefuel ? `/desk/oil-card-refuel-log/${t.name}` : `/desk/oil-card-recharge/${t.name}`;
-				const formDt = isRefuel ? "Oil Card Refuel Log" : "Oil Card Recharge";
-
-				let actionHtml = `<a href="${formUrl}" style="color:#2563eb; font-weight:600;" onclick="frappe.set_route('Form', '${formDt}', '${t.name}'); return false;">查看</a>`;
+				// 操作列（单页闭环：完全移除离开本页的查看链接，仅保留单页即时删除）
+				let actionHtml = '<span style="color:#94a3b8;">--</span>';
 				if (!isLocked || isMgr) {
-					actionHtml += ` <a href="javascript:void(0)" class="btn-delete-row" data-doctype="${t.doc_type}" data-name="${t.name}" style="color:#dc2626; margin-left:8px;" title="删除">🗑️</a>`;
+					actionHtml = `<a href="javascript:void(0)" class="btn-delete-row" data-doctype="${t.doc_type}" data-name="${t.name}" style="color:#dc2626; font-weight:600; text-decoration:none; cursor:pointer;" title="删除记录">🗑️ 删除</a>`;
 				}
 
 				html += `
