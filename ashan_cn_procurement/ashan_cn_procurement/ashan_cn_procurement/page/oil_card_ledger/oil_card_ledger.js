@@ -22,15 +22,18 @@ class UnifiedOilCardLedgerConsole {
 		this.wrapper = $(page.body);
 		this.cards = [];
 		this.activeCard = null;
+		this.meta = { vehicles: [], modes_of_payment: [] };
 
 		const now = new Date();
 		this.selectedYear = now.getFullYear();
 		this.selectedMonth = now.getMonth() + 1; // 1 - 12
 		this.isManager = false;
 		this.isLocked = false;
+		this.currentEndingBalance = 0;
 
 		this.initLayout();
 		this.bindEvents();
+		this.loadMeta();
 		this.loadCards();
 	}
 
@@ -144,12 +147,12 @@ class UnifiedOilCardLedgerConsole {
 								<button class="btn-nav-step" id="btn-this-month" title="回到当月">📅 本月</button>
 							</div>
 
-							<!-- 右侧：录入内容与操作中枢 -->
+							<!-- 右侧：行内快捷录入与操作中枢 -->
 							<div class="actions-cluster">
-								<button class="btn-cmd-primary" id="btn-quick-refuel">
+								<button class="btn-cmd-primary" id="btn-quick-refuel" title="在明细表最后一行快速录入加油">
 									<span>⛽</span> 录入加油
 								</button>
-								<button class="btn-cmd-secondary" id="btn-quick-recharge">
+								<button class="btn-cmd-secondary" id="btn-quick-recharge" title="在明细表最后一行快速录入充值">
 									<span>💳</span> 录入充值
 								</button>
 								<div id="lock-action-container" style="display: inline-block;">
@@ -181,7 +184,7 @@ class UnifiedOilCardLedgerConsole {
 										<th>当前里程</th>
 										<th>加油升数</th>
 										<th>变动金额</th>
-										<th>结余余额</th>
+										<th class="col-balance">实时余额</th>
 										<!-- 高级列 (管理员可见) -->
 										<th class="mgr-col">行驶里程</th>
 										<th class="mgr-col">百公里油耗</th>
@@ -191,7 +194,7 @@ class UnifiedOilCardLedgerConsole {
 									</tr>
 								</thead>
 								<tbody id="tbody-unified-ledger">
-									<!-- 动态渲染首行结转与流水 -->
+									<!-- 动态渲染首行结转、流水与新增行 -->
 								</tbody>
 								<tfoot id="tfoot-unified-ledger">
 									<!-- 动态合计行 -->
@@ -220,6 +223,18 @@ class UnifiedOilCardLedgerConsole {
 		`);
 
 		this.initFilterDropdowns();
+	}
+
+	loadMeta() {
+		const self = this;
+		frappe.call({
+			method: "ashan_cn_procurement.ashan_cn_procurement.page.oil_card_ledger.oil_card_ledger.get_quick_entry_meta",
+			callback: function (r) {
+				if (r.message) {
+					self.meta = r.message;
+				}
+			},
+		});
 	}
 
 	initFilterDropdowns() {
@@ -308,32 +323,74 @@ class UnifiedOilCardLedgerConsole {
 			frappe.show_alert({ message: "流水总账已刷新", indicator: "green" }, 2);
 		});
 
-		// 录入加油
+		// 触发【行内快速录入加油】
 		this.wrapper.on("click", "#btn-quick-refuel", function () {
 			if (!self.activeCard) return;
 			if (self.isLocked && !self.isManager) {
 				frappe.msgprint("当前月份已核定锁定，非管理员禁止录入记录！");
 				return;
 			}
-			frappe.new_doc("Oil Card Refuel Log", {
-				oil_card: self.activeCard.name,
-				company: self.activeCard.company,
-				supplier: self.activeCard.supplier,
-			});
+			self.startInlineEntry("refuel");
 		});
 
-		// 录入充值
+		// 触发【行内快速录入充值】
 		this.wrapper.on("click", "#btn-quick-recharge", function () {
 			if (!self.activeCard) return;
 			if (self.isLocked && !self.isManager) {
 				frappe.msgprint("当前月份已核定锁定，非管理员禁止录入记录！");
 				return;
 			}
-			frappe.new_doc("Oil Card Recharge", {
-				oil_card: self.activeCard.name,
-				company: self.activeCard.company,
-				supplier: self.activeCard.supplier,
-			});
+			self.startInlineEntry("recharge");
+		});
+
+		// 取消行内录入
+		this.wrapper.on("click", "#btn-inline-cancel", function () {
+			$("#row-inline-entry").remove();
+		});
+
+		// 保存行内加油记录
+		this.wrapper.on("click", "#btn-inline-save-refuel", function () {
+			self.saveInlineRefuel();
+		});
+
+		// 保存行内充值记录
+		this.wrapper.on("click", "#btn-inline-save-recharge", function () {
+			self.saveInlineRecharge();
+		});
+
+		// 行内输入计算联动
+		this.wrapper.on("input", "#inline-refuel-amount, #inline-refuel-liters, #inline-refuel-odo", function () {
+			self.updateInlineRefuelCalculations();
+		});
+
+		this.wrapper.on("input", "#inline-recharge-amount, #inline-recharge-bonus", function () {
+			self.updateInlineRechargeCalculations();
+		});
+
+		// 车辆切换时自动带出燃料类型与最后里程
+		this.wrapper.on("change", "#inline-refuel-vehicle", function () {
+			const vehName = $(this).val();
+			const veh = self.meta.vehicles.find((v) => v.name === vehName);
+			if (veh) {
+				if (veh.fuel_type) {
+					self.wrapper.find("#inline-refuel-grade").val(veh.fuel_type);
+				}
+				if (veh.last_odometer) {
+					self.wrapper.find("#inline-refuel-odo").attr("placeholder", `上期:${veh.last_odometer}km`);
+				}
+			}
+			self.updateInlineRefuelCalculations();
+		});
+
+		// 回车保存，ESC取消
+		this.wrapper.on("keydown", ".row-inline-entry input", function (e) {
+			if (e.which === 13) {
+				const isRefuel = $("#btn-inline-save-refuel").length > 0;
+				if (isRefuel) self.saveInlineRefuel();
+				else self.saveInlineRecharge();
+			} else if (e.which === 27) {
+				$("#row-inline-entry").remove();
+			}
 		});
 
 		// 本月核定锁定
@@ -421,6 +478,248 @@ class UnifiedOilCardLedgerConsole {
 			} else {
 				frappe.set_route("List", "Oil Card Invoice Batch");
 			}
+		});
+	}
+
+	startInlineEntry(type) {
+		const existing = $("#row-inline-entry");
+		if (existing.length > 0) {
+			existing.find("input:first").focus();
+			return;
+		}
+
+		const isMgr = this.isManager;
+		const tbody = this.wrapper.find("#tbody-unified-ledger");
+
+		// 默认日期取当前年月合适的时间
+		const now = new Date();
+		let defaultDate = `${this.selectedYear}-${String(this.selectedMonth).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+		if (this.selectedYear !== now.getFullYear() || this.selectedMonth !== now.getMonth() + 1) {
+			defaultDate = `${this.selectedYear}-${String(this.selectedMonth).padStart(2, "0")}-01`;
+		}
+
+		let html = "";
+		if (type === "refuel") {
+			// 加油行内录入
+			let vehicleOptions = '<option value="">-- 车辆(必填) --</option>';
+			this.meta.vehicles.forEach((v) => {
+				vehicleOptions += `<option value="${v.name}">${v.license_plate || v.name}</option>`;
+			});
+
+			html = `
+				<tr id="row-inline-entry" class="row-inline-entry">
+					<td>
+						<input type="date" id="inline-refuel-date" class="inline-input-sm" value="${defaultDate}" required style="width:125px;">
+					</td>
+					<td><span class="status-pill-subtle status-pill-amber">⛽ 新增加油</span></td>
+					<td>
+						<select id="inline-refuel-vehicle" class="inline-input-sm" style="width:130px;" required>
+							${vehicleOptions}
+						</select>
+					</td>
+					<td>
+						<select id="inline-refuel-grade" class="inline-input-sm" style="width:65px;">
+							<option value="92">92#</option>
+							<option value="95" selected>95#</option>
+							<option value="98">98#</option>
+							<option value="0#">0#</option>
+							<option value="柴油">柴油</option>
+						</select>
+					</td>
+					<td>
+						<input type="number" id="inline-refuel-odo" class="inline-input-sm" placeholder="当前里程" required style="width:90px;">
+					</td>
+					<td>
+						<input type="number" step="0.01" id="inline-refuel-liters" class="inline-input-sm" placeholder="升数" required style="width:75px;">
+					</td>
+					<td>
+						<input type="number" step="0.01" id="inline-refuel-amount" class="inline-input-sm" placeholder="金额¥" required style="width:85px;">
+					</td>
+					<td>
+						<b id="inline-preview-balance" style="color:#1d4ed8; font-size:13px;">${formatMoney(this.currentEndingBalance)}</b>
+					</td>
+					${isMgr ? `
+						<td class="mgr-col" id="inline-preview-dist" style="color:#64748b;">--</td>
+						<td class="mgr-col" id="inline-preview-consum" style="color:#64748b;">--</td>
+						<td class="mgr-col"><span class="status-pill-subtle status-pill-amber">未开票</span></td>
+					` : ""}
+					<td>
+						<input type="text" id="inline-refuel-remark" class="inline-input-sm" placeholder="备注(选填)" style="width:95px;">
+					</td>
+					<td style="white-space:nowrap;">
+						<button class="btn-save-inline" id="btn-inline-save-refuel">💾 保存</button>
+						<button class="btn-cancel-inline" id="btn-inline-cancel">❌ 取消</button>
+					</td>
+				</tr>
+			`;
+		} else {
+			// 充值行内录入
+			let modeOptions = "";
+			this.meta.modes_of_payment.forEach((m) => {
+				modeOptions += `<option value="${m}">${m}</option>`;
+			});
+
+			html = `
+				<tr id="row-inline-entry" class="row-inline-entry">
+					<td>
+						<input type="date" id="inline-recharge-date" class="inline-input-sm" value="${defaultDate}" required style="width:125px;">
+					</td>
+					<td><span class="status-pill-subtle status-pill-green">💳 新增充值</span></td>
+					<td>
+						<select id="inline-recharge-mode" class="inline-input-sm" style="width:120px;">
+							${modeOptions}
+						</select>
+					</td>
+					<td>--</td>
+					<td>--</td>
+					<td>--</td>
+					<td>
+						<input type="number" step="0.01" id="inline-recharge-amount" class="inline-input-sm" placeholder="+金额¥" required style="width:90px;">
+					</td>
+					<td>
+						<b id="inline-preview-balance" style="color:#059669; font-size:13px;">${formatMoney(this.currentEndingBalance)}</b>
+					</td>
+					${isMgr ? `
+						<td class="mgr-col">--</td>
+						<td class="mgr-col">--</td>
+						<td class="mgr-col">--</td>
+					` : ""}
+					<td>
+						<input type="text" id="inline-recharge-remark" class="inline-input-sm" placeholder="备注(选填)" style="width:95px;">
+					</td>
+					<td style="white-space:nowrap;">
+						<button class="btn-save-inline" id="btn-inline-save-recharge">💾 保存</button>
+						<button class="btn-cancel-inline" id="btn-inline-cancel">❌ 取消</button>
+					</td>
+				</tr>
+			`;
+		}
+
+		tbody.append(html);
+		const targetInput = type === "refuel" ? $("#inline-refuel-vehicle") : $("#inline-recharge-amount");
+		targetInput.focus();
+
+		// 滚动到该行
+		const tableWrapper = this.wrapper.find(".oil-data-table-wrapper");
+		tableWrapper.scrollTop(tableWrapper[0].scrollHeight);
+	}
+
+	updateInlineRefuelCalculations() {
+		const amt = parseFloat($("#inline-refuel-amount").val()) || 0;
+		const lit = parseFloat($("#inline-refuel-liters").val()) || 0;
+		const odo = parseFloat($("#inline-refuel-odo").val()) || 0;
+		const vehName = $("#inline-refuel-vehicle").val();
+
+		const previewBal = this.currentEndingBalance - amt;
+		$("#inline-preview-balance").text(formatMoney(previewBal));
+
+		if (this.isManager && vehName) {
+			const veh = this.meta.vehicles.find((v) => v.name === vehName);
+			if (veh && odo > (veh.last_odometer || 0)) {
+				const dist = odo - (veh.last_odometer || 0);
+				$("#inline-preview-dist").text(`${dist} km`);
+				if (dist > 0 && lit > 0) {
+					const consum = ((lit / dist) * 100).toFixed(2);
+					$("#inline-preview-consum").text(`${consum} L/100km`);
+				} else {
+					$("#inline-preview-consum").text("--");
+				}
+			} else {
+				$("#inline-preview-dist").text("--");
+				$("#inline-preview-consum").text("--");
+			}
+		}
+	}
+
+	updateInlineRechargeCalculations() {
+		const amt = parseFloat($("#inline-recharge-amount").val()) || 0;
+		const previewBal = this.currentEndingBalance + amt;
+		$("#inline-preview-balance").text(formatMoney(previewBal));
+	}
+
+	saveInlineRefuel() {
+		const self = this;
+		const dateVal = $("#inline-refuel-date").val();
+		const vehVal = $("#inline-refuel-vehicle").val();
+		const odoVal = $("#inline-refuel-odo").val();
+		const litVal = $("#inline-refuel-liters").val();
+		const amtVal = $("#inline-refuel-amount").val();
+		const gradeVal = $("#inline-refuel-grade").val();
+		const remarkVal = $("#inline-refuel-remark").val();
+
+		// 校验必填项
+		let hasErr = false;
+		$(".inline-input-sm").removeClass("input-invalid");
+
+		if (!dateVal) { $("#inline-refuel-date").addClass("input-invalid"); hasErr = true; }
+		if (!vehVal) { $("#inline-refuel-vehicle").addClass("input-invalid"); hasErr = true; }
+		if (!odoVal || parseFloat(odoVal) <= 0) { $("#inline-refuel-odo").addClass("input-invalid"); hasErr = true; }
+		if (!litVal || parseFloat(litVal) <= 0) { $("#inline-refuel-liters").addClass("input-invalid"); hasErr = true; }
+		if (!amtVal || parseFloat(amtVal) <= 0) { $("#inline-refuel-amount").addClass("input-invalid"); hasErr = true; }
+
+		if (hasErr) {
+			frappe.show_alert({ message: "请完整填写标红的必填项（日期、车辆、当前里程、加油升数与金额）！", indicator: "red" }, 4);
+			return;
+		}
+
+		frappe.call({
+			method: "ashan_cn_procurement.ashan_cn_procurement.page.oil_card_ledger.oil_card_ledger.quick_add_refuel",
+			args: {
+				oil_card: self.activeCard.name,
+				posting_date: dateVal,
+				vehicle: vehVal,
+				odometer: odoVal,
+				liters: litVal,
+				amount: amtVal,
+				fuel_grade: gradeVal,
+				remark: remarkVal,
+			},
+			callback: function (r) {
+				if (r.message && r.message.status === "ok") {
+					frappe.show_alert({ message: r.message.message, indicator: "green" }, 3);
+					$("#row-inline-entry").remove();
+					self.loadLedgerData();
+					self.loadMeta(); // 刷新车辆最新里程
+				}
+			},
+		});
+	}
+
+	saveInlineRecharge() {
+		const self = this;
+		const dateVal = $("#inline-recharge-date").val();
+		const modeVal = $("#inline-recharge-mode").val();
+		const amtVal = $("#inline-recharge-amount").val();
+		const remarkVal = $("#inline-recharge-remark").val();
+
+		let hasErr = false;
+		$(".inline-input-sm").removeClass("input-invalid");
+
+		if (!dateVal) { $("#inline-recharge-date").addClass("input-invalid"); hasErr = true; }
+		if (!amtVal || parseFloat(amtVal) <= 0) { $("#inline-recharge-amount").addClass("input-invalid"); hasErr = true; }
+
+		if (hasErr) {
+			frappe.show_alert({ message: "请完整填写标红的必填项（日期与充值金额）！", indicator: "red" }, 4);
+			return;
+		}
+
+		frappe.call({
+			method: "ashan_cn_procurement.ashan_cn_procurement.page.oil_card_ledger.oil_card_ledger.quick_add_recharge",
+			args: {
+				oil_card: self.activeCard.name,
+				posting_date: dateVal,
+				recharge_amount: amtVal,
+				mode_of_payment: modeVal,
+				bonus_amount: 0,
+				remark: remarkVal,
+			},
+			callback: function (r) {
+				if (r.message && r.message.status === "ok") {
+					frappe.show_alert({ message: r.message.message, indicator: "green" }, 3);
+					$("#row-inline-entry").remove();
+					self.loadLedgerData();
+				}
+			},
 		});
 	}
 
@@ -534,13 +833,14 @@ class UnifiedOilCardLedgerConsole {
 		const txns = data.transactions || [];
 		this.isManager = Boolean(data.is_manager);
 		this.isLocked = Boolean(data.is_locked);
+		this.currentEndingBalance = flt(kpis.ending_balance || 0);
 
 		// Zone 1: 顶部油卡信息
 		this.wrapper.find("#disp-card-name").text(card.card_name || card.name);
 		this.wrapper.find("#disp-card-no").text(`卡号: ${card.card_no_masked || card.card_code || "--"}`);
 		this.wrapper.find("#disp-card-status").text(card.status === "Active" ? "正常" : (card.status || "正常"));
 		this.wrapper.find("#disp-card-supplier").text(`· ${card.supplier || ""}`);
-		this.wrapper.find("#disp-ledger-subhead").text(`（${kpis.year}年${kpis.month}月 · 共 ${txns.length} 笔流水 · 期末结存 ${formatMoney(kpis.ending_balance || 0)}）`);
+		this.wrapper.find("#disp-ledger-subhead").text(`（${kpis.year}年${kpis.month}月 · 共 ${txns.length} 笔流水 · 实时结余 ${formatMoney(this.currentEndingBalance)}）`);
 
 		// Zone 1: 4 大财务指标
 		this.wrapper.find("#kpi-opening-bal").text(formatMoney(kpis.opening_balance || 0));
@@ -606,6 +906,7 @@ class UnifiedOilCardLedgerConsole {
 
 		// Zone 3: 渲染合流流水表格
 		this.renderUnifiedTable(txns, kpis);
+		this.wrapper.find(".oil-data-table-wrapper").scrollLeft(0);
 	}
 
 	renderUnifiedTable(txns, kpis) {
@@ -626,7 +927,7 @@ class UnifiedOilCardLedgerConsole {
 				<td><b>${openingDate}</b></td>
 				<td><span class="status-pill-subtle status-pill-gray">期初结存</span></td>
 				<td colspan="5"><b>💰 ${prevMonthDesc}</b></td>
-				<td><b style="color:#1d4ed8; font-size:13.5px;">${openingBalFmt}</b></td>
+				<td><b style="color:#1d4ed8; font-size:13px;">${openingBalFmt}</b></td>
 				${isMgr ? '<td class="mgr-col">--</td><td class="mgr-col">--</td><td class="mgr-col">--</td>' : ""}
 				<td style="color:#64748b;">月初结存</td>
 				<td>--</td>
@@ -703,7 +1004,7 @@ class UnifiedOilCardLedgerConsole {
 				<td colspan="5"><b>本月合计 / 净变动</b></td>
 				<td><b>${totalLitersFmt}</b></td>
 				<td><b>${netChangeFmt}</b></td>
-				<td><b style="color:#6d28d9; font-size:13.5px;">${endingBalFmt}</b></td>
+				<td><b style="color:#6d28d9; font-size:13px;">${endingBalFmt}</b></td>
 				${isMgr ? `<td class="mgr-col"><b>${kpis.period_distance || 0} km</b></td><td class="mgr-col"><b>${kpis.avg_consumption || 0} L/100km</b></td><td class="mgr-col">--</td>` : ""}
 				<td colspan="2" style="color:#64748b; font-size:11.5px;">充值 ${kpis.recharge_count || 0} 笔 / 加油 ${kpis.refuel_count || 0} 次</td>
 			</tr>

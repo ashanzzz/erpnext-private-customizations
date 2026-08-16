@@ -152,7 +152,7 @@
 /* ===== 右侧主控制台 ===== */
 .oil-console-main {
   flex: 1;
-  min-width: 0; /* 防止子元素超宽破坏布局 */
+  min-width: 0;
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
@@ -469,10 +469,16 @@
 .oil-data-table th {
   background: #f8fafc;
   color: #334155;
-  font-weight: 700;
+  font-weight: 800;
   padding: 8px 11px;
   border-bottom: 1px solid #cbd5e1;
   white-space: nowrap;
+}
+
+.oil-data-table th.col-balance {
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12.5px;
 }
 
 .oil-data-table td {
@@ -480,6 +486,7 @@
   border-bottom: 1px solid #f1f5f9;
   color: #334155;
   white-space: nowrap;
+  vertical-align: middle;
 }
 
 .oil-data-table tr:hover td {
@@ -492,6 +499,68 @@
   font-weight: 700;
   border-bottom: 2px solid #86efac;
 }
+
+/* 行内快速录入编辑行 (Inline Editing Row) */
+.row-inline-entry td {
+  background: #fffbeb !important;
+  border-top: 2px solid #f59e0b !important;
+  border-bottom: 2px solid #f59e0b !important;
+  box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.1);
+  padding: 6px 8px !important;
+}
+
+.inline-input-sm {
+  padding: 4px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid #d97706;
+  border-radius: 4px;
+  background: #fff;
+  color: #0f172a;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.inline-input-sm:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.2);
+}
+
+.inline-input-sm.input-invalid {
+  border-color: #dc2626 !important;
+  background-color: #fef2f2 !important;
+}
+
+.btn-save-inline {
+  background: #059669;
+  color: #fff;
+  border: none;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  box-shadow: 0 1px 2px rgba(5,150,105,0.25);
+  transition: background 0.12s ease;
+}
+.btn-save-inline:hover { background: #047857; }
+
+.btn-cancel-inline {
+  background: #fff;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 4px;
+  transition: all 0.12s ease;
+}
+.btn-cancel-inline:hover { background: #f1f5f9; color: #1e293b; }
 
 .oil-data-table tfoot td {
   background: #f8fafc;

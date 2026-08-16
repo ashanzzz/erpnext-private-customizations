@@ -7,6 +7,7 @@ from ashan_cn_procurement.reimbursement.service import (
     get_purchase_invoice_item_candidates,
     get_unpaid_purchase_invoice_picker_rows as get_unpaid_purchase_invoice_picker_row_data,
     import_purchase_invoice_items,
+    normalize_names,
     search_unpaid_purchase_invoices as search_unpaid_purchase_invoice_rows,
 )
 
@@ -16,17 +17,20 @@ def preview_unpaid_purchase_invoice_items(
     company: str,
     purchase_invoice_names: str | Iterable[str] | None = None,
     purchase_invoice_item_names: str | Iterable[str] | None = None,
+    excluded_purchase_invoice_item_names: str | Iterable[str] | None = None,
 ) -> dict:
     """Read-only preview used before a new reimbursement request is saved."""
     candidates = get_purchase_invoice_item_candidates(
         company,
         purchase_invoice_names,
         purchase_invoice_item_names,
+        existing_sources=set(normalize_names(excluded_purchase_invoice_item_names)),
     )
     return {
         "items": [candidate["row"] for candidate in candidates],
         "imported_count": len(candidates),
         "imported_amount": sum(frappe.utils.flt(candidate["row"]["amount"]) for candidate in candidates),
+        "imported_source_items": [candidate["source_pi_item"] for candidate in candidates],
     }
 
 
@@ -68,12 +72,21 @@ def get_unpaid_purchase_invoice_filter_options(company: str) -> dict:
 def get_unpaid_purchase_invoice_picker_rows(
     company: str,
     filters: dict | str | None = None,
+    mode: str = "invoice",
+    reimbursement_request_name: str | None = None,
+    excluded_purchase_invoice_item_names: str | Iterable[str] | None = None,
 ) -> dict:
     """Load the rows displayed below the filters in the single picker dialog."""
     if not company:
         frappe.throw(frappe._("请先填写公司。"))
     return {
-        "rows": get_unpaid_purchase_invoice_picker_row_data(company, filters),
+        "rows": get_unpaid_purchase_invoice_picker_row_data(
+            company=company,
+            filters=filters,
+            mode=mode,
+            reimbursement_request_name=reimbursement_request_name,
+            excluded_purchase_invoice_item_names=excluded_purchase_invoice_item_names,
+        ),
     }
 
 

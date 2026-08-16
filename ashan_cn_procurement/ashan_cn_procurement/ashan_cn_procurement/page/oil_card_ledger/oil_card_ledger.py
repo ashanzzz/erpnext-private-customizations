@@ -44,6 +44,25 @@ def get_all_oil_cards():
 
 
 @frappe.whitelist()
+def get_quick_entry_meta():
+	"""
+	获取行内快速补录所需的车辆档案与付款方式元数据
+	"""
+	vehicles = frappe.get_all(
+		"Vehicle",
+		fields=["name", "license_plate", "fuel_type", "last_odometer"],
+		order_by="license_plate asc",
+	)
+	modes = frappe.get_all("Mode of Payment", fields=["name"], filters={"enabled": 1})
+	mode_names = [m.name for m in modes] if modes else ["Cheque", "Cash", "银行转账", "微信支付", "支付宝"]
+
+	return {
+		"vehicles": vehicles,
+		"modes_of_payment": mode_names,
+	}
+
+
+@frappe.whitelist()
 def get_unified_ledger_data(oil_card, year=None, month=None):
 	"""
 	获取油卡单一合流流水总账数据：
@@ -254,6 +273,144 @@ def get_oil_card_ledger_data(oil_card, year=None, month=None):
 	兼容旧版接口别名
 	"""
 	return get_unified_ledger_data(oil_card, year, month)
+
+
+@frappe.whitelist()
+def quick_add_refuel(oil_card, posting_date, vehicle, odometer, liters, amount, fuel_grade=None, unit_price=None, remark=None):
+	"""
+	行内快速录入加油记录
+	"""
+	if not oil_card or not posting_date or not vehicle:
+		frappe.throw("油卡、日期和车辆为必填项！")
+
+	dt = getdate(posting_date)
+	closing_name = f"{oil_card}-{dt.year}-{dt.month}"
+	if frappe.db.exists("Oil Card Monthly Closing", closing_name):
+		closing_doc = frappe.get_doc("Oil Card Monthly Closing", closing_name)
+		if closing_doc.is_locked and not is_oil_card_manager():
+			frappe.throw(f"该月份 ({dt.year}年{dt.month}月) 已被核定锁定，非管理员禁止录入记录！")
+
+	card = frappe.get_doc("Oil Card", oil_card)
+	veh = frappe.get_doc("Vehicle", vehicle)
+
+	odo = flt(odometer)
+	lit = flt(liters)
+	amt = flt(amount)
+	u_price = flt(unit_price) or (round(amt / lit, 2) if lit > 0 else 0)
+
+	dist = odo - flt(veh.last_odometer) if odo > flt(veh.last_odometer) else 0
+	consum = round((lit / dist) * 100, 2) if dist > 0 and lit > 0 else 0
+
+	# 油品标号标准化映射
+	grade_map = {
+		"92#": "92", "92": "92",
+		"95#": "95", "95": "95",
+		"98#": "98", "98": "98",
+		"0#": "0#", "-10#": "-10#",
+		"Petrol": "95", "Diesel": "0#", "汽油": "汽油", "柴油": "柴油"
+	}
+	norm_grade = grade_map.get(fuel_grade or veh.fuel_type, "95")
+
+	doc = frappe.new_doc("Oil Card Refuel Log")
+	doc.naming_series = "OCRL-.YYYY.-.#####"
+	doc.oil_card = oil_card
+	doc.company = card.company
+	doc.supplier = card.supplier
+	doc.posting_date = posting_date
+	doc.vehicle = vehicle
+	doc.odometer = odo
+	doc.fuel_grade = norm_grade
+	doc.liters = lit
+	doc.unit_price = u_price
+	doc.amount = amt
+	doc.invoice_status = "未开票"
+	doc.remark = remark or ""
+	doc.insert(ignore_permissions=True)
+
+	# 更新只读派生字段
+	frappe.db.set_value("Oil Card Refuel Log", doc.name, {
+		"distance_since_last": dist,
+		"liter_per_100km": consum
+	}, update_modified=False)
+
+	# 同步更新车辆最新里程
+	if odo > flt(veh.last_odometer):
+		frappe.db.set_value("Vehicle", vehicle, "last_odometer", odo, update_modified=True)
+
+	# 重新计算卡内当前总余额
+	recharges_sum = frappe.db.sql(
+		"SELECT COALESCE(SUM(COALESCE(effective_amount, recharge_amount)), 0) as total FROM `tabOil Card Recharge` WHERE oil_card = %s AND docstatus != 2",
+		oil_card,
+		as_dict=True,
+	)[0].total
+	refuels_sum = frappe.db.sql(
+		"SELECT COALESCE(SUM(amount), 0) as total FROM `tabOil Card Refuel Log` WHERE oil_card = %s AND docstatus != 2",
+		oil_card,
+		as_dict=True,
+	)[0].total
+	new_card_bal = flt(card.opening_balance) + flt(recharges_sum) - flt(refuels_sum)
+	frappe.db.set_value("Oil Card", oil_card, "current_balance", new_card_bal, update_modified=True)
+
+	frappe.db.commit()
+	return {"status": "ok", "message": "加油记录已成功保存并实时核算！", "name": doc.name}
+
+
+@frappe.whitelist()
+def quick_add_recharge(oil_card, posting_date, recharge_amount, mode_of_payment=None, bonus_amount=None, remark=None):
+	"""
+	行内快速录入充值记录
+	"""
+	if not oil_card or not posting_date:
+		frappe.throw("油卡和日期为必填项！")
+
+	dt = getdate(posting_date)
+	closing_name = f"{oil_card}-{dt.year}-{dt.month}"
+	if frappe.db.exists("Oil Card Monthly Closing", closing_name):
+		closing_doc = frappe.get_doc("Oil Card Monthly Closing", closing_name)
+		if closing_doc.is_locked and not is_oil_card_manager():
+			frappe.throw(f"该月份 ({dt.year}年{dt.month}月) 已被核定锁定，非管理员禁止录入充值！")
+
+	card = frappe.get_doc("Oil Card", oil_card)
+	rec_amt = flt(recharge_amount)
+	bonus = flt(bonus_amount)
+	eff_amt = rec_amt + bonus
+
+	# 付款方式校验与容错
+	if not mode_of_payment or not frappe.db.exists("Mode of Payment", mode_of_payment):
+		default_mode = frappe.db.get_value("Mode of Payment", {"enabled": 1}, "name")
+		mode_of_payment = default_mode or "Cheque"
+
+	doc = frappe.new_doc("Oil Card Recharge")
+	doc.naming_series = "OCR-.YYYY.-.#####"
+	doc.oil_card = oil_card
+	doc.company = card.company
+	doc.supplier = card.supplier
+	doc.posting_date = posting_date
+	doc.transaction_type = "主卡充值"
+	doc.mode_of_payment = mode_of_payment
+	doc.recharge_amount = rec_amt
+	doc.bonus_amount = bonus
+	doc.effective_amount = eff_amt
+	doc.status = "Submitted"
+	doc.remark = remark or ""
+	doc.insert(ignore_permissions=True)
+
+	# 重新计算卡内当前总余额
+	recharges_sum = frappe.db.sql(
+		"SELECT COALESCE(SUM(COALESCE(effective_amount, recharge_amount)), 0) as total FROM `tabOil Card Recharge` WHERE oil_card = %s AND docstatus != 2",
+		oil_card,
+		as_dict=True,
+	)[0].total
+	refuels_sum = frappe.db.sql(
+		"SELECT COALESCE(SUM(amount), 0) as total FROM `tabOil Card Refuel Log` WHERE oil_card = %s AND docstatus != 2",
+		oil_card,
+		as_dict=True,
+	)[0].total
+	new_card_bal = flt(card.opening_balance) + flt(recharges_sum) - flt(refuels_sum)
+	frappe.db.set_value("Oil Card", oil_card, "current_balance", new_card_bal, update_modified=True)
+
+	frappe.db.commit()
+	return {"status": "ok", "message": "充值记录已成功保存并实时核算！", "name": doc.name}
 
 
 @frappe.whitelist()

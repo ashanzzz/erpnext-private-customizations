@@ -51,7 +51,78 @@
         "业务扩展"
     ];
 
-    // 2. 深度拦截 Frappe Sidebar 解析，确保在任意单据页刷新（F5）均保持 Home 业务侧边栏
+    // 2. 单据页统一使用 App 维护的业务侧边栏。
+    //
+    // 系统 Home Sidebar 不受本 App 的 Workspace Sidebar JSON 管理。单据页若回退
+    // 到 Home，会在 SPA 路由切换后渲染出缺少一级图标的旧数据。My Business 是
+    // 本 App 中受版本控制的完整导航源，一级图标与二级项目均在此处统一维护。
+    const BUSINESS_SIDEBAR = "My Business";
+    const SYSTEM_MANAGEMENT_SECTION = "系统管理";
+    const SYSTEM_MANAGEMENT_ROUTES = [
+        "/desk/client-script",
+        "/desk/customize-form",
+        "/desk/server-script",
+        "/desk/system-settings"
+    ];
+
+    function get_system_manager_status() {
+        if (!window.frappe) return null;
+        if (frappe.boot && Object.prototype.hasOwnProperty.call(frappe.boot, "ashan_is_system_manager")) {
+            return Boolean(frappe.boot.ashan_is_system_manager);
+        }
+        if (frappe.boot && frappe.boot.user && Array.isArray(frappe.boot.user.roles)) {
+            return frappe.boot.user.roles.includes("System Manager");
+        }
+        if (Array.isArray(frappe.user_roles)) {
+            return frappe.user_roles.includes("System Manager");
+        }
+        if (frappe.user && typeof frappe.user.has_role === "function") {
+            return Boolean(frappe.user.has_role("System Manager"));
+        }
+        return null;
+    }
+
+    // Workspace Sidebar Item has no native role field in Frappe v16. Keep the
+    // business navigation clean for ordinary users; actual access remains
+    // protected by the standard DocType and System Settings permissions.
+    function restrict_system_management_section() {
+        if (get_system_manager_status() !== false) return;
+        const $sidebar = $(".body-sidebar");
+        if (!$sidebar.length) return;
+
+        $sidebar.find("a").filter(function() {
+            const href = $(this).attr("href") || "";
+            return SYSTEM_MANAGEMENT_ROUTES.some((route) => href === route || href.startsWith(`${route}?`));
+        }).closest(".sidebar-child-item").remove();
+
+        $sidebar.find(".section-item").filter(function() {
+            const $section = $(this);
+            const title = ($section.attr("item-name") || $section.attr("title") || "").trim();
+            return title === SYSTEM_MANAGEMENT_SECTION
+                || $section.find(".sidebar-item-label").first().text().trim() === SYSTEM_MANAGEMENT_SECTION;
+        }).each(function() {
+            const $section = $(this);
+            // Support both v16 sidebar layouts: children nested in the section
+            // and children following it as sibling sidebar items.
+            $section.nextUntil(".section-item").filter(".sidebar-child-item").remove();
+            $section.remove();
+        });
+    }
+
+    function schedule_system_management_visibility(retries = 20) {
+        const status = get_system_manager_status();
+        if (status === true) return;
+        if (status === false) {
+            restrict_system_management_section();
+            return;
+        }
+        // The server already removes this group from non-admin boot data. This
+        // retry only protects a cached client sidebar while Frappe is starting.
+        if (retries > 0) {
+            window.setTimeout(() => schedule_system_management_visibility(retries - 1), 150);
+        }
+    }
+
     function patch_sidebar_resolver() {
         if (!window.frappe || !frappe.ui || !frappe.ui.Sidebar) return false;
         const Sidebar = frappe.ui.Sidebar;
@@ -59,13 +130,14 @@
 
         const orig_resolve_sidebar = Sidebar.prototype.resolve_sidebar;
         Sidebar.prototype.resolve_sidebar = function(doctype, module) {
-            // 当处于采购、库存、财务等业务单据或标准模块时，统一解析为 Home 侧边栏
+            // 当处于采购、库存、财务等业务单据或标准模块时，统一解析为 App 维护的
+            // 业务侧边栏。这样从一级看板进入任意二级单据后，不会切换到系统 Home。
             const mod_lower = (module || "").toLowerCase();
             if (!module || mod_lower === "setup" || mod_lower === "buying" || mod_lower === "stock" || mod_lower === "accounts" || mod_lower === "hr" || mod_lower === "ashan_cn_procurement" || mod_lower === "ashan cn procurement") {
-                return "Home";
+                return BUSINESS_SIDEBAR;
             }
             const res = orig_resolve_sidebar ? orig_resolve_sidebar.apply(this, arguments) : null;
-            return res || "Home";
+            return res || BUSINESS_SIDEBAR;
         };
 
         const orig_choose_app_name = Sidebar.prototype.choose_app_name;
@@ -94,7 +166,10 @@
         if (TypeSectionBreak._ashan_strict_patched) return true;
 
         // 丝滑动画切换 toggle()
-        TypeSectionBreak.prototype.toggle = function(animate = true) {
+        // Frappe 内部的 open()/close() 会在 SPA 路由切换与侧栏尺寸变化时调用
+        // toggle()，这类同步不应播放动画；一级文字和箭头的用户点击会显式传入
+        // true，仍保留 180ms 的展开/收起反馈。
+        TypeSectionBreak.prototype.toggle = function(animate = false) {
             const $nested = $(this.$nested_items);
             if (!$nested.length) return;
 
@@ -256,11 +331,13 @@
         inject_styles();
         patch_sidebar_resolver();
         patch_native_section_break();
+        schedule_system_management_visibility();
 
         $(document).on("sidebar_setup app_ready route-change page-change", function() {
             inject_styles();
             patch_sidebar_resolver();
             patch_native_section_break();
+            schedule_system_management_visibility();
         });
     }
 
