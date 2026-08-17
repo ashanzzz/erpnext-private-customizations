@@ -9,12 +9,19 @@ from frappe.utils import flt, getdate, nowdate, now_datetime
 
 def is_oil_card_manager():
 	"""
-	判断当前用户是否具备【油卡管理员】权限
+	判断当前用户是否具备管理员与授权审核权限
 	"""
 	if frappe.session.user == "Administrator":
 		return True
 	user_roles = set(frappe.get_roles())
-	manager_roles = {"System Manager", "Oil Card Manager", "Accounts Manager", "Stock Manager"}
+	manager_roles = {
+		"System Manager",
+		"Oil Card Manager",
+		"油卡管理员",
+		"Purchase Manager",
+		"Accounts Manager",
+		"Stock Manager"
+	}
 	return bool(user_roles & manager_roles)
 
 
