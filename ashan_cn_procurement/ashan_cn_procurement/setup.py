@@ -207,7 +207,11 @@ def setup_doctype_and_page_permissions():
 		"Environmental Compliance Item",
 		"Special Equipment",
 		"Special Equipment Inspection",
-		"Special Equipment Annual Inspection"
+		"Special Equipment Annual Inspection",
+		"Property Lease",
+		"Property Charge Rate",
+		"Utility Meter",
+		"Property Monthly Settlement"
 	]
 	target_roles = ["System Manager", "Fleet Manager", "Oil Card Manager", "油卡管理员", "Oil Card Operator", "油卡操作员", "Desk User", "All"]
 
@@ -244,7 +248,7 @@ def setup_doctype_and_page_permissions():
 			dp.save(ignore_permissions=True)
 
 	# 3. 确保 Pages 拥有这些角色的访问权限
-	for page_name in ["oil-card-ledger", "vehicle-toll-ledger", "special-equipment-center", "environmental-management"]:
+	for page_name in ["oil-card-ledger", "vehicle-toll-ledger", "special-equipment-center", "environmental-management", "property-settlement-workbench"]:
 		if frappe.db.exists("Page", page_name):
 			page_doc = frappe.get_doc("Page", page_name)
 			existing_roles = {r.role for r in page_doc.roles}

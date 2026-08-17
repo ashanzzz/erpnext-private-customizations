@@ -1,0 +1,92 @@
+{
+  "name": "Property Lease Charge",
+  "module": "Ashan CN Procurement",
+  "doctype": "DocType",
+  "custom": 0,
+  "issingle": 0,
+  "istable": 1,
+  "fields": [
+    {
+      "label": "租赁物业",
+      "fieldname": "property_lease",
+      "fieldtype": "Link",
+      "options": "Property Lease",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "label": "场地名称",
+      "fieldname": "property_name",
+      "fieldtype": "Data",
+      "in_list_view": 1
+    },
+    {
+      "label": "所属公司",
+      "fieldname": "company",
+      "fieldtype": "Link",
+      "options": "Company",
+      "in_list_view": 1
+    },
+    {
+      "label": "面积(㎡)",
+      "fieldname": "area",
+      "fieldtype": "Float",
+      "in_list_view": 1
+    },
+    {
+      "label": "计费项目",
+      "fieldname": "charge_item",
+      "fieldtype": "Select",
+      "options": "房租\n物业费\n房租含物业\n其他固定费用",
+      "in_list_view": 1
+    },
+    {
+      "label": "计费方式",
+      "fieldname": "billing_method",
+      "fieldtype": "Select",
+      "options": "年金额\n按天每平方米"
+    },
+    {
+      "label": "当月计费天数",
+      "fieldname": "billing_days",
+      "fieldtype": "Int",
+      "in_list_view": 1
+    },
+    {
+      "label": "含税日单价快照",
+      "fieldname": "daily_rate_snapshot",
+      "fieldtype": "Currency"
+    },
+    {
+      "label": "年金额快照",
+      "fieldname": "annual_amount_snapshot",
+      "fieldtype": "Currency"
+    },
+    {
+      "label": "含税金额",
+      "fieldname": "amount_tax_incl",
+      "fieldtype": "Currency",
+      "in_list_view": 1
+    },
+    {
+      "label": "不含税金额",
+      "fieldname": "amount_tax_excl",
+      "fieldtype": "Currency"
+    },
+    {
+      "label": "税率(%)",
+      "fieldname": "tax_rate",
+      "fieldtype": "Percent"
+    },
+    {
+      "label": "税额",
+      "fieldname": "tax_amount",
+      "fieldtype": "Currency"
+    },
+    {
+      "label": "备注说明",
+      "fieldname": "remark",
+      "fieldtype": "Small Text"
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "name": "Property Lease",
+  "module": "Ashan CN Procurement",
+  "doctype": "DocType",
+  "custom": 0,
+  "issingle": 0,
+  "istable": 0,
+  "autoname": "format:{company}-{property_name}",
+  "title_field": "property_name",
+  "search_fields": "company,property_name,charge_item",
+  "fields": [
+    {
+      "label": "场地名称",
+      "fieldname": "property_name",
+      "fieldtype": "Data",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "label": "所属公司",
+      "fieldname": "company",
+      "fieldtype": "Link",
+      "options": "Company",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "label": "建筑/使用面积(㎡)",
+      "fieldname": "area",
+      "fieldtype": "Float",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "label": "计费项目",
+      "fieldname": "charge_item",
+      "fieldtype": "Select",
+      "options": "房租\n物业费\n房租含物业\n其他固定费用",
+      "default": "房租含物业",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "label": "计费方式",
+      "fieldname": "billing_method",
+      "fieldtype": "Select",
+      "options": "年金额\n按天每平方米",
+      "default": "年金额",
+      "reqd": 1
+    },
+    {
+      "fieldtype": "Column Break",
+      "fieldname": "cb_lease_1"
+    },
+    {
+      "label": "租赁起日",
+      "fieldname": "start_date",
+      "fieldtype": "Date"
+    },
+    {
+      "label": "租赁止日",
+      "fieldname": "end_date",
+      "fieldtype": "Date"
+    },
+    {
+      "label": "启用",
+      "fieldname": "enabled",
+      "fieldtype": "Check",
+      "default": "1",
+      "in_list_view": 1
+    },
+    {
+      "label": "备注说明",
+      "fieldname": "remark",
+      "fieldtype": "Small Text"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "All",
+      "read": 1
+    }
+  ]
+}
