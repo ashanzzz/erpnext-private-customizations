@@ -50,7 +50,7 @@
         "Filter": "筛选",
         "Filters": "筛选条件",
         "Filter By": "筛选条件",
-        "Add Filter": "+ 添加筛选条件",
+        "Add Filter": "添加筛选条件",
         "Clear Filters": "清空全部筛选",
         "Sort By": "排序规则",
         "Created On": "创建时间",
@@ -86,9 +86,9 @@
         "Email": "发送邮件",
         "Upload": "上传文件",
         "Download": "下载附件",
-        "Add row": "+ 添加行",
-        "Add Row": "+ 添加行",
-        "Add multiple": "+ 批量添加行",
+        "Add row": "添加行",
+        "Add Row": "添加行",
+        "Add multiple": "批量添加",
         "Insert Above": "在上方插入行",
         "Insert Below": "在下方插入行",
         "Move Up": "上移",
@@ -99,10 +99,13 @@
         "Edit": "编辑修改",
         "New": "新建",
         "Create": "创建",
-        "+ Add": "+ 新建",
-        "+ New": "+ 新建",
-        "+ Add Role": "+ 新建角色",
-        "+ Add User": "+ 新建用户",
+        "+ Add": "新建",
+        "+ New": "新建",
+        "+ Add Role": "新建角色",
+        "+ Add User": "新建用户",
+        "+ Add {0}": "新建 {0}",
+        "Add {0}": "新建 {0}",
+        "New {0}": "新建 {0}",
 
         // === 4. 单据状态 (Document Statuses) ===
         "Draft": "草稿",
@@ -184,8 +187,6 @@
         "Sales & Purchase": "销售与采购",
         "Series": "编号系列",
         "Last Updated On": "最后更新时间",
-        "+ Add {0}": "+ 新建 {0}",
-        "Add {0}": "+ 新建 {0}",
         "Stock Entry": "物料调拨与出入库",
         "Delivery Note": "销售出库单",
         "Stock Ledger": "库存台账明细",
@@ -265,10 +266,10 @@
             }
         });
         $(".btn:contains('Add Row'), button:contains('Add Row')").each(function() {
-            $(this).contents().filter(function() { return this.nodeType === 3 && this.nodeValue.trim() === "Add Row"; }).replaceWith("+ 添加行");
+            $(this).contents().filter(function() { return this.nodeType === 3 && this.nodeValue.trim() === "Add Row"; }).replaceWith("添加行");
         });
         $(".btn:contains('Add multiple'), button:contains('Add multiple')").each(function() {
-            $(this).contents().filter(function() { return this.nodeType === 3 && this.nodeValue.trim() === "Add multiple"; }).replaceWith("+ 批量添加");
+            $(this).contents().filter(function() { return this.nodeType === 3 && this.nodeValue.trim() === "Add multiple"; }).replaceWith("批量添加");
         });
     }
 
