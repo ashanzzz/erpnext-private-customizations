@@ -15,7 +15,7 @@ frappe.pages['vehicle-toll-ledger'].on_page_show = function(wrapper) {
 };
 
 /* ============================================================
-   VehicleTollLedger — 高速费月度台账（车辆选项卡大屏）
+   VehicleTollLedger — 离开单元格自动保存 · 6趟计费 · 车辆人员配置
    ============================================================ */
 class VehicleTollLedger {
     constructor(wrapper, page) {
@@ -27,15 +27,29 @@ class VehicleTollLedger {
         this.currentYear = now.getFullYear();
         this.currentMonth = now.getMonth() + 1;
 
-        this.vehicles = [];          // 入池车辆列表
-        this.activeVehicle = null;   // 当前选中的 vehicle_config name
-        this.sheetData = null;       // 当前车辆当月台账数据
-        this.isDirty = false;
+        this.vehicles = [];
+        this.activeVehicle = null;
+        this.sheetData = null;
         this.isManager = false;
+        this._autoSaveTimer = null;
+        this._isDirty = false;
+        this._saving = false;
 
         this.init_dom();
         this.bind_global_events();
         this.load_vehicles();
+    }
+
+    // ─── 固定6趟计费列定义 ───────────────────────────────────
+    get_toll_routes() {
+        return [
+            {id: 'c1', name: '趟次 1'},
+            {id: 'c2', name: '趟次 2'},
+            {id: 'c3', name: '趟次 3'},
+            {id: 'c4', name: '趟次 4'},
+            {id: 'c5', name: '趟次 5'},
+            {id: 'c6', name: '趟次 6'},
+        ];
     }
 
     // ─── DOM 骨架 ────────────────────────────────────────────
@@ -58,9 +72,17 @@ class VehicleTollLedger {
                 </div>
                 <div class="toll-actions">
                     <button class="toll-btn toll-btn-secondary" id="btn-manage-vehicles">⚙️ 管理入池车辆</button>
-                    <button class="toll-btn toll-btn-secondary" id="btn-config-routes" style="display:none;">🛤️ 配置收费站列</button>
                     <button class="toll-btn toll-btn-lock" id="btn-toggle-lock" style="display:none;">🔒 本月核定</button>
-                    <button class="toll-btn toll-btn-primary" id="btn-save" style="display:none;">💾 保存 (Ctrl+S)</button>
+                </div>
+            </div>
+
+            <!-- 自动保存状态条 -->
+            <div class="toll-autosave-bar" id="toll-autosave-bar">
+                <div class="autosave-left">
+                    <span id="autosave-status">数据已同步</span>
+                </div>
+                <div class="autosave-right">
+                    <span class="autosave-tip">💡 离开单元格或按 Enter/Tab 自动保存</span>
                 </div>
             </div>
 
@@ -86,13 +108,15 @@ class VehicleTollLedger {
 
             <!-- 车辆选项卡栏 -->
             <div class="toll-tabs-wrapper" id="toll-tabs-wrapper" style="display:none;">
-                <div class="toll-tabs" id="toll-tabs-bar">
-                    <!-- 动态渲染 -->
-                </div>
+                <div class="toll-tabs" id="toll-tabs-bar"></div>
             </div>
 
-            <!-- 台账表格区域 -->
+            <!-- 台账区域 -->
             <div class="toll-sheet-container" id="toll-sheet-container" style="display:none;">
+
+                <!-- 车辆人员信息栏 -->
+                <div class="toll-vehicle-info-bar" id="toll-vehicle-info-bar"></div>
+
                 <div class="toll-table-wrapper">
                     <table class="toll-excel-table" id="toll-matrix-table">
                         <thead id="toll-thead"></thead>
@@ -100,34 +124,34 @@ class VehicleTollLedger {
                         <tfoot id="toll-tfoot"></tfoot>
                     </table>
                 </div>
-                <!-- 快捷预支注入面板 -->
+
+                <!-- 公司预支流水面板 -->
                 <div class="toll-deposit-panel" id="toll-deposit-panel">
                     <div class="toll-deposit-header">
                         <strong>💰 本月公司预支/注入流水</strong>
                         <button class="toll-btn toll-btn-deposit" id="btn-add-deposit">＋ 新增预支充值</button>
                     </div>
-                    <div id="deposit-list-container"><!-- 动态渲染 --></div>
+                    <div id="deposit-list-container"></div>
                 </div>
+
                 <div class="toll-footer-bar">
                     <div class="toll-shortcuts">
-                        <span><kbd>Tab</kbd>/<kbd>Enter</kbd> 换格</span>
-                        <span><kbd>Ctrl+S</kbd> 保存</span>
-                        <span>💡 通行费录入后自动计算结余</span>
+                        <span><kbd>Enter</kbd> 向下换格</span>
+                        <span><kbd>Tab</kbd> 向右换格</span>
+                        <span>离开单元格自动同步保存</span>
                     </div>
-                    <div id="toll-save-status">尚未修改</div>
                 </div>
             </div>
 
-            <!-- 无车辆空态提示 -->
+            <!-- 空态 -->
             <div class="toll-empty-state" id="toll-empty-state" style="display:none;">
                 <div class="toll-empty-icon">🚗</div>
                 <div class="toll-empty-title">暂无入池车辆</div>
                 <div class="toll-empty-desc">点击上方「⚙️ 管理入池车辆」添加需要纳入高速费管理的车辆</div>
             </div>
-
         </div>`);
 
-        // 年月选择器
+        // 年月下拉框填充
         const $yearSel = this.$container.find('#sel-year');
         const nowYear = new Date().getFullYear();
         for (let y = nowYear - 3; y <= nowYear + 2; y++) {
@@ -142,7 +166,7 @@ class VehicleTollLedger {
         $monthSel.val(this.currentMonth);
     }
 
-    // ─── 全局事件绑定 ────────────────────────────────────────
+    // ─── 全局事件 ─────────────────────────────────────────────
     bind_global_events() {
         const self = this;
         const $c = this.$container;
@@ -152,8 +176,8 @@ class VehicleTollLedger {
             self.currentMonth = parseInt($c.find('#sel-month').val());
             if (self.activeVehicle) self.load_sheet();
         });
-        $c.find('#btn-prev-month').on('click', () => { self.shift_month(-1); });
-        $c.find('#btn-next-month').on('click', () => { self.shift_month(1); });
+        $c.find('#btn-prev-month').on('click', () => self.shift_month(-1));
+        $c.find('#btn-next-month').on('click', () => self.shift_month(1));
         $c.find('#btn-cur-month').on('click', () => {
             const now = new Date();
             self.currentYear = now.getFullYear();
@@ -161,23 +185,12 @@ class VehicleTollLedger {
             self.update_period_ui();
             if (self.activeVehicle) self.load_sheet();
         });
-        $c.find('#btn-save').on('click', () => self.save_sheet());
         $c.find('#btn-toggle-lock').on('click', () => {
             if (!self.sheetData) return;
             self.sheetData.is_locked ? self.reopen_sheet() : self.close_sheet();
         });
         $c.find('#btn-manage-vehicles').on('click', () => self.open_manage_vehicles_dialog());
-        $c.find('#btn-config-routes').on('click', () => self.open_config_routes_dialog());
         $c.find('#btn-add-deposit').on('click', () => self.open_add_deposit_dialog());
-
-        $(document).on('keydown.toll_ledger', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-                if ($('#toll-matrix-table').is(':visible')) {
-                    e.preventDefault();
-                    self.save_sheet();
-                }
-            }
-        });
     }
 
     shift_month(delta) {
@@ -196,11 +209,9 @@ class VehicleTollLedger {
         this.$container.find('#sel-month').val(this.currentMonth);
     }
 
-    refresh() {
-        this.load_vehicles();
-    }
+    refresh() { this.load_vehicles(); }
 
-    // ─── 加载入池车辆列表 ────────────────────────────────────
+    // ─── 加载入池车辆 ────────────────────────────────────────
     load_vehicles() {
         const self = this;
         frappe.call({
@@ -236,10 +247,11 @@ class VehicleTollLedger {
 
         this.vehicles.forEach(v => {
             const isActive = v.config_name === self.activeVehicle;
+            const operatorText = v.primary_user ? ` · ${frappe.utils.escape_html(v.primary_user)}` : '';
             const $tab = $(`
                 <div class="toll-tab-item ${isActive ? 'active' : ''}" data-config="${v.config_name}">
                     <span class="toll-tab-icon">🚗</span>
-                    <span class="toll-tab-label">${frappe.utils.escape_html(v.display_name)}</span>
+                    <span class="toll-tab-label">${frappe.utils.escape_html(v.display_name)}${operatorText}</span>
                 </div>
             `);
             $tab.on('click', () => {
@@ -251,7 +263,6 @@ class VehicleTollLedger {
             $tabsBar.append($tab);
         });
 
-        // 如果还没选中任何车辆，自动选第一辆
         if (!this.activeVehicle || !this.vehicles.find(v => v.config_name === this.activeVehicle)) {
             this.activeVehicle = this.vehicles[0].config_name;
             $tabsBar.find('.toll-tab-item').first().addClass('active');
@@ -260,7 +271,7 @@ class VehicleTollLedger {
         this.load_sheet();
     }
 
-    // ─── 加载当前车辆当月台账 ────────────────────────────────
+    // ─── 加载当前车辆当月台账 ───────────────────────────────
     load_sheet() {
         const self = this;
         if (!this.activeVehicle) return;
@@ -273,7 +284,7 @@ class VehicleTollLedger {
                 month: self.currentMonth
             },
             freeze: true,
-            freeze_message: '正在加载台账数据...',
+            freeze_message: '正在加载台账...',
             callback(r) {
                 if (r.message) {
                     self.sheetData = r.message;
@@ -288,23 +299,18 @@ class VehicleTollLedger {
         const d = this.sheetData;
         const self = this;
         const $c = this.$container;
+        const routes = this.get_toll_routes();
 
         $c.find('#toll-sheet-container').show();
 
-        // 状态与按钮
+        // 状态badge + 核定按钮
         const $badge = $c.find('#toll-status-badge');
         const $lockBtn = $c.find('#btn-toggle-lock');
-        const $sheetBox = $c.find('#toll-sheet-container');
-        const $saveBtn = $c.find('#btn-save');
-        const $configRoutes = $c.find('#btn-config-routes');
-
-        $configRoutes.show();
 
         if (d.is_locked) {
             $badge.removeClass('status-open').addClass('status-locked')
                 .html(`🔒 ${d.year}年${d.month}月已核定锁定`);
-            $sheetBox.addClass('toll-sheet-locked');
-            $saveBtn.hide();
+            $c.find('#toll-sheet-container').addClass('toll-sheet-locked');
             if (d.is_manager) {
                 $lockBtn.show().removeClass('toll-btn-lock').addClass('toll-btn-unlock').html('🔓 取消核定');
             } else {
@@ -312,8 +318,7 @@ class VehicleTollLedger {
             }
         } else {
             $badge.removeClass('status-locked').addClass('status-open').html('🟢 正常录入中');
-            $sheetBox.removeClass('toll-sheet-locked');
-            $saveBtn.show();
+            $c.find('#toll-sheet-container').removeClass('toll-sheet-locked');
             if (d.is_manager) {
                 $lockBtn.show().removeClass('toll-btn-unlock').addClass('toll-btn-lock').html('🔒 本月核定');
             } else {
@@ -321,79 +326,78 @@ class VehicleTollLedger {
             }
         }
 
-        const routes = d.toll_routes || [];
+        // 车辆人员信息栏（纯文本显示，支持点击快速修改）
+        const opName = d.primary_user ? frappe.utils.escape_html(d.primary_user) : '未设置';
+        const mgrName = d.vehicle_manager ? frappe.utils.escape_html(d.vehicle_manager) : '未设置';
+        $c.find('#toll-vehicle-info-bar').html(`
+            <div class="vehicle-info-left">
+                <span class="info-veh-name">🚗 ${frappe.utils.escape_html(d.display_name)}</span>
+                <span class="info-chip operator-chip">📋 操作员: <b>${opName}</b></span>
+                <span class="info-chip manager-chip">👤 车辆管理员: <b>${mgrName}</b></span>
+            </div>
+            <div class="vehicle-info-right">
+                <button class="toll-btn-link" id="btn-edit-personnel">✏️ 修改人员信息</button>
+            </div>
+        `);
+        $c.find('#btn-edit-personnel').on('click', () => self.open_personnel_dialog());
 
         // 表头
         let thHtml = `<tr>
-            <th style="width:140px;">日期</th>`;
+            <th style="width:110px;">日期</th>`;
         routes.forEach(r => {
-            thHtml += `<th style="min-width:85px;">${frappe.utils.escape_html(r.name)}</th>`;
+            thHtml += `<th style="min-width:75px;">${r.name}</th>`;
         });
         thHtml += `
-            <th style="min-width:90px;background:#fef2f2;color:#991b1b;">日合计</th>
-            <th style="min-width:110px;background:#f0fdf4;color:#166534;">公司预支注入</th>
-            <th style="min-width:110px;background:#f5f3ff;color:#5b21b6;">实时结余</th>
-            <th style="min-width:130px;">备注</th>
+            <th style="min-width:80px;background:#fef2f2;color:#991b1b;">日合计</th>
+            <th style="min-width:95px;background:#f0fdf4;color:#166534;">预支注入</th>
+            <th style="min-width:95px;background:#f5f3ff;color:#5b21b6;">实时结余</th>
+            <th style="min-width:110px;">备注</th>
         </tr>`;
         $c.find('#toll-thead').html(thHtml);
 
-        // 表体：期初行 + 每日行
+        // 表体：期初行
         let tbHtml = `<tr class="row-opening">
             <td class="cell-date">🔁 结转期初</td>`;
         routes.forEach(() => { tbHtml += `<td></td>`; });
         tbHtml += `
-            <td></td>
-            <td></td>
-            <td class="cell-balance" id="opening-bal-cell">
+            <td></td><td></td>
+            <td class="cell-readonly cell-balance" id="opening-bal-cell">
                 ${d.is_locked
                     ? `<span class="cell-readonly">${fmt_cur(d.opening_balance)}</span>`
                     : `<input type="number" step="0.01" class="cell-input" id="input-opening" value="${d.opening_balance || 0}">`
                 }
             </td>
-            <td style="font-size:12px;color:#15803d;">上月期末结转</td>
+            <td style="font-size:11px;color:#15803d;">上月期末结转</td>
         </tr>`;
 
+        // 每日行
         (d.daily_records || []).forEach(r => {
             const weekendCls = r.is_weekend ? 'row-weekend' : '';
-            const deposits_html = r.deposit > 0
-                ? `<span class="deposit-badge">+${fmt_cur(r.deposit)}</span>`
-                : '';
             tbHtml += `<tr class="${weekendCls}" data-day="${r.day}">
                 <td class="cell-date">${r.date_display || r.date}</td>`;
 
             routes.forEach(route => {
                 const val = (r.routes && r.routes[route.id]) ? r.routes[route.id] : '';
                 tbHtml += `<td>
-                    <input type="number" step="0.01" class="cell-input cell-route-input"
+                    <input type="number" step="0.01" min="0" class="cell-input cell-route-input"
                            data-day="${r.day}" data-rid="${route.id}"
-                           value="${val}" placeholder="—"
+                           value="${val}" placeholder=""
                            ${d.is_locked ? 'disabled' : ''}>
                 </td>`;
             });
 
             tbHtml += `
-                <td class="cell-readonly cell-expense" id="exp-${r.day}">
-                    ${r.expense > 0 ? fmt_cur(r.expense) : '—'}
-                </td>
-                <td class="cell-readonly cell-deposit" id="dep-${r.day}">
-                    ${r.deposit > 0 ? `+${fmt_cur(r.deposit)}` : '—'}
-                </td>
-                <td class="cell-readonly cell-balance ${r.balance < 0 ? 'negative' : ''}" id="bal-${r.day}">
-                    ${fmt_cur(r.balance)}
-                </td>
-                <td>
-                    <input type="text" class="cell-input cell-remark-input"
-                           data-day="${r.day}"
-                           value="${frappe.utils.escape_html(r.remark || '')}"
-                           placeholder="备注"
-                           ${d.is_locked ? 'disabled' : ''}>
-                </td>
+                <td class="cell-readonly cell-expense" id="exp-${r.day}">${r.expense > 0 ? fmt_cur(r.expense) : '—'}</td>
+                <td class="cell-readonly cell-deposit" id="dep-${r.day}">${r.deposit > 0 ? `+${fmt_cur(r.deposit)}` : '—'}</td>
+                <td class="cell-readonly cell-balance ${r.balance < 0 ? 'negative' : ''}" id="bal-${r.day}">${fmt_cur(r.balance)}</td>
+                <td><input type="text" class="cell-input cell-remark-input" data-day="${r.day}"
+                           value="${frappe.utils.escape_html(r.remark || '')}" placeholder="备注"
+                           ${d.is_locked ? 'disabled' : ''}></td>
             </tr>`;
         });
-
         $c.find('#toll-tbody').html(tbHtml);
 
-        // 表尾合计行
+        // 表尾
         let tfHtml = `<tr class="row-summary">
             <td style="text-align:center;">📊 月度合计</td>`;
         routes.forEach(route => {
@@ -407,47 +411,84 @@ class VehicleTollLedger {
         </tr>`;
         $c.find('#toll-tfoot').html(tfHtml);
 
-        // 绑定输入事件
         this.bind_cell_events();
-
-        // 全量重算
         this.recalculate();
-
-        // 渲染预支流水面板
         this.render_deposit_panel(d.deposit_records || []);
+
+        this.set_save_status('idle');
     }
 
-    // ─── 绑定单元格事件 ──────────────────────────────────────
+    // ─── 绑定单元格事件：离开单元格保存 + Enter/Tab 换格 ────────
     bind_cell_events() {
         const self = this;
         const $t = this.$container.find('#toll-matrix-table');
 
+        // 输入时：标记脏数据，并触发界面实时计算
         $t.find('.cell-route-input, #input-opening').on('input', function() {
+            self._isDirty = true;
             $(this).addClass('changed');
-            self.isDirty = true;
-            self.$container.find('#toll-save-status').html('⚠️ 有未保存修改');
             self.recalculate();
+            self.set_save_status('pending');
+
+            // 1.5 秒空闲防抖辅助（用户停下不离开时也自动保底）
+            clearTimeout(self._autoSaveTimer);
+            self._autoSaveTimer = setTimeout(() => {
+                if (self._isDirty) self.auto_save();
+            }, 1500);
         });
 
-        // Enter 跳到下一行同列
+        // 核心机制：离开单元格（blur / change）立即触发保存！
+        $t.find('.cell-route-input, #input-opening').on('blur change', function() {
+            clearTimeout(self._autoSaveTimer);
+            if (self._isDirty || $(this).hasClass('changed')) {
+                self.auto_save();
+            }
+        });
+
+        // 备注输入框离开时保存
+        $t.find('.cell-remark-input').on('change blur', function() {
+            self.auto_save();
+        });
+
+        // 键盘导航：Enter 向下换行，Tab 向右换格
         $t.find('.cell-input').on('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                const idx = $(this).closest('td').index();
-                const $nextRow = $(this).closest('tr').next('tr:not(.row-summary)');
+                const $td = $(this).closest('td');
+                const colIdx = $td.index();
+                const $nextRow = $td.closest('tr').next('tr:not(.row-summary)');
                 if ($nextRow.length) {
-                    const $inp = $nextRow.children('td').eq(idx).find('.cell-input');
-                    if ($inp.length) $inp.focus().select();
+                    const $nextInp = $nextRow.children('td').eq(colIdx).find('.cell-input');
+                    if ($nextInp.length) {
+                        $nextInp.focus().select();
+                    }
                 }
             }
         });
+    }
+
+    // ─── 自动保存状态指示 ────────────────────────────────────
+    set_save_status(state) {
+        const $s = this.$container.find('#autosave-status');
+        if (state === 'idle') {
+            $s.html('<span class="save-idle">✅ 数据已同步</span>');
+        } else if (state === 'pending') {
+            $s.html('<span class="save-pending">⏳ 待保存...</span>');
+        } else if (state === 'saving') {
+            $s.html('<span class="save-saving">💾 正在保存中...</span>');
+        } else if (state === 'ok') {
+            const time = new Date().toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+            $s.html(`<span class="save-ok">✅ 已自动保存 (${time})</span>`);
+        } else if (state === 'err') {
+            $s.html('<span class="save-err">❌ 自动保存失败，请检查网络</span>');
+        }
     }
 
     // ─── 全表级联重算 ─────────────────────────────────────────
     recalculate() {
         const d = this.sheetData;
         if (!d) return;
-        const routes = d.toll_routes || [];
+        const routes = this.get_toll_routes();
 
         let opening = d.is_locked
             ? flt(d.opening_balance)
@@ -469,7 +510,6 @@ class VehicleTollLedger {
                 routeTotals[route.id] += v;
             });
 
-            // 预支注入来自服务器数据（只读列，不可在表格直接编辑）
             const dayRec = (d.daily_records || []).find(r => r.day === dayNum);
             const dayDep = dayRec ? flt(dayRec.deposit) : 0;
 
@@ -483,14 +523,13 @@ class VehicleTollLedger {
             $balCell.toggleClass('negative', curBal < 0);
         });
 
-        // 合计行
         routes.forEach(r => {
             $(`#sum-route-${r.id}`).text(routeTotals[r.id] > 0 ? fmt_cur(routeTotals[r.id]) : '—');
         });
         this.$container.find('#sum-expense').text(fmt_cur(totExp));
         this.$container.find('#sum-deposit').text(totDep > 0 ? `+${fmt_cur(totDep)}` : '—');
-        const $sumBal = this.$container.find('#sum-balance');
-        $sumBal.text(fmt_cur(curBal)).toggleClass('negative', curBal < 0);
+        const $sb = this.$container.find('#sum-balance');
+        $sb.text(fmt_cur(curBal)).toggleClass('negative', curBal < 0);
 
         // KPI
         this.$container.find('#kpi-opening').text(`¥ ${fmt_cur(opening)}`);
@@ -499,62 +538,60 @@ class VehicleTollLedger {
         this.$container.find('#kpi-closing').text(`¥ ${fmt_cur(curBal)}`);
     }
 
-    // ─── 收集当前表格数据 ────────────────────────────────────
+    // ─── 收集表格数据 ─────────────────────────────────────────
     collect_data() {
         const d = this.sheetData;
-        const routes = d.toll_routes || [];
-        let opening = d.is_locked ? flt(d.opening_balance) : flt(this.$container.find('#input-opening').val());
-
+        const routes = this.get_toll_routes();
         const daily_records = [];
+
         this.$container.find('#toll-tbody tr[data-day]').each(function() {
             const $row = $(this);
             const dayNum = parseInt($row.attr('data-day'));
             const dateStr = `${d.year}/${String(d.month).padStart(2,'0')}/${String(dayNum).padStart(2,'0')}`;
-
             const routesData = {};
             routes.forEach(route => {
                 const v = flt($row.find(`.cell-route-input[data-rid="${route.id}"]`).val());
                 if (v > 0) routesData[route.id] = v;
             });
-
             const remark = $row.find('.cell-remark-input').val() || '';
             daily_records.push({ day: dayNum, date: dateStr, routes: routesData, remark });
         });
 
-        return {
-            vehicle_config: this.activeVehicle,
-            year: this.currentYear,
-            month: this.currentMonth,
-            daily_records,
-            toll_routes: routes,
-            remark: this.$container.find('.toll-sheet-remark')?.val() || ''
-        };
+        return { daily_records };
     }
 
-    // ─── 保存台账 ────────────────────────────────────────────
-    save_sheet() {
+    // ─── 自动保存 ─────────────────────────────────────────────
+    auto_save() {
         const self = this;
+        if (this._saving || !this.activeVehicle || !this.sheetData) return;
+        if (this.sheetData.is_locked) return;
+
+        this._saving = true;
+        this.set_save_status('saving');
+
         const payload = this.collect_data();
         frappe.call({
             method: 'ashan_cn_procurement.ashan_cn_procurement.page.vehicle_toll_ledger.vehicle_toll_ledger.save_vehicle_toll_sheet',
             args: {
-                vehicle_config: payload.vehicle_config,
-                year: payload.year,
-                month: payload.month,
+                vehicle_config: self.activeVehicle,
+                year: self.currentYear,
+                month: self.currentMonth,
                 daily_records: payload.daily_records,
-                toll_routes: payload.toll_routes,
-                remark: payload.remark
+                remark: ''
             },
-            freeze: true,
-            freeze_message: '正在保存台账...',
             callback(r) {
+                self._saving = false;
                 if (r.message && r.message.success) {
-                    frappe.show_alert({ message: '月度高速费台账保存成功！', indicator: 'green' }, 4);
-                    self.isDirty = false;
+                    self._isDirty = false;
                     self.$container.find('.cell-input').removeClass('changed');
-                    self.$container.find('#toll-save-status').text(`已于 ${new Date().toLocaleTimeString()} 保存`);
-                    self.load_sheet();
+                    self.set_save_status('ok');
+                } else {
+                    self.set_save_status('err');
                 }
+            },
+            error() {
+                self._saving = false;
+                self.set_save_status('err');
             }
         });
     }
@@ -563,12 +600,19 @@ class VehicleTollLedger {
     close_sheet() {
         const self = this;
         frappe.confirm(
-            `确定核定锁定 <b>${self.currentYear}年${self.currentMonth}月</b>（${self.sheetData?.display_name}）的台账吗？<br>核定后期末结存将自动结转至下月期初。`,
+            `确定核定锁定 <b>${self.currentYear}年${self.currentMonth}月</b>（${self.sheetData?.display_name}）吗？<br>核定后期末结存自动结转至下月期初。`,
             () => {
+                // 先同步保存一次
                 const payload = self.collect_data();
                 frappe.call({
                     method: 'ashan_cn_procurement.ashan_cn_procurement.page.vehicle_toll_ledger.vehicle_toll_ledger.save_vehicle_toll_sheet',
-                    args: { ...payload },
+                    args: {
+                        vehicle_config: self.activeVehicle,
+                        year: self.currentYear,
+                        month: self.currentMonth,
+                        daily_records: payload.daily_records,
+                        remark: ''
+                    },
                     callback() {
                         frappe.call({
                             method: 'ashan_cn_procurement.ashan_cn_procurement.page.vehicle_toll_ledger.vehicle_toll_ledger.close_vehicle_toll_sheet',
@@ -605,7 +649,7 @@ class VehicleTollLedger {
         });
     }
 
-    // ─── 预支/注入流水面板 ────────────────────────────────────
+    // ─── 预支流水面板 ─────────────────────────────────────────
     render_deposit_panel(deposits) {
         const self = this;
         const $list = this.$container.find('#deposit-list-container');
@@ -632,14 +676,12 @@ class VehicleTollLedger {
                 ${self.sheetData?.is_locked ? '' : `<td><button class="toll-btn-del-dep" data-name="${dep.name}">🗑</button></td>`}
             </tr>`;
         });
-
         html += `</tbody></table>`;
         $list.html(html);
 
-        // 绑定删除按钮
         $list.find('.toll-btn-del-dep').on('click', function() {
             const depName = $(this).attr('data-name');
-            frappe.confirm('确定删除此预支记录吗？删除后结余将实时重新计算。', () => {
+            frappe.confirm('确定删除此预支记录吗？', () => {
                 frappe.call({
                     method: 'ashan_cn_procurement.ashan_cn_procurement.page.vehicle_toll_ledger.vehicle_toll_ledger.delete_toll_deposit',
                     args: { deposit_name: depName },
@@ -660,24 +702,11 @@ class VehicleTollLedger {
         const d = new frappe.ui.Dialog({
             title: `💰 新增公司预支/充值 — ${self.sheetData?.display_name || ''}`,
             fields: [
-                {
-                    fieldname: 'deposit_date', fieldtype: 'Date', label: '预支/充值日期',
-                    reqd: 1,
-                    default: frappe.datetime.get_today()
-                },
-                {
-                    fieldname: 'amount', fieldtype: 'Currency', label: '预支金额 (元)',
-                    reqd: 1, description: '公司向该车辆ETC账户注入的资金金额'
-                },
-                {
-                    fieldname: 'deposit_type', fieldtype: 'Select', label: '预支方式',
-                    options: '现金预支\n公户转账\nETC自动充值\n其他',
-                    default: '现金预支'
-                },
-                {
-                    fieldname: 'reference_no', fieldtype: 'Data', label: '凭证号/流水号',
-                    description: '转账凭证号或ETC充值流水号（可选）'
-                },
+                { fieldname: 'deposit_date', fieldtype: 'Date', label: '预支/充值日期', reqd: 1, default: frappe.datetime.get_today() },
+                { fieldname: 'amount', fieldtype: 'Currency', label: '预支金额 (元)', reqd: 1 },
+                { fieldname: 'deposit_type', fieldtype: 'Select', label: '预支方式',
+                  options: '现金预支\n公户转账\nETC自动充值\n其他', default: '现金预支' },
+                { fieldname: 'reference_no', fieldtype: 'Data', label: '凭证号/流水号' },
                 { fieldname: 'remark', fieldtype: 'Small Text', label: '备注' }
             ],
             primary_action_label: '确认保存',
@@ -707,6 +736,52 @@ class VehicleTollLedger {
         d.show();
     }
 
+    // ─── 修改人员配置 Dialog（纯文本直接填写） ────────────────
+    open_personnel_dialog() {
+        const self = this;
+        const d = self.sheetData;
+        if (!d) return;
+
+        const dlg = new frappe.ui.Dialog({
+            title: `👤 人员信息配置 — ${d.display_name}`,
+            fields: [
+                {
+                    fieldname: 'primary_user',
+                    fieldtype: 'Data',
+                    label: '车辆操作员（主要使用人/司机）',
+                    default: d.primary_user || '',
+                    description: '直接输入操作员姓名（如“张师傅”），会显示在车辆选项卡和台账头部'
+                },
+                {
+                    fieldname: 'vehicle_manager',
+                    fieldtype: 'Data',
+                    label: '车辆管理员',
+                    default: d.vehicle_manager || '',
+                    description: '直接输入车辆管理员姓名（如“王主管”），仅作台账展示使用'
+                }
+            ],
+            primary_action_label: '保存人员信息',
+            primary_action(values) {
+                frappe.call({
+                    method: 'ashan_cn_procurement.ashan_cn_procurement.page.vehicle_toll_ledger.vehicle_toll_ledger.update_vehicle_personnel',
+                    args: {
+                        vehicle_config: self.activeVehicle,
+                        primary_user: values.primary_user || '',
+                        vehicle_manager: values.vehicle_manager || ''
+                    },
+                    callback(r) {
+                        if (r.message?.success) {
+                            frappe.show_alert({ message: '人员配置已更新！', indicator: 'green' }, 3);
+                            dlg.hide();
+                            self.load_vehicles();
+                        }
+                    }
+                });
+            }
+        });
+        dlg.show();
+    }
+
     // ─── 管理入池车辆 Dialog ──────────────────────────────────
     open_manage_vehicles_dialog() {
         const self = this;
@@ -714,50 +789,34 @@ class VehicleTollLedger {
             title: '⚙️ 管理高速费入池车辆',
             size: 'large',
             fields: [
-                {
-                    fieldname: 'info_html', fieldtype: 'HTML',
-                    options: `<div style="font-size:12px;color:#6b7280;margin-bottom:12px;">
-                        在此管理纳入高速费台账的车辆。只有在此加入的车辆才会出现在顶部选项卡中。
-                        可从"车辆管理"DocType中选择已有车辆。
-                    </div>`
-                },
-                {
-                    fieldname: 'section_add', fieldtype: 'Section Break', label: '添加新车辆到高速费管理'
-                },
-                {
-                    fieldname: 'new_vehicle', fieldtype: 'Link', label: '选择车辆',
-                    options: 'Vehicle',
-                    description: '从车辆管理档案中选择需要纳入高速费管理的车辆'
-                },
-                {
-                    fieldname: 'new_display_name', fieldtype: 'Data', label: '选项卡显示名称',
-                    description: '如"粤B·8888 专车"，留空则使用车辆名称'
-                },
-                {
-                    fieldname: 'new_opening_balance', fieldtype: 'Currency', label: '初始期初余额',
-                    default: 0,
-                    description: '该车辆高速费账户的启动资金余额（只在首次录入时有效）'
-                },
-                {
-                    fieldname: 'section_cur', fieldtype: 'Section Break', label: '当前入池车辆'
-                },
-                {
-                    fieldname: 'current_vehicles_html', fieldtype: 'HTML',
-                    options: self._render_current_vehicles_html()
-                }
+                { fieldname: 'info_html', fieldtype: 'HTML',
+                  options: `<div style="font-size:12px;color:#6b7280;margin-bottom:12px;">在此管理纳入高速费台账的车辆。只有在此加入的车辆才会出现在顶部选项卡中。</div>` },
+                { fieldname: 'section_add', fieldtype: 'Section Break', label: '添加新车辆' },
+                { fieldname: 'new_vehicle', fieldtype: 'Link', label: '选择车辆', options: 'Vehicle',
+                  description: '从系统车辆档案中选择' },
+                { fieldname: 'new_display_name', fieldtype: 'Data', label: '选项卡显示名称',
+                  description: '如"粤B·8888 专车"，留空则使用车牌号' },
+                { fieldname: 'col_break', fieldtype: 'Column Break' },
+                { fieldname: 'new_primary_user', fieldtype: 'Data', label: '车辆操作员姓名',
+                  description: '直接填写驾驶员/操作员名字（如“张师傅”）' },
+                { fieldname: 'new_vehicle_manager', fieldtype: 'Data', label: '车辆管理员姓名',
+                  description: '直接填写管理员名字（如“王经理”）' },
+                { fieldname: 'new_opening_balance', fieldtype: 'Currency', label: '初始期初余额 (启动资金)', default: 0 },
+                { fieldname: 'section_cur', fieldtype: 'Section Break', label: '当前已入池车辆' },
+                { fieldname: 'current_vehicles_html', fieldtype: 'HTML',
+                  options: self._render_current_vehicles_html() }
             ],
             primary_action_label: '添加到入池',
             primary_action(values) {
-                if (!values.new_vehicle) {
-                    frappe.msgprint('请先选择要添加的车辆！');
-                    return;
-                }
+                if (!values.new_vehicle) { frappe.msgprint('请先选择要添加的车辆！'); return; }
                 frappe.call({
                     method: 'ashan_cn_procurement.ashan_cn_procurement.page.vehicle_toll_ledger.vehicle_toll_ledger.add_vehicle_to_toll',
                     args: {
                         vehicle: values.new_vehicle,
                         display_name: values.new_display_name || values.new_vehicle,
-                        opening_balance: values.new_opening_balance || 0
+                        opening_balance: values.new_opening_balance || 0,
+                        primary_user: values.new_primary_user || '',
+                        vehicle_manager: values.new_vehicle_manager || ''
                     },
                     freeze: true,
                     callback(r) {
@@ -772,7 +831,6 @@ class VehicleTollLedger {
         });
         d.show();
 
-        // 绑定停用按钮
         d.$wrapper.on('click', '.btn-deactivate-vehicle', function() {
             const configName = $(this).attr('data-config');
             const label = $(this).attr('data-label');
@@ -794,19 +852,21 @@ class VehicleTollLedger {
     }
 
     _render_current_vehicles_html() {
-        if (!this.vehicles.length) {
-            return `<div style="color:#9ca3af;padding:8px;">暂无入池车辆</div>`;
-        }
+        if (!this.vehicles.length) return `<div style="color:#9ca3af;padding:8px;">暂无入池车辆</div>`;
         let html = `<table style="width:100%;font-size:13px;border-collapse:collapse;">
             <thead><tr style="background:#f8fafc;font-weight:600;">
                 <th style="padding:6px 10px;border:1px solid #e2e8f0;">车辆</th>
                 <th style="padding:6px 10px;border:1px solid #e2e8f0;">显示名称</th>
+                <th style="padding:6px 10px;border:1px solid #e2e8f0;">操作员</th>
+                <th style="padding:6px 10px;border:1px solid #e2e8f0;">管理员</th>
                 <th style="padding:6px 10px;border:1px solid #e2e8f0;">操作</th>
             </tr></thead><tbody>`;
         this.vehicles.forEach(v => {
             html += `<tr>
                 <td style="padding:6px 10px;border:1px solid #e2e8f0;">${frappe.utils.escape_html(v.vehicle || v.config_name)}</td>
                 <td style="padding:6px 10px;border:1px solid #e2e8f0;">${frappe.utils.escape_html(v.display_name)}</td>
+                <td style="padding:6px 10px;border:1px solid #e2e8f0;">${frappe.utils.escape_html(v.primary_user || '—')}</td>
+                <td style="padding:6px 10px;border:1px solid #e2e8f0;">${frappe.utils.escape_html(v.vehicle_manager || '—')}</td>
                 <td style="padding:6px 10px;border:1px solid #e2e8f0;">
                     <button class="btn-deactivate-vehicle" data-config="${v.config_name}" data-label="${frappe.utils.escape_html(v.display_name)}"
                         style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:12px;">
@@ -817,69 +877,6 @@ class VehicleTollLedger {
         });
         html += `</tbody></table>`;
         return html;
-    }
-
-    // ─── 配置收费站列 Dialog ──────────────────────────────────
-    open_config_routes_dialog() {
-        const self = this;
-        if (!self.activeVehicle || !self.sheetData) return;
-
-        const routes = self.sheetData.toll_routes || [];
-        const d = new frappe.ui.Dialog({
-            title: `🛤️ 配置收费站/路段列 — ${self.sheetData.display_name}`,
-            fields: [
-                {
-                    fieldname: 'help_html', fieldtype: 'HTML',
-                    options: `<div style="font-size:12px;color:#6b7280;margin-bottom:10px;">
-                        配置该车辆每日高速通行费的收费站列（如"进城收费站"、"出城收费站"等）。修改后当月台账立即生效。
-                    </div>`
-                },
-                {
-                    fieldname: 'routes_table', fieldtype: 'Table', label: '收费站/路段列',
-                    data: routes.map(r => ({ rid: r.id, rname: r.name })),
-                    fields: [
-                        { fieldname: 'rid', fieldtype: 'Data', label: '列ID', in_list_view: 1, columns: 3, read_only: 1 },
-                        { fieldname: 'rname', fieldtype: 'Data', label: '收费站/路段名称', in_list_view: 1, reqd: 1, columns: 6 }
-                    ]
-                }
-            ],
-            primary_action_label: '确认保存',
-            primary_action(values) {
-                const rows = d.fields_dict.routes_table.get_value() || [];
-                const updatedRoutes = rows.map((r, idx) => ({
-                    id: r.rid || `r_${Date.now()}_${idx}`,
-                    name: (r.rname || `收费站${idx + 1}`).trim()
-                }));
-                if (!updatedRoutes.length) {
-                    frappe.msgprint('至少需要保留一个收费站列！');
-                    return;
-                }
-                frappe.call({
-                    method: 'ashan_cn_procurement.ashan_cn_procurement.page.vehicle_toll_ledger.vehicle_toll_ledger.update_vehicle_toll_routes',
-                    args: { vehicle_config: self.activeVehicle, toll_routes: updatedRoutes },
-                    callback(r) {
-                        if (r.message?.success) {
-                            frappe.show_alert({ message: '收费站列配置已更新！', indicator: 'green' }, 3);
-                            d.hide();
-                            self.sheetData.toll_routes = updatedRoutes;
-                            self.render_sheet();
-                        }
-                    }
-                });
-            }
-        });
-
-        d.set_secondary_action_label('＋ 添加收费站');
-        d.set_secondary_action(() => {
-            const table = d.fields_dict.routes_table;
-            const cur = table.get_value() || [];
-            const next = cur.length + 1;
-            cur.push({ rid: `r${next}`, rname: `收费站${next}` });
-            table.df.data = cur;
-            table.refresh();
-        });
-
-        d.show();
     }
 }
 
