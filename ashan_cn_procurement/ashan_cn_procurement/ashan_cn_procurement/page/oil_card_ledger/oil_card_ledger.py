@@ -28,7 +28,7 @@ def is_oil_card_manager():
 @frappe.whitelist()
 def get_all_oil_cards():
 	"""
-	获取所有有效油卡列表及其当前余额，包含公司简称解析（优先显示简称，无简称才显示全称）
+	获取所有有效油卡列表及其当前余额，包含供应商简称解析（优先显示供应商简称，无简称才显示全称）
 	"""
 	cards = frappe.get_all(
 		"Oil Card",
@@ -48,7 +48,18 @@ def get_all_oil_cards():
 		order_by="idx asc, modified desc",
 	)
 
-	# 预加载所有公司的简称与全称映射
+	# 预加载所有供应商的简称与全称映射
+	suppliers = frappe.get_all("Supplier", fields=["name", "supplier_name", "alias"])
+	supplier_map = {}
+	for s in suppliers:
+		alias_text = (s.alias or "").strip()
+		full_text = (s.supplier_name or s.name or "").strip()
+		supplier_map[s.name] = {
+			"abbr": alias_text if alias_text else full_text,
+			"full": full_text,
+		}
+
+	# 预加载所有公司的简称与全称映射（作为备用）
 	companies = frappe.get_all("Company", fields=["name", "company_name", "abbr"])
 	company_map = {}
 	for c in companies:
@@ -56,17 +67,22 @@ def get_all_oil_cards():
 		full_text = (c.company_name or c.name or "").strip()
 		company_map[c.name] = {
 			"abbr": abbr_text if abbr_text else full_text,
-			"full": full_text
+			"full": full_text,
 		}
 
 	for card in cards:
+		sup_name = card.get("supplier")
 		comp_name = card.get("company")
-		if comp_name and comp_name in company_map:
-			card["company_abbr"] = company_map[comp_name]["abbr"]
-			card["company_full"] = company_map[comp_name]["full"]
+
+		if sup_name and sup_name in supplier_map:
+			card["supplier_abbr"] = supplier_map[sup_name]["abbr"]
+			card["supplier_full"] = supplier_map[sup_name]["full"]
+		elif comp_name and comp_name in company_map:
+			card["supplier_abbr"] = company_map[comp_name]["abbr"]
+			card["supplier_full"] = company_map[comp_name]["full"]
 		else:
-			card["company_abbr"] = card.get("supplier") or comp_name or ""
-			card["company_full"] = card.get("supplier") or comp_name or ""
+			card["supplier_abbr"] = sup_name or comp_name or ""
+			card["supplier_full"] = sup_name or comp_name or ""
 
 	return cards
 
@@ -422,17 +438,23 @@ def get_unified_ledger_data(oil_card, year=None, month=None):
 
 	is_mgr = is_oil_card_manager()
 
-	comp_abbr = ""
-	comp_full = ""
-	if card.company and frappe.db.exists("Company", card.company):
+	sup_abbr = ""
+	sup_full = ""
+	if card.supplier and frappe.db.exists("Supplier", card.supplier):
+		s_doc = frappe.get_doc("Supplier", card.supplier)
+		alias_text = (s_doc.alias or "").strip()
+		full_text = (s_doc.supplier_name or s_doc.name or "").strip()
+		sup_abbr = alias_text if alias_text else full_text
+		sup_full = full_text
+	elif card.company and frappe.db.exists("Company", card.company):
 		c_doc = frappe.get_doc("Company", card.company)
 		abbr_text = (c_doc.abbr or "").strip()
 		full_text = (c_doc.company_name or c_doc.name or "").strip()
-		comp_abbr = abbr_text if abbr_text else full_text
-		comp_full = full_text
+		sup_abbr = abbr_text if abbr_text else full_text
+		sup_full = full_text
 	else:
-		comp_abbr = card.supplier or card.company or ""
-		comp_full = card.supplier or card.company or ""
+		sup_abbr = card.supplier or card.company or ""
+		sup_full = card.supplier or card.company or ""
 
 	return {
 		"card_info": {
@@ -444,8 +466,8 @@ def get_unified_ledger_data(oil_card, year=None, month=None):
 			"card_type": card.card_type,
 			"supplier": card.supplier,
 			"company": card.company,
-			"company_abbr": comp_abbr,
-			"company_full": comp_full,
+			"supplier_abbr": sup_abbr,
+			"supplier_full": sup_full,
 			"status": card.status,
 			"current_balance": flt(card.current_balance),
 			"uninvoiced_amount": flt(card.uninvoiced_amount),

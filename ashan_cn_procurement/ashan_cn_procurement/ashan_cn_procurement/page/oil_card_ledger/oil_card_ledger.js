@@ -1378,8 +1378,8 @@ class UnifiedOilCardLedgerConsole {
 			const currentBal = flt(c.current_balance || 0);
 			const balNum = currentBal.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 			const cardNo = c.card_no_masked || c.card_code || "";
-			const orgText = c.company_abbr || c.supplier || c.company || "";
-			const orgFull = c.company_full || c.company || c.supplier || "";
+			const orgText = c.supplier_abbr || c.supplier || c.company_abbr || c.company || "";
+			const orgFull = c.supplier_full || c.supplier || c.company_full || c.company || "";
 
 			let balClass = "bal-positive";
 			if (currentBal < 0) {
@@ -1478,8 +1478,8 @@ class UnifiedOilCardLedgerConsole {
 		this.wrapper.find("#disp-card-name").text(card.card_name || card.name);
 		this.wrapper.find("#disp-card-no").text(`卡号: ${card.card_no_masked || card.card_code || "--"}`);
 		this.wrapper.find("#disp-card-status").text(card.status === "Active" ? "正常" : (card.status || "正常"));
-		const topOrgText = card.company_abbr || card.supplier || card.company || "";
-		const topOrgFull = card.company_full || card.company || card.supplier || "";
+		const topOrgText = card.supplier_abbr || card.supplier || card.company_abbr || card.company || "";
+		const topOrgFull = card.supplier_full || card.supplier || card.company_full || card.company || "";
 		this.wrapper.find("#disp-card-supplier").text(topOrgText ? `· ${topOrgText}` : "").attr("title", topOrgFull);
 		this.wrapper.find("#disp-ledger-subhead").text(`（${kpis.year}年${kpis.month}月 · 共 ${txns.length} 笔流水 · 实时结余 ${formatMoney(this.currentEndingBalance)}）`);
 
