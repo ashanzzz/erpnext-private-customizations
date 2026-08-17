@@ -68,7 +68,9 @@ d:\SynologyDrive团队\antigravity\erpnext16/
 │
 ├── docs/                             # 📖 ERPNext 16 AI 开发文档与规范指南
 │   └── ai/
+│       ├── ASHAN_APP_MODULES_AND_DESIGN_GUIDE.md # ⭐️ 核心模块设计哲学、业务架构与 UI 记忆
 │       ├── ERPNext_PROJECT_RULES.md
+│       ├── ERPNext16_UI_GUIDE.md
 │       ├── ERPNext16_LEARN.md
 │       └── ERPNext16_API_MAP.md
 │

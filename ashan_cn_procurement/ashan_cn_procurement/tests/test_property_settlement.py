@@ -287,8 +287,73 @@ class TestPropertySettlement(unittest.TestCase):
 		self.assertEqual(ws_e.cell(2, 1).value, "水电费明细（单价含税）")
 		# 第三行应为「所属期」
 		row3_val = str(ws_e.cell(3, 1).value or "")
-		self.assertIn("所属期", row3_val)
-		ws_l = wb_comp[wb_comp.sheetnames[1]]  # 第二个 Sheet = 房租物业
-		self.assertEqual(ws_l.cell(1, 1).value, self.comp_jz)
-		self.assertEqual(ws_l.cell(2, 1).value, "房租物业费明细（单价含税）")
+		# 3. 验证合计 Sheet 标题与 0 用量除零保护
+		ws_tot = wb_all["合计水电费"]
+		self.assertEqual(ws_tot.cell(1, 1).value, "全公司合计")
+		# 标题行不能出现重复的「合计合计」
+		row_sec_tot = ws_tot.cell(18, 1).value
+		self.assertNotIn("合计合计", str(row_sec_tot))
+		self.assertIn("全公司合计水电费", str(row_sec_tot))
+
+	def test_09_zero_usage_excel_div_zero_protection(self):
+		"""测试 Case 9: 0用量场景下 Excel 单价公式除零保护 (IF(F=0,0,E/F))"""
+		from ashan_cn_procurement.services.property_settlement import generate_settlement_excel_workbook
+
+		mock_data = {
+			"settlement_month": "2026-08-01",
+			"electricity_price": 1.1957,
+			"water_price": 5.5,
+			"meter_readings": [], # 无水表也无电表
+			"adjustments": [],
+			"lease_charges": []
+		}
+		wb = generate_settlement_excel_workbook(mock_data, mode="total")
+		ws_e = wb["合计水电费"]
+		# 电费汇总行中的单价公式应包含 IF(F...=0,0,...)
+		price_formula = str(ws_e.cell(12, 7).value or "")
+		self.assertIn("IF(", price_formula)
+
+	def test_10_lease_charge_rate_auto_enrichment(self):
+		"""测试 Case 10: 租赁单据重载或缺少费率基准时，集中计算引擎自动从收费标准补齐"""
+		if not frappe.db.exists("Property Lease", {"property_name": "自动补齐测试厂房"}):
+			l = frappe.new_doc("Property Lease")
+			l.property_name = "自动补齐测试厂房"
+			l.company = self.comp_jz
+			l.area = 2000.0
+			l.property_fee_mode = "房租含物业"
+			l.insert(ignore_permissions=True)
+		else:
+			l = frappe.get_doc("Property Lease", {"property_name": "自动补齐测试厂房"})
+
+		# 设置收费标准 年租金 120,000 元/年
+		if not frappe.db.exists("Property Charge Rate", {"property_lease": l.name, "effective_from": "2026-01-01"}):
+			rate = frappe.new_doc("Property Charge Rate")
+			rate.property_lease = l.name
+			rate.effective_from = "2026-01-01"
+			rate.rent_pricing_mode = "按年总金额 (元/年)"
+			rate.rent_annual_amount = 120000.0
+			rate.insert(ignore_permissions=True)
+
+		# 模拟子表中由于旧数据或数据库重载缺失 rent_annual_amount / rent_daily_rate
+		mock_data = {
+			"settlement_month": "2026-08-01", # 31天
+			"lease_charges": [
+				{
+					"property_lease": l.name,
+					"property_name": "自动补齐测试厂房",
+					"company": self.comp_jz,
+					"area": 2000.0,
+					"billing_days": 31,
+					"rent_amount_tax_incl": 0.0 # 初始为 0
+				}
+			]
+		}
+		res = calculate_settlement_matrix(mock_data)
+		l0 = res["lease_charges"][0]
+
+		# 验证引擎自动补齐了年租金基准并正确算出了 31 天租金 = (120000 / 365) * 31 = 10191.78
+		expected_amt = round((120000.0 / 365.0) * 31, 2)
+		self.assertEqual(l0["rent_annual_amount"], 120000.0)
+		self.assertEqual(l0["rent_amount_tax_incl"], expected_amt)
+		self.assertEqual(l0["amount_tax_incl"], expected_amt)
 

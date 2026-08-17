@@ -1,4 +1,4 @@
-﻿# Copyright (c) 2026, Ashan CN Procurement and contributors
+# Copyright (c) 2026, Ashan CN Procurement and contributors
 # For license information, please see license.txt
 
 import io
@@ -151,12 +151,58 @@ def calculate_settlement_matrix(data):
 		area = flt(l_chg.get("area"))
 		t_rate = flt(l_chg.get("tax_rate") or 9.0)
 		l_days = cint(l_chg.get("billing_days") or days_in_month)
+		p_lease_name = l_chg.get("property_lease")
 
-		# 房租核算
+		# 费率自动补齐（防止数据库重载或旧数据丢失单价基数导致空计算）
 		r_ann_amt = flt(l_chg.get("rent_annual_amount"))
 		r_daily = flt(l_chg.get("rent_daily_rate"))
 		r_mon_amt = flt(l_chg.get("rent_monthly_amount"))
+		p_ann_amt = flt(l_chg.get("property_fee_annual_amount"))
+		p_daily = flt(l_chg.get("property_fee_daily_rate"))
+		p_mon_amt = flt(l_chg.get("property_fee_monthly_amount"))
+		prop_mode = l_chg.get("property_fee_mode") or "房租含物业"
+		rent_mode = l_chg.get("rent_pricing_mode") or "按年总金额 (元/年)"
+		r_rate_snap = l_chg.get("rent_rate_snapshot") or ""
+		p_rate_snap = l_chg.get("property_fee_rate_snapshot") or ""
 
+		if not r_ann_amt and not r_daily and not r_mon_amt and p_lease_name:
+			rate = get_applicable_charge_rate(p_lease_name, settlement_month)
+			if rate:
+				prop_mode = rate.property_fee_mode or prop_mode
+				rent_mode = rate.rent_pricing_mode or rent_mode
+				r_ann_amt = flt(rate.rent_annual_amount)
+				r_daily = flt(rate.rent_daily_rate)
+				r_mon_amt = flt(rate.rent_monthly_amount)
+				p_ann_amt = flt(rate.property_fee_annual_amount)
+				p_daily = flt(rate.property_fee_daily_rate)
+				p_mon_amt = flt(rate.property_fee_monthly_amount)
+				t_rate = flt(rate.rent_tax_rate or t_rate)
+
+				if rent_mode == "按日单价 (元/㎡·天)":
+					r_rate_snap = f"¥ {r_daily}/㎡·天"
+				elif rent_mode == "按月单价 (元/㎡·月)":
+					r_rate_snap = f"¥ {rate.rent_monthly_rate}/㎡·月"
+				elif rent_mode == "按年单价 (元/㎡·年)":
+					r_rate_snap = f"¥ {rate.rent_annual_rate}/㎡·年"
+				elif rent_mode == "按月总金额 (元/月)":
+					r_rate_snap = f"¥ {r_mon_amt}/月"
+				else:
+					r_rate_snap = f"¥ {r_ann_amt}/年"
+
+				if prop_mode == "单独计收物业费":
+					p_mode = rate.property_fee_pricing_mode or "按月单价 (元/㎡·月)"
+					if p_mode == "按日单价 (元/㎡·天)":
+						p_rate_snap = f"¥ {p_daily}/㎡·天"
+					elif p_mode == "按月单价 (元/㎡·月)":
+						p_rate_snap = f"¥ {rate.property_fee_monthly_rate}/㎡·月"
+					elif p_mode == "按年单价 (元/㎡·年)":
+						p_rate_snap = f"¥ {rate.property_fee_annual_rate}/㎡·年"
+					else:
+						p_rate_snap = f"¥ {p_ann_amt}/年"
+				else:
+					p_rate_snap = "含在房租中"
+
+		# 房租核算
 		if r_ann_amt > 0:
 			rent_amt = round((r_ann_amt / 365.0) * l_days, 2)
 			if area > 0 and not r_daily:
@@ -169,11 +215,6 @@ def calculate_settlement_matrix(data):
 			rent_amt = flt(l_chg.get("rent_amount_tax_incl"))
 
 		# 物业费核算 (若单独计收物业费)
-		prop_mode = l_chg.get("property_fee_mode") or "房租含物业"
-		p_ann_amt = flt(l_chg.get("property_fee_annual_amount"))
-		p_daily = flt(l_chg.get("property_fee_daily_rate"))
-		p_mon_amt = flt(l_chg.get("property_fee_monthly_amount"))
-
 		if prop_mode == "单独计收物业费":
 			if p_ann_amt > 0:
 				prop_fee_amt = round((p_ann_amt / 365.0) * l_days, 2)
@@ -193,6 +234,16 @@ def calculate_settlement_matrix(data):
 		tax_amt = round(tot_lease_amt - amt_excl, 2)
 
 		l_chg["billing_days"] = l_days
+		l_chg["property_fee_mode"] = prop_mode
+		l_chg["rent_pricing_mode"] = rent_mode
+		l_chg["rent_rate_snapshot"] = r_rate_snap
+		l_chg["property_fee_rate_snapshot"] = p_rate_snap
+		l_chg["rent_annual_amount"] = r_ann_amt
+		l_chg["rent_daily_rate"] = r_daily
+		l_chg["rent_monthly_amount"] = r_mon_amt
+		l_chg["property_fee_annual_amount"] = p_ann_amt
+		l_chg["property_fee_daily_rate"] = p_daily
+		l_chg["property_fee_monthly_amount"] = p_mon_amt
 		l_chg["rent_amount_tax_incl"] = rent_amt
 		l_chg["property_fee_amount_tax_incl"] = prop_fee_amt
 		l_chg["amount_tax_incl"] = tot_lease_amt
@@ -812,7 +863,8 @@ def render_water_elec_sheet(ws, sheet_name, company_name, settlement_month, prop
 	ws.row_dimensions[curr_row].height = 27.0
 	ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=8)
 	short_comp = get_sheet_title(company_name)
-	c_sec_tot = ws.cell(curr_row, 1, f"{short_comp}合计水电费")
+	title_label = "全公司合计水电费" if is_total or short_comp == "合计" else f"{short_comp}合计水电费"
+	c_sec_tot = ws.cell(curr_row, 1, title_label)
 	c_sec_tot.font = font_sec_hdr
 	c_sec_tot.alignment = align_center
 	for c in range(1, 9):
@@ -821,7 +873,7 @@ def render_water_elec_sheet(ws, sheet_name, company_name, settlement_month, prop
 
 	# 汇总表头
 	ws.row_dimensions[curr_row].height = 27.0
-	tot_headers = ["项目", "不含税金额", "税率", "税额", "含税合计", "数量", "单位", "水电费合计"]
+	tot_headers = ["项目", "不含税金额", "税率", "税额", "含税合计", "数量", "单价", "水电费合计"]
 	for c_idx, h in enumerate(tot_headers, start=1):
 		cell = ws.cell(curr_row, c_idx, h)
 		cell.font = font_tbl_hdr
@@ -839,7 +891,7 @@ def render_water_elec_sheet(ws, sheet_name, company_name, settlement_month, prop
 	ws.cell(curr_row, 4, f"=E{curr_row}-E{curr_row}/(C{curr_row}+1)").font = font_data
 	ws.cell(curr_row, 5, f"=+H{elec_total_row}").font = font_data
 	ws.cell(curr_row, 6, f"=+F{elec_total_row}").font = font_data
-	ws.cell(curr_row, 7, f"=+E{curr_row}/F{curr_row}").font = font_data
+	ws.cell(curr_row, 7, f"=IF(F{curr_row}=0,0,E{curr_row}/F{curr_row})").font = font_data
 	for c in range(1, 8):
 		cell = ws.cell(curr_row, c)
 		cell.alignment = align_center
@@ -860,7 +912,7 @@ def render_water_elec_sheet(ws, sheet_name, company_name, settlement_month, prop
 	ws.cell(curr_row, 4, f"=E{curr_row}-E{curr_row}/(C{curr_row}+1)").font = font_data
 	ws.cell(curr_row, 5, f"=+H{water_total_row}").font = font_data
 	ws.cell(curr_row, 6, f"=+F{water_total_row}").font = font_data
-	ws.cell(curr_row, 7, f"=+E{curr_row}/F{curr_row}").font = font_data
+	ws.cell(curr_row, 7, f"=IF(F{curr_row}=0,0,E{curr_row}/F{curr_row})").font = font_data
 	for c in range(1, 8):
 		cell = ws.cell(curr_row, c)
 		cell.alignment = align_center
@@ -893,7 +945,7 @@ def render_water_elec_sheet(ws, sheet_name, company_name, settlement_month, prop
 			cell.border = Border(top=cell.border.top, bottom=med_side, left=thin_side, right=thin_side)
 
 
-def render_lease_sheet(ws, sheet_name, company_name, settlement_month, prop_mgmt_co, leases):
+def render_lease_sheet(ws, sheet_name, company_name, settlement_month, prop_mgmt_co, leases, is_total=False):
 	"""
 	房租物业费 Sheet：房租 + 物业费 (年缴费明细)
 	列布局 (8列): 场地名称 | 年金额(房租) | 年金额(物业费) | 面积(㎡) | 单价(元/㎡·年) | 物业费模式 | 所属期金额(房租) | 所属期金额(物业费)
@@ -949,7 +1001,12 @@ def render_lease_sheet(ws, sheet_name, company_name, settlement_month, prop_mgmt
 		ann_rent = float(l.get("rent_annual_amount") or 0)
 		area = float(l.get("area") or 0)
 		b_days = int(l.get("billing_days") or 0)
-		r_daily = ann_rent / 365.0 if ann_rent > 0 else float(l.get("rent_daily_rate") or 0)
+		if ann_rent > 0 and area > 0:
+			r_daily = ann_rent / area / 365.0
+		elif ann_rent > 0:
+			r_daily = ann_rent / 365.0
+		else:
+			r_daily = float(l.get("rent_daily_rate") or 0)
 		rent_this_period = float(l.get("rent_amount_tax_incl") or 0)
 
 		prop_mode_label = "单独计收" if l.get("property_fee_mode") == "单独计收物业费" else "含在房租中"
@@ -1027,7 +1084,12 @@ def render_lease_sheet(ws, sheet_name, company_name, settlement_month, prop_mgmt
 		ann_prop = float(l.get("property_fee_annual_amount") or 0)
 		area = float(l.get("area") or 0)
 		b_days = int(l.get("billing_days") or 0)
-		p_daily = ann_prop / area / 365.0 if (ann_prop > 0 and area > 0) else float(l.get("property_fee_daily_rate") or 0)
+		if ann_prop > 0 and area > 0:
+			p_daily = ann_prop / area / 365.0
+		elif ann_prop > 0:
+			p_daily = ann_prop / 365.0
+		else:
+			p_daily = float(l.get("property_fee_daily_rate") or 0)
 		prop_this = float(l.get("property_fee_amount_tax_incl") or 0)
 		rate_snap = str(l.get("property_fee_rate_snapshot") or "")
 
@@ -1080,7 +1142,8 @@ def render_lease_sheet(ws, sheet_name, company_name, settlement_month, prop_mgmt
 	ws.row_dimensions[curr_row].height = 27.0
 	ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=8)
 	short_comp = get_sheet_title(company_name)
-	c_sec_tot = ws.cell(curr_row, 1, f"{short_comp}合计房租物业费")
+	title_label = "全公司合计房租物业费" if is_total or short_comp == "合计" else f"{short_comp}合计房租物业费"
+	c_sec_tot = ws.cell(curr_row, 1, title_label)
 	c_sec_tot.font = font_sec_hdr
 	c_sec_tot.alignment = align_center
 	for c in range(1, 9):
@@ -1228,14 +1291,14 @@ def generate_settlement_excel_workbook(data, company=None, property_management_c
 		short = get_sheet_title(company)
 		render_water_elec_sheet(default_ws, f"{short}水电费", company, settlement_month, prop_mgmt, comp_meters, comp_adjs, comp_summary, is_total=False)
 		ws2 = wb.create_sheet(f"{short}房租物业")
-		render_lease_sheet(ws2, f"{short}房租物业", company, settlement_month, prop_mgmt, comp_leases)
+		render_lease_sheet(ws2, f"{short}房租物业", company, settlement_month, prop_mgmt, comp_leases, is_total=False)
 
 	elif mode == "total":
 		all_meters = data.get("meter_readings") or []
 		all_leases = data.get("lease_charges") or []
 		render_water_elec_sheet(default_ws, "合计水电费", "全公司合计", settlement_month, prop_mgmt, all_meters, build_total_adjs(), {}, is_total=True)
 		ws2 = wb.create_sheet("合计房租物业")
-		render_lease_sheet(ws2, "合计房租物业", "全公司合计", settlement_month, prop_mgmt, all_leases)
+		render_lease_sheet(ws2, "合计房租物业", "全公司合计", settlement_month, prop_mgmt, all_leases, is_total=True)
 
 	else:  # mode == "all"
 		companies = [s.get("company") for s in (data.get("company_summaries") or []) if s.get("company")]
@@ -1247,7 +1310,7 @@ def generate_settlement_excel_workbook(data, company=None, property_management_c
 			first_sheet = False
 			render_water_elec_sheet(ws_e, f"{short}水电费", comp, settlement_month, prop_mgmt, comp_meters, comp_adjs, comp_summary, is_total=False)
 			ws_l = wb.create_sheet(f"{short}房租物业")
-			render_lease_sheet(ws_l, f"{short}房租物业", comp, settlement_month, prop_mgmt, comp_leases)
+			render_lease_sheet(ws_l, f"{short}房租物业", comp, settlement_month, prop_mgmt, comp_leases, is_total=False)
 
 		# 全公司合计 2 Sheet
 		all_meters = data.get("meter_readings") or []
@@ -1255,7 +1318,7 @@ def generate_settlement_excel_workbook(data, company=None, property_management_c
 		ws_tot_e = default_ws if first_sheet else wb.create_sheet()
 		render_water_elec_sheet(ws_tot_e, "合计水电费", "全公司合计", settlement_month, prop_mgmt, all_meters, build_total_adjs(), {}, is_total=True)
 		ws_tot_l = wb.create_sheet("合计房租物业")
-		render_lease_sheet(ws_tot_l, "合计房租物业", "全公司合计", settlement_month, prop_mgmt, all_leases)
+		render_lease_sheet(ws_tot_l, "合计房租物业", "全公司合计", settlement_month, prop_mgmt, all_leases, is_total=True)
 
 	return wb
 

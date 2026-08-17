@@ -62,6 +62,42 @@
       "fieldtype": "Data"
     },
     {
+      "label": "年租金基准",
+      "fieldname": "rent_annual_amount",
+      "fieldtype": "Currency"
+    },
+    {
+      "label": "日租金单价",
+      "fieldname": "rent_daily_rate",
+      "fieldtype": "Float"
+    },
+    {
+      "label": "月租金基准",
+      "fieldname": "rent_monthly_amount",
+      "fieldtype": "Currency"
+    },
+    {
+      "label": "年物业费基准",
+      "fieldname": "property_fee_annual_amount",
+      "fieldtype": "Currency"
+    },
+    {
+      "label": "日物业费单价",
+      "fieldname": "property_fee_daily_rate",
+      "fieldtype": "Float"
+    },
+    {
+      "label": "月物业费基准",
+      "fieldname": "property_fee_monthly_amount",
+      "fieldtype": "Currency"
+    },
+    {
+      "label": "税率(%)",
+      "fieldname": "tax_rate",
+      "fieldtype": "Percent",
+      "default": "9.0"
+    },
+    {
       "label": "房租含税金额",
       "fieldname": "rent_amount_tax_incl",
       "fieldtype": "Currency",

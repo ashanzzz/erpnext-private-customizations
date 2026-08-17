@@ -1515,9 +1515,19 @@ function calculate_local_matrix(data) {
         };
     });
 
+    let days_in_month = 30;
+    if (data.settlement_month) {
+        const parts = String(data.settlement_month).split('-');
+        if (parts.length >= 2) {
+            const yr = parseInt(parts[0]);
+            const mo = parseInt(parts[1]);
+            days_in_month = new Date(yr, mo, 0).getDate();
+        }
+    }
+
     (data.lease_charges || []).forEach(l => {
         const area = parseFloat(l.area) || 0;
-        const l_days = parseInt(l.billing_days) || 30;
+        const l_days = parseInt(l.billing_days) || days_in_month;
 
         let rent_amt = parseFloat(l.rent_amount_tax_incl) || 0;
         if (l.rent_annual_amount > 0) {
@@ -1525,7 +1535,7 @@ function calculate_local_matrix(data) {
         } else if (l.rent_daily_rate > 0 && area > 0) {
             rent_amt = Math.round((area * parseFloat(l.rent_daily_rate) * l_days) * 100) / 100;
         } else if (l.rent_monthly_amount > 0) {
-            rent_amt = Math.round((parseFloat(l.rent_monthly_amount) * (l_days / 30.0)) * 100) / 100;
+            rent_amt = Math.round((parseFloat(l.rent_monthly_amount) * (l_days / days_in_month)) * 100) / 100;
         }
 
         let prop_amt = 0;
@@ -1535,7 +1545,7 @@ function calculate_local_matrix(data) {
             } else if (l.property_fee_daily_rate > 0 && area > 0) {
                 prop_amt = Math.round((area * parseFloat(l.property_fee_daily_rate) * l_days) * 100) / 100;
             } else if (l.property_fee_monthly_amount > 0) {
-                prop_amt = Math.round((parseFloat(l.property_fee_monthly_amount) * (l_days / 30.0)) * 100) / 100;
+                prop_amt = Math.round((parseFloat(l.property_fee_monthly_amount) * (l_days / days_in_month)) * 100) / 100;
             } else {
                 prop_amt = parseFloat(l.property_fee_amount_tax_incl) || 0;
             }

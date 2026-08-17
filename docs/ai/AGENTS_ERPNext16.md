@@ -8,6 +8,7 @@
 2. `docs/ai/ERPNext16_LEARN.md`
 3. 需要选 API 时读取 `docs/ai/ERPNext16_API_MAP.md`
 4. 涉及页面和 UI 时读取 `docs/ai/ERPNext16_UI_GUIDE.md`
+5. 涉及业务模块架构、设计哲学与 UI 风格记忆时读取 `docs/ai/ASHAN_APP_MODULES_AND_DESIGN_GUIDE.md`
 
 ## 版本原则
 

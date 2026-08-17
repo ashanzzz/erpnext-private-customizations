@@ -53,49 +53,60 @@ def get_company_bill_data(settlement_name, company):
 	# 过滤该公司相关的抄表
 	company_meters = [
 		m for m in doc_dict.get("meter_readings", [])
-		if m.company == company
+		if (m.get("company") if isinstance(m, dict) else m.company) == company
 	]
 
 	# 过滤该公司相关的租赁费用
 	company_leases = [
 		l for l in doc_dict.get("lease_charges", [])
-		if l.company == company
+		if (l.get("company") if isinstance(l, dict) else l.company) == company
 	]
 
 	# 过滤该公司相关的调整项
 	company_adjustments = []
 	for adj in doc_dict.get("adjustments", []):
-		if adj.adjustment_scope == "单公司" and adj.company == company:
+		adj_scope = adj.get("adjustment_scope") if isinstance(adj, dict) else adj.adjustment_scope
+		adj_comp = adj.get("company") if isinstance(adj, dict) else adj.company
+		adj_from = adj.get("from_company") if isinstance(adj, dict) else adj.from_company
+		adj_to = adj.get("to_company") if isinstance(adj, dict) else adj.to_company
+		adj_type = adj.get("adjustment_type") if isinstance(adj, dict) else adj.adjustment_type
+		u_type = adj.get("utility_type") if isinstance(adj, dict) else adj.utility_type
+		u_adj = adj.get("usage_adjustment") if isinstance(adj, dict) else adj.usage_adjustment
+		amt_adj = adj.get("amount_adjustment") if isinstance(adj, dict) else adj.amount_adjustment
+		eq_u = adj.get("equivalent_usage") if isinstance(adj, dict) else adj.equivalent_usage
+		reason = adj.get("reason") if isinstance(adj, dict) else adj.reason
+
+		if adj_scope == "单公司" and adj_comp == company:
 			company_adjustments.append({
-				"title": f"{adj.utility_type}调整",
-				"type": adj.adjustment_type,
+				"title": f"{u_type}调整",
+				"type": adj_type,
 				"scope": "本公司单项调整",
-				"usage": adj.usage_adjustment,
-				"amount": adj.amount_adjustment,
-				"reason": adj.reason
+				"usage": u_adj,
+				"amount": amt_adj,
+				"reason": reason
 			})
-		elif adj.adjustment_scope == "公司间转移":
-			if adj.from_company == company:
+		elif adj_scope == "公司间转移":
+			if adj_from == company:
 				company_adjustments.append({
-					"title": f"公司间{adj.utility_type}调出 (转至 {adj.to_company})",
-					"type": adj.adjustment_type,
+					"title": f"公司间{u_type}调出 (转至 {adj_to})",
+					"type": adj_type,
 					"scope": "公司间转出",
-					"usage": -flt(adj.equivalent_usage),
-					"amount": -flt(adj.amount_adjustment),
-					"reason": adj.reason
+					"usage": -flt(eq_u),
+					"amount": -flt(amt_adj),
+					"reason": reason
 				})
-			elif adj.to_company == company:
+			elif adj_to == company:
 				company_adjustments.append({
-					"title": f"公司间{adj.utility_type}调入 (来自 {adj.from_company})",
-					"type": adj.adjustment_type,
+					"title": f"公司间{u_type}调入 (来自 {adj_from})",
+					"type": adj_type,
 					"scope": "公司间转入",
-					"usage": flt(adj.equivalent_usage),
-					"amount": flt(adj.amount_adjustment),
-					"reason": adj.reason
+					"usage": flt(eq_u),
+					"amount": flt(amt_adj),
+					"reason": reason
 				})
 
 	# 汇总信息
-	summary = next((s for s in doc_dict.get("company_summaries", []) if s.company == company), None)
+	summary = next((s for s in doc_dict.get("company_summaries", []) if (s.get("company") if isinstance(s, dict) else s.company) == company), None)
 
 	return {
 		"settlement_name": doc.name,

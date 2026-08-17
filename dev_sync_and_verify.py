@@ -28,7 +28,7 @@ USERNAME = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
 USER_PWD = os.getenv('ERPNEXT_PASSWORD', 'Woo@@@204317')
 
 LOCAL_APP_DIR = r"d:\SynologyDrive团队\antigravity\erpnext16\ashan_cn_procurement"
-ARTIFACT_DIR = r"C:\Users\ashan\.gemini\antigravity\brain\49a429d8-4554-471e-974e-f9d70d7ec2f8"
+ARTIFACT_DIR = r"C:\Users\ashan\.gemini\antigravity\brain\062db5c0-afb5-4a31-90f4-1728b7cf9460"
 
 def sync_to_container(migrate=False, restart=True):
     print("==================================================")
