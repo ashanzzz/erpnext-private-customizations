@@ -56,7 +56,7 @@
    "doctype": "Workspace Sidebar Item"
   },
   {
-   "label": "物料调拨与领用",
+   "label": "物料收发流水",
    "link_type": "DocType",
    "type": "Link",
    "link_to": "Stock Entry",
@@ -140,7 +140,7 @@
    "doctype": "Workspace Sidebar Item"
   },
   {
-   "label": "采购申请单",
+   "label": "物料采购申请单",
    "link_type": "DocType",
    "type": "Link",
    "link_to": "Material Request",
@@ -356,7 +356,7 @@
    "doctype": "Workspace Sidebar Item"
   },
   {
-   "label": "待支付报销明细",
+   "label": "未支付报销明细",
    "link_type": "Report",
    "type": "Link",
    "link_to": "Unpaid Reimbursement List",
@@ -380,7 +380,7 @@
    "doctype": "Workspace Sidebar Item"
   },
   {
-   "label": "付款与核销凭证",
+   "label": "付款凭证",
    "link_type": "DocType",
    "type": "Link",
    "link_to": "Payment Entry",
@@ -392,31 +392,19 @@
    "doctype": "Workspace Sidebar Item"
   },
   {
-   "label": "系统与权限中心",
-   "link_type": "URL",
+   "label": "系统管理",
+   "link_type": "DocType",
    "icon": "settings",
    "type": "Section Break",
    "child": 0,
    "collapsible": 1,
    "indent": 1,
-   "keep_closed": 1,
-   "show_arrow": 0,
-   "doctype": "Workspace Sidebar Item"
-  },
-  {
-   "label": "🛡️ 角色与岗位配置",
-   "link_type": "DocType",
-   "type": "Link",
-   "link_to": "Role",
-   "child": 1,
-   "collapsible": 0,
-   "indent": 0,
    "keep_closed": 0,
    "show_arrow": 0,
    "doctype": "Workspace Sidebar Item"
   },
   {
-   "label": "👥 用户与账号管理",
+   "label": "用户管理",
    "link_type": "DocType",
    "type": "Link",
    "link_to": "User",
@@ -428,22 +416,10 @@
    "doctype": "Workspace Sidebar Item"
   },
   {
-   "label": "🔐 角色权限管理器",
-   "link_type": "Page",
-   "type": "Link",
-   "link_to": "permission-manager",
-   "child": 1,
-   "collapsible": 0,
-   "indent": 0,
-   "keep_closed": 0,
-   "show_arrow": 0,
-   "doctype": "Workspace Sidebar Item"
-  },
-  {
-   "label": "🏢 原版工作区配置",
+   "label": "角色管理",
    "link_type": "DocType",
    "type": "Link",
-   "link_to": "Workspace",
+   "link_to": "Role",
    "child": 1,
    "collapsible": 0,
    "indent": 0,
@@ -452,34 +428,10 @@
    "doctype": "Workspace Sidebar Item"
   },
   {
-   "label": "📜 系统模块总览",
+   "label": "系统设置",
    "link_type": "DocType",
    "type": "Link",
-   "link_to": "Module Def",
-   "child": 1,
-   "collapsible": 0,
-   "indent": 0,
-   "keep_closed": 0,
-   "show_arrow": 0,
-   "doctype": "Workspace Sidebar Item"
-  },
-  {
-   "label": "⚙️ 全局系统设置",
-   "link_type": "URL",
-   "url": "/desk/system-settings",
-   "type": "Link",
-   "child": 1,
-   "collapsible": 0,
-   "indent": 0,
-   "keep_closed": 0,
-   "show_arrow": 0,
-   "doctype": "Workspace Sidebar Item"
-  },
-  {
-   "label": "客户端脚本",
-   "link_type": "URL",
-   "url": "/desk/client-script",
-   "type": "Link",
+   "link_to": "System Settings",
    "child": 1,
    "collapsible": 0,
    "indent": 0,
@@ -489,9 +441,9 @@
   },
   {
    "label": "自定义表单",
-   "link_type": "URL",
-   "url": "/desk/customize-form/Customize%20Form",
+   "link_type": "DocType",
    "type": "Link",
+   "link_to": "Customize Form",
    "child": 1,
    "collapsible": 0,
    "indent": 0,
@@ -500,10 +452,22 @@
    "doctype": "Workspace Sidebar Item"
   },
   {
-   "label": "服务器脚本",
-   "link_type": "URL",
-   "url": "/desk/server-script",
+   "label": "客户端脚本",
+   "link_type": "DocType",
    "type": "Link",
+   "link_to": "Client Script",
+   "child": 1,
+   "collapsible": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "show_arrow": 0,
+   "doctype": "Workspace Sidebar Item"
+  },
+  {
+   "label": "服务端脚本",
+   "link_type": "DocType",
+   "type": "Link",
+   "link_to": "Server Script",
    "child": 1,
    "collapsible": 0,
    "indent": 0,

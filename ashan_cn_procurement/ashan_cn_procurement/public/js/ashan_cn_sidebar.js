@@ -7,14 +7,35 @@
    ========================================================================== */
 
 (function() {
+    function get_user_roles() {
+        if (!window.frappe) return [];
+        if (frappe.boot && frappe.boot.user && Array.isArray(frappe.boot.user.roles)) {
+            return frappe.boot.user.roles;
+        }
+        if (Array.isArray(frappe.user_roles)) {
+            return frappe.user_roles;
+        }
+        return [];
+    }
+
+    function is_oil_card_manager_user() {
+        const roles = get_user_roles();
+        const mgr_roles = ["System Manager", "Oil Card Manager", "油卡管理员", "Purchase Manager", "Accounts Manager", "Stock Manager"];
+        return roles.some(r => mgr_roles.includes(r)) || (frappe.session && frappe.session.user === "Administrator");
+    }
+
+    function is_pure_operator() {
+        const roles = get_user_roles();
+        const isOp = roles.includes("Oil Card Operator") || roles.includes("油卡操作员");
+        return isOp && !is_oil_card_manager_user();
+    }
+
     // 0. 路由全局重定向规则与拦截保护
     function get_user_default_route() {
         if (!window.frappe) return "desk/oil-card-ledger";
-        const isMgr = frappe.boot && (frappe.boot.ashan_is_system_manager || (frappe.user_roles && frappe.user_roles.includes("System Manager")));
+        if (is_pure_operator()) return "desk/oil-card-ledger";
+        const isMgr = is_oil_card_manager_user() || (frappe.boot && frappe.boot.ashan_is_system_manager);
         if (isMgr) return "desk/my-business";
-        if (frappe.user_roles && (frappe.user_roles.includes("Oil Card Operator") || frappe.user_roles.includes("Oil Card Manager") || frappe.user_roles.includes("油卡操作员") || frappe.user_roles.includes("油卡管理员"))) {
-            return "desk/oil-card-ledger";
-        }
         return "desk/oil-card-ledger";
     }
 
@@ -29,13 +50,19 @@
         frappe.re_route["app/home"] = defRoute;
         frappe.re_route["Workspaces/Home"] = defRoute;
 
-        // 监听路由变更：防止访问不存在的 page home 导致弹窗
+        // 监听路由变更：纯操作员强行路由锁定与保护
         frappe.router && frappe.router.on && frappe.router.on("change", function() {
-            const isMgr = frappe.boot && (frappe.boot.ashan_is_system_manager || (frappe.user_roles && frappe.user_roles.includes("System Manager")));
+            const isOp = is_pure_operator();
             const route = frappe.get_route_str ? frappe.get_route_str() : "";
+
+            if (isOp && route && !route.includes("oil-card-ledger")) {
+                frappe.set_route("desk", "oil-card-ledger");
+                return;
+            }
+
             if (route === "home" || route === "desk/home" || route === "app/home" || route === "Workspaces/Home") {
+                const isMgr = is_oil_card_manager_user();
                 frappe.set_route(isMgr ? "my-business" : "oil-card-ledger");
-                // 自动关闭可能由旧路由触发的 not found 提示弹窗
                 setTimeout(function() {
                     $(".modal:contains('home not found'), .modal:contains('未找到请求的页面')").modal("hide");
                 }, 50);
@@ -43,12 +70,12 @@
         });
     }
 
-    // 1. 一级标题 → 对应 Workspace 映射
+    // 1. 一级标题 → 对应 Workspace / Page 映射
     const SECTION_WORKSPACE_MAP = {
-        "油卡使用明细": "vehicle-fuel-hub",
-        "车油能耗中心": "vehicle-fuel-hub",
-        "车辆燃油": "vehicle-fuel-hub",
-        "燃油管理": "vehicle-fuel-hub",
+        "油卡使用明细": "oil-card-ledger",
+        "车油能耗中心": "oil-card-ledger",
+        "车辆燃油": "oil-card-ledger",
+        "燃油管理": "oil-card-ledger",
         "仓库与库存": "stock-and-inventory",
         "库存": "stock-and-inventory",
         "采购协同": "procurement-management",
@@ -109,29 +136,6 @@
         return null;
     }
 
-    function get_user_roles() {
-        if (!window.frappe) return [];
-        if (frappe.boot && frappe.boot.user && Array.isArray(frappe.boot.user.roles)) {
-            return frappe.boot.user.roles;
-        }
-        if (Array.isArray(frappe.user_roles)) {
-            return frappe.user_roles;
-        }
-        return [];
-    }
-
-    function is_oil_card_manager_user() {
-        const roles = get_user_roles();
-        const mgr_roles = ["System Manager", "Oil Card Manager", "油卡管理员", "Purchase Manager", "Accounts Manager", "Stock Manager"];
-        return roles.some(r => mgr_roles.includes(r)) || (frappe.session && frappe.session.user === "Administrator");
-    }
-
-    function is_pure_operator() {
-        const roles = get_user_roles();
-        const isOp = roles.includes("Oil Card Operator") || roles.includes("油卡操作员");
-        return isOp && !is_oil_card_manager_user();
-    }
-
     // Workspace Sidebar Item has no native role field in Frappe v16. Keep the
     // business navigation clean for ordinary users; actual access remains
     // protected by the standard DocType and System Settings permissions.
@@ -139,9 +143,16 @@
         const $sidebar = $(".body-sidebar");
         if (!$sidebar.length) return;
 
-        // 1. 如果是操作员（仅具备操作员角色，非管理员）：
-        // 操作员只能看见左边【油卡使用明细】（且仅保留【油卡综合台账明细台】），其他所有原始单据和模块全部隐藏
+        // 1. 如果是纯操作员：
+        // 操作员只能看见左边【油卡使用明细】（且仅保留【油卡综合台账明细台】），彻底移除顶部的总控主页与其他所有模块
         if (is_pure_operator()) {
+            // 移除顶部的【我的业务 (总控主页)】
+            $sidebar.find("a").filter(function() {
+                const href = ($(this).attr("href") || "").toLowerCase();
+                const text = $(this).text().trim();
+                return href.includes("my-business") || href.includes("/desk/home") || text.includes("我的业务") || text.includes("总控主页");
+            }).closest(".standard-sidebar-item, .sidebar-item-container").remove();
+
             // 移除除【油卡使用明细】之外的所有一级分类大项
             $sidebar.find(".section-item").each(function() {
                 const $section = $(this);
