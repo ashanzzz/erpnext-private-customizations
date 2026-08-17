@@ -60,8 +60,38 @@ def create_custom_roles():
 
 def setup_doctype_and_page_permissions():
 	"""
-	为油卡操作员和管理员配置 DocType 与 Page 权限
+	为所有前台角色配置核心 UI 单据（Page、Workspace、Sidebar）以及油卡模块 DocType 与 Page 权限
 	"""
+	# 1. 核心前台 UI 渲染所必需的基础单据读取权限
+	core_ui_doctypes = [
+		"Page",
+		"Workspace",
+		"Workspace Sidebar",
+		"Workspace Sidebar Item",
+		"Dashboard Chart",
+		"Number Card"
+	]
+	ui_roles = ["Desk User", "All", "Oil Card Operator", "Oil Card Manager", "油卡操作员", "油卡管理员"]
+	for udt in core_ui_doctypes:
+		if not frappe.db.exists("DocType", udt):
+			continue
+		for role in ui_roles:
+			if not frappe.db.exists("Custom DocPerm", {"parent": udt, "role": role, "permlevel": 0}):
+				try:
+					dp = frappe.new_doc("Custom DocPerm")
+					dp.parent = udt
+					dp.parenttype = "DocType"
+					dp.parentfield = "permissions"
+					dp.role = role
+					dp.permlevel = 0
+					dp.read = 1
+					dp.select = 1
+					dp.export = 1
+					dp.insert(ignore_permissions=True)
+				except Exception as e:
+					frappe.logger("setup").warning(f"Error adding Custom DocPerm for {udt} / {role}: {e}")
+
+	# 2. 油卡业务 DocType 读写权限
 	oil_doctypes = [
 		"Oil Card",
 		"Oil Card Refuel Log",
@@ -93,7 +123,7 @@ def setup_doctype_and_page_permissions():
 				except Exception as e:
 					frappe.logger("setup").warning(f"Error adding Custom DocPerm for {dt} / {role}: {e}")
 
-	# 确保 Page oil-card-ledger 拥有这些角色的访问权限
+	# 3. 确保 Page oil-card-ledger 拥有这些角色的访问权限
 	if frappe.db.exists("Page", "oil-card-ledger"):
 		page_doc = frappe.get_doc("Page", "oil-card-ledger")
 		existing_roles = {r.role for r in page_doc.roles}
@@ -106,5 +136,6 @@ def setup_doctype_and_page_permissions():
 			page_doc.save(ignore_permissions=True)
 
 	frappe.db.commit()
+
 
 
