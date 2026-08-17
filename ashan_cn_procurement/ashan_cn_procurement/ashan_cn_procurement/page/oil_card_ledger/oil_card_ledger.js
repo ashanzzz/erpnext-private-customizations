@@ -219,15 +219,18 @@ class UnifiedOilCardLedgerConsole {
 					self.meta = r.message;
 					if (r.message.is_manager !== undefined) {
 						self.isManager = Boolean(r.message.is_manager);
-						if (self.isManager) {
-							self.wrapper.find("#btn-create-card").show();
-							self.wrapper.find("#empty-add-card-hint").show();
-						} else {
-							self.wrapper.find("#btn-create-card").hide();
-							self.wrapper.find("#empty-add-card-hint").hide();
-						}
-						self.renderCardsList();
 					}
+					if (r.message.is_system_admin !== undefined) {
+						self.isSystemAdmin = Boolean(r.message.is_system_admin);
+					}
+					if (self.isSystemAdmin) {
+						self.wrapper.find("#btn-create-card").show();
+						self.wrapper.find("#empty-add-card-hint").show();
+					} else {
+						self.wrapper.find("#btn-create-card").hide();
+						self.wrapper.find("#empty-add-card-hint").hide();
+					}
+					self.renderCardsList();
 				}
 			},
 		});
@@ -1388,7 +1391,7 @@ class UnifiedOilCardLedgerConsole {
 				balClass = "bal-zero";
 			}
 
-			const deleteBtnHtml = this.isManager ? `
+			const deleteBtnHtml = this.isSystemAdmin ? `
 				<button type="button" class="btn-delete-card" data-name="${strName}" data-title="${c.card_name}" title="删除油卡档案">
 					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
 				</button>
@@ -1471,8 +1474,17 @@ class UnifiedOilCardLedgerConsole {
 		const kpis = data.kpis || {};
 		const txns = data.transactions || [];
 		this.isManager = Boolean(data.is_manager);
+		this.isSystemAdmin = Boolean(data.is_system_admin);
 		this.isLocked = Boolean(data.is_locked);
 		this.currentEndingBalance = flt(kpis.ending_balance || 0);
+
+		if (this.isSystemAdmin) {
+			this.wrapper.find("#btn-create-card").show();
+			this.wrapper.find("#empty-add-card-hint").show();
+		} else {
+			this.wrapper.find("#btn-create-card").hide();
+			this.wrapper.find("#empty-add-card-hint").hide();
+		}
 
 		// Zone 1: 顶部油卡信息
 		this.wrapper.find("#disp-card-name").text(card.card_name || card.name);

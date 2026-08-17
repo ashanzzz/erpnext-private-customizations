@@ -112,9 +112,20 @@
     // business navigation clean for ordinary users; actual access remains
     // protected by the standard DocType and System Settings permissions.
     function restrict_system_management_section() {
-        if (get_system_manager_status() !== false) return;
+        const isSysMgr = get_system_manager_status() === true;
         const $sidebar = $(".body-sidebar");
         if (!$sidebar.length) return;
+
+        // 非系统管理员（包括油卡操作员与油卡管理员）彻底移除【油卡档案】链接，统一使用【油卡综合台账明细台】
+        if (!isSysMgr) {
+            $sidebar.find("a").filter(function() {
+                const href = ($(this).attr("href") || "").toLowerCase();
+                const text = $(this).text().trim();
+                return href === "/desk/oil-card" || href === "/app/oil-card" || href.startsWith("/desk/oil-card?") || href.startsWith("/app/oil-card?") || text === "油卡档案";
+            }).closest(".sidebar-child-item").remove();
+        }
+
+        if (get_system_manager_status() !== false) return;
 
         $sidebar.find("a").filter(function() {
             const href = $(this).attr("href") || "";
@@ -136,14 +147,13 @@
     }
 
     function schedule_system_management_visibility(retries = 20) {
+        restrict_system_management_section();
         const status = get_system_manager_status();
         if (status === true) return;
         if (status === false) {
             restrict_system_management_section();
             return;
         }
-        // The server already removes this group from non-admin boot data. This
-        // retry only protects a cached client sidebar while Frappe is starting.
         if (retries > 0) {
             window.setTimeout(() => schedule_system_management_visibility(retries - 1), 150);
         }

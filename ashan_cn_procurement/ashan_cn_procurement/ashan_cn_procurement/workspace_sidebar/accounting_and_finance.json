@@ -176,18 +176,6 @@
    "doctype": "Workspace Sidebar Item"
   },
   {
-   "label": "油卡档案",
-   "link_type": "DocType",
-   "type": "Link",
-   "link_to": "Oil Card",
-   "child": 1,
-   "collapsible": 0,
-   "indent": 0,
-   "keep_closed": 0,
-   "show_arrow": 0,
-   "doctype": "Workspace Sidebar Item"
-  },
-  {
    "label": "油卡充值流水",
    "link_type": "DocType",
    "type": "Link",

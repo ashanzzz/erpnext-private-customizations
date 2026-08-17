@@ -20,13 +20,6 @@
  "shortcuts": [
   {
    "type": "DocType",
-   "link_to": "Oil Card",
-   "doc_view": "List",
-   "label": "油卡档案",
-   "doctype": "Workspace Shortcut"
-  },
-  {
-   "type": "DocType",
    "link_to": "Oil Card Recharge",
    "doc_view": "List",
    "label": "油卡充值流水",
@@ -54,17 +47,6 @@
    "hidden": 0,
    "link_type": "DocType",
    "link_to": "",
-   "onboard": 0,
-   "is_query_report": 0,
-   "link_count": 0,
-   "doctype": "Workspace Link"
-  },
-  {
-   "type": "Link",
-   "label": "油卡档案",
-   "hidden": 0,
-   "link_type": "DocType",
-   "link_to": "Oil Card",
    "onboard": 0,
    "is_query_report": 0,
    "link_count": 0,

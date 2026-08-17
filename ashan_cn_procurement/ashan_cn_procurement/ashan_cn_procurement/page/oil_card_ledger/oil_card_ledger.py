@@ -134,6 +134,7 @@ def get_quick_entry_meta():
 		"default_company": default_company,
 		"default_supplier": default_supplier,
 		"is_manager": is_oil_card_manager(),
+		"is_system_admin": is_system_admin(),
 	}
 
 
@@ -194,13 +195,23 @@ def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="�
 	}
 
 
+def is_system_admin():
+	"""
+	严格系统管理员鉴权：仅 System Manager / Administrator 可创建与删除油卡主数据
+	"""
+	if frappe.session.user == "Administrator":
+		return True
+	user_roles = set(frappe.get_roles())
+	return "System Manager" in user_roles
+
+
 @frappe.whitelist()
 def quick_create_oil_card(card_name, card_no, card_code=None, card_type="主卡", company=None, supplier=None, opening_balance=0):
 	"""
-	单页模态对话框极速新建油卡档案（零跳转，仅管理员可用）
+	单页模态对话框极速新建油卡档案（仅系统管理员可用）
 	"""
-	if not is_oil_card_manager():
-		frappe.throw("权限不足：只有油卡管理员可以新建油卡档案！")
+	if not is_system_admin():
+		frappe.throw("权限不足：油卡管理员与操作员无权新建油卡，仅系统管理员可建档油卡！")
 
 	if not card_name or not card_no:
 		frappe.throw("油卡名称与卡号为必填项！")
@@ -252,10 +263,10 @@ def quick_create_oil_card(card_name, card_no, card_code=None, card_type="主卡"
 @frappe.whitelist()
 def delete_oil_card(oil_card):
 	"""
-	单页极速删除油卡档案（零跳转）
+	单页极速删除油卡档案（仅系统管理员可用）
 	"""
-	if not is_oil_card_manager():
-		frappe.throw("权限不足：只有管理员才可以删除油卡档案！")
+	if not is_system_admin():
+		frappe.throw("权限不足：油卡管理员与操作员无权删除油卡，仅系统管理员可删除油卡！")
 
 	if not oil_card or not frappe.db.exists("Oil Card", oil_card):
 		frappe.throw("指定的油卡不存在或已被删除！")
@@ -491,6 +502,7 @@ def get_unified_ledger_data(oil_card, year=None, month=None):
 		"is_locked": is_locked,
 		"locked_info": locked_info,
 		"is_manager": is_mgr,
+		"is_system_admin": is_system_admin(),
 	}
 
 
