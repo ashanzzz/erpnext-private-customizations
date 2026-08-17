@@ -1,18 +1,10 @@
-/* ==========================================================================
-   物业与租赁月结 — Excel 级联矩阵 · 智能调整 · 公司结算单
-   ========================================================================== */
-
-[data-page-route="property-settlement-workbench"] .layout-main-section,
-[data-page-route="property-settlement-workbench"] .layout-main-section-wrapper {
-    background-color: #f8f9fa !important;
-    min-height: calc(100vh - 60px);
-}
+/* -*- coding: utf-8 -*-
+   Property Settlement Workbench Styles (1:1 匹配标准单证排版)
+   ============================================================ */
 
 .prop-settle-wrapper {
-    padding: 16px 24px 40px;
-    background: var(--bg-color, #f8f9fa);
-    min-height: calc(100vh - 60px);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 16px 20px 40px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft YaHei", sans-serif;
     color: #1f2937;
 }
 
@@ -22,53 +14,140 @@
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 10px;
     margin-bottom: 16px;
 }
-.prop-title-box { display: flex; align-items: center; gap: 10px; }
-.prop-page-title { font-size: 20px; font-weight: 700; margin: 0; color: #111827; }
+.prop-title-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 36px;
+}
+.prop-page-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0;
+    color: #111827;
+    line-height: 36px;
+}
 .prop-status-badge {
-    padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600;
-    display: inline-flex; align-items: center; gap: 5px;
+    padding: 0 10px;
+    height: 26px;
+    line-height: 24px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
 }
 .prop-status-badge.status-draft { background: #fef9c3; color: #a16207; border: 1px solid #fde047; }
 .prop-status-badge.status-locked { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
 
 /* 年月选择器 */
 .prop-period-controls {
-    display: flex; align-items: center; gap: 5px;
-    background: #fff; padding: 4px 8px; border-radius: 8px;
-    border: 1px solid #e5e7eb; box-shadow: 0 1px 2px rgba(0,0,0,.03);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fff;
+    padding: 0 8px;
+    height: 36px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    box-shadow: 0 1px 2px rgba(0,0,0,.03);
+    box-sizing: border-box;
 }
 .prop-btn-nav {
-    background: #f3f4f6; border: 1px solid #e5e7eb; color: #374151;
-    border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 600;
-    cursor: pointer; transition: .15s;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    color: #374151;
+    border-radius: 4px;
+    height: 26px;
+    line-height: 24px;
+    padding: 0 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: .15s;
 }
 .prop-btn-nav:hover { background: #e5e7eb; }
 .prop-select-period {
-    border: 1px solid #d1d5db; border-radius: 6px; padding: 3px 8px;
-    font-size: 13px; font-weight: 600; background: #fff; outline: none;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    height: 26px;
+    line-height: 24px;
+    padding: 0 6px;
+    font-size: 13px;
+    font-weight: 600;
+    background: #fff;
+    outline: none;
+    box-sizing: border-box;
 }
 
-/* 物业管理公司 */
+/* 物业管理公司 (高度与周边严格 36px 对齐) */
 .prop-mgmt-box {
-    display: flex; align-items: center; gap: 6px;
-    background: #fff; padding: 4px 10px; border-radius: 8px;
-    border: 1px solid #e5e7eb; font-size: 13px; font-weight: 600; color: #475569;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fff;
+    padding: 0 10px;
+    height: 36px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    box-sizing: border-box;
+    box-shadow: 0 1px 2px rgba(0,0,0,.03);
+}
+.prop-mgmt-box label {
+    margin: 0;
+    white-space: nowrap;
+    line-height: 36px;
 }
 .prop-mgmt-input {
-    border: 1px solid transparent; background: transparent; padding: 2px 4px;
-    font-size: 13px; font-weight: 600; color: #1e293b; outline: none; width: 200px;
+    border: 1px solid transparent;
+    background: transparent;
+    padding: 0 4px;
+    height: 28px;
+    line-height: 28px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e293b;
+    outline: none;
+    width: 210px;
+    box-sizing: border-box;
 }
-.prop-mgmt-input:focus { border-color: #0284c7; background: #f8fafc; border-radius: 4px; }
+.prop-mgmt-input:focus {
+    border-color: #0284c7;
+    background: #f8fafc;
+    border-radius: 4px;
+}
 
 /* 操作按钮 */
-.prop-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.prop-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    height: 36px;
+}
 .prop-btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 600;
-    cursor: pointer; transition: .15s; border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 36px;
+    line-height: 34px;
+    padding: 0 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: .15s;
+    border: none;
 }
 .prop-btn-primary { background: #0284c7; color: #fff; box-shadow: 0 1px 3px rgba(2,132,199,.3); }
 .prop-btn-primary:hover { background: #0369a1; }
@@ -80,18 +159,70 @@
 .prop-btn-lock:hover { background: #c2410c; }
 .prop-btn-unlock { background: #4b5563; color: #fff; }
 .prop-btn-unlock:hover { background: #374151; }
-.prop-btn-link {
-    background: none; border: none; color: #0284c7; font-size: 12px;
-    cursor: pointer; text-decoration: underline; padding: 2px 6px; font-weight: 600;
-}
-.prop-btn-link:hover { color: #0369a1; }
 
-/* 模块卡片 Section */
+.prop-btn-link {
+    background: none;
+    border: none;
+    color: #0284c7;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: .15s;
+}
+.prop-btn-link:hover { background: #e0f2fe; }
+
+/* 下拉菜单 */
+.prop-actions .btn-group { position: relative; display: inline-block; }
+.prop-actions .dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 1050;
+    display: none;
+    min-width: 250px;
+    padding: 6px 0;
+    margin: 4px 0 0;
+    font-size: 13px;
+    text-align: left;
+    background-color: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -2px rgba(0,0,0,.05);
+}
+.prop-actions .dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 8px 16px;
+    clear: both;
+    font-weight: 500;
+    color: #1e293b;
+    text-align: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+    background-color: transparent;
+    border: 0;
+    cursor: pointer;
+    font-size: 13px;
+}
+.prop-actions .dropdown-item:hover {
+    background-color: #f1f5f9;
+    color: #0f172a;
+}
+.prop-actions .dropdown-divider {
+    height: 0;
+    margin: 4px 0;
+    overflow: hidden;
+    border-top: 1px solid #e2e8f0;
+}
+
+/* ❷ 核心卡片容器 */
 .prop-card-section {
     background: #fff;
+    border-radius: 8px;
     border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.03);
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
     margin-bottom: 16px;
     overflow: hidden;
 }
@@ -99,120 +230,140 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 8px;
     padding: 10px 16px;
     background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e5e7eb;
 }
 .sec-title { font-size: 14px; font-weight: 700; color: #1e293b; }
 .sec-tip { font-size: 12px; color: #64748b; }
-.sec-title-with-rate { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-
-.rate-config-box {
-    display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #475569;
-}
+.sec-title-with-rate { display: flex; align-items: center; gap: 20px; }
+.rate-config-box { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #475569; }
 .rate-input {
-    width: 90px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 4px;
-    font-size: 13px; font-weight: 700; text-align: right; outline: none;
+    width: 80px; padding: 2px 6px; border: 1px solid #cbd5e1;
+    border-radius: 4px; font-weight: 600; text-align: right; background: #fff;
 }
-.rate-input:focus { border-color: #0284c7; box-shadow: 0 0 0 2px rgba(2,132,199,.2); }
-.unit { font-size: 12px; color: #64748b; font-weight: 600; }
 .tax-tip { font-size: 11.5px; color: #94a3b8; }
 
-/* 表格公用 */
-.prop-table-responsive { overflow-x: auto; }
+/* ❸ 表格与排版 */
+.prop-table-responsive { width: 100%; overflow-x: auto; }
 .prop-excel-table, .prop-summary-table {
-    width: 100%; border-collapse: collapse; font-size: 13px;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
 }
 .prop-excel-table th, .prop-summary-table th {
-    background: #f8fafc; color: #475569; font-weight: 600; padding: 8px 10px;
-    border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9;
-    white-space: nowrap; text-align: left;
+    background: #f1f5f9;
+    color: #475569;
+    font-weight: 600;
+    padding: 8px 10px;
+    border: 1px solid #e2e8f0;
+    white-space: nowrap;
 }
 .prop-excel-table td, .prop-summary-table td {
-    padding: 6px 10px; border-bottom: 1px solid #f1f5f9; border-right: 1px solid #f8fafc;
-    vertical-align: middle; white-space: nowrap; font-variant-numeric: tabular-nums;
+    padding: 6px 10px;
+    border: 1px solid #e2e8f0;
+    vertical-align: middle;
 }
-.prop-excel-table tr:hover td, .prop-summary-table tr:hover td {
-    background: #f8fafc;
-}
-.prop-row-total td {
-    background: #f1f5f9; font-weight: 700; border-top: 2px solid #cbd5e1;
-}
+.prop-excel-table tr:hover, .prop-summary-table tr:hover { background: #f8fafc; }
+.prop-row-total { background: #f0fdf4 !important; font-weight: 700; }
 
-/* 单元格输入框 */
 .cell-reading-input {
-    width: 100%; border: 1px solid #d1d5db; background: #fff;
-    padding: 4px 6px; border-radius: 4px; font-size: 13px; font-weight: 700;
-    text-align: right; outline: none; transition: .15s; box-sizing: border-box;
+    width: 90px; padding: 3px 6px; border: 1px solid #cbd5e1;
+    border-radius: 4px; text-align: right; font-weight: 600; background: #fff;
 }
-.cell-reading-input:focus {
-    border-color: #0284c7; box-shadow: 0 0 0 2px rgba(2,132,199,.2); background: #fefce8;
-}
+.cell-reading-input:focus { border-color: #0284c7; outline: none; background: #fefce8; }
 .cell-remark-input {
-    width: 100%; border: 1px solid transparent; background: transparent;
-    padding: 3px 6px; border-radius: 4px; font-size: 12px; outline: none;
+    width: 100%; padding: 2px 6px; border: 1px solid transparent;
+    border-radius: 4px; font-size: 12px; background: transparent;
 }
-.cell-remark-input:focus {
-    border-color: #cbd5e1; background: #fff;
-}
-.table-locked .cell-reading-input, .table-locked .cell-remark-input {
-    pointer-events: none; border-color: transparent !important; background: transparent !important;
+.cell-remark-input:focus { border-color: #cbd5e1; background: #fff; outline: none; }
+
+.mult-badge {
+    background: #e0f2fe; color: #0369a1; padding: 2px 6px;
+    border-radius: 4px; font-weight: 700; font-size: 11px;
 }
 
-/* 徽章与标签 */
-.mult-badge {
-    background: #e0f2fe; color: #0369a1; font-weight: 700; font-size: 11.5px;
-    padding: 2px 6px; border-radius: 4px;
-}
+/* 标签样式 */
 .prop-tag {
-    display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11.5px; font-weight: 600;
+    display: inline-block; padding: 2px 6px; border-radius: 4px;
+    font-size: 11px; font-weight: 600;
 }
-.tag-type { background: #fef3c7; color: #b45309; }
-.tag-charge { background: #f3e8ff; color: #6b21a8; }
-.tag-prop-sep { background: #fee2e2; color: #991b1b; }
-.tag-prop-inc { background: #f1f5f9; color: #475569; }
+.tag-type { background: #f1f5f9; color: #475569; }
+.tag-prop-sep { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.tag-prop-inc { background: #f1f5f9; color: #64748b; }
 .company-out { color: #dc2626; font-weight: 600; }
 .company-in { color: #059669; font-weight: 600; }
+
 .prop-btn-del-adj {
-    background: none; border: none; cursor: pointer; font-size: 14px; opacity: .7;
+    background: none; border: none; cursor: pointer; padding: 2px;
+    font-size: 14px; opacity: .7; transition: .15s;
 }
 .prop-btn-del-adj:hover { opacity: 1; transform: scale(1.1); }
 
-/* 弹窗样式 */
-.confirm-box { padding: 4px 0; }
-.confirm-cards-container {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;
+/* 锁定态样式 */
+.table-locked input, .table-locked select {
+    background: #f8fafc !important;
+    border-color: transparent !important;
+    cursor: default;
+    color: #475569;
 }
-.confirm-comp-card {
-    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;
-}
-.confirm-comp-card .comp-title {
-    font-weight: 700; font-size: 15px; color: #1e293b; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;
-}
-.confirm-comp-card .comp-details {
-    font-size: 13px; color: #475569; display: flex; flex-direction: column; gap: 4px;
-}
-.confirm-comp-card .comp-subtotal {
-    margin-top: 6px; font-weight: 700; color: #111827; font-size: 14px; border-top: 1px dashed #cbd5e1; padding-top: 6px;
-}
-.confirm-comp-card .comp-subtotal span { color: #166534; }
-.confirm-grand-total {
-    text-align: right; font-size: 16px; font-weight: 700; color: #111827; padding: 10px 14px; background: #ecfdf5; border-radius: 6px; border: 1px solid #a7f3d0;
-}
-.confirm-grand-total b { color: #065f46; font-size: 18px; }
 
-/* 打印结算单容器 */
+/* ❹ 1:1 打印与单证预览弹窗样式 (完全对齐《抄表记录.xlsx》) */
 .print-bill-container {
-    background: #fff; padding: 16px 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 16px 20px;
+    background: #fff;
+    color: #000;
+    font-family: "等线", "Microsoft YaHei", sans-serif;
+    font-size: 12px;
 }
-.bill-header { text-align: center; margin-bottom: 16px; border-bottom: 2px solid #0284c7; padding-bottom: 8px; }
-.bill-title { margin: 0 0 6px 0; font-size: 18px; color: #1e293b; }
-.bill-meta { display: flex; justify-content: space-between; font-size: 12.5px; color: #64748b; }
-.bill-section-title { font-weight: 700; margin: 12px 0 6px 0; font-size: 13.5px; color: #1e293b; }
-.bill-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 10px; }
-.bill-table th, .bill-table td { border: 1px solid #e2e8f0; padding: 5px 8px; }
-.bill-table th { background: #f8fafc; font-weight: 600; color: #475569; }
-.bill-footer-total { text-align: right; font-size: 15px; font-weight: 700; margin-top: 14px; padding: 8px 12px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; }
-.grand-total-amount { color: #065f46; font-size: 18px; }
+.bill-header { text-align: center; margin-bottom: 12px; }
+.bill-title { margin: 0 0 4px 0; font-size: 19px; font-weight: bold; }
+.bill-subtitle { font-size: 13px; margin-bottom: 6px; }
+.bill-meta-row {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 11.5px; border-top: 1px solid #000; border-bottom: 1px solid #000;
+    padding: 5px 4px; margin-top: 6px;
+}
+.bill-sec-title {
+    text-align: center;
+    font-weight: normal;
+    font-size: 12px;
+    padding: 4px;
+    border: 1.5px solid #000;
+    border-bottom: 1px solid #000;
+    background: #fff;
+    margin-top: 10px;
+}
+.bill-table-1to1 {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11.5px;
+    margin-bottom: 6px;
+}
+.bill-table-1to1 th {
+    border: 1px solid #000;
+    border-left: 1.5px solid #000;
+    border-right: 1.5px solid #000;
+    padding: 4px 6px;
+    text-align: center;
+    font-weight: bold;
+}
+.bill-table-1to1 td {
+    border: 1px solid #000;
+    padding: 4px 6px;
+    text-align: center;
+    height: 26px;
+}
+.bill-table-1to1 tr td:first-child { border-left: 1.5px solid #000; }
+.bill-table-1to1 tr td:last-child { border-right: 1.5px solid #000; }
+.bill-table-1to1 tr.total-row td {
+    font-weight: bold;
+    border-bottom: 1.5px solid #000;
+}
+.grand-total-large-cell {
+    font-size: 20px;
+    font-weight: normal;
+    text-align: center;
+    vertical-align: middle;
+    border: 1.5px solid #000 !important;
+}
