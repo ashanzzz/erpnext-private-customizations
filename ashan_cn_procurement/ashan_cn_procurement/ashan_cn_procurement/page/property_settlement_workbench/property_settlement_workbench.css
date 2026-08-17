@@ -51,6 +51,18 @@
     font-size: 13px; font-weight: 600; background: #fff; outline: none;
 }
 
+/* 物业管理公司 */
+.prop-mgmt-box {
+    display: flex; align-items: center; gap: 6px;
+    background: #fff; padding: 4px 10px; border-radius: 8px;
+    border: 1px solid #e5e7eb; font-size: 13px; font-weight: 600; color: #475569;
+}
+.prop-mgmt-input {
+    border: 1px solid transparent; background: transparent; padding: 2px 4px;
+    font-size: 13px; font-weight: 600; color: #1e293b; outline: none; width: 200px;
+}
+.prop-mgmt-input:focus { border-color: #0284c7; background: #f8fafc; border-radius: 4px; }
+
 /* 操作按钮 */
 .prop-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .prop-btn {
@@ -60,6 +72,8 @@
 }
 .prop-btn-primary { background: #0284c7; color: #fff; box-shadow: 0 1px 3px rgba(2,132,199,.3); }
 .prop-btn-primary:hover { background: #0369a1; }
+.prop-btn-excel { background: #107c41; color: #fff; box-shadow: 0 1px 3px rgba(16,124,65,.3); }
+.prop-btn-excel:hover { background: #0b5c30; color: #fff; }
 .prop-btn-secondary { background: #fff; color: #374151; border: 1px solid #d1d5db; }
 .prop-btn-secondary:hover { background: #f9fafb; }
 .prop-btn-lock { background: #ea580c; color: #fff; box-shadow: 0 1px 3px rgba(234,88,12,.3); }

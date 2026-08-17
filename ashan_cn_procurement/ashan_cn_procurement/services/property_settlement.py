@@ -1,9 +1,15 @@
 # Copyright (c) 2026, Ashan CN Procurement and contributors
 # For license information, please see license.txt
 
+import io
+import json
 import calendar
 import frappe
 from frappe.utils import flt, cint, getdate, nowdate, now_datetime, formatdate
+
+import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.utils import get_column_letter
 
 
 def get_month_range(year, month):
@@ -310,6 +316,7 @@ def calculate_settlement_matrix(data):
 	data["lease_charges"] = lease_charges
 	data["company_summaries"] = company_summaries
 	data["total_amount"] = round(grand_total, 2)
+	data["property_management_company"] = data.get("property_management_company") or "天津金利达物业管理有限公司"
 
 	return data
 
@@ -445,6 +452,7 @@ def get_month_settlement_data(year, month):
 		"settlement_month": start_date,
 		"status": "草稿",
 		"is_new": True,
+		"property_management_company": "天津金利达物业管理有限公司",
 		"electricity_price": elec_price,
 		"electricity_tax_rate": 13.0,
 		"water_price": water_price,
@@ -481,6 +489,7 @@ def save_draft_settlement(data):
 		doc.settlement_month = settlement_month
 
 	doc.status = "草稿"
+	doc.property_management_company = calc_data.get("property_management_company") or "天津金利达物业管理有限公司"
 	doc.electricity_price = flt(calc_data.get("electricity_price"))
 	doc.electricity_tax_rate = flt(calc_data.get("electricity_tax_rate"))
 	doc.water_price = flt(calc_data.get("water_price"))
@@ -561,3 +570,493 @@ def revert_settlement_to_draft(name):
 		"data": calculate_settlement_matrix(doc.as_dict()),
 		"message": "已解锁并恢复为草稿状态，可重新编辑读数与调整！"
 	}
+
+
+# ─────────────────────────────────────────────────────────────
+# Excel 单证导出引擎 (完美对齐《抄表记录.xlsx》祺富单证/吉众单证/合计单证)
+# ─────────────────────────────────────────────────────────────
+
+def render_excel_bill_sheet(ws, sheet_title, company_name, settlement_month, prop_mgmt_co, meters, leases, adjustments, summary):
+	"""
+	渲染符合《抄表记录.xlsx》标准样式的物业明细（单价含税）Sheet
+	"""
+	ws.title = sheet_title
+	ws.views.sheetView[0].showGridLines = True
+
+	font_title = Font(name="微软雅黑", size=14, bold=True)
+	font_subtitle = Font(name="微软雅黑", size=11, bold=True)
+	font_sec = Font(name="微软雅黑", size=11, bold=True)
+	font_header = Font(name="微软雅黑", size=10, bold=True)
+	font_data = Font(name="微软雅黑", size=10)
+	font_bold = Font(name="微软雅黑", size=10, bold=True)
+
+	fill_header = PatternFill(start_color="F2F4F7", end_color="F2F4F7", fill_type="solid")
+	fill_total = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+	fill_grand = PatternFill(start_color="ECFDF5", end_color="ECFDF5", fill_type="solid")
+
+	thin_border = Border(
+		left=Side(style='thin', color='D0D5DD'),
+		right=Side(style='thin', color='D0D5DD'),
+		top=Side(style='thin', color='D0D5DD'),
+		bottom=Side(style='thin', color='D0D5DD')
+	)
+
+	align_center = Alignment(horizontal="center", vertical="center")
+	align_left = Alignment(horizontal="left", vertical="center")
+	align_right = Alignment(horizontal="right", vertical="center")
+
+	curr_row = 1
+
+	# 1. 标题区
+	ws.cell(curr_row, 1, company_name).font = font_title
+	curr_row += 1
+
+	ws.cell(curr_row, 1, "物业明细（单价含税）").font = font_subtitle
+	curr_row += 1
+
+	# 元数据行
+	s_date_str = str(settlement_month)[:10]
+	ws.cell(curr_row, 1, "上期日期").font = font_bold
+	ws.cell(curr_row, 2, s_date_str)
+	ws.cell(curr_row, 3, "本期日期").font = font_bold
+	ws.cell(curr_row, 4, s_date_str)
+	ws.cell(curr_row, 5, "核定日期").font = font_bold
+	ws.cell(curr_row, 6, s_date_str)
+	ws.cell(curr_row, 7, "物业公司").font = font_bold
+	ws.cell(curr_row, 8, prop_mgmt_co or "天津金利达物业管理有限公司").font = font_bold
+	for c in range(1, 9):
+		ws.cell(curr_row, c).alignment = align_center if c in [2,4,6] else align_left
+	curr_row += 2
+
+	# 2. 电费明细表
+	ws.cell(curr_row, 1, "电费").font = font_sec
+	curr_row += 1
+
+	elec_headers = ["表号", "上期表数", "本期表数", "本期用电", "倍率", "核定度数", "单价", "总价"]
+	for c_idx, h in enumerate(elec_headers, start=1):
+		cell = ws.cell(curr_row, c_idx, h)
+		cell.font = font_header
+		cell.fill = fill_header
+		cell.border = thin_border
+		cell.alignment = align_center if c_idx in [1, 5] else (align_right if c_idx > 1 else align_left)
+	curr_row += 1
+
+	elec_start_row = curr_row
+	elec_meters = [m for m in meters if m.get("utility_type") in ["电", "电费"]]
+	for m in elec_meters:
+		ws.cell(curr_row, 1, str(m.get("meter_no"))).alignment = align_center
+		ws.cell(curr_row, 2, float(m.get("previous_reading", 0))).number_format = "#,##0.00"
+		ws.cell(curr_row, 3, float(m.get("current_reading", 0))).number_format = "#,##0.00"
+		ws.cell(curr_row, 4, float(m.get("raw_usage", 0))).number_format = "#,##0.00"
+		ws.cell(curr_row, 5, float(m.get("multiplier", 1))).alignment = align_center
+		ws.cell(curr_row, 6, float(m.get("calculated_usage", 0))).number_format = "#,##0.00"
+		ws.cell(curr_row, 7, float(m.get("unit_price", 0))).number_format = "0.0000"
+		ws.cell(curr_row, 8, float(m.get("amount_tax_incl", 0))).number_format = "#,##0.00"
+		for c in range(1, 9):
+			ws.cell(curr_row, c).font = font_data
+			ws.cell(curr_row, c).border = thin_border
+			if c in [2, 3, 4, 6, 7, 8]:
+				ws.cell(curr_row, c).alignment = align_right
+		curr_row += 1
+
+	# 电费调整项
+	elec_adjs = [a for a in adjustments if a.get("utility_type") in ["电费", "电"]]
+	for a in elec_adjs:
+		title = a.get("title") or "电费调整"
+		ws.cell(curr_row, 1, title).alignment = align_left
+		ws.cell(curr_row, 2, "—").alignment = align_center
+		ws.cell(curr_row, 3, "—").alignment = align_center
+		ws.cell(curr_row, 4, float(a.get("usage", 0))).number_format = "#,##0.00"
+		ws.cell(curr_row, 5, 1).alignment = align_center
+		ws.cell(curr_row, 6, float(a.get("usage", 0))).number_format = "#,##0.00"
+		ws.cell(curr_row, 7, "—").alignment = align_center
+		ws.cell(curr_row, 8, float(a.get("amount", 0))).number_format = "#,##0.00"
+		for c in range(1, 9):
+			ws.cell(curr_row, c).font = font_data
+			ws.cell(curr_row, c).border = thin_border
+			if c in [4, 6, 8]:
+				ws.cell(curr_row, c).alignment = align_right
+		curr_row += 1
+
+	if curr_row == elec_start_row:
+		# 无数据占位行
+		ws.cell(curr_row, 1, "—").alignment = align_center
+		for c in range(2, 9):
+			ws.cell(curr_row, c, 0).number_format = "#,##0.00"
+			ws.cell(curr_row, c).alignment = align_right
+		for c in range(1, 9):
+			ws.cell(curr_row, c).font = font_data
+			ws.cell(curr_row, c).border = thin_border
+		curr_row += 1
+
+	# 电费合计行
+	ws.cell(curr_row, 1, "合计").alignment = align_center
+	ws.cell(curr_row, 4, f"=SUM(D{elec_start_row}:D{curr_row-1})").number_format = "#,##0.00"
+	ws.cell(curr_row, 6, f"=SUM(F{elec_start_row}:F{curr_row-1})").number_format = "#,##0.00"
+	ws.cell(curr_row, 8, f"=SUM(H{elec_start_row}:H{curr_row-1})").number_format = "#,##0.00"
+	for c in range(1, 9):
+		ws.cell(curr_row, c).font = font_bold
+		ws.cell(curr_row, c).fill = fill_total
+		ws.cell(curr_row, c).border = thin_border
+		if c in [4, 6, 8]:
+			ws.cell(curr_row, c).alignment = align_right
+	elec_total_row = curr_row
+	curr_row += 2
+
+	# 3. 水费明细表
+	ws.cell(curr_row, 1, "水费").font = font_sec
+	curr_row += 1
+
+	water_headers = ["表号", "上期表数", "本期表数", "本期用水", "倍率", "核定m³", "单价", "总价"]
+	for c_idx, h in enumerate(water_headers, start=1):
+		cell = ws.cell(curr_row, c_idx, h)
+		cell.font = font_header
+		cell.fill = fill_header
+		cell.border = thin_border
+		cell.alignment = align_center if c_idx in [1, 5] else (align_right if c_idx > 1 else align_left)
+	curr_row += 1
+
+	water_start_row = curr_row
+	water_meters = [m for m in meters if m.get("utility_type") in ["水", "水费"]]
+	for m in water_meters:
+		ws.cell(curr_row, 1, str(m.get("meter_no"))).alignment = align_center
+		ws.cell(curr_row, 2, float(m.get("previous_reading", 0))).number_format = "#,##0.00"
+		ws.cell(curr_row, 3, float(m.get("current_reading", 0))).number_format = "#,##0.00"
+		ws.cell(curr_row, 4, float(m.get("raw_usage", 0))).number_format = "#,##0.00"
+		ws.cell(curr_row, 5, float(m.get("multiplier", 1))).alignment = align_center
+		ws.cell(curr_row, 6, float(m.get("calculated_usage", 0))).number_format = "#,##0.00"
+		ws.cell(curr_row, 7, float(m.get("unit_price", 0))).number_format = "0.0000"
+		ws.cell(curr_row, 8, float(m.get("amount_tax_incl", 0))).number_format = "#,##0.00"
+		for c in range(1, 9):
+			ws.cell(curr_row, c).font = font_data
+			ws.cell(curr_row, c).border = thin_border
+			if c in [2, 3, 4, 6, 7, 8]:
+				ws.cell(curr_row, c).alignment = align_right
+		curr_row += 1
+
+	# 水费调整项
+	water_adjs = [a for a in adjustments if a.get("utility_type") in ["水费", "水"]]
+	for a in water_adjs:
+		title = a.get("title") or "水费调整"
+		ws.cell(curr_row, 1, title).alignment = align_left
+		ws.cell(curr_row, 2, "—").alignment = align_center
+		ws.cell(curr_row, 3, "—").alignment = align_center
+		ws.cell(curr_row, 4, float(a.get("usage", 0))).number_format = "#,##0.00"
+		ws.cell(curr_row, 5, 1).alignment = align_center
+		ws.cell(curr_row, 6, float(a.get("usage", 0))).number_format = "#,##0.00"
+		ws.cell(curr_row, 7, "—").alignment = align_center
+		ws.cell(curr_row, 8, float(a.get("amount", 0))).number_format = "#,##0.00"
+		for c in range(1, 9):
+			ws.cell(curr_row, c).font = font_data
+			ws.cell(curr_row, c).border = thin_border
+			if c in [4, 6, 8]:
+				ws.cell(curr_row, c).alignment = align_right
+		curr_row += 1
+
+	if curr_row == water_start_row:
+		ws.cell(curr_row, 1, "—").alignment = align_center
+		for c in range(2, 9):
+			ws.cell(curr_row, c, 0).number_format = "#,##0.00"
+			ws.cell(curr_row, c).alignment = align_right
+		for c in range(1, 9):
+			ws.cell(curr_row, c).font = font_data
+			ws.cell(curr_row, c).border = thin_border
+		curr_row += 1
+
+	# 水费合计行
+	ws.cell(curr_row, 1, "合计").alignment = align_center
+	ws.cell(curr_row, 4, f"=SUM(D{water_start_row}:D{curr_row-1})").number_format = "#,##0.00"
+	ws.cell(curr_row, 6, f"=SUM(F{water_start_row}:F{curr_row-1})").number_format = "#,##0.00"
+	ws.cell(curr_row, 8, f"=SUM(H{water_start_row}:H{curr_row-1})").number_format = "#,##0.00"
+	for c in range(1, 9):
+		ws.cell(curr_row, c).font = font_bold
+		ws.cell(curr_row, c).fill = fill_total
+		ws.cell(curr_row, c).border = thin_border
+		if c in [4, 6, 8]:
+			ws.cell(curr_row, c).alignment = align_right
+	water_total_row = curr_row
+	curr_row += 2
+
+	# 4. 房租与物业费明细 (若有)
+	lease_total_row = None
+	if leases:
+		ws.cell(curr_row, 1, "房租与物业费").font = font_sec
+		curr_row += 1
+
+		lease_headers = ["场地名称", "面积(㎡)", "计费天数", "房租单价", "物业费计收", "房租金额", "物业费金额", "含税合计"]
+		for c_idx, h in enumerate(lease_headers, start=1):
+			cell = ws.cell(curr_row, c_idx, h)
+			cell.font = font_header
+			cell.fill = fill_header
+			cell.border = thin_border
+			cell.alignment = align_center if c_idx in [3] else (align_right if c_idx in [2, 6, 7, 8] else align_left)
+		curr_row += 1
+
+		lease_start_row = curr_row
+		for l in leases:
+			ws.cell(curr_row, 1, l.get("property_name", "")).alignment = align_left
+			ws.cell(curr_row, 2, float(l.get("area", 0))).number_format = "#,##0.00"
+			r_snap = l.get("rent_rate_snapshot")
+			if not r_snap or str(r_snap).strip() == "None":
+				r_snap = "—"
+			p_snap = l.get("property_fee_rate_snapshot")
+			if not p_snap or str(p_snap).strip() == "None":
+				p_snap = "已含在房租中" if l.get("property_fee_mode") != "单独计收物业费" else "—"
+
+			ws.cell(curr_row, 4, str(r_snap)).alignment = align_left
+			ws.cell(curr_row, 5, str(p_snap)).alignment = align_left
+			ws.cell(curr_row, 6, float(l.get("rent_amount_tax_incl") or 0)).number_format = "#,##0.00"
+			ws.cell(curr_row, 7, float(l.get("property_fee_amount_tax_incl") or 0)).number_format = "#,##0.00"
+			ws.cell(curr_row, 8, float(l.get("amount_tax_incl") or 0)).number_format = "#,##0.00"
+			for c in range(1, 9):
+				ws.cell(curr_row, c).font = font_data
+				ws.cell(curr_row, c).border = thin_border
+				if c in [2, 6, 7, 8]:
+					ws.cell(curr_row, c).alignment = align_right
+			curr_row += 1
+
+		# 房租合计行
+		ws.cell(curr_row, 1, "合计").alignment = align_center
+		ws.cell(curr_row, 2, f"=SUM(B{lease_start_row}:B{curr_row-1})").number_format = "#,##0.00"
+		ws.cell(curr_row, 6, f"=SUM(F{lease_start_row}:F{curr_row-1})").number_format = "#,##0.00"
+		ws.cell(curr_row, 7, f"=SUM(G{lease_start_row}:G{curr_row-1})").number_format = "#,##0.00"
+		ws.cell(curr_row, 8, f"=SUM(H{lease_start_row}:H{curr_row-1})").number_format = "#,##0.00"
+		for c in range(1, 9):
+			ws.cell(curr_row, c).font = font_bold
+			ws.cell(curr_row, c).fill = fill_total
+			ws.cell(curr_row, c).border = thin_border
+			if c in [2, 6, 7, 8]:
+				ws.cell(curr_row, c).alignment = align_right
+		lease_total_row = curr_row
+		curr_row += 2
+
+	# 5. 水电与物业综合汇总表
+	summary_title = f"{company_name} 合计水电与物业费"
+	ws.cell(curr_row, 1, summary_title).font = font_sec
+	curr_row += 1
+
+	sum_headers = ["项目", "金额(不含税)", "税率", "税额", "合计(含税)", "数量", "单位", "综合单价"]
+	for c_idx, h in enumerate(sum_headers, start=1):
+		cell = ws.cell(curr_row, c_idx, h)
+		cell.font = font_header
+		cell.fill = fill_header
+		cell.border = thin_border
+		cell.alignment = align_center if c_idx in [3, 7] else (align_right if c_idx in [2, 4, 5, 6, 8] else align_left)
+	curr_row += 1
+
+	sum_start_row = curr_row
+
+	# 电费汇总行
+	ws.cell(curr_row, 1, "电费").alignment = align_left
+	ws.cell(curr_row, 5, f"=H{elec_total_row}").number_format = "#,##0.00"
+	ws.cell(curr_row, 3, 0.13).number_format = "0%"
+	ws.cell(curr_row, 2, f"=E{curr_row}/(1+C{curr_row})").number_format = "#,##0.00"
+	ws.cell(curr_row, 4, f"=E{curr_row}-B{curr_row}").number_format = "#,##0.00"
+	ws.cell(curr_row, 6, f"=F{elec_total_row}").number_format = "#,##0.00"
+	ws.cell(curr_row, 7, "kWh").alignment = align_center
+	ws.cell(curr_row, 8, f"=IF(F{curr_row}>0,E{curr_row}/F{curr_row},0)").number_format = "0.0000"
+	for c in range(1, 9):
+		ws.cell(curr_row, c).font = font_data
+		ws.cell(curr_row, c).border = thin_border
+		if c in [2, 4, 5, 6, 8]:
+			ws.cell(curr_row, c).alignment = align_right
+	curr_row += 1
+
+	# 水费汇总行
+	ws.cell(curr_row, 1, "水费").alignment = align_left
+	ws.cell(curr_row, 5, f"=H{water_total_row}").number_format = "#,##0.00"
+	ws.cell(curr_row, 3, 0.09).number_format = "0%"
+	ws.cell(curr_row, 2, f"=E{curr_row}/(1+C{curr_row})").number_format = "#,##0.00"
+	ws.cell(curr_row, 4, f"=E{curr_row}-B{curr_row}").number_format = "#,##0.00"
+	ws.cell(curr_row, 6, f"=F{water_total_row}").number_format = "#,##0.00"
+	ws.cell(curr_row, 7, "m³").alignment = align_center
+	ws.cell(curr_row, 8, f"=IF(F{curr_row}>0,E{curr_row}/F{curr_row},0)").number_format = "0.0000"
+	for c in range(1, 9):
+		ws.cell(curr_row, c).font = font_data
+		ws.cell(curr_row, c).border = thin_border
+		if c in [2, 4, 5, 6, 8]:
+			ws.cell(curr_row, c).alignment = align_right
+	curr_row += 1
+
+	# 房租汇总行 (若有)
+	if lease_total_row:
+		ws.cell(curr_row, 1, "房租").alignment = align_left
+		ws.cell(curr_row, 5, f"=F{lease_total_row}").number_format = "#,##0.00"
+		ws.cell(curr_row, 3, 0.09).number_format = "0%"
+		ws.cell(curr_row, 2, f"=E{curr_row}/(1+C{curr_row})").number_format = "#,##0.00"
+		ws.cell(curr_row, 4, f"=E{curr_row}-B{curr_row}").number_format = "#,##0.00"
+		ws.cell(curr_row, 6, f"=B{lease_total_row}").number_format = "#,##0.00"
+		ws.cell(curr_row, 7, "㎡").alignment = align_center
+		ws.cell(curr_row, 8, "—").alignment = align_center
+		for c in range(1, 9):
+			ws.cell(curr_row, c).font = font_data
+			ws.cell(curr_row, c).border = thin_border
+			if c in [2, 4, 5, 6]:
+				ws.cell(curr_row, c).alignment = align_right
+		curr_row += 1
+
+		# 物业费汇总行
+		ws.cell(curr_row, 1, "物业费").alignment = align_left
+		ws.cell(curr_row, 5, f"=G{lease_total_row}").number_format = "#,##0.00"
+		ws.cell(curr_row, 3, 0.09).number_format = "0%"
+		ws.cell(curr_row, 2, f"=E{curr_row}/(1+C{curr_row})").number_format = "#,##0.00"
+		ws.cell(curr_row, 4, f"=E{curr_row}-B{curr_row}").number_format = "#,##0.00"
+		ws.cell(curr_row, 6, f"=B{lease_total_row}").number_format = "#,##0.00"
+		ws.cell(curr_row, 7, "㎡").alignment = align_center
+		ws.cell(curr_row, 8, "—").alignment = align_center
+		for c in range(1, 9):
+			ws.cell(curr_row, c).font = font_data
+			ws.cell(curr_row, c).border = thin_border
+			if c in [2, 4, 5, 6]:
+				ws.cell(curr_row, c).alignment = align_right
+		curr_row += 1
+
+	# 应付总计行
+	ws.cell(curr_row, 1, "应付总计").alignment = align_center
+	ws.cell(curr_row, 2, f"=SUM(B{sum_start_row}:B{curr_row-1})").number_format = "#,##0.00"
+	ws.cell(curr_row, 3, "—").alignment = align_center
+	ws.cell(curr_row, 4, f"=SUM(D{sum_start_row}:D{curr_row-1})").number_format = "#,##0.00"
+	ws.cell(curr_row, 5, f"=SUM(E{sum_start_row}:E{curr_row-1})").number_format = "#,##0.00"
+	ws.cell(curr_row, 6, "—").alignment = align_center
+	ws.cell(curr_row, 7, "—").alignment = align_center
+	ws.cell(curr_row, 8, "—").alignment = align_center
+	for c in range(1, 9):
+		ws.cell(curr_row, c).font = font_bold
+		ws.cell(curr_row, c).fill = fill_grand
+		ws.cell(curr_row, c).border = thin_border
+		if c in [2, 4, 5]:
+			ws.cell(curr_row, c).alignment = align_right
+
+	# 自动设置列宽
+	col_widths = {1: 18, 2: 14, 3: 14, 4: 14, 5: 12, 6: 15, 7: 15, 8: 16}
+	for col_idx, width in col_widths.items():
+		col_letter = get_column_letter(col_idx)
+		ws.column_dimensions[col_letter].width = width
+
+
+def generate_settlement_excel_workbook(data, company=None, property_management_company=None, mode="single"):
+	"""
+	根据月结数据与指定模式生成 openpyxl Workbook
+	mode: "company" (单公司) | "total" (全公司合计) | "all" (包含所有分公司与合计的多Sheet工作簿)
+	"""
+	data = calculate_settlement_matrix(data)
+	wb = openpyxl.Workbook()
+	# 移除默认第一个空白 sheet
+	default_ws = wb.active
+
+	settlement_month = data.get("settlement_month") or nowdate()
+	prop_mgmt = property_management_company or data.get("property_management_company") or "天津金利达物业管理有限公司"
+
+	def get_company_data(comp):
+		comp_meters = [m for m in (data.get("meter_readings") or []) if m.get("company") == comp]
+		comp_leases = [l for l in (data.get("lease_charges") or []) if l.get("company") == comp]
+		comp_summary = next((s for s in (data.get("company_summaries") or []) if s.get("company") == comp), {})
+
+		comp_adjs = []
+		for a in (data.get("adjustments") or []):
+			if a.get("adjustment_scope") == "单公司" and a.get("company") == comp:
+				comp_adjs.append({
+					"title": f"{a.get('utility_type')}调整",
+					"utility_type": a.get("utility_type"),
+					"usage": flt(a.get("usage_adjustment")),
+					"amount": flt(a.get("amount_adjustment")),
+					"reason": a.get("reason")
+				})
+			elif a.get("adjustment_scope") == "公司间转移":
+				if a.get("from_company") == comp:
+					comp_adjs.append({
+						"title": f"{a.get('utility_type')}调出 (转至 {a.get('to_company')})",
+						"utility_type": a.get("utility_type"),
+						"usage": -flt(a.get("equivalent_usage")),
+						"amount": -flt(a.get("amount_adjustment")),
+						"reason": a.get("reason")
+					})
+				elif a.get("to_company") == comp:
+					comp_adjs.append({
+						"title": f"{a.get('utility_type')}调入 (来自 {a.get('from_company')})",
+						"utility_type": a.get("utility_type"),
+						"usage": flt(a.get("equivalent_usage")),
+						"amount": flt(a.get("amount_adjustment")),
+						"reason": a.get("reason")
+					})
+		return comp_meters, comp_leases, comp_adjs, comp_summary
+
+	if mode == "company" and company:
+		comp_meters, comp_leases, comp_adjs, comp_summary = get_company_data(company)
+		sheet_title = f"{company[:2]}单证" if len(company) <= 4 else f"{company}单证"
+		render_excel_bill_sheet(default_ws, sheet_title, company, settlement_month, prop_mgmt, comp_meters, comp_leases, comp_adjs, comp_summary)
+
+	elif mode == "total":
+		all_meters = data.get("meter_readings") or []
+		all_leases = data.get("lease_charges") or []
+		# 合计模式下，公司间转移调整两端对冲为 0，单公司调整保留
+		total_adjs = []
+		for a in (data.get("adjustments") or []):
+			if a.get("adjustment_scope") == "单公司":
+				total_adjs.append({
+					"title": f"{a.get('utility_type')}单项调整 ({a.get('company')})",
+					"utility_type": a.get("utility_type"),
+					"usage": flt(a.get("usage_adjustment")),
+					"amount": flt(a.get("amount_adjustment")),
+					"reason": a.get("reason")
+				})
+		render_excel_bill_sheet(default_ws, "合计单证", "全公司合计", settlement_month, prop_mgmt, all_meters, all_leases, total_adjs, {})
+
+	else: # mode == "all"
+		companies = [s.get("company") for s in (data.get("company_summaries") or []) if s.get("company")]
+		first_sheet = True
+		for comp in companies:
+			ws = default_ws if first_sheet else wb.create_sheet()
+			first_sheet = False
+			sheet_title = f"{comp[:2]}单证" if len(comp) <= 4 else f"{comp}单证"
+			comp_meters, comp_leases, comp_adjs, comp_summary = get_company_data(comp)
+			render_excel_bill_sheet(ws, sheet_title, comp, settlement_month, prop_mgmt, comp_meters, comp_leases, comp_adjs, comp_summary)
+
+		# 增加合计单证 Sheet
+		ws_tot = default_ws if first_sheet else wb.create_sheet()
+		all_meters = data.get("meter_readings") or []
+		all_leases = data.get("lease_charges") or []
+		total_adjs = []
+		for a in (data.get("adjustments") or []):
+			if a.get("adjustment_scope") == "单公司":
+				total_adjs.append({
+					"title": f"{a.get('utility_type')}单项调整 ({a.get('company')})",
+					"utility_type": a.get("utility_type"),
+					"usage": flt(a.get("usage_adjustment")),
+					"amount": flt(a.get("amount_adjustment")),
+					"reason": a.get("reason")
+				})
+		render_excel_bill_sheet(ws_tot, "合计单证", "全公司合计", settlement_month, prop_mgmt, all_meters, all_leases, total_adjs, {})
+
+	return wb
+
+
+@frappe.whitelist()
+def export_settlement_excel(settlement_month, company=None, property_management_company=None, mode="company"):
+	"""
+	Whitelisted API: 下载物业结算明细 Excel
+	"""
+	settlement_month = str(settlement_month).strip()
+	year, month = cint(settlement_month.split("-")[0]), cint(settlement_month.split("-")[1])
+	data = get_month_settlement_data(year, month)
+
+	if property_management_company:
+		data["property_management_company"] = property_management_company
+
+	wb = generate_settlement_excel_workbook(data, company=company, property_management_company=property_management_company, mode=mode)
+
+	bio = io.BytesIO()
+	wb.save(bio)
+	bio.seek(0)
+
+	month_str = settlement_month[:7]
+	if mode == "company" and company:
+		fname = f"{company}_{month_str}_物业明细（单价含税）.xlsx"
+	elif mode == "total":
+		fname = f"全公司合计_{month_str}_物业明细（单价含税）.xlsx"
+	else:
+		fname = f"{month_str}_物业及水电结算全套明细（单价含税）.xlsx"
+
+	frappe.response['filename'] = fname
+	frappe.response['filecontent'] = bio.getvalue()
+	frappe.response['type'] = 'binary'

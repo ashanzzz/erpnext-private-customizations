@@ -64,9 +64,26 @@ class PropertyMonthlySettlement {
                     <button class="prop-btn-nav" id="btn-cur-month">本月</button>
                 </div>
 
+                <div class="prop-mgmt-box">
+                    <label>物业公司:</label>
+                    <input type="text" id="inp-prop-mgmt" class="prop-mgmt-input" value="天津金利达物业管理有限公司" placeholder="天津金利达物业管理有限公司" />
+                </div>
+
                 <div class="prop-actions">
                     <button class="prop-btn prop-btn-secondary" id="btn-save-draft">💾 保存草稿</button>
-                    <button class="prop-btn prop-btn-primary" id="btn-preview-bills">📄 结算单预览/打印</button>
+                    <div class="btn-group">
+                        <button type="button" class="prop-btn prop-btn-excel dropdown-toggle" data-toggle="dropdown" id="btn-export-dropdown">
+                            📥 导出 Excel ▾
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-right" id="menu-export-excel" style="font-size: 13px;">
+                            <a class="dropdown-item" href="#" id="act-export-full">📊 导出【全套月结工作簿】(含各分公司与合计)</a>
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item" href="#" id="act-export-total">📑 导出【全公司合计单证】Excel</a>
+                            <div class="dropdown-divider"></div>
+                            <div id="comp-export-items"></div>
+                        </div>
+                    </div>
+                    <button class="prop-btn prop-btn-primary" id="btn-preview-bills">📄 单证预览/打印</button>
                     <button class="prop-btn prop-btn-lock" id="btn-finalize-settle">🔒 完成本月结算</button>
                     <button class="prop-btn prop-btn-unlock" id="btn-revert-settle" style="display:none;">🔓 取消结算</button>
                 </div>
@@ -91,7 +108,7 @@ class PropertyMonthlySettlement {
                                 <th style="text-align: right;">水费金额</th>
                                 <th style="text-align: right;">调整金额</th>
                                 <th style="text-align: right; background: #ecfdf5; color: #065f46;">本月应付总额</th>
-                                <th style="text-align: center; width: 100px;">公司结算单</th>
+                                <th style="text-align: center; width: 140px;">单证与打印</th>
                             </tr>
                         </thead>
                         <tbody id="tbody-comp-summary"></tbody>
@@ -249,6 +266,13 @@ class PropertyMonthlySettlement {
             self.load_month_settlement();
         });
 
+        // 物业公司输入修改
+        this.$container.find('#inp-prop-mgmt').on('change input', function() {
+            if (self.data) {
+                self.data.property_management_company = $(this).val();
+            }
+        });
+
         // 导航按钮
         this.$container.find('#btn-prev-month').on('click', () => {
             if (self.currentMonth === 1) {
@@ -291,6 +315,16 @@ class PropertyMonthlySettlement {
         // 保存草稿
         this.$container.find('#btn-save-draft').on('click', () => {
             self.save_draft();
+        });
+
+        // 导出 Excel 选项
+        this.$container.find('#act-export-full').on('click', (e) => {
+            e.preventDefault();
+            self.download_excel('all');
+        });
+        this.$container.find('#act-export-total').on('click', (e) => {
+            e.preventDefault();
+            self.download_excel('total');
         });
 
         // 添加调整弹窗
@@ -354,19 +388,34 @@ class PropertyMonthlySettlement {
             $btnRevert.show();
             $btnSave.hide();
             $btnAddAdj.hide();
-            this.$container.find('.prop-excel-table, .rate-input').addClass('table-locked');
+            this.$container.find('.prop-excel-table, .rate-input, .prop-mgmt-input').addClass('table-locked');
         } else {
             $badge.removeClass('status-locked').addClass('status-draft').html('🟡 草稿录入中');
             $btnFinalize.show();
             $btnRevert.hide();
             $btnSave.show();
             $btnAddAdj.show();
-            this.$container.find('.prop-excel-table, .rate-input').removeClass('table-locked');
+            this.$container.find('.prop-excel-table, .rate-input, .prop-mgmt-input').removeClass('table-locked');
         }
+
+        // 物业公司
+        this.$container.find('#inp-prop-mgmt').val(d.property_management_company || '天津金利达物业管理有限公司').prop('disabled', isLocked);
 
         // 单价
         this.$container.find('#inp-elec-price').val(d.electricity_price || 1.1957).prop('disabled', isLocked);
         this.$container.find('#inp-water-price').val(d.water_price || 5.5).prop('disabled', isLocked);
+
+        // 更新 Excel 导出菜单中的各公司项
+        const $compMenu = this.$container.find('#comp-export-items');
+        $compMenu.empty();
+        (d.company_summaries || []).forEach(s => {
+            const $item = $(`<a class="dropdown-item" href="#">📄 导出【${frappe.utils.escape_html(s.company)}】单证</a>`);
+            $item.on('click', (e) => {
+                e.preventDefault();
+                self.download_excel('company', s.company);
+            });
+            $compMenu.append($item);
+        });
 
         this.render_summary_table();
         this.render_meter_tables();
@@ -415,7 +464,10 @@ class PropertyMonthlySettlement {
                     </td>
                     <td style="text-align: center;">
                         <button class="prop-btn-link btn-print-company" data-company="${frappe.utils.escape_html(s.company)}">
-                            🖨️ 结算单
+                            🖨️ 单证预览
+                        </button>
+                        <button class="prop-btn-link btn-export-company" data-company="${frappe.utils.escape_html(s.company)}" title="导出Excel" style="margin-left:4px; color:#0284c7;">
+                            📥 Excel
                         </button>
                     </td>
                 </tr>
@@ -426,13 +478,18 @@ class PropertyMonthlySettlement {
                 const comp = $(this).attr('data-company');
                 self.open_single_bill_dialog(comp);
             });
+            $r.find('.btn-export-company').on('click', function(e) {
+                e.stopPropagation();
+                const comp = $(this).attr('data-company');
+                self.download_excel('company', comp);
+            });
             $tbody.append($r);
         });
 
         // 合计行
-        $tbody.append(`
+        const $rTot = $(`
             <tr class="prop-row-total">
-                <td><b>合计</b></td>
+                <td><b>全公司合计</b></td>
                 <td style="text-align: right;">¥ ${format_currency(totRent)}</td>
                 <td style="text-align: right;">¥ ${format_currency(totProp)}</td>
                 <td style="text-align: right;">${format_number(totElecU)}</td>
@@ -441,9 +498,23 @@ class PropertyMonthlySettlement {
                 <td style="text-align: right;">¥ ${format_currency(totWaterA)}</td>
                 <td style="text-align: right;">${totAdj !== 0 ? '¥ ' + format_currency(totAdj) : '—'}</td>
                 <td style="text-align: right; font-weight: 800; font-size: 15px; color: #166534;">¥ ${format_currency(totGrand)}</td>
-                <td></td>
+                <td style="text-align: center;">
+                    <button class="prop-btn-link" id="btn-print-total">
+                        🖨️ 合计单证
+                    </button>
+                    <button class="prop-btn-link" id="btn-export-total-row" title="导出合计Excel" style="margin-left:4px; color:#0284c7;">
+                        📥 Excel
+                    </button>
+                </td>
             </tr>
         `);
+        $rTot.find('#btn-print-total').on('click', () => {
+            self.open_single_bill_dialog('total');
+        });
+        $rTot.find('#btn-export-total-row').on('click', () => {
+            self.download_excel('total');
+        });
+        $tbody.append($rTot);
     }
 
     // ─── 渲染水电抄表表格 ─────────────────────────────────────
@@ -606,6 +677,7 @@ class PropertyMonthlySettlement {
 
         this.data.electricity_price = parseFloat(this.$container.find('#inp-elec-price').val()) || 1.1957;
         this.data.water_price = parseFloat(this.$container.find('#inp-water-price').val()) || 5.5;
+        this.data.property_management_company = this.$container.find('#inp-prop-mgmt').val() || '天津金利达物业管理有限公司';
 
         // 调用集中纯算法
         calculate_local_matrix(this.data);
@@ -631,6 +703,7 @@ class PropertyMonthlySettlement {
     // ─── 保存草稿 ─────────────────────────────────────────────
     save_draft() {
         const self = this;
+        self.data.property_management_company = self.$container.find('#inp-prop-mgmt').val() || '天津金利达物业管理有限公司';
         frappe.call({
             method: 'ashan_cn_procurement.ashan_cn_procurement.page.property_settlement_workbench.property_settlement_workbench.save_settlement',
             args: {
@@ -644,6 +717,19 @@ class PropertyMonthlySettlement {
                 }
             }
         });
+    }
+
+    // ─── 导出 Excel ───────────────────────────────────────────
+    download_excel(mode, company) {
+        const self = this;
+        const month = self.data?.settlement_month || `${self.currentYear}-${self.currentMonth < 10 ? '0' + self.currentMonth : self.currentMonth}-01`;
+        const propMgmt = self.$container.find('#inp-prop-mgmt').val() || self.data?.property_management_company || '天津金利达物业管理有限公司';
+
+        let url = `/api/method/ashan_cn_procurement.services.property_settlement.export_settlement_excel?settlement_month=${encodeURIComponent(month)}&mode=${encodeURIComponent(mode)}&property_management_company=${encodeURIComponent(propMgmt)}`;
+        if (company) {
+            url += `&company=${encodeURIComponent(company)}`;
+        }
+        window.open(url);
     }
 
     // ─── 弹窗 1: 添加费用调整 ─────────────────────────────────
@@ -820,6 +906,7 @@ class PropertyMonthlySettlement {
             ],
             primary_action_label: '确认完成本月结算',
             primary_action() {
+                self.data.property_management_company = self.$container.find('#inp-prop-mgmt').val() || '天津金利达物业管理有限公司';
                 frappe.call({
                     method: 'ashan_cn_procurement.ashan_cn_procurement.page.property_settlement_workbench.property_settlement_workbench.finalize_settlement',
                     args: {
@@ -859,53 +946,89 @@ class PropertyMonthlySettlement {
         });
     }
 
-    // ─── 弹窗 3: 单一公司结算单预览与打印 ─────────────────────
+    // ─── 弹窗 3: 单一公司 / 全公司合计单证预览与打印 ─────────
     open_single_bill_dialog(company) {
         const self = this;
         const d = self.data;
         if (!d) return;
 
-        const compMeters = (d.meter_readings || []).filter(m => m.company === company);
-        const compLeases = (d.lease_charges || []).filter(l => l.company === company);
-        const compSummary = (d.company_summaries || []).find(s => s.company === company) || {};
+        const isTotal = (company === 'total' || company === '全公司合计');
+        const compTitle = isTotal ? '全公司合计' : company;
+        const propMgmt = self.$container.find('#inp-prop-mgmt').val() || d.property_management_company || '天津金利达物业管理有限公司';
 
-        const compAdjustments = [];
-        (d.adjustments || []).forEach(a => {
-            if (a.adjustment_scope === '单公司' && a.company === company) {
-                compAdjustments.push({
-                    title: a.utility_type,
-                    type: a.adjustment_type,
-                    scope: '单公司调整',
-                    usage: a.equivalent_usage,
-                    amount: a.amount_adjustment,
-                    reason: a.reason
-                });
-            } else if (a.adjustment_scope === '公司间转移') {
-                if (a.from_company === company) {
+        let compMeters = [], compLeases = [], compSummary = {}, compAdjustments = [];
+
+        if (isTotal) {
+            compMeters = d.meter_readings || [];
+            compLeases = d.lease_charges || [];
+            let totRent = 0, totProp = 0, totGrand = 0;
+            (d.company_summaries || []).forEach(s => {
+                totRent += s.rent_amount;
+                totProp += s.property_fee_amount;
+                totGrand += s.total_amount;
+            });
+            compSummary = {
+                company: '全公司合计',
+                rent_amount: totRent,
+                property_fee_amount: totProp,
+                total_amount: totGrand
+            };
+            (d.adjustments || []).forEach(a => {
+                if (a.adjustment_scope === '单公司') {
                     compAdjustments.push({
-                        title: `${a.utility_type}调出 (转至 ${a.to_company})`,
-                        type: `${a.adjustment_type} (公司间转出)`,
-                        scope: '公司间转移',
-                        usage: -a.equivalent_usage,
-                        amount: -a.amount_adjustment,
-                        reason: a.reason
-                    });
-                } else if (a.to_company === company) {
-                    compAdjustments.push({
-                        title: `${a.utility_type}调入 (来自 ${a.from_company})`,
-                        type: `${a.adjustment_type} (公司间转入)`,
-                        scope: '公司间转移',
+                        title: `${a.utility_type}调整 (${a.company})`,
+                        type: a.adjustment_type,
+                        scope: '单公司调整',
                         usage: a.equivalent_usage,
                         amount: a.amount_adjustment,
                         reason: a.reason
                     });
                 }
-            }
-        });
+            });
+        } else {
+            compMeters = (d.meter_readings || []).filter(m => m.company === company);
+            compLeases = (d.lease_charges || []).filter(l => l.company === company);
+            compSummary = (d.company_summaries || []).find(s => s.company === company) || {};
+
+            (d.adjustments || []).forEach(a => {
+                if (a.adjustment_scope === '单公司' && a.company === company) {
+                    compAdjustments.push({
+                        title: `${a.utility_type}调整`,
+                        type: a.adjustment_type,
+                        scope: '单公司调整',
+                        usage: a.equivalent_usage,
+                        amount: a.amount_adjustment,
+                        reason: a.reason
+                    });
+                } else if (a.adjustment_scope === '公司间转移') {
+                    if (a.from_company === company) {
+                        compAdjustments.push({
+                            title: `${a.utility_type}调出 (转至 ${a.to_company})`,
+                            type: `${a.adjustment_type} (公司间转出)`,
+                            scope: '公司间转移',
+                            usage: -a.equivalent_usage,
+                            amount: -a.amount_adjustment,
+                            reason: a.reason
+                        });
+                    } else if (a.to_company === company) {
+                        compAdjustments.push({
+                            title: `${a.utility_type}调入 (来自 ${a.from_company})`,
+                            type: `${a.adjustment_type} (公司间转入)`,
+                            scope: '公司间转移',
+                            usage: a.equivalent_usage,
+                            amount: a.amount_adjustment,
+                            reason: a.reason
+                        });
+                    }
+                }
+            });
+        }
 
         const bill = {
             settlement_month: d.settlement_month,
-            company: company,
+            company: compTitle,
+            is_total: isTotal,
+            property_management_company: propMgmt,
             status: d.status || '草稿',
             electricity_price: d.electricity_price,
             water_price: d.water_price,
@@ -929,27 +1052,101 @@ class PropertyMonthlySettlement {
     }
 
     show_bill_modal(bill) {
+        const self = this;
         const monthStr = bill.settlement_month.substring(0, 7);
 
+        // 1. 电费明细表格行
         let meterRows = '';
-        (bill.meters || []).forEach(m => {
+        let sumElecRaw = 0, sumElecCalc = 0, sumElecAmt = 0;
+        (bill.meters || []).filter(m => m.utility_type === '电').forEach(m => {
+            sumElecRaw += (m.raw_usage || 0);
+            sumElecCalc += (m.calculated_usage || 0);
+            sumElecAmt += (m.amount_tax_incl || 0);
             meterRows += `
                 <tr>
-                    <td>${m.utility_type}</td>
-                    <td style="text-align:center;">${m.meter_no}</td>
+                    <td style="text-align:center;"><b>${m.meter_no}</b></td>
                     <td style="text-align:right;">${format_number(m.previous_reading)}</td>
                     <td style="text-align:right;">${format_number(m.current_reading)}</td>
                     <td style="text-align:right;">${format_number(m.raw_usage)}</td>
                     <td style="text-align:center;">×${m.multiplier}</td>
                     <td style="text-align:right; font-weight:600;">${format_number(m.calculated_usage)}</td>
-                    <td style="text-align:right;">¥ ${m.unit_price}</td>
+                    <td style="text-align:right;">${Number(m.unit_price).toFixed(4)}</td>
                     <td style="text-align:right; font-weight:700;">¥ ${format_currency(m.amount_tax_incl)}</td>
                 </tr>
             `;
         });
 
+        // 电费调整行
+        (bill.adjustments || []).filter(a => a.title.includes('电') || a.type.includes('电')).forEach(a => {
+            const u = a.usage || 0;
+            const amt = a.amount || 0;
+            sumElecRaw += u;
+            sumElecCalc += u;
+            sumElecAmt += amt;
+            meterRows += `
+                <tr style="background:#fffbeb;">
+                    <td style="font-weight:600; color:#b45309;">${a.title}</td>
+                    <td style="text-align:center;">—</td>
+                    <td style="text-align:center;">—</td>
+                    <td style="text-align:right;">${format_number(u)}</td>
+                    <td style="text-align:center;">1</td>
+                    <td style="text-align:right; font-weight:600;">${format_number(u)}</td>
+                    <td style="text-align:center;">—</td>
+                    <td style="text-align:right; font-weight:700; color:${amt<0?'#dc2626':'#059669'};">¥ ${format_currency(amt)}</td>
+                </tr>
+            `;
+        });
+
+        // 2. 水费明细表格行
+        let waterRows = '';
+        let sumWaterRaw = 0, sumWaterCalc = 0, sumWaterAmt = 0;
+        (bill.meters || []).filter(m => m.utility_type === '水').forEach(m => {
+            sumWaterRaw += (m.raw_usage || 0);
+            sumWaterCalc += (m.calculated_usage || 0);
+            sumWaterAmt += (m.amount_tax_incl || 0);
+            waterRows += `
+                <tr>
+                    <td style="text-align:center;"><b>${m.meter_no}</b></td>
+                    <td style="text-align:right;">${format_number(m.previous_reading)}</td>
+                    <td style="text-align:right;">${format_number(m.current_reading)}</td>
+                    <td style="text-align:right;">${format_number(m.raw_usage)}</td>
+                    <td style="text-align:center;">×${m.multiplier}</td>
+                    <td style="text-align:right; font-weight:600;">${format_number(m.calculated_usage)}</td>
+                    <td style="text-align:right;">${Number(m.unit_price).toFixed(4)}</td>
+                    <td style="text-align:right; font-weight:700;">¥ ${format_currency(m.amount_tax_incl)}</td>
+                </tr>
+            `;
+        });
+
+        (bill.adjustments || []).filter(a => a.title.includes('水') || a.type.includes('水')).forEach(a => {
+            const u = a.usage || 0;
+            const amt = a.amount || 0;
+            sumWaterRaw += u;
+            sumWaterCalc += u;
+            sumWaterAmt += amt;
+            waterRows += `
+                <tr style="background:#fffbeb;">
+                    <td style="font-weight:600; color:#b45309;">${a.title}</td>
+                    <td style="text-align:center;">—</td>
+                    <td style="text-align:center;">—</td>
+                    <td style="text-align:right;">${format_number(u)}</td>
+                    <td style="text-align:center;">1</td>
+                    <td style="text-align:right; font-weight:600;">${format_number(u)}</td>
+                    <td style="text-align:center;">—</td>
+                    <td style="text-align:right; font-weight:700; color:${amt<0?'#dc2626':'#059669'};">¥ ${format_currency(amt)}</td>
+                </tr>
+            `;
+        });
+
+        // 3. 房租与物业费表格行
         let leaseRows = '';
+        let sumArea = 0, sumRentAmt = 0, sumPropAmt = 0, sumLeaseTot = 0;
         (bill.leases || []).forEach(l => {
+            sumArea += (l.area || 0);
+            sumRentAmt += (l.rent_amount_tax_incl || 0);
+            sumPropAmt += (l.property_fee_amount_tax_incl || 0);
+            sumLeaseTot += (l.amount_tax_incl || 0);
+
             const propFeeText = (l.property_fee_mode === '单独计收物业费')
                 ? `¥ ${format_currency(l.property_fee_amount_tax_incl)} (${l.property_fee_rate_snapshot || ''})`
                 : '已包含在房租中';
@@ -958,112 +1155,251 @@ class PropertyMonthlySettlement {
                 <tr>
                     <td>${frappe.utils.escape_html(l.property_name)}</td>
                     <td style="text-align:right;">${format_number(l.area)} ㎡</td>
+                    <td style="text-align:center;">${l.billing_days} 天</td>
                     <td>${frappe.utils.escape_html(l.rent_rate_snapshot || '—')}</td>
                     <td>${propFeeText}</td>
-                    <td style="text-align:center;">${l.billing_days} 天</td>
                     <td style="text-align:right;">¥ ${format_currency(l.rent_amount_tax_incl)}</td>
+                    <td style="text-align:right; color:${l.property_fee_amount_tax_incl > 0 ? '#b45309' : '#94a3b8'};">
+                        ${l.property_fee_amount_tax_incl > 0 ? '¥ ' + format_currency(l.property_fee_amount_tax_incl) : '—'}
+                    </td>
                     <td style="text-align:right; font-weight:700; color:#166534;">¥ ${format_currency(l.amount_tax_incl)}</td>
                 </tr>
             `;
         });
 
-        let adjRows = '';
-        (bill.adjustments || []).forEach(a => {
-            adjRows += `
-                <tr>
-                    <td>${a.title}</td>
-                    <td>${a.type} (${a.scope})</td>
-                    <td style="text-align:right;">${a.usage ? format_number(a.usage) : '—'}</td>
-                    <td style="text-align:right; font-weight:700; color:${a.amount < 0 ? '#dc2626' : '#059669'};">¥ ${format_currency(a.amount)}</td>
-                    <td>${frappe.utils.escape_html(a.reason || '')}</td>
-                </tr>
-            `;
-        });
+        // 4. 税务与综合汇总行
+        const elecExcl = Math.round((sumElecAmt / 1.13) * 100) / 100;
+        const elecTax = Math.round((sumElecAmt - elecExcl) * 100) / 100;
+        const elecAvg = sumElecCalc > 0 ? (sumElecAmt / sumElecCalc).toFixed(4) : '0.0000';
 
-        const totalAmt = bill.summary ? bill.summary.total_amount : 0;
-        const rentAmt = bill.summary ? bill.summary.rent_amount : 0;
-        const propAmt = bill.summary ? bill.summary.property_fee_amount : 0;
+        const waterExcl = Math.round((sumWaterAmt / 1.09) * 100) / 100;
+        const waterTax = Math.round((sumWaterAmt - waterExcl) * 100) / 100;
+        const waterAvg = sumWaterCalc > 0 ? (sumWaterAmt / sumWaterCalc).toFixed(4) : '0.0000';
+
+        const rentExcl = Math.round((sumRentAmt / 1.09) * 100) / 100;
+        const rentTax = Math.round((sumRentAmt - rentExcl) * 100) / 100;
+
+        const propExcl = Math.round((sumPropAmt / 1.09) * 100) / 100;
+        const propTax = Math.round((sumPropAmt - propExcl) * 100) / 100;
+
+        const grandExcl = elecExcl + waterExcl + rentExcl + propExcl;
+        const grandTax = elecTax + waterTax + rentTax + propTax;
+        const grandTot = sumElecAmt + sumWaterAmt + sumLeaseTot;
+
+        // 快捷公司切换 Tab
+        const allCompanies = (self.data?.company_summaries || []).map(s => s.company);
+        let tabButtons = '';
+        allCompanies.forEach(c => {
+            const activeClass = (c === bill.company) ? 'btn-primary' : 'btn-default';
+            tabButtons += `<button class="btn btn-xs ${activeClass} tab-switch-comp" data-comp="${frappe.utils.escape_html(c)}" style="margin-right:6px;">${frappe.utils.escape_html(c)}</button>`;
+        });
+        const totActive = bill.is_total ? 'btn-primary' : 'btn-default';
+        tabButtons += `<button class="btn btn-xs ${totActive} tab-switch-comp" data-comp="total">全公司合计</button>`;
 
         const dlg = new frappe.ui.Dialog({
-            title: `📄 ${bill.company} — ${monthStr} 物业水电结算单`,
+            title: `📄 ${bill.company} — ${monthStr} 物业明细（单价含税）`,
             size: 'large',
             fields: [
                 {
                     fieldtype: 'HTML',
                     fieldname: 'bill_html',
                     options: `
+                        <div style="margin-bottom:12px; display:flex; align-items:center; justify-content:space-between;">
+                            <div><b>单证切换:</b> ${tabButtons}</div>
+                            <button class="btn btn-xs btn-default" id="btn-export-current-excel" style="color:#0284c7; font-weight:600;">📥 导出当前单证 Excel</button>
+                        </div>
+
                         <div class="print-bill-container" id="printable-company-bill">
                             <div class="bill-header">
-                                <h3 class="bill-title">${frappe.utils.escape_html(bill.company)} 物业及水电月度结算单</h3>
-                                <div class="bill-meta">
-                                    <span>结算周期: <b>${monthStr}</b></span>
-                                    <span>状态: <b>${bill.status}</b></span>
+                                <h3 class="bill-title">${frappe.utils.escape_html(bill.company)}</h3>
+                                <div style="font-size:15px; font-weight:700; color:#334155; margin-bottom:6px;">物业明细（单价含税）</div>
+                                <div class="bill-meta" style="font-size:12px; color:#475569; display:flex; justify-content:space-between; border-top:1px solid #e2e8f0; padding-top:6px;">
+                                    <span>上期日期: <b>${monthStr}-01</b></span>
+                                    <span>本期日期: <b>${monthStr}-01</b></span>
+                                    <span>核定日期: <b>${monthStr}-01</b></span>
+                                    <span>物业公司: <b>${frappe.utils.escape_html(bill.property_management_company || '')}</b></span>
                                 </div>
                             </div>
 
-                            ${bill.meters?.length ? `
-                            <div class="bill-section-title">一、水电费明细 (电价: ¥${bill.electricity_price}/kWh, 水价: ¥${bill.water_price}/m³)</div>
+                            <!-- 1. 电费 -->
+                            <div class="bill-section-title">⚡ 电费</div>
                             <table class="bill-table">
                                 <thead>
                                     <tr>
-                                        <th>类型</th><th>表号</th><th>上期</th><th>本期</th><th>差值</th><th>倍率</th><th>核定用量</th><th>单价</th><th>含税金额</th>
+                                        <th style="width:120px;">表号</th>
+                                        <th style="text-align:right;">上期表数</th>
+                                        <th style="text-align:right;">本期表数</th>
+                                        <th style="text-align:right;">本期用电</th>
+                                        <th style="text-align:center;">倍率</th>
+                                        <th style="text-align:right;">核定度数</th>
+                                        <th style="text-align:right;">单价</th>
+                                        <th style="text-align:right;">总价</th>
                                     </tr>
                                 </thead>
-                                <tbody>${meterRows}</tbody>
+                                <tbody>
+                                    ${meterRows || '<tr><td colspan="8" style="text-align:center; color:#94a3b8;">无电费记录</td></tr>'}
+                                    <tr style="font-weight:700; background:#f8fafc;">
+                                        <td style="text-align:center;">合计</td>
+                                        <td></td><td></td>
+                                        <td style="text-align:right;">${format_number(sumElecRaw)}</td>
+                                        <td></td>
+                                        <td style="text-align:right;">${format_number(sumElecCalc)}</td>
+                                        <td></td>
+                                        <td style="text-align:right;">¥ ${format_currency(sumElecAmt)}</td>
+                                    </tr>
+                                </tbody>
                             </table>
-                            ` : ''}
 
+                            <!-- 2. 水费 -->
+                            <div class="bill-section-title" style="margin-top:14px;">💧 水费</div>
+                            <table class="bill-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width:120px;">表号</th>
+                                        <th style="text-align:right;">上期表数</th>
+                                        <th style="text-align:right;">本期表数</th>
+                                        <th style="text-align:right;">本期用水</th>
+                                        <th style="text-align:center;">倍率</th>
+                                        <th style="text-align:right;">核定m³</th>
+                                        <th style="text-align:right;">单价</th>
+                                        <th style="text-align:right;">总价</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${waterRows || '<tr><td colspan="8" style="text-align:center; color:#94a3b8;">无水费记录</td></tr>'}
+                                    <tr style="font-weight:700; background:#f8fafc;">
+                                        <td style="text-align:center;">合计</td>
+                                        <td></td><td></td>
+                                        <td style="text-align:right;">${format_number(sumWaterRaw)}</td>
+                                        <td></td>
+                                        <td style="text-align:right;">${format_number(sumWaterCalc)}</td>
+                                        <td></td>
+                                        <td style="text-align:right;">¥ ${format_currency(sumWaterAmt)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <!-- 3. 房租与物业费 -->
                             ${bill.leases?.length ? `
-                            <div class="bill-section-title" style="margin-top:14px;">二、房租及物业费明细 (房租合计: ¥${format_currency(rentAmt)}, 物业费合计: ¥${format_currency(propAmt)})</div>
+                            <div class="bill-section-title" style="margin-top:14px;">🏠 房租与物业费</div>
                             <table class="bill-table">
                                 <thead>
                                     <tr>
-                                        <th>场地</th><th>面积</th><th>房租单价</th><th>物业费计收</th><th>计费天数</th><th>房租金额</th><th>含税合计</th>
+                                        <th>场地名称</th>
+                                        <th style="text-align:right;">面积(㎡)</th>
+                                        <th style="text-align:center;">计费天数</th>
+                                        <th>房租单价</th>
+                                        <th>物业费计收</th>
+                                        <th style="text-align:right;">房租金额</th>
+                                        <th style="text-align:right;">物业费金额</th>
+                                        <th style="text-align:right;">含税合计</th>
                                     </tr>
                                 </thead>
-                                <tbody>${leaseRows}</tbody>
+                                <tbody>
+                                    ${leaseRows}
+                                    <tr style="font-weight:700; background:#f8fafc;">
+                                        <td style="text-align:center;">合计</td>
+                                        <td style="text-align:right;">${format_number(sumArea)} ㎡</td>
+                                        <td></td><td></td><td></td>
+                                        <td style="text-align:right;">¥ ${format_currency(sumRentAmt)}</td>
+                                        <td style="text-align:right;">¥ ${format_currency(sumPropAmt)}</td>
+                                        <td style="text-align:right; color:#166534;">¥ ${format_currency(sumLeaseTot)}</td>
+                                    </tr>
+                                </tbody>
                             </table>
                             ` : ''}
 
-                            ${bill.adjustments?.length ? `
-                            <div class="bill-section-title" style="margin-top:14px;">三、费用调整明细</div>
+                            <!-- 4. 水电与物业综合汇总 -->
+                            <div class="bill-section-title" style="margin-top:16px;">📊 ${frappe.utils.escape_html(bill.company)} 合计水电与物业费</div>
                             <table class="bill-table">
                                 <thead>
                                     <tr>
-                                        <th>调整项</th><th>方式</th><th>等效用量</th><th>调整金额</th><th>原因说明</th>
+                                        <th>项目</th>
+                                        <th style="text-align:right;">金额(不含税)</th>
+                                        <th style="text-align:center;">税率</th>
+                                        <th style="text-align:right;">税额</th>
+                                        <th style="text-align:right;">合计(含税)</th>
+                                        <th style="text-align:right;">数量</th>
+                                        <th style="text-align:center;">单位</th>
+                                        <th style="text-align:right;">综合单价</th>
                                     </tr>
                                 </thead>
-                                <tbody>${adjRows}</tbody>
+                                <tbody>
+                                    <tr>
+                                        <td><b>电费</b></td>
+                                        <td style="text-align:right;">¥ ${format_currency(elecExcl)}</td>
+                                        <td style="text-align:center;">13%</td>
+                                        <td style="text-align:right;">¥ ${format_currency(elecTax)}</td>
+                                        <td style="text-align:right; font-weight:700;">¥ ${format_currency(sumElecAmt)}</td>
+                                        <td style="text-align:right;">${format_number(sumElecCalc)}</td>
+                                        <td style="text-align:center;">kWh</td>
+                                        <td style="text-align:right;">¥ ${elecAvg}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><b>水费</b></td>
+                                        <td style="text-align:right;">¥ ${format_currency(waterExcl)}</td>
+                                        <td style="text-align:center;">9%</td>
+                                        <td style="text-align:right;">¥ ${format_currency(waterTax)}</td>
+                                        <td style="text-align:right; font-weight:700;">¥ ${format_currency(sumWaterAmt)}</td>
+                                        <td style="text-align:right;">${format_number(sumWaterCalc)}</td>
+                                        <td style="text-align:center;">m³</td>
+                                        <td style="text-align:right;">¥ ${waterAvg}</td>
+                                    </tr>
+                                    ${bill.leases?.length ? `
+                                    <tr>
+                                        <td><b>房租</b></td>
+                                        <td style="text-align:right;">¥ ${format_currency(rentExcl)}</td>
+                                        <td style="text-align:center;">9%</td>
+                                        <td style="text-align:right;">¥ ${format_currency(rentTax)}</td>
+                                        <td style="text-align:right; font-weight:700;">¥ ${format_currency(sumRentAmt)}</td>
+                                        <td style="text-align:right;">${format_number(sumArea)}</td>
+                                        <td style="text-align:center;">㎡</td>
+                                        <td style="text-align:center;">—</td>
+                                    </tr>
+                                    <tr>
+                                        <td><b>物业费</b></td>
+                                        <td style="text-align:right;">¥ ${format_currency(propExcl)}</td>
+                                        <td style="text-align:center;">9%</td>
+                                        <td style="text-align:right;">¥ ${format_currency(propTax)}</td>
+                                        <td style="text-align:right; font-weight:700;">¥ ${format_currency(sumPropAmt)}</td>
+                                        <td style="text-align:right;">${format_number(sumArea)}</td>
+                                        <td style="text-align:center;">㎡</td>
+                                        <td style="text-align:center;">—</td>
+                                    </tr>
+                                    ` : ''}
+                                    <tr style="font-weight:800; background:#ecfdf5;">
+                                        <td style="text-align:center; color:#065f46;">应付总计</td>
+                                        <td style="text-align:right;">¥ ${format_currency(grandExcl)}</td>
+                                        <td style="text-align:center;">—</td>
+                                        <td style="text-align:right;">¥ ${format_currency(grandTax)}</td>
+                                        <td style="text-align:right; font-size:15px; color:#065f46;">¥ ${format_currency(grandTot)}</td>
+                                        <td style="text-align:center;">—</td>
+                                        <td style="text-align:center;">—</td>
+                                        <td style="text-align:center;">—</td>
+                                    </tr>
+                                </tbody>
                             </table>
-                            ` : ''}
-
-                            <div class="bill-footer-total">
-                                <span>本月应付总额: </span>
-                                <span class="grand-total-amount">¥ ${format_currency(totalAmt)}</span>
-                            </div>
                         </div>
                     `
                 }
             ],
-            primary_action_label: '🖨️ 打印结算单',
+            primary_action_label: '🖨️ 打印当前单证',
             primary_action() {
                 const printContents = document.getElementById('printable-company-bill').innerHTML;
-                const win = window.open('', '', 'height=700,width=900');
+                const win = window.open('', '', 'height=750,width=950');
                 win.document.write(`
                     <html>
                     <head>
-                        <title>${bill.company} - ${monthStr} 物业结算单</title>
+                        <title>${bill.company} - ${monthStr} 物业明细（单价含税）</title>
                         <style>
-                            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 24px; }
-                            .bill-header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-                            .bill-title { margin: 0 0 8px 0; font-size: 20px; }
-                            .bill-meta { display: flex; justify-content: space-between; font-size: 13px; color: #555; }
-                            .bill-section-title { font-weight: 700; margin: 16px 0 8px 0; font-size: 14px; color: #111; }
-                            .bill-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 12px; }
-                            .bill-table th, .bill-table td { border: 1px solid #ccc; padding: 6px 8px; }
-                            .bill-table th { background: #f5f5f5; font-weight: 600; }
-                            .bill-footer-total { text-align: right; font-size: 16px; font-weight: 700; margin-top: 20px; padding: 10px; background: #f9f9f9; border: 1px solid #ddd; }
-                            .grand-total-amount { color: #166534; font-size: 20px; }
+                            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft YaHei", sans-serif; padding: 24px; color: #1e293b; }
+                            .bill-header { text-align: center; margin-bottom: 16px; }
+                            .bill-title { margin: 0 0 6px 0; font-size: 20px; font-weight: bold; }
+                            .bill-meta { font-size: 12px; color: #555; }
+                            .bill-section-title { font-weight: bold; margin: 16px 0 6px 0; font-size: 13.5px; }
+                            .bill-table { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-bottom: 12px; }
+                            .bill-table th, .bill-table td { border: 1px solid #ccc; padding: 5px 8px; }
+                            .bill-table th { background: #f5f5f5; font-weight: bold; }
                         </style>
                     </head>
                     <body>
@@ -1076,6 +1412,23 @@ class PropertyMonthlySettlement {
                 setTimeout(() => { win.print(); }, 500);
             }
         });
+
+        // 绑定单证切换 Tab 事件
+        dlg.$wrapper.find('.tab-switch-comp').on('click', function() {
+            const comp = $(this).attr('data-comp');
+            dlg.hide();
+            self.open_single_bill_dialog(comp);
+        });
+
+        // 绑定导出当前单证 Excel
+        dlg.$wrapper.find('#btn-export-current-excel').on('click', function() {
+            if (bill.is_total) {
+                self.download_excel('total');
+            } else {
+                self.download_excel('company', bill.company);
+            }
+        });
+
         dlg.show();
     }
 }

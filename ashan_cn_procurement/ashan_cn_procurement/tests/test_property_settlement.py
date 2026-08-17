@@ -237,3 +237,50 @@ class TestPropertySettlement(unittest.TestCase):
 		self.assertEqual(summary_qf["rent_amount"], 6200.00)
 		self.assertEqual(summary_qf["property_fee_amount"], 1019.18)
 		self.assertEqual(summary_qf["total_amount"], 7219.18)
+
+	def test_08_excel_export_generation(self):
+		"""测试 Case 8: 导出符合《抄表记录.xlsx》格式的单公司与合计 Excel"""
+		from ashan_cn_procurement.services.property_settlement import generate_settlement_excel_workbook
+
+		mock_data = {
+			"settlement_month": "2026-08-01",
+			"property_management_company": "天津金利达物业管理有限公司",
+			"electricity_price": 1.1957,
+			"water_price": 5.5,
+			"meter_readings": [
+				{
+					"meter_no": "1",
+					"utility_type": "电",
+					"company": self.comp_jz,
+					"previous_reading": 2711.0,
+					"current_reading": 2780.0,
+					"multiplier": 120.0,
+					"calculated_usage": 8280.0,
+					"amount_tax_incl": 9900.40
+				}
+			],
+			"adjustments": [],
+			"lease_charges": [
+				{
+					"property_name": "大车间+3楼办公",
+					"company": self.comp_jz,
+					"area": 3338.0,
+					"rent_amount_tax_incl": 20383.56,
+					"property_fee_amount_tax_incl": 0.0,
+					"amount_tax_incl": 20383.56,
+					"billing_days": 31
+				}
+			]
+		}
+
+		# 1. 导出全套工作簿
+		wb_all = generate_settlement_excel_workbook(mock_data, mode="all")
+		self.assertIn("合计单证", wb_all.sheetnames)
+		self.assertTrue(len(wb_all.sheetnames) >= 2)
+
+		# 2. 导出单公司单证
+		wb_comp = generate_settlement_excel_workbook(mock_data, company=self.comp_jz, mode="company")
+		self.assertEqual(len(wb_comp.sheetnames), 1)
+		ws = wb_comp.active
+		self.assertEqual(ws.cell(1, 1).value, self.comp_jz)
+		self.assertEqual(ws.cell(2, 1).value, "物业明细（单价含税）")

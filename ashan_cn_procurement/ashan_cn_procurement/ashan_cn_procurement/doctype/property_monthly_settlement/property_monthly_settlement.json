@@ -43,6 +43,13 @@
       "fieldname": "cb_main_1"
     },
     {
+      "label": "物业管理公司",
+      "fieldname": "property_management_company",
+      "fieldtype": "Data",
+      "default": "天津金利达物业管理有限公司",
+      "in_list_view": 1
+    },
+    {
       "label": "结算人",
       "fieldname": "settled_by",
       "fieldtype": "Link",
