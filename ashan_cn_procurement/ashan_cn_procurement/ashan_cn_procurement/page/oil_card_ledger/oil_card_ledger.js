@@ -1009,10 +1009,11 @@ class UnifiedOilCardLedgerConsole {
 					label: __("车型分类"),
 					fieldname: "vehicle_category",
 					fieldtype: "Select",
-					options: ["货车", "轿车", "SUV", "商务车", "客车", "特种作业车"],
+					options: ["货车", "轿车"],
 					default: "货车",
 					reqd: 1,
 				},
+
 				{
 					fieldtype: "Section Break",
 				},
@@ -1110,28 +1111,29 @@ class UnifiedOilCardLedgerConsole {
 			const wrapper = d.fields_dict.fuel_match_alert_html.$wrapper;
 
 			let html = "";
-			if (cat === "货车" || cat === "特种作业车") {
+			if (cat === "货车") {
 				if (fuel === "汽油" || fuel === "插电混动" || fuel === "纯电动") {
 					html = `<div style="background:#fef2f2; border:1.5px solid #ef4444; border-radius:6px; padding:9px 12px; color:#b91c1c; font-size:12px; font-weight:700;">
-						⚠️ <b>【动力匹配提示】</b>：您选择的车型是【${cat}】，该车型通常为【柴油】动力。请核实该车辆是否确为【${fuel}】！
+						⚠️ <b>【动力匹配提示】</b>：您选择的车型是【货车】，该车型通常为【柴油】动力。请核实该车辆是否确为【${fuel}】！
 					</div>`;
 				} else {
 					html = `<div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:7px 12px; color:#15803d; font-size:11.5px;">
-						✓ 动力匹配正常：货车已默认配置为【柴油动力（0#）】。
+						✓ 动力匹配正常：货车已默认配置为【柴油动力（0# 柴油）】。
 					</div>`;
 				}
-			} else if (cat === "轿车" || cat === "SUV" || cat === "商务车") {
+			} else if (cat === "轿车") {
 				if (fuel === "柴油") {
 					html = `<div style="background:#fef2f2; border:1.5px solid #ef4444; border-radius:6px; padding:9px 12px; color:#b91c1c; font-size:12px; font-weight:700;">
-						⚠️ <b>【动力匹配提示】</b>：您选择的车型是【${cat}】，乘用车通常为【汽油】动力。请核实该车辆是否确为【柴油】动力！
+						⚠️ <b>【动力匹配提示】</b>：您选择的车型是【轿车】，轿车通常为【汽油】动力。请核实该车辆是否确为【柴油】动力！
 					</div>`;
 				} else {
 					html = `<div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:7px 12px; color:#15803d; font-size:11.5px;">
-						✓ 动力匹配正常：乘用车已配置为【${fuel}（95#/92#）】。
+						✓ 动力匹配正常：轿车已配置为【${fuel}（92#/95# 汽油）】。
 					</div>`;
 				}
 			}
 			wrapper.html(html);
+
 		}
 
 		// 联动车型与动力
