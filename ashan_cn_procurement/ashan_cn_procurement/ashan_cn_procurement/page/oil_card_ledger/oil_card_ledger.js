@@ -948,18 +948,26 @@ class UnifiedOilCardLedgerConsole {
 		$("#inline-refuel-vehicle-val").val(v.name);
 		$("#vehicle-autocomplete-dropdown").hide();
 
-		// 自动联动推荐动力油号 (纯中文)
-		const fuelLabel = v.fuel_type_label || (v.fuel_type === "Diesel" ? "柴油" : "汽油");
-		if (fuelLabel === "柴油") {
-			$("#inline-refuel-grade-input").val("0# 柴油");
-			$("#inline-refuel-grade-val").val("0#");
-		} else if (fuelLabel === "天然气") {
-			$("#inline-refuel-grade-input").val("CNG 天然气");
-			$("#inline-refuel-grade-val").val("CNG");
+		// 自动联动推荐动力油号 (使用车辆设置的默认油号或动力类型智能判定)
+		if (v.custom_default_fuel_grade) {
+			const grade = v.custom_default_fuel_grade;
+			$("#inline-refuel-grade-input").val(grade);
+			const shortVal = grade.split(" ")[0].replace("#", "").trim();
+			$("#inline-refuel-grade-val").val(shortVal);
 		} else {
-			$("#inline-refuel-grade-input").val("95# 汽油");
-			$("#inline-refuel-grade-val").val("95");
+			const fuelLabel = v.fuel_type_label || (v.fuel_type === "Diesel" ? "柴油" : "汽油");
+			if (fuelLabel === "柴油") {
+				$("#inline-refuel-grade-input").val("0# 柴油");
+				$("#inline-refuel-grade-val").val("0#");
+			} else if (fuelLabel === "天然气") {
+				$("#inline-refuel-grade-input").val("CNG 天然气");
+				$("#inline-refuel-grade-val").val("CNG");
+			} else {
+				$("#inline-refuel-grade-input").val("92# 汽油");
+				$("#inline-refuel-grade-val").val("92");
+			}
 		}
+
 
 		// 提示上期里程
 		if (v.last_odometer) {

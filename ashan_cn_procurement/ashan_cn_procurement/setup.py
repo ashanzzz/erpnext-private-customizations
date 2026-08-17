@@ -11,6 +11,81 @@ def after_migrate():
 	cleanup_deprecated_roles()
 	create_custom_roles()
 	setup_doctype_and_page_permissions()
+	setup_vehicle_custom_fields()
+
+def setup_vehicle_custom_fields():
+	"""
+	为 Vehicle 标准 DocType 扩展业务状态（启用/封存）、主要驾驶员以及默认油品型号
+	"""
+	custom_fields = {
+		"Vehicle": [
+			{
+				"fieldname": "custom_vehicle_status",
+				"label": "车辆状态",
+				"fieldtype": "Select",
+				"options": "正常在用\n封存停用",
+				"default": "正常在用",
+				"insert_after": "license_plate",
+				"in_list_view": 1,
+				"in_standard_filter": 1,
+				"description": "封存停用后将从油卡加油录入、高速费入池选择中自动隐藏"
+			},
+			{
+				"fieldname": "custom_primary_driver",
+				"label": "主要驾驶员",
+				"fieldtype": "Data",
+				"insert_after": "model",
+				"in_list_view": 1,
+				"in_standard_filter": 1,
+				"description": "车辆主要使用人/驾驶员姓名，与高速费台账联动同步"
+			},
+			{
+				"fieldname": "custom_default_fuel_grade",
+				"label": "默认油品型号",
+				"fieldtype": "Select",
+				"options": "0# 柴油\n-10# 柴油\n92# 汽油\n95# 汽油\n98# 汽油\n纯电动\n天然气\n其他",
+				"insert_after": "fuel_type",
+				"in_list_view": 1,
+				"description": "加油录入选择车辆时自动精准带出"
+			}
+		]
+	}
+
+	from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
+	create_custom_fields(custom_fields, ignore_validate=True)
+
+	# 初始化现有车辆数据
+	vehicles = frappe.get_all("Vehicle", fields=["name", "fuel_type", "custom_vehicle_status", "custom_default_fuel_grade", "custom_primary_driver"])
+	for v in vehicles:
+		v_doc = frappe.get_doc("Vehicle", v.name)
+		changed = False
+		if not v_doc.custom_vehicle_status:
+			v_doc.custom_vehicle_status = "正常在用"
+			changed = True
+		if not v_doc.custom_default_fuel_grade:
+			f_type = (v_doc.fuel_type or "").lower()
+			if "diesel" in f_type or "柴油" in f_type:
+				v_doc.custom_default_fuel_grade = "0# 柴油"
+			elif "petrol" in f_type or "汽油" in f_type:
+				v_doc.custom_default_fuel_grade = "92# 汽油"
+			elif "electric" in f_type or "纯电" in f_type:
+				v_doc.custom_default_fuel_grade = "纯电动"
+			elif "gas" in f_type or "天然气" in f_type:
+				v_doc.custom_default_fuel_grade = "天然气"
+			else:
+				v_doc.custom_default_fuel_grade = "0# 柴油"
+			changed = True
+		# 从 Vehicle Toll Config 同步现有主要驾驶员
+		if not v_doc.custom_primary_driver and frappe.db.exists("Vehicle Toll Config", v.name):
+			t_user = frappe.db.get_value("Vehicle Toll Config", v.name, "primary_user")
+			if t_user:
+				v_doc.custom_primary_driver = t_user
+				changed = True
+		if changed:
+			v_doc.save(ignore_permissions=True)
+
+	frappe.db.commit()
+
 
 def cleanup_deprecated_roles():
 	"""

@@ -37,7 +37,7 @@ def get_next_ym(year, month):
 
 @frappe.whitelist()
 def get_enrolled_vehicles():
-    """获取所有入池的高速费车辆列表"""
+    """获取所有入池的高速费车辆列表（自动过滤封存车辆）"""
     configs = frappe.get_list(
         "Vehicle Toll Config",
         filters={"is_active": 1},
@@ -46,19 +46,32 @@ def get_enrolled_vehicles():
     )
     result = []
     for c in configs:
+        # 检查底层车辆是否已封存
+        if c.vehicle and frappe.db.exists("Vehicle", c.vehicle):
+            v_status = frappe.db.get_value("Vehicle", c.vehicle, "custom_vehicle_status")
+            if v_status == "封存停用":
+                continue
+            # 若配置中驾驶员为空，兜底从车辆档案读取
+            p_user = c.primary_user
+            if not p_user:
+                p_user = frappe.db.get_value("Vehicle", c.vehicle, "custom_primary_driver") or ""
+        else:
+            p_user = c.primary_user or ""
+
         result.append({
             "config_name": c.name,
             "vehicle": c.vehicle,
             "display_name": c.display_name or c.vehicle or c.name,
             "toll_routes": DEFAULT_TOLL_ROUTES,
             "opening_balance_default": flt(c.opening_balance_default),
-            "primary_user": c.primary_user or "",
+            "primary_user": p_user,
             "vehicle_manager": c.vehicle_manager or "",
         })
     return {
         "vehicles": result,
         "is_manager": is_toll_manager()
     }
+
 
 @frappe.whitelist()
 def get_vehicle_monthly_sheet(vehicle_config, year=None, month=None):
@@ -395,7 +408,19 @@ def reopen_vehicle_toll_sheet(vehicle_config, year, month):
 
 @frappe.whitelist()
 def add_vehicle_to_toll(vehicle, display_name=None, opening_balance=0, primary_user=None, vehicle_manager=None):
-    """将车辆加入高速费管理入池"""
+    """将车辆加入高速费管理入池（校验封存状态并同步主要驾驶员）"""
+    if frappe.db.exists("Vehicle", vehicle):
+        v_status = frappe.db.get_value("Vehicle", vehicle, "custom_vehicle_status")
+        if v_status == "封存停用":
+            frappe.throw(_("车辆【{0}】当前处于【封存停用】状态，无法加入高速费管理！请先在车辆档案中恢复在用。").format(vehicle))
+
+        # 若未填驾驶员，优先从车辆档案读取
+        if not primary_user:
+            primary_user = frappe.db.get_value("Vehicle", vehicle, "custom_primary_driver") or ""
+        else:
+            # 填了驾驶员，反向同步到车辆档案
+            frappe.db.set_value("Vehicle", vehicle, "custom_primary_driver", primary_user)
+
     if frappe.db.exists("Vehicle Toll Config", vehicle):
         doc = frappe.get_doc("Vehicle Toll Config", vehicle)
         doc.is_active = 1
@@ -429,7 +454,7 @@ def remove_vehicle_from_toll(vehicle_config):
 
 @frappe.whitelist()
 def update_vehicle_personnel(vehicle_config, primary_user=None, vehicle_manager=None):
-    """更新车辆操作员和管理员姓名（直接填文本）"""
+    """更新车辆主要驾驶员姓名（双向同步至 Vehicle Toll Config 和 Vehicle 车辆档案）"""
     if not frappe.db.exists("Vehicle Toll Config", vehicle_config):
         frappe.throw(_("车辆配置不存在！"))
     doc = frappe.get_doc("Vehicle Toll Config", vehicle_config)
@@ -438,5 +463,12 @@ def update_vehicle_personnel(vehicle_config, primary_user=None, vehicle_manager=
     if vehicle_manager is not None:
         doc.vehicle_manager = vehicle_manager
     doc.save(ignore_permissions=True)
+
+    # 同步写回 Vehicle 车辆档案主数据
+    if doc.vehicle and frappe.db.exists("Vehicle", doc.vehicle):
+        driver_val = primary_user or vehicle_manager or ""
+        frappe.db.set_value("Vehicle", doc.vehicle, "custom_primary_driver", driver_val)
+
     frappe.db.commit()
     return {"success": True}
+

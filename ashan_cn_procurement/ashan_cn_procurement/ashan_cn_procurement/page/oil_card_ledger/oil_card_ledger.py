@@ -108,11 +108,25 @@ def get_fuel_label(fuel_type):
 @frappe.whitelist()
 def get_quick_entry_meta():
 	"""
-	获取行内快速补录与新建油卡所需的车辆档案、付款方式、公司及供应商元数据
+	获取行内快速补录与新建油卡所需的车辆档案、付款方式、公司及供应商元数据（自动过滤封存车辆）
 	"""
+	# 仅获取“正常在用”车辆，封存车辆自动过滤隐藏
+	filters = {}
+	if frappe.db.has_column("Vehicle", "custom_vehicle_status"):
+		filters["custom_vehicle_status"] = ["!=", "封存停用"]
+
+	fields = ["name", "license_plate", "model", "make", "fuel_type", "last_odometer"]
+	if frappe.db.has_column("Vehicle", "custom_vehicle_status"):
+		fields.append("custom_vehicle_status")
+	if frappe.db.has_column("Vehicle", "custom_primary_driver"):
+		fields.append("custom_primary_driver")
+	if frappe.db.has_column("Vehicle", "custom_default_fuel_grade"):
+		fields.append("custom_default_fuel_grade")
+
 	vehicles = frappe.get_all(
 		"Vehicle",
-		fields=["name", "license_plate", "model", "make", "fuel_type", "last_odometer"],
+		filters=filters,
+		fields=fields,
 		order_by="license_plate asc",
 	)
 	for v in vehicles:
@@ -139,9 +153,9 @@ def get_quick_entry_meta():
 
 
 @frappe.whitelist()
-def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="柴油", last_odometer=0, make=None, company=None):
+def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="柴油", last_odometer=0, make=None, company=None, primary_driver=None):
 	"""
-	单页极速新建车辆档案（零跳转，纯中文）
+	单页极速新建车辆档案（零跳转，纯中文，默认正常在用）
 	"""
 	if not license_plate:
 		frappe.throw("车牌号码为必填项！")
@@ -159,14 +173,19 @@ def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="�
 	# 规范化 ERPNext 标准 fuel_type 字段
 	fuel_norm = "Diesel"
 	fuel_label = get_fuel_label(fuel_type)
+	default_grade = "0# 柴油"
 	if fuel_label == "汽油" or fuel_label == "插电混动":
 		fuel_norm = "Petrol"
+		default_grade = "92# 汽油"
 	elif fuel_label == "纯电动":
 		fuel_norm = "Electric"
+		default_grade = "纯电动"
 	elif fuel_label == "天然气":
 		fuel_norm = "Natural Gas"
+		default_grade = "天然气"
 	else:
 		fuel_norm = "Diesel"
+		default_grade = "0# 柴油"
 
 	# 规范化车型
 	model_val = vehicle_category.split("/")[0].strip() if "/" in vehicle_category else vehicle_category.strip()
@@ -178,6 +197,12 @@ def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="�
 	doc.company = company
 	doc.last_odometer = int(flt(last_odometer))
 	doc.fuel_type = fuel_norm
+	if frappe.db.has_column("Vehicle", "custom_vehicle_status"):
+		doc.custom_vehicle_status = "正常在用"
+	if frappe.db.has_column("Vehicle", "custom_default_fuel_grade"):
+		doc.custom_default_fuel_grade = default_grade
+	if primary_driver and frappe.db.has_column("Vehicle", "custom_primary_driver"):
+		doc.custom_primary_driver = primary_driver
 	doc.insert(ignore_permissions=True)
 	frappe.db.commit()
 
@@ -190,9 +215,12 @@ def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="�
 			"model": doc.model,
 			"fuel_type": doc.fuel_type,
 			"fuel_type_label": fuel_label,
+			"custom_default_fuel_grade": default_grade,
+			"custom_vehicle_status": "正常在用",
 			"last_odometer": doc.last_odometer,
 		},
 	}
+
 
 
 def is_system_admin():

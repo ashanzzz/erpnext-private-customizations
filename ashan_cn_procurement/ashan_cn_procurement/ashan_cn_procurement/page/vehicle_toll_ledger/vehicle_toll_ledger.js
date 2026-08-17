@@ -831,7 +831,36 @@ class VehicleTollLedger {
                 });
             }
         });
+
+        // 仅筛选“正常在用”车辆，封存停用车辆不予入池
+        d.fields_dict.new_vehicle.get_query = function() {
+
+            return {
+                filters: [
+                    ["Vehicle", "custom_vehicle_status", "!=", "封存停用"]
+                ]
+            };
+        };
+
+        // 选车后自动带出车辆档案中维护的主要驾驶员
+        d.fields_dict.new_vehicle.$input.on('change', function() {
+            const veh = d.get_value('new_vehicle');
+            if (veh) {
+                frappe.db.get_value('Vehicle', veh, ['custom_primary_driver', 'model'], (r) => {
+                    if (r) {
+                        if (r.custom_primary_driver && !d.get_value('new_primary_user')) {
+                            d.set_value('new_primary_user', r.custom_primary_driver);
+                        }
+                        if (r.model && !d.get_value('new_display_name')) {
+                            d.set_value('new_display_name', `${veh} (${r.model})`);
+                        }
+                    }
+                });
+            }
+        });
+
         d.show();
+
 
         d.$wrapper.on('click', '.btn-deactivate-vehicle', function() {
             const configName = $(this).attr('data-config');

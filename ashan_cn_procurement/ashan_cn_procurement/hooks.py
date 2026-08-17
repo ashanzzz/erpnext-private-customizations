@@ -50,6 +50,7 @@ role_home_page = {
 # DocType Specific Client Scripts
 doctype_js = {
     "Purchase Invoice": "public/js/purchase_invoice_tax_calculator.js",
+    "Vehicle": "public/js/vehicle_custom.js",
 }
 
 doctype_list_js = {
@@ -61,8 +62,12 @@ doc_events = {
     "Purchase Invoice": {
         "before_validate": "ashan_cn_procurement.overrides.purchase_invoice_tax.calculate_china_line_taxes",
         "validate": "ashan_cn_procurement.overrides.purchase_invoice_tax.validate_purchase_invoice_taxes"
+    },
+    "Vehicle": {
+        "on_update": "ashan_cn_procurement.overrides.vehicle_sync.on_vehicle_update"
     }
 }
+
 
 # Post-Migration Hooks
 after_migrate = "ashan_cn_procurement.setup.after_migrate"
