@@ -204,10 +204,128 @@
         }
     }
 
+    function sanitize_boot_sidebars() {
+        if (!window.frappe || !frappe.boot || !frappe.boot.workspace_sidebar_item) return;
+        if (is_pure_operator()) {
+            // 立即注入 CSS 零延迟防护层，杜绝首屏任何一闪而过
+            if (!document.getElementById("operator-zero-fouc-style")) {
+                const style = document.createElement("style");
+                style.id = "operator-zero-fouc-style";
+                style.innerHTML = `
+                    .body-sidebar a[href*="my-business"],
+                    .body-sidebar a[href*="/desk/home"],
+                    .body-sidebar .section-item:not([item-name*="车辆和车用油"]):not([title*="车辆和车用油"]):not([item-name*="油卡"]):not([title*="油卡"]),
+                    .body-sidebar a[href*="/desk/oil-card"]:not([href*="oil-card-ledger"]),
+                    .body-sidebar a[href*="/desk/oil-card-recharge"],
+                    .body-sidebar a[href*="/desk/oil-card-refuel-log"],
+                    .body-sidebar a[href*="/desk/oil-card-invoice-batch"],
+                    .body-sidebar a[href*="/desk/user"],
+                    .body-sidebar a[href*="/desk/role"] {
+                        display: none !important;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            Object.keys(frappe.boot.workspace_sidebar_item).forEach(ws_key => {
+                const ws = frappe.boot.workspace_sidebar_item[ws_key];
+                if (ws && Array.isArray(ws.items)) {
+                    const filtered = [];
+                    let inFuelSection = false;
+                    ws.items.forEach(item => {
+                        const title = (item.label || item.item_name || "").trim();
+                        if (item.type === "Section Break") {
+                            if (FUEL_SECTION_TITLES.includes(title)) {
+                                inFuelSection = true;
+                                item.label = "车辆和车用油管理";
+                                item.show_arrow = 1;
+                                item.collapsible = 1;
+                                filtered.push(item);
+                            } else {
+                                inFuelSection = false;
+                            }
+                        } else if (inFuelSection) {
+                            const linkTo = (item.link_to || "").toLowerCase();
+                            if (linkTo === "oil-card-ledger" || title.includes("油卡综合台账明细台")) {
+                                filtered.push(item);
+                            }
+                        }
+                    });
+                    ws.items = filtered;
+                }
+            });
+        }
+    }
+
+    // 立即执行 boot 数据净化
+    sanitize_boot_sidebars();
+
     function patch_sidebar_resolver() {
         if (!window.frappe || !frappe.ui || !frappe.ui.Sidebar) return false;
         const Sidebar = frappe.ui.Sidebar;
         if (Sidebar._ashan_resolved_patched) return true;
+
+        const orig_prepare = Sidebar.prototype.prepare;
+        Sidebar.prototype.prepare = function() {
+            sanitize_boot_sidebars();
+            if (is_pure_operator()) {
+                if (this.sidebar_data && Array.isArray(this.sidebar_data.items)) {
+                    const filtered = [];
+                    let inFuelSection = false;
+                    this.sidebar_data.items.forEach(item => {
+                        const title = (item.label || item.item_name || "").trim();
+                        if (item.type === "Section Break") {
+                            if (FUEL_SECTION_TITLES.includes(title)) {
+                                inFuelSection = true;
+                                item.label = "车辆和车用油管理";
+                                item.show_arrow = 1;
+                                item.collapsible = 1;
+                                filtered.push(item);
+                            } else {
+                                inFuelSection = false;
+                            }
+                        } else if (inFuelSection) {
+                            const linkTo = (item.link_to || "").toLowerCase();
+                            if (linkTo === "oil-card-ledger" || title.includes("油卡综合台账明细台")) {
+                                filtered.push(item);
+                            }
+                        }
+                    });
+                    this.sidebar_data.items = filtered;
+                    this.workspace_sidebar_items = filtered;
+                }
+            }
+            if (orig_prepare) orig_prepare.apply(this, arguments);
+        };
+
+        const orig_find_nested_items = Sidebar.prototype.find_nested_items;
+        Sidebar.prototype.find_nested_items = function() {
+            if (is_pure_operator()) {
+                const filtered = [];
+                let inFuelSection = false;
+                (this.workspace_sidebar_items || []).forEach(item => {
+                    const title = (item.label || item.item_name || "").trim();
+                    if (item.type === "Section Break") {
+                        if (FUEL_SECTION_TITLES.includes(title)) {
+                            inFuelSection = true;
+                            item.label = "车辆和车用油管理";
+                            item.show_arrow = 1;
+                            item.collapsible = 1;
+                            filtered.push(item);
+                        } else {
+                            inFuelSection = false;
+                        }
+                    } else if (inFuelSection) {
+                        const linkTo = (item.link_to || "").toLowerCase();
+                        if (linkTo === "oil-card-ledger" || title.includes("油卡综合台账明细台")) {
+                            filtered.push(item);
+                        }
+                    }
+                });
+                this.workspace_sidebar_items = filtered;
+            }
+            if (orig_find_nested_items) orig_find_nested_items.apply(this, arguments);
+        };
 
         const orig_resolve_sidebar = Sidebar.prototype.resolve_sidebar;
         Sidebar.prototype.resolve_sidebar = function(doctype, module) {
