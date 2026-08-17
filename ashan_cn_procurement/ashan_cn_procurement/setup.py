@@ -240,12 +240,12 @@ def setup_doctype_and_page_permissions():
 			dp.save(ignore_permissions=True)
 
 	# 3. 确保 Pages 拥有这些角色的访问权限
-	for page_name in ["oil-card-ledger", "vehicle-toll-ledger"]:
+	for page_name in ["oil-card-ledger", "vehicle-toll-ledger", "special-equipment-center"]:
 		if frappe.db.exists("Page", page_name):
 			page_doc = frappe.get_doc("Page", page_name)
 			existing_roles = {r.role for r in page_doc.roles}
 			modified = False
-			for role in ["System Manager", "Fleet Manager", "Oil Card Manager", "油卡管理员", "Oil Card Operator", "油卡操作员", "Desk User"]:
+			for role in ["System Manager", "Fleet Manager", "Oil Card Manager", "油卡管理员", "Oil Card Operator", "油卡操作员", "Desk User", "All"]:
 				if role not in existing_roles:
 					page_doc.append("roles", {"role": role})
 					modified = True
@@ -253,6 +253,7 @@ def setup_doctype_and_page_permissions():
 				page_doc.save(ignore_permissions=True)
 
 	frappe.db.commit()
+
 
 
 

@@ -69,6 +69,14 @@ doc_events = {
 }
 
 
+# Scheduled Tasks (Daily Expiry & Reminder Refresh)
+scheduler_events = {
+    "daily": [
+        "ashan_cn_procurement.services.special_equipment.refresh_all_special_equipment_status"
+    ]
+}
+
 # Post-Migration Hooks
 after_migrate = "ashan_cn_procurement.setup.after_migrate"
+
 
