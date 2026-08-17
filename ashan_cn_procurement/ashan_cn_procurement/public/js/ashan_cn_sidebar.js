@@ -13,8 +13,6 @@
         frappe.re_route[""] = "desk/home";
         frappe.re_route["desk"] = "desk/home";
         frappe.re_route["app"] = "desk/home";
-        frappe.re_route["Workspaces"] = "desk/home";
-        frappe.re_route["workspaces"] = "desk/home";
     }
 
     // 1. 一级标题 → 对应 Workspace 映射
@@ -52,13 +50,13 @@
     ];
 
     // 2. 单据页统一使用 App 维护的业务侧边栏。
-    //
-    // 系统 Home Sidebar 不受本 App 的 Workspace Sidebar JSON 管理。单据页若回退
-    // 到 Home，会在 SPA 路由切换后渲染出缺少一级图标的旧数据。My Business 是
-    // 本 App 中受版本控制的完整导航源，一级图标与二级项目均在此处统一维护。
     const BUSINESS_SIDEBAR = "My Business";
-    const SYSTEM_MANAGEMENT_SECTION = "系统管理";
+    const SYSTEM_MANAGEMENT_SECTIONS = ["系统管理", "系统与权限中心"];
     const SYSTEM_MANAGEMENT_ROUTES = [
+        "/desk/role",
+        "/desk/user",
+        "/desk/permission-manager",
+        "/desk/workspaces",
         "/desk/client-script",
         "/desk/customize-form",
         "/desk/server-script",
@@ -98,8 +96,8 @@
         $sidebar.find(".section-item").filter(function() {
             const $section = $(this);
             const title = ($section.attr("item-name") || $section.attr("title") || "").trim();
-            return title === SYSTEM_MANAGEMENT_SECTION
-                || $section.find(".sidebar-item-label").first().text().trim() === SYSTEM_MANAGEMENT_SECTION;
+            const labelText = $section.find(".sidebar-item-label").first().text().trim();
+            return SYSTEM_MANAGEMENT_SECTIONS.includes(title) || SYSTEM_MANAGEMENT_SECTIONS.includes(labelText);
         }).each(function() {
             const $section = $(this);
             // Support both v16 sidebar layouts: children nested in the section

@@ -177,20 +177,20 @@ class UnifiedOilCardLedgerConsole {
 							<table class="oil-data-table" id="table-unified-ledger">
 								<thead>
 									<tr id="thead-row">
-										<th>日期</th>
-										<th>类型</th>
-										<th>车辆 / 摘要</th>
-										<th>油号</th>
-										<th>当前里程</th>
-										<th>升数(L)</th>
-										<th>变动金额(¥)</th>
-										<th class="col-balance">实时余额(¥)</th>
+										<th class="th-date">日期</th>
+										<th class="th-type">类型</th>
+										<th class="th-vehicle">车辆 / 摘要</th>
+										<th class="th-grade">油号</th>
+										<th class="th-odo">当前里程</th>
+										<th class="th-liters">升数(L)</th>
+										<th class="th-amt">变动金额(¥)</th>
+										<th class="col-balance th-bal">实时余额(¥)</th>
 										<!-- 高级列 (管理员可见) -->
-										<th class="mgr-col">行驶里程</th>
-										<th class="mgr-col">百公里油耗</th>
-										<th class="mgr-col">开票</th>
-										<th>备注</th>
-										<th>操作</th>
+										<th class="mgr-col th-dist">行驶里程</th>
+										<th class="mgr-col th-consum">百公里油耗</th>
+										<th class="mgr-col th-invoice">开票</th>
+										<th class="th-remark">备注</th>
+										<th class="th-action">操作</th>
 									</tr>
 								</thead>
 								<tbody id="tbody-unified-ledger">
@@ -480,11 +480,11 @@ class UnifiedOilCardLedgerConsole {
 			}
 		});
 
-		// 本月核定锁定
+		// 本月核定锁定 (操作员与管理员均可执行)
 		this.wrapper.on("click", "#btn-lock-month-action", function () {
 			if (!self.activeCard) return;
 			frappe.confirm(
-				`确定要对【${self.activeCard.card_name}】的 <b>${self.selectedYear}年${self.selectedMonth}月</b> 进行【本月核定与锁定】吗？<br><br><span style="color:#b45309;">核定后该月份流水将被保护，操作员不可再编辑或删除。</span>`,
+				`确定要对【${self.activeCard.card_name}】的 <b>${self.selectedYear}年${self.selectedMonth}月</b> 进行【本月核定与锁定】吗？<br><br><span style="color:#b45309;">核定后该月份流水将被保护，单据不可直接修改或删除。</span>`,
 				function () {
 					frappe.call({
 						method: "ashan_cn_procurement.ashan_cn_procurement.page.oil_card_ledger.oil_card_ledger.lock_monthly_ledger",
@@ -504,11 +504,48 @@ class UnifiedOilCardLedgerConsole {
 			);
 		});
 
-		// 解除月度锁定
+		// 操作员申请取消核定
+		this.wrapper.on("click", "#btn-request-unlock-action", function () {
+			if (!self.activeCard) return;
+			const d = new frappe.ui.Dialog({
+				title: __("📨 申请取消当月核定"),
+				fields: [
+					{
+						label: __("申请原因 / 需修改内容"),
+						fieldname: "reason",
+						fieldtype: "Small Text",
+						reqd: 1,
+						placeholder: "请详细说明申请解除锁定的原因（例如：某日加油记录表显里程输入有误，需更正）...",
+					},
+				],
+				primary_action_label: __("🚀 提交申请"),
+				primary_action(values) {
+					frappe.call({
+						method: "ashan_cn_procurement.ashan_cn_procurement.page.oil_card_ledger.oil_card_ledger.request_unlock_monthly_ledger",
+						args: {
+							oil_card: self.activeCard.name,
+							year: self.selectedYear,
+							month: self.selectedMonth,
+							reason: values.reason,
+						},
+						callback: function (r) {
+							if (r.message && r.message.status === "ok") {
+								frappe.show_alert({ message: r.message.message, indicator: "orange" }, 4);
+								d.hide();
+								self.loadLedgerData();
+							}
+						},
+					});
+				},
+			});
+			d.show();
+		});
+
+		// 管理员直接解锁
 		this.wrapper.on("click", "#btn-unlock-month-action", function () {
 			if (!self.activeCard) return;
 			frappe.confirm(
-				`确定要解除【${self.activeCard.card_name}】 <b>${self.selectedYear}年${self.selectedMonth}月</b> 的锁定状态吗？`,
+				`确定要直接解除【${self.activeCard.card_name}】 <b>${self.selectedYear}年${self.selectedMonth}月</b> 的锁定状态吗？`,
 				function () {
 					frappe.call({
 						method: "ashan_cn_procurement.ashan_cn_procurement.page.oil_card_ledger.oil_card_ledger.unlock_monthly_ledger",
@@ -528,17 +565,61 @@ class UnifiedOilCardLedgerConsole {
 			);
 		});
 
-		// 删除单笔记录
+		// 管理员批准解锁申请
+		this.wrapper.on("click", "#btn-approve-unlock-action", function () {
+			if (!self.activeCard) return;
+			frappe.confirm(`确定要【批准】操作员的取消核定申请并解除当月锁定吗？`, function () {
+				frappe.call({
+					method: "ashan_cn_procurement.ashan_cn_procurement.page.oil_card_ledger.oil_card_ledger.approve_unlock_monthly_ledger",
+					args: {
+						oil_card: self.activeCard.name,
+						year: self.selectedYear,
+						month: self.selectedMonth,
+						approved: 1,
+					},
+					callback: function (r) {
+						if (r.message && r.message.status === "ok") {
+							frappe.show_alert({ message: r.message.message, indicator: "green" }, 4);
+							self.loadLedgerData();
+						}
+					},
+				});
+			});
+		});
+
+		// 管理员驳回解锁申请
+		this.wrapper.on("click", "#btn-reject-unlock-action", function () {
+			if (!self.activeCard) return;
+			frappe.confirm(`确定要【驳回】此项取消核定申请吗？`, function () {
+				frappe.call({
+					method: "ashan_cn_procurement.ashan_cn_procurement.page.oil_card_ledger.oil_card_ledger.approve_unlock_monthly_ledger",
+					args: {
+						oil_card: self.activeCard.name,
+						year: self.selectedYear,
+						month: self.selectedMonth,
+						approved: 0,
+					},
+					callback: function (r) {
+						if (r.message && r.message.status === "ok") {
+							frappe.show_alert({ message: r.message.message, indicator: "orange" }, 3);
+							self.loadLedgerData();
+						}
+					},
+				});
+			});
+		});
+
+		// 删除单笔记录（带删除原因授权与审计）
 		this.wrapper.on("click", ".btn-delete-row", function () {
 			const docType = $(this).data("doctype");
 			const docName = $(this).data("name");
 
 			if (self.isLocked && !self.isManager) {
-				frappe.msgprint("当前月份已核定锁定，禁止删除记录！");
+				frappe.msgprint("当前月份已核定锁定，禁止删除记录！若需修改请先点击【申请取消核定】。");
 				return;
 			}
 
-			frappe.confirm(`确定要删除此笔记录 [${docName}] 吗？`, function () {
+			frappe.confirm(`确定要删除此笔流水记录 [${docName}] 吗？<br><span style="color:#dc2626; font-size:11.5px;">删除后卡内实时余额将自动重算并留存操作审计。</span>`, function () {
 				frappe.call({
 					method: "ashan_cn_procurement.ashan_cn_procurement.page.oil_card_ledger.oil_card_ledger.delete_ledger_record",
 					args: {
@@ -547,10 +628,11 @@ class UnifiedOilCardLedgerConsole {
 						oil_card: self.activeCard.name,
 						year: self.selectedYear,
 						month: self.selectedMonth,
+						reason: "用户行内删除",
 					},
 					callback: function (r) {
 						if (r.message && r.message.status === "ok") {
-							frappe.show_alert({ message: "记录已删除", indicator: "green" }, 3);
+							frappe.show_alert({ message: "记录已成功删除并重新核算！", indicator: "green" }, 3);
 							self.loadLedgerData();
 						}
 					},
@@ -578,33 +660,33 @@ class UnifiedOilCardLedgerConsole {
 
 		let html = "";
 		if (type === "refuel") {
-			// 加油行内录入 (支持智能模糊匹配车牌、油标选择器、纯中文动力与快捷新建车辆)
+			// 加油行内录入 (100% 贴合固定列宽，零抖动与计算消耗)
 			html = `
 				<tr id="row-inline-entry" class="row-inline-entry">
 					<td>
-						<input type="date" id="inline-refuel-date" class="inline-input-sm" value="${defaultDate}" required style="width:115px;">
+						<input type="date" id="inline-refuel-date" class="inline-input-sm" value="${defaultDate}" required>
 					</td>
 					<td><span class="status-pill-subtle status-pill-amber">⛽ 新增加油</span></td>
 					<td style="position:relative;">
 						<div class="vehicle-combobox-wrapper">
-							<input type="text" id="inline-refuel-vehicle-input" class="inline-input-sm" placeholder="输入车牌/9527..." autocomplete="off" style="width:130px; font-weight:600;" required>
+							<input type="text" id="inline-refuel-vehicle-input" class="inline-input-sm" placeholder="输入车牌/9527..." autocomplete="off" style="font-weight:600;" required>
 							<input type="hidden" id="inline-refuel-vehicle-val">
 						</div>
 					</td>
 					<td style="position:relative;">
 						<div class="grade-combobox-wrapper">
-							<input type="text" id="inline-refuel-grade-input" class="inline-input-sm" placeholder="选择/输入油号" value="95# 汽油" autocomplete="off" style="width:90px; font-weight:600;" required>
+							<input type="text" id="inline-refuel-grade-input" class="inline-input-sm" placeholder="选择油号" value="95# 汽油" autocomplete="off" style="font-weight:600;" required>
 							<input type="hidden" id="inline-refuel-grade-val" value="95">
 						</div>
 					</td>
 					<td>
-						<input type="number" id="inline-refuel-odo" class="inline-input-sm" placeholder="当前里程" required style="width:85px;">
+						<input type="number" id="inline-refuel-odo" class="inline-input-sm" placeholder="当前里程" required>
 					</td>
 					<td>
-						<input type="number" step="0.01" id="inline-refuel-liters" class="inline-input-sm" placeholder="升数" required style="width:70px;">
+						<input type="number" step="0.01" id="inline-refuel-liters" class="inline-input-sm" placeholder="升数" required>
 					</td>
 					<td>
-						<input type="number" step="0.01" id="inline-refuel-amount" class="inline-input-sm" placeholder="金额¥" required style="width:80px;">
+						<input type="number" step="0.01" id="inline-refuel-amount" class="inline-input-sm" placeholder="金额¥" required>
 					</td>
 					<td>
 						<b id="inline-preview-balance" style="color:#1d4ed8; font-size:12.5px;">${formatMoney(this.currentEndingBalance)}</b>
@@ -615,16 +697,16 @@ class UnifiedOilCardLedgerConsole {
 						<td class="mgr-col"><span class="status-pill-subtle status-pill-amber">未开票</span></td>
 					` : ""}
 					<td>
-						<input type="text" id="inline-refuel-remark" class="inline-input-sm" placeholder="备注(选填)" style="width:85px;">
+						<input type="text" id="inline-refuel-remark" class="inline-input-sm" placeholder="备注(选填)">
 					</td>
 					<td style="white-space:nowrap;">
 						<button class="btn-save-inline" id="btn-inline-save-refuel" title="保存 (Enter)">💾 保存</button>
-						<button class="btn-cancel-inline" id="btn-inline-cancel" title="取消 (Esc)">❌ 取消</button>
+						<button class="btn-cancel-inline" id="btn-inline-cancel" title="取消 (Esc)">❌</button>
 					</td>
 				</tr>
 			`;
 		} else {
-			// 充值行内录入
+			// 充值行内录入 (100% 贴合固定列宽)
 			let modeOptions = "";
 			this.meta.modes_of_payment.forEach((m) => {
 				modeOptions += `<option value="${m}">${m}</option>`;
@@ -633,11 +715,11 @@ class UnifiedOilCardLedgerConsole {
 			html = `
 				<tr id="row-inline-entry" class="row-inline-entry">
 					<td>
-						<input type="date" id="inline-recharge-date" class="inline-input-sm" value="${defaultDate}" required style="width:115px;">
+						<input type="date" id="inline-recharge-date" class="inline-input-sm" value="${defaultDate}" required>
 					</td>
 					<td><span class="status-pill-subtle status-pill-green">💳 新增充值</span></td>
 					<td>
-						<select id="inline-recharge-mode" class="inline-input-sm" style="width:120px;">
+						<select id="inline-recharge-mode" class="inline-input-sm">
 							${modeOptions}
 						</select>
 					</td>
@@ -645,7 +727,7 @@ class UnifiedOilCardLedgerConsole {
 					<td>--</td>
 					<td>--</td>
 					<td>
-						<input type="number" step="0.01" id="inline-recharge-amount" class="inline-input-sm" placeholder="+金额¥" required style="width:80px;">
+						<input type="number" step="0.01" id="inline-recharge-amount" class="inline-input-sm" placeholder="+金额¥" required>
 					</td>
 					<td>
 						<b id="inline-preview-balance" style="color:#059669; font-size:12.5px;">${formatMoney(this.currentEndingBalance)}</b>
@@ -656,11 +738,11 @@ class UnifiedOilCardLedgerConsole {
 						<td class="mgr-col">--</td>
 					` : ""}
 					<td>
-						<input type="text" id="inline-recharge-remark" class="inline-input-sm" placeholder="备注(选填)" style="width:85px;">
+						<input type="text" id="inline-recharge-remark" class="inline-input-sm" placeholder="备注(选填)">
 					</td>
 					<td style="white-space:nowrap;">
 						<button class="btn-save-inline" id="btn-inline-save-recharge" title="保存 (Enter)">💾 保存</button>
-						<button class="btn-cancel-inline" id="btn-inline-cancel" title="取消 (Esc)">❌ 取消</button>
+						<button class="btn-cancel-inline" id="btn-inline-cancel" title="取消 (Esc)">❌</button>
 					</td>
 				</tr>
 			`;
@@ -1387,24 +1469,42 @@ class UnifiedOilCardLedgerConsole {
 		const lockDesc = this.wrapper.find("#kpi-lock-desc");
 		const lockBtnContainer = this.wrapper.find("#lock-action-container");
 		const lockedBanner = this.wrapper.find("#locked-banner");
+		const unlockReq = data.locked_info ? Boolean(data.locked_info.unlock_requested) : false;
 
 		if (this.isLocked) {
 			lockCard.removeClass("is-unlocked").addClass("is-locked");
 			lockTitle.text("🔒 已核定锁定").css("color", "#dc2626");
-			lockDesc.text("单据受保护 (不可编辑)");
-			lockedBanner.show();
-			if (data.locked_info) {
-				this.wrapper.find("#locked-meta-info").text(`核定人: ${data.locked_info.locked_by} (${data.locked_info.locked_at})`);
-			}
+			lockDesc.text(data.locked_info && data.locked_info.locked_by ? `核定人: ${data.locked_info.locked_by}` : "本月单据受保护");
 
-			// 管理员可见解锁按钮
 			if (this.isManager) {
+				if (unlockReq) {
+					lockedBanner.html(`
+						<div style="display:flex; justify-content:space-between; align-items:center; width:100%; gap:15px; flex-wrap:wrap;">
+							<div>
+								<span>📨 <b>【操作员申请取消核定】</b>：用户 <b>${data.locked_info.unlock_requested_by}</b> 申请解除【${this.selectedYear}年${this.selectedMonth}月】锁定，理由：“<b>${data.locked_info.unlock_request_reason}</b>”</span>
+							</div>
+							<div style="display:flex; gap:8px;">
+								<button class="btn-approve-unlock" id="btn-approve-unlock-action" style="background:#059669; color:#fff; border:none; padding:4px 10px; border-radius:4px; font-weight:700; cursor:pointer;">✅ 批准解锁</button>
+								<button class="btn-reject-unlock" id="btn-reject-unlock-action" style="background:#dc2626; color:#fff; border:none; padding:4px 10px; border-radius:4px; font-weight:700; cursor:pointer;">❌ 驳回申请</button>
+							</div>
+						</div>
+					`).show();
+				} else {
+					lockedBanner.html(`<span>🔒 本月流水已核定锁定。当前为【油卡管理员】权限，可直接解锁或调整。</span>`).show();
+				}
 				lockBtnContainer.html(`<button class="btn-cmd-unlock" id="btn-unlock-month-action"><span>🔓</span> 解除锁定</button>`);
 			} else {
-				lockBtnContainer.html(`<span class="status-pill-subtle status-pill-red" style="padding:4px 8px;">🔒 本月已锁定</span>`);
+				// 操作员视角
+				if (unlockReq) {
+					lockedBanner.html(`<span>⏳ <b>【已提交取消核定申请】</b>：已向管理员申请解除锁定（理由：“${data.locked_info.unlock_request_reason}”），等待管理员审批中...</span>`).show();
+					lockBtnContainer.html(`<span class="status-pill-subtle status-pill-amber" style="padding:5px 9px; font-size:12px;">⏳ 申请反核定待审</span>`);
+				} else {
+					lockedBanner.html(`<span>🔒 本月加油与充值已完成核定锁定，当前处于只读保护状态。如需修改请点击【申请取消核定】。</span>`).show();
+					lockBtnContainer.html(`<button class="btn-cmd-request-unlock" id="btn-request-unlock-action" style="background:#d97706; color:#fff; border:none; padding:5px 10px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer;"><span>📨</span> 申请取消核定</button>`);
+				}
 			}
 
-			// 禁用快捷录入按钮
+			// 锁定状态下非管理员禁用快捷录入
 			this.wrapper.find("#btn-quick-refuel, #btn-quick-recharge").css("opacity", this.isManager ? "1" : "0.5");
 		} else {
 			lockCard.removeClass("is-locked").addClass("is-unlocked");
@@ -1412,12 +1512,8 @@ class UnifiedOilCardLedgerConsole {
 			lockDesc.text("可自由录入/编辑");
 			lockedBanner.hide();
 
-			// 管理员可见核定按钮
-			if (this.isManager) {
-				lockBtnContainer.html(`<button class="btn-cmd-lock" id="btn-lock-month-action"><span>🔒</span> 本月核定</button>`);
-			} else {
-				lockBtnContainer.html(`<span class="status-pill-subtle status-pill-green" style="padding:4px 8px;">🟢 未锁定</span>`);
-			}
+			// 操作员和管理员均可点击【本月核定】
+			lockBtnContainer.html(`<button class="btn-cmd-lock" id="btn-lock-month-action"><span>🔒</span> 本月核定</button>`);
 			this.wrapper.find("#btn-quick-refuel, #btn-quick-recharge").css("opacity", "1");
 		}
 

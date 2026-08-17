@@ -67,6 +67,31 @@
       "fieldname": "remark",
       "fieldtype": "Small Text",
       "label": "核定备注"
+    },
+    {
+      "fieldname": "unlock_requested",
+      "fieldtype": "Check",
+      "label": "是否申请取消核定",
+      "default": "0",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "unlock_requested_by",
+      "fieldtype": "Link",
+      "label": "申请人",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "unlock_requested_at",
+      "fieldtype": "Datetime",
+      "label": "申请时间",
+      "read_only": 1
+    },
+    {
+      "fieldname": "unlock_request_reason",
+      "fieldtype": "Small Text",
+      "label": "申请取消核定原因"
     }
   ],
   "permissions": [

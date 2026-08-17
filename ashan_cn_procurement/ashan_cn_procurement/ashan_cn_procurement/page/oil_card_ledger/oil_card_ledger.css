@@ -515,7 +515,7 @@
   margin-left: 5px;
 }
 
-/* 现代化数据表格 */
+/* 现代化固定布局数据表格 (Zero Layout Shift - 彻底杜绝录入行引起的表头挤压与跳动) */
 .oil-data-table-wrapper {
   width: 100%;
   overflow-x: auto;
@@ -526,32 +526,50 @@
 
 .oil-data-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 11.5px;
   text-align: left;
 }
 
-.oil-data-table th {
-  background: #f8fafc;
-  color: #334155;
-  font-weight: 800;
-  padding: 6px 6px;
-  border-bottom: 1px solid #cbd5e1;
-  white-space: nowrap;
-}
-
-.oil-data-table th.col-balance {
-  background: #eff6ff;
-  color: #1d4ed8;
-  font-size: 12px;
-}
-
+.oil-data-table th,
 .oil-data-table td {
   padding: 6px 6px;
   border-bottom: 1px solid #f1f5f9;
   color: #334155;
   white-space: nowrap;
   vertical-align: middle;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 固定列宽体系，保证录入行插入时 0 像素抖动与无额外回流计算 */
+.th-date { width: 108px; }
+.th-type { width: 75px; }
+.th-vehicle { width: 135px; }
+.th-grade { width: 95px; }
+.th-odo { width: 90px; }
+.th-liters { width: 75px; }
+.th-amt { width: 85px; }
+.th-bal { width: 95px; }
+.th-dist { width: 80px; }
+.th-consum { width: 85px; }
+.th-invoice { width: 70px; }
+.th-remark { width: 115px; }
+.th-action { width: 75px; }
+
+.oil-data-table th {
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 800;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.oil-data-table th.col-balance {
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
 }
 
 .oil-data-table tr:hover td {
@@ -571,11 +589,12 @@
   border-top: 2px solid #f59e0b !important;
   border-bottom: 2px solid #f59e0b !important;
   box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.1);
-  padding: 6px 8px !important;
+  padding: 5px 4px !important;
 }
 
 .inline-input-sm {
-  padding: 4px 6px;
+  width: 100%;
+  padding: 4px 5px;
   font-size: 12px;
   font-weight: 600;
   border: 1px solid #d97706;

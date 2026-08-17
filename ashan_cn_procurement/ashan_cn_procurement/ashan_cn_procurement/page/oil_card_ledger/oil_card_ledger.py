@@ -376,14 +376,17 @@ def get_unified_ledger_data(oil_card, year=None, month=None):
 
 	if frappe.db.exists("Oil Card Monthly Closing", closing_name):
 		closing_doc = frappe.get_doc("Oil Card Monthly Closing", closing_name)
-		if closing_doc.is_locked:
-			is_locked = True
-			locked_info = {
-				"locked_by": closing_doc.locked_by,
-				"locked_at": str(closing_doc.locked_at),
-				"closing_balance": flt(closing_doc.closing_balance),
-				"remark": closing_doc.remark or "",
-			}
+		is_locked = bool(closing_doc.is_locked)
+		locked_info = {
+			"locked_by": closing_doc.locked_by or "",
+			"locked_at": str(closing_doc.locked_at) if closing_doc.locked_at else "",
+			"closing_balance": flt(closing_doc.closing_balance),
+			"remark": closing_doc.remark or "",
+			"unlock_requested": bool(closing_doc.get("unlock_requested")),
+			"unlock_requested_by": closing_doc.get("unlock_requested_by") or "",
+			"unlock_requested_at": str(closing_doc.get("unlock_requested_at") or ""),
+			"unlock_request_reason": closing_doc.get("unlock_request_reason") or "",
+		}
 
 	is_mgr = is_oil_card_manager()
 
@@ -433,71 +436,59 @@ def get_oil_card_ledger_data(oil_card, year=None, month=None):
 
 
 @frappe.whitelist()
-def quick_add_refuel(oil_card, posting_date, vehicle, odometer, liters, amount, fuel_grade=None, unit_price=None, remark=None):
+def quick_add_refuel(oil_card, posting_date, vehicle, odometer, liters, amount, fuel_grade=None, remark=None):
 	"""
 	行内快速录入加油记录
 	"""
 	if not oil_card or not posting_date or not vehicle:
-		frappe.throw("油卡、日期和车辆为必填项！")
+		frappe.throw("油卡、日期与车辆为必填项！")
 
 	dt = getdate(posting_date)
 	closing_name = f"{oil_card}-{dt.year}-{dt.month}"
 	if frappe.db.exists("Oil Card Monthly Closing", closing_name):
 		closing_doc = frappe.get_doc("Oil Card Monthly Closing", closing_name)
 		if closing_doc.is_locked and not is_oil_card_manager():
-			frappe.throw(f"该月份 ({dt.year}年{dt.month}月) 已被核定锁定，非管理员禁止录入记录！")
+			frappe.throw(f"该月份 ({dt.year}年{dt.month}月) 已被核定锁定，非管理员禁止录入加油！若需修改请先申请取消核定。")
 
 	card = frappe.get_doc("Oil Card", oil_card)
-	veh = frappe.get_doc("Vehicle", vehicle)
-
-	odo = flt(odometer)
+	odo = int(flt(odometer))
 	lit = flt(liters)
 	amt = flt(amount)
-	u_price = flt(unit_price) or (round(amt / lit, 2) if lit > 0 else 0)
 
-	dist = odo - flt(veh.last_odometer) if odo > flt(veh.last_odometer) else 0
-	consum = round((lit / dist) * 100, 2) if dist > 0 and lit > 0 else 0
-
-	# 油品标号标准化映射与容错 (支持92, 92#, 92# 汽油, 0, 0#, 0# 柴油, -10#, -20#, -35#, 柴油, 汽油, CNG天然气等任意自由输入)
+	# 油标格式化
+	grade_str = str(fuel_grade or "95# 汽油").strip()
 	grade_map = {
-		"92#": "92", "92": "92", "92# 汽油": "92", "92号": "92", "92号汽油": "92",
-		"95#": "95", "95": "95", "95# 汽油": "95", "95号": "95", "95号汽油": "95",
-		"98#": "98", "98": "98", "98# 汽油": "98", "98号": "98", "98号汽油": "98",
-		"0#": "0#", "0": "0#", "0# 柴油": "0#", "0号": "0#", "0号柴油": "0#",
-		"-10#": "-10#", "-10": "-10#", "-10# 柴油": "-10#", "-10号柴油": "-10#",
-		"-20#": "-20#", "-20": "-20#", "-20# 柴油": "-20#", "-20号柴油": "-20#",
-		"-35#": "-35#", "-35": "-35#", "-35# 柴油": "-35#", "-35号柴油": "-35#",
-		"CNG": "CNG", "CNG 天然气": "CNG", "天然气": "CNG", "LNG": "LNG", "LNG 液化天然气": "LNG",
-		"Petrol": "95", "Diesel": "0#", "汽油": "95", "柴油": "0#"
+		"92# 汽油": "92# 汽油", "92#": "92# 汽油", "92": "92# 汽油", "92号": "92# 汽油",
+		"95# 汽油": "95# 汽油", "95#": "95# 汽油", "95": "95# 汽油", "95号": "95# 汽油",
+		"98# 汽油": "98# 汽油", "98#": "98# 汽油", "98": "98# 汽油", "98号": "98# 汽油",
+		"0# 柴油": "0# 柴油", "0#": "0# 柴油", "0": "0# 柴油", "0号": "0# 柴油", "柴油": "0# 柴油",
+		"-10# 柴油": "-10# 柴油", "-10#": "-10# 柴油", "-10": "-10# 柴油",
+		"-20# 柴油": "-20# 柴油", "-20#": "-20# 柴油", "-20": "-20# 柴油",
+		"-35# 柴油": "-35# 柴油", "-35#": "-35# 柴油", "-35": "-35# 柴油",
+		"CNG 天然气": "CNG 天然气", "CNG": "CNG 天然气", "LNG 液化气": "LNG 液化气", "LNG": "LNG 液化气", "天然气": "CNG 天然气",
 	}
-	clean_grade = str(fuel_grade).strip() if fuel_grade else ""
-	norm_grade = grade_map.get(clean_grade) or grade_map.get(clean_grade.upper()) or grade_map.get(veh.fuel_type, "95")
+	fuel_grade_norm = grade_map.get(grade_str, grade_str)
 
 	doc = frappe.new_doc("Oil Card Refuel Log")
 	doc.naming_series = "OCRL-.YYYY.-.#####"
 	doc.oil_card = oil_card
-	doc.company = card.company
-	doc.supplier = card.supplier
-	doc.posting_date = posting_date
 	doc.vehicle = vehicle
-	doc.odometer = odo
-	doc.fuel_grade = norm_grade
+	doc.posting_date = posting_date
+	doc.current_odometer = odo
+	doc.fuel_grade = fuel_grade_norm
 	doc.liters = lit
-	doc.unit_price = u_price
 	doc.amount = amt
+	doc.unit_price = round(amt / lit, 3) if lit > 0 else 0
 	doc.invoice_status = "未开票"
+	doc.status = "Submitted"
 	doc.remark = remark or ""
 	doc.insert(ignore_permissions=True)
 
-	# 更新只读派生字段
-	frappe.db.set_value("Oil Card Refuel Log", doc.name, {
-		"distance_since_last": dist,
-		"liter_per_100km": consum
-	}, update_modified=False)
-
-	# 同步更新车辆最新里程
-	if odo > flt(veh.last_odometer):
-		frappe.db.set_value("Vehicle", vehicle, "last_odometer", odo, update_modified=True)
+	# 更新车辆里程
+	if frappe.db.exists("Vehicle", vehicle):
+		veh_doc = frappe.get_doc("Vehicle", vehicle)
+		if odo > flt(veh_doc.last_odometer or 0):
+			frappe.db.set_value("Vehicle", vehicle, "last_odometer", odo, update_modified=True)
 
 	# 重新计算卡内当前总余额
 	recharges_sum = frappe.db.sql(
@@ -530,7 +521,7 @@ def quick_add_recharge(oil_card, posting_date, recharge_amount, mode_of_payment=
 	if frappe.db.exists("Oil Card Monthly Closing", closing_name):
 		closing_doc = frappe.get_doc("Oil Card Monthly Closing", closing_name)
 		if closing_doc.is_locked and not is_oil_card_manager():
-			frappe.throw(f"该月份 ({dt.year}年{dt.month}月) 已被核定锁定，非管理员禁止录入充值！")
+			frappe.throw(f"该月份 ({dt.year}年{dt.month}月) 已被核定锁定，非管理员禁止录入充值！若需修改请先申请取消核定。")
 
 	card = frappe.get_doc("Oil Card", oil_card)
 	rec_amt = flt(recharge_amount)
@@ -579,11 +570,8 @@ def quick_add_recharge(oil_card, posting_date, recharge_amount, mode_of_payment=
 def lock_monthly_ledger(oil_card, year, month, remark=None):
 	"""
 	【本月核定 / 锁定月度】：
-	仅油卡管理员可执行。核定后锁定该月所有加油与充值记录，不可编辑或删除。
+	操作员与管理员均可执行。核定后锁定该月所有加油与充值记录，进入保护状态。
 	"""
-	if not is_oil_card_manager():
-		frappe.throw("权限不足：只有【油卡管理员】才可以执行月度核定与锁定操作。")
-
 	y = int(year)
 	m = int(month)
 	closing_name = f"{oil_card}-{y}-{m}"
@@ -598,6 +586,10 @@ def lock_monthly_ledger(oil_card, year, month, remark=None):
 		doc.closing_balance = closing_bal
 		doc.locked_by = frappe.session.user
 		doc.locked_at = now_datetime()
+		doc.unlock_requested = 0
+		doc.unlock_requested_by = None
+		doc.unlock_requested_at = None
+		doc.unlock_request_reason = None
 		if remark:
 			doc.remark = remark
 		doc.save(ignore_permissions=True)
@@ -620,31 +612,80 @@ def lock_monthly_ledger(oil_card, year, month, remark=None):
 
 
 @frappe.whitelist()
-def unlock_monthly_ledger(oil_card, year, month):
+def request_unlock_monthly_ledger(oil_card, year, month, reason):
 	"""
-	【解除月度锁定】：
-	仅油卡管理员可执行。
+	【操作员申请取消核定 / 申请解锁月度】：
+	操作员提交申请理由，由油卡管理员审核批准后方可解锁。
 	"""
-	if not is_oil_card_manager():
-		frappe.throw("权限不足：只有【油卡管理员】才可以解除月度锁定。")
+	if not reason or not str(reason).strip():
+		frappe.throw("请填写申请取消核定的具体原因！")
 
 	y = int(year)
 	m = int(month)
 	closing_name = f"{oil_card}-{y}-{m}"
 
-	if frappe.db.exists("Oil Card Monthly Closing", closing_name):
-		doc = frappe.get_doc("Oil Card Monthly Closing", closing_name)
-		doc.is_locked = 0
-		doc.save(ignore_permissions=True)
-		frappe.db.commit()
+	if not frappe.db.exists("Oil Card Monthly Closing", closing_name):
+		frappe.throw("该月尚未核定锁定，无需申请解锁。")
 
-	return {"status": "ok", "message": f"{y}年{m}月已解除锁定，恢复可编辑状态。"}
+	doc = frappe.get_doc("Oil Card Monthly Closing", closing_name)
+	if not doc.is_locked:
+		frappe.throw("该月当前处于未锁定状态，无需申请解锁。")
+
+	doc.unlock_requested = 1
+	doc.unlock_requested_by = frappe.session.user
+	doc.unlock_requested_at = now_datetime()
+	doc.unlock_request_reason = str(reason).strip()
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+
+	return {"status": "ok", "message": f"已提交【{y}年{m}月】取消核定申请，请等待油卡管理员审核解锁！"}
 
 
 @frappe.whitelist()
-def delete_ledger_record(doc_type, name, oil_card, year, month):
+def approve_unlock_monthly_ledger(oil_card, year, month, approved=1):
 	"""
-	删除单笔充值或加油流水（检查月度锁定）
+	【管理员审核取消核定申请 / 直接解锁】：
+	仅油卡管理员可执行。
+	"""
+	if not is_oil_card_manager():
+		frappe.throw("权限不足：只有【油卡管理员】才可以批准或直接解除月度锁定。")
+
+	y = int(year)
+	m = int(month)
+	closing_name = f"{oil_card}-{y}-{m}"
+
+	if not frappe.db.exists("Oil Card Monthly Closing", closing_name):
+		return {"status": "ok", "message": "该月未锁定。"}
+
+	doc = frappe.get_doc("Oil Card Monthly Closing", closing_name)
+	is_appr = bool(int(approved)) if str(approved).isdigit() else bool(approved)
+
+	if is_appr:
+		doc.is_locked = 0
+		doc.unlock_requested = 0
+		doc.save(ignore_permissions=True)
+		frappe.db.commit()
+		return {"status": "ok", "message": f"{y}年{m}月已解除锁定，恢复可编辑状态。"}
+	else:
+		doc.unlock_requested = 0
+		doc.save(ignore_permissions=True)
+		frappe.db.commit()
+		return {"status": "ok", "message": f"{y}年{m}月的取消核定申请已被驳回。"}
+
+
+@frappe.whitelist()
+def unlock_monthly_ledger(oil_card, year, month):
+	"""
+	【解除月度锁定】：
+	仅油卡管理员可执行。
+	"""
+	return approve_unlock_monthly_ledger(oil_card, year, month, approved=1)
+
+
+@frappe.whitelist()
+def delete_ledger_record(doc_type, name, oil_card, year, month, reason=None):
+	"""
+	删除单笔充值或加油流水（检查月度锁定与操作授权审计）
 	"""
 	y = int(year)
 	m = int(month)
@@ -653,11 +694,50 @@ def delete_ledger_record(doc_type, name, oil_card, year, month):
 	if frappe.db.exists("Oil Card Monthly Closing", closing_name):
 		closing_doc = frappe.get_doc("Oil Card Monthly Closing", closing_name)
 		if closing_doc.is_locked and not is_oil_card_manager():
-			frappe.throw(f"该月份 ({y}年{m}月) 已被核定锁定，非管理员禁止删除记录！")
+			frappe.throw(f"该月份 ({y}年{m}月) 已被核定锁定，非管理员禁止删除记录！若需修改请先申请取消核定。")
 
 	if doc_type not in ["Oil Card Recharge", "Oil Card Refuel Log"]:
 		frappe.throw("非法的单据类型")
 
-	frappe.delete_doc(doc_type, name)
+	if not frappe.db.exists(doc_type, name):
+		return {"status": "ok"}
+
+	doc = frappe.get_doc(doc_type, name)
+
+	# 记录操作审计
+	try:
+		audit_entry = {
+			"user": frappe.session.user,
+			"action": "Delete",
+			"doc_type": doc_type,
+			"doc_name": name,
+			"oil_card": oil_card,
+			"year": y,
+			"month": m,
+			"amount": getattr(doc, "amount", None) or getattr(doc, "recharge_amount", None) or 0,
+			"reason": reason or "用户行内删除",
+			"timestamp": str(now_datetime()),
+		}
+		frappe.logger("oil_card").info(f"Oil Card Record Deleted: {audit_entry}")
+	except Exception:
+		pass
+
+	frappe.delete_doc(doc_type, name, ignore_permissions=True)
+
+	# 重新计算卡内当前总余额
+	card = frappe.get_doc("Oil Card", oil_card)
+	recharges_sum = frappe.db.sql(
+		"SELECT COALESCE(SUM(COALESCE(effective_amount, recharge_amount)), 0) as total FROM `tabOil Card Recharge` WHERE oil_card = %s AND docstatus != 2",
+		oil_card,
+		as_dict=True,
+	)[0].total
+	refuels_sum = frappe.db.sql(
+		"SELECT COALESCE(SUM(amount), 0) as total FROM `tabOil Card Refuel Log` WHERE oil_card = %s AND docstatus != 2",
+		oil_card,
+		as_dict=True,
+	)[0].total
+	new_card_bal = flt(card.opening_balance) + flt(recharges_sum) - flt(refuels_sum)
+	frappe.db.set_value("Oil Card", oil_card, "current_balance", new_card_bal, update_modified=True)
+
 	frappe.db.commit()
-	return {"status": "ok"}
+	return {"status": "ok", "message": "记录已成功删除并重新核算！"}

@@ -51,3 +51,7 @@ doc_events = {
         "validate": "ashan_cn_procurement.overrides.purchase_invoice_tax.validate_purchase_invoice_taxes"
     }
 }
+
+# Post-Migration Hooks
+after_migrate = "ashan_cn_procurement.setup.after_migrate"
+
