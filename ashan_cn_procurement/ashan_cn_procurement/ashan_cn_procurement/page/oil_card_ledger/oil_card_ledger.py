@@ -153,9 +153,9 @@ def get_quick_entry_meta():
 
 
 @frappe.whitelist()
-def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="柴油", last_odometer=0, make=None, company=None, primary_driver=None):
+def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="柴油", default_fuel_grade=None, last_odometer=0, make=None, company=None, primary_driver=None):
 	"""
-	单页极速新建车辆档案（零跳转，纯中文，默认正常在用）
+	单页极速新建车辆档案（零跳转，纯中文，默认正常在用，完全同步至车辆主数据）
 	"""
 	if not license_plate:
 		frappe.throw("车牌号码为必填项！")
@@ -173,19 +173,21 @@ def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="�
 	# 规范化 ERPNext 标准 fuel_type 字段
 	fuel_norm = "Diesel"
 	fuel_label = get_fuel_label(fuel_type)
-	default_grade = "0# 柴油"
+	calc_default_grade = "0# 柴油"
 	if fuel_label == "汽油" or fuel_label == "插电混动":
 		fuel_norm = "Petrol"
-		default_grade = "92# 汽油"
+		calc_default_grade = "92# 汽油"
 	elif fuel_label == "纯电动":
 		fuel_norm = "Electric"
-		default_grade = "纯电动"
+		calc_default_grade = "纯电动"
 	elif fuel_label == "天然气":
 		fuel_norm = "Natural Gas"
-		default_grade = "天然气"
+		calc_default_grade = "天然气"
 	else:
 		fuel_norm = "Diesel"
-		default_grade = "0# 柴油"
+		calc_default_grade = "0# 柴油"
+
+	actual_grade = default_fuel_grade or calc_default_grade
 
 	# 规范化车型
 	model_val = vehicle_category.split("/")[0].strip() if "/" in vehicle_category else vehicle_category.strip()
@@ -200,26 +202,28 @@ def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="�
 	if frappe.db.has_column("Vehicle", "custom_vehicle_status"):
 		doc.custom_vehicle_status = "正常在用"
 	if frappe.db.has_column("Vehicle", "custom_default_fuel_grade"):
-		doc.custom_default_fuel_grade = default_grade
+		doc.custom_default_fuel_grade = actual_grade
 	if primary_driver and frappe.db.has_column("Vehicle", "custom_primary_driver"):
-		doc.custom_primary_driver = primary_driver
+		doc.custom_primary_driver = primary_driver.strip()
 	doc.insert(ignore_permissions=True)
 	frappe.db.commit()
 
 	return {
 		"status": "ok",
-		"message": f"车辆【{doc.license_plate}】已成功创建！",
+		"message": f"车辆【{doc.license_plate}】已成功创建并归入车辆主档案！",
 		"vehicle": {
 			"name": doc.name,
 			"license_plate": doc.license_plate,
 			"model": doc.model,
 			"fuel_type": doc.fuel_type,
 			"fuel_type_label": fuel_label,
-			"custom_default_fuel_grade": default_grade,
+			"custom_default_fuel_grade": actual_grade,
+			"custom_primary_driver": doc.get("custom_primary_driver") or "",
 			"custom_vehicle_status": "正常在用",
 			"last_odometer": doc.last_odometer,
 		},
 	}
+
 
 
 

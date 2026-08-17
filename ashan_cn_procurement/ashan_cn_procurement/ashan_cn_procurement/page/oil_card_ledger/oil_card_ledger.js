@@ -1028,6 +1028,27 @@ class UnifiedOilCardLedgerConsole {
 					fieldtype: "Column Break",
 				},
 				{
+					label: __("初始默认油号"),
+					fieldname: "default_fuel_grade",
+					fieldtype: "Select",
+					options: ["0# 柴油", "-10# 柴油", "-20# 柴油", "92# 汽油", "95# 汽油", "98# 汽油", "纯电动", "天然气", "其他"],
+					default: "0# 柴油",
+					reqd: 1,
+					description: "选择动力类型时会自动推荐，也可手动指定",
+				},
+				{
+					fieldtype: "Section Break",
+				},
+				{
+					label: __("主要驾驶员"),
+					fieldname: "primary_driver",
+					fieldtype: "Data",
+					placeholder: "如：张师傅（选填，与高速费台账联动）",
+				},
+				{
+					fieldtype: "Column Break",
+				},
+				{
 					label: __("当前表显里程 (km)"),
 					fieldname: "last_odometer",
 					fieldtype: "Int",
@@ -1050,6 +1071,8 @@ class UnifiedOilCardLedgerConsole {
 						license_plate: values.license_plate,
 						vehicle_category: values.vehicle_category,
 						fuel_type: values.fuel_type,
+						default_fuel_grade: values.default_fuel_grade,
+						primary_driver: values.primary_driver || "",
 						last_odometer: values.last_odometer || 0,
 						company: companyDefault,
 					},
@@ -1065,6 +1088,21 @@ class UnifiedOilCardLedgerConsole {
 				});
 			},
 		});
+
+		// 动力类型联动默认油号推荐
+		d.fields_dict.fuel_type.$input.on("change", function () {
+			const ft = d.get_value("fuel_type") || "";
+			if (ft === "柴油") {
+				d.set_value("default_fuel_grade", "0# 柴油");
+			} else if (ft === "汽油" || ft === "插电混动") {
+				d.set_value("default_fuel_grade", "92# 汽油");
+			} else if (ft === "纯电动") {
+				d.set_value("default_fuel_grade", "纯电动");
+			} else if (ft === "天然气") {
+				d.set_value("default_fuel_grade", "天然气");
+			}
+		});
+
 
 		function updateFuelWarning() {
 			const cat = d.get_value("vehicle_category") || "";
