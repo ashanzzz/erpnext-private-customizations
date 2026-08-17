@@ -165,12 +165,26 @@
             });
 
             // 在【油卡使用明细】下，只保留【油卡综合台账明细台】，移除所有底层原始单据（油卡档案、充值单、加油单等）
-            $sidebar.find("a").filter(function() {
-                const href = ($(this).attr("href") || "").toLowerCase();
+            $sidebar.find(".sidebar-child-item .standard-sidebar-item").filter(function() {
+                const href = ($(this).find("a").attr("href") || "").toLowerCase();
                 const text = $(this).text().trim();
                 const isLedgerPage = href.includes("oil-card-ledger") || text.includes("油卡综合台账明细台");
                 return !isLedgerPage;
-            }).closest(".sidebar-child-item").remove();
+            }).remove();
+
+            // 确保【油卡使用明细】手风琴结构与小箭头完整呈现，并默认处于展开状态
+            const $fuelSection = $sidebar.find(".section-item").filter(function() {
+                const title = ($(this).attr("item-name") || $(this).attr("title") || "").trim();
+                const labelText = $(this).find(".sidebar-item-label").first().text().trim();
+                return title === "油卡使用明细" || labelText === "油卡使用明细" || title === "车油能耗中心" || labelText === "车油能耗中心";
+            });
+            if ($fuelSection.length) {
+                $fuelSection.attr("data-state", "opened");
+                $fuelSection.find(".drop-icon").attr("data-state", "opened").show().find("use").attr("href", "#icon-chevron-down");
+                $fuelSection.find(".sidebar-item-control").show();
+                $fuelSection.find(".sidebar-child-item").show().removeClass("hidden");
+                $fuelSection.find(".sidebar-child-item .standard-sidebar-item").show().removeClass("hidden");
+            }
 
             return;
         }
