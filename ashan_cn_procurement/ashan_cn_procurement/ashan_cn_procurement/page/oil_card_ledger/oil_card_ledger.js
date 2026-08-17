@@ -1378,7 +1378,8 @@ class UnifiedOilCardLedgerConsole {
 			const currentBal = flt(c.current_balance || 0);
 			const balNum = currentBal.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 			const cardNo = c.card_no_masked || c.card_code || "";
-			const orgText = c.supplier || c.company || "";
+			const orgText = c.company_abbr || c.supplier || c.company || "";
+			const orgFull = c.company_full || c.company || c.supplier || "";
 
 			let balClass = "bal-positive";
 			if (currentBal < 0) {
@@ -1407,7 +1408,7 @@ class UnifiedOilCardLedgerConsole {
 					</div>
 					<div class="card-item-mid">
 						<span class="card-no-text">${cardNo}</span>
-						${orgText ? `<span class="card-org-text" title="${orgText}">· ${orgText}</span>` : ""}
+						${orgText ? `<span class="card-org-text" title="${orgFull}">· ${orgText}</span>` : ""}
 					</div>
 					<div class="card-item-bot">
 						<span class="card-bal-label">实时余额</span>
@@ -1477,7 +1478,9 @@ class UnifiedOilCardLedgerConsole {
 		this.wrapper.find("#disp-card-name").text(card.card_name || card.name);
 		this.wrapper.find("#disp-card-no").text(`卡号: ${card.card_no_masked || card.card_code || "--"}`);
 		this.wrapper.find("#disp-card-status").text(card.status === "Active" ? "正常" : (card.status || "正常"));
-		this.wrapper.find("#disp-card-supplier").text(`· ${card.supplier || ""}`);
+		const topOrgText = card.company_abbr || card.supplier || card.company || "";
+		const topOrgFull = card.company_full || card.company || card.supplier || "";
+		this.wrapper.find("#disp-card-supplier").text(topOrgText ? `· ${topOrgText}` : "").attr("title", topOrgFull);
 		this.wrapper.find("#disp-ledger-subhead").text(`（${kpis.year}年${kpis.month}月 · 共 ${txns.length} 笔流水 · 实时结余 ${formatMoney(this.currentEndingBalance)}）`);
 
 		// Zone 1: 4 大财务指标
