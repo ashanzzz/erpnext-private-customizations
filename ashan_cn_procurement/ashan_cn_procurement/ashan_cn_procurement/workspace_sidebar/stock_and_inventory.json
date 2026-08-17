@@ -188,6 +188,18 @@
    "doctype": "Workspace Sidebar Item"
   },
   {
+   "label": "高速费月度台账大屏",
+   "link_type": "Page",
+   "type": "Link",
+   "link_to": "vehicle-toll-ledger",
+   "child": 1,
+   "collapsible": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "show_arrow": 0,
+   "doctype": "Workspace Sidebar Item"
+  },
+  {
    "label": "油卡档案",
    "link_type": "DocType",
    "type": "Link",

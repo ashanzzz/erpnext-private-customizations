@@ -93,6 +93,10 @@ def main() -> None:
             run(client, "docker exec erpnext16 tar -xzf /tmp/" + APP + "-sync.tar.gz -C " + BENCH + "/apps", 120)
             extracted_check = "docker exec erpnext16 sh -c 'test -d " + MODULE + "/doctype; if ! test -f " + PACKAGE + "/public/js/reimbursement_request.js; then find " + APP_ROOT + " -name reimbursement_request.js -print; exit 1; fi'"
             run(client, extracted_check, 120)
+            # The archive deliberately excludes __pycache__. Remove the old bytecode from
+            # this app so Python cannot keep serving a pre-sync module after a restart.
+            purge_python_cache = "docker exec erpnext16 sh -c 'find " + APP_ROOT + " -type d -name __pycache__ -prune -exec rm -rf {} +'"
+            run(client, purge_python_cache, 120)
             legacy = "docker exec erpnext16 sh -c 'set -eu; for name in doctype report workspace workspace_sidebar; do if test -d " + PACKAGE + "/$name; then mv " + PACKAGE + "/$name " + PACKAGE + "/.legacy_misplaced_${name}_" + stamp + "; fi; done'"
             run(client, legacy, 120)
         finally:

@@ -91,7 +91,7 @@ def setup_doctype_and_page_permissions():
 				except Exception as e:
 					frappe.logger("setup").warning(f"Error adding Custom DocPerm for {udt} / {role}: {e}")
 
-	# 2. 油卡业务 DocType 读写权限
+	# 2. 油卡与车用油、高速费业务 DocType 读写权限
 	oil_doctypes = [
 		"Oil Card",
 		"Oil Card Recharge",
@@ -99,6 +99,9 @@ def setup_doctype_and_page_permissions():
 		"Oil Card Invoice Batch",
 		"Oil Card Invoice Batch Item",
 		"Oil Card Monthly Closing",
+		"Vehicle Toll Config",
+		"Vehicle Toll Monthly Sheet",
+		"Vehicle Toll Deposit",
 		"Vehicle",
 	]
 	target_roles = ["Oil Card Operator", "Oil Card Manager", "油卡操作员", "油卡管理员"]
