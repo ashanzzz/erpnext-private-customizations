@@ -10,6 +10,7 @@ def after_migrate():
 	"""
 	cleanup_deprecated_roles()
 	create_custom_roles()
+	setup_doctype_and_page_permissions()
 
 def cleanup_deprecated_roles():
 	"""
@@ -56,4 +57,54 @@ def create_custom_roles():
 			frappe.logger("setup").info(f"Created Role: {r['role_name']}")
 
 	frappe.db.commit()
+
+def setup_doctype_and_page_permissions():
+	"""
+	为油卡操作员和管理员配置 DocType 与 Page 权限
+	"""
+	oil_doctypes = [
+		"Oil Card",
+		"Oil Card Refuel Log",
+		"Oil Card Recharge Log",
+		"Oil Card Monthly Closing",
+		"Vehicle Archive"
+	]
+	target_roles = ["Oil Card Operator", "Oil Card Manager", "油卡操作员", "油卡管理员"]
+
+	for dt in oil_doctypes:
+		if not frappe.db.exists("DocType", dt):
+			continue
+		for role in target_roles:
+			if not frappe.db.exists("Custom DocPerm", {"parent": dt, "role": role, "permlevel": 0}):
+				try:
+					dp = frappe.new_doc("Custom DocPerm")
+					dp.parent = dt
+					dp.parenttype = "DocType"
+					dp.parentfield = "permissions"
+					dp.role = role
+					dp.permlevel = 0
+					dp.read = 1
+					dp.write = 1
+					dp.create = 1
+					dp.delete = 1 if "Manager" in role or "管理员" in role else 0
+					dp.report = 1
+					dp.export = 1
+					dp.insert(ignore_permissions=True)
+				except Exception as e:
+					frappe.logger("setup").warning(f"Error adding Custom DocPerm for {dt} / {role}: {e}")
+
+	# 确保 Page oil-card-ledger 拥有这些角色的访问权限
+	if frappe.db.exists("Page", "oil-card-ledger"):
+		page_doc = frappe.get_doc("Page", "oil-card-ledger")
+		existing_roles = {r.role for r in page_doc.roles}
+		modified = False
+		for role in target_roles:
+			if role not in existing_roles:
+				page_doc.append("roles", {"role": role})
+				modified = True
+		if modified:
+			page_doc.save(ignore_permissions=True)
+
+	frappe.db.commit()
+
 
