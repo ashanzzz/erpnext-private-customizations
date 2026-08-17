@@ -105,23 +105,33 @@ def setup_doctype_and_page_permissions():
 		if not frappe.db.exists("DocType", dt):
 			continue
 		for role in target_roles:
-			if not frappe.db.exists("Custom DocPerm", {"parent": dt, "role": role, "permlevel": 0}):
-				try:
-					dp = frappe.new_doc("Custom DocPerm")
-					dp.parent = dt
-					dp.parenttype = "DocType"
-					dp.parentfield = "permissions"
-					dp.role = role
-					dp.permlevel = 0
-					dp.read = 1
-					dp.write = 1
-					dp.create = 1
-					dp.delete = 1 if "Manager" in role or "管理员" in role else 0
-					dp.report = 1
-					dp.export = 1
-					dp.insert(ignore_permissions=True)
-				except Exception as e:
-					frappe.logger("setup").warning(f"Error adding Custom DocPerm for {dt} / {role}: {e}")
+			is_mgr = "Manager" in role or "管理员" in role
+			existing = frappe.db.get_value("Custom DocPerm", {"parent": dt, "role": role, "permlevel": 0}, "name")
+			if existing:
+				dp = frappe.get_doc("Custom DocPerm", existing)
+			else:
+				dp = frappe.new_doc("Custom DocPerm")
+				dp.parent = dt
+				dp.parenttype = "DocType"
+				dp.parentfield = "permissions"
+				dp.role = role
+				dp.permlevel = 0
+
+			dp.read = 1
+			dp.report = 1
+			dp.export = 1
+
+			# 油卡档案（Oil Card）：操作员仅可读取选择，严禁新建、修改和删除；管理员具备全部权限
+			if dt == "Oil Card":
+				dp.create = 1 if is_mgr else 0
+				dp.write = 1 if is_mgr else 0
+				dp.delete = 1 if is_mgr else 0
+			else:
+				dp.create = 1
+				dp.write = 1
+				dp.delete = 1 if is_mgr else 0
+
+			dp.save(ignore_permissions=True)
 
 	# 3. 确保 Page oil-card-ledger 拥有这些角色的访问权限
 	if frappe.db.exists("Page", "oil-card-ledger"):

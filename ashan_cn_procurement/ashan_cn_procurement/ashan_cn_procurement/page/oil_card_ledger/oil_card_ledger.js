@@ -44,7 +44,7 @@ class UnifiedOilCardLedgerConsole {
 				<div class="oil-cards-sidebar">
 					<div class="sidebar-header">
 						<span class="sidebar-title">💳 全部油卡</span>
-						<button class="btn-add-card" id="btn-create-card">+ 新建油卡</button>
+						<button class="btn-add-card" id="btn-create-card" style="display: none;">+ 新建油卡</button>
 					</div>
 					<div class="card-search-box">
 						<input type="text" class="card-search-input" id="card-search-input" placeholder="🔍 搜索油卡名称/卡号...">
@@ -62,7 +62,7 @@ class UnifiedOilCardLedgerConsole {
 					<div class="empty-placeholder" id="main-empty-placeholder" style="padding: 100px 0;">
 						<div class="empty-placeholder-icon">💳</div>
 						<div style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">请从左侧选择一张油卡查看流水台账</div>
-						<div style="font-size: 12px;">或点击左侧“+ 新建油卡”录入您的第一张企业油卡</div>
+						<div style="font-size: 12px; display: none;" id="empty-add-card-hint">或点击左侧“+ 新建油卡”录入您的第一张企业油卡</div>
 					</div>
 
 					<div id="main-content-pane" style="display: none; display: flex; flex-direction: column; gap: 14px;">
@@ -217,6 +217,17 @@ class UnifiedOilCardLedgerConsole {
 			callback: function (r) {
 				if (r.message) {
 					self.meta = r.message;
+					if (r.message.is_manager !== undefined) {
+						self.isManager = Boolean(r.message.is_manager);
+						if (self.isManager) {
+							self.wrapper.find("#btn-create-card").show();
+							self.wrapper.find("#empty-add-card-hint").show();
+						} else {
+							self.wrapper.find("#btn-create-card").hide();
+							self.wrapper.find("#empty-add-card-hint").hide();
+						}
+						self.renderCardsList();
+					}
 				}
 			},
 		});
@@ -1369,15 +1380,19 @@ class UnifiedOilCardLedgerConsole {
 			const cardNo = c.card_no_masked || c.card_code || "";
 			const balClass = currentBal === 0 ? "balance-zero" : "";
 
+			const deleteBtnHtml = this.isManager ? `
+							<button type="button" class="btn-delete-card" data-name="${strName}" data-title="${c.card_name}" title="删除油卡档案">
+								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+							</button>
+			` : "";
+
 			html += `
 				<div class="oil-card-item ${isActive}" data-name="${strName}">
 					<div class="card-item-top">
 						<span class="card-item-name" title="${c.card_name}">${c.card_name}</span>
 						<div class="card-top-right-group">
 							<span class="card-item-badge">${c.card_type || "油卡"}</span>
-							<button type="button" class="btn-delete-card" data-name="${strName}" data-title="${c.card_name}" title="删除油卡档案">
-								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-							</button>
+							${deleteBtnHtml}
 						</div>
 					</div>
 					<div class="card-item-mid">

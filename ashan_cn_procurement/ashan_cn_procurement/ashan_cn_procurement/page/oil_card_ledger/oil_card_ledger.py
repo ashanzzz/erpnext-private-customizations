@@ -96,6 +96,7 @@ def get_quick_entry_meta():
 		"suppliers": suppliers,
 		"default_company": default_company,
 		"default_supplier": default_supplier,
+		"is_manager": is_oil_card_manager(),
 	}
 
 
@@ -159,8 +160,11 @@ def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="�
 @frappe.whitelist()
 def quick_create_oil_card(card_name, card_no, card_code=None, card_type="主卡", company=None, supplier=None, opening_balance=0):
 	"""
-	单页模态对话框极速新建油卡档案（零跳转）
+	单页模态对话框极速新建油卡档案（零跳转，仅管理员可用）
 	"""
+	if not is_oil_card_manager():
+		frappe.throw("权限不足：只有油卡管理员可以新建油卡档案！")
+
 	if not card_name or not card_no:
 		frappe.throw("油卡名称与卡号为必填项！")
 
