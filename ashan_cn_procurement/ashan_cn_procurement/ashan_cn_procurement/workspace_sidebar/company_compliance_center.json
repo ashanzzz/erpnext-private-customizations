@@ -164,7 +164,7 @@
    "doctype": "Workspace Sidebar Item"
   },
   {
-   "label": "油卡使用明细",
+   "label": "车辆和车用油管理",
    "link_type": "DocType",
    "icon": "truck",
    "type": "Section Break",

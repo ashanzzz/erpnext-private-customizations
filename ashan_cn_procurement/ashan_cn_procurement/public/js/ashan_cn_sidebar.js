@@ -30,36 +30,10 @@
         return isOp && !is_oil_card_manager_user();
     }
 
-    // 0. 路由全局重定向规则与拦截保护
-    function get_user_default_route() {
-        if (!window.frappe) return "desk/oil-card-ledger";
-        if (is_pure_operator()) return "desk/oil-card-ledger";
-        const isMgr = is_oil_card_manager_user() || (frappe.boot && frappe.boot.ashan_is_system_manager);
-        if (isMgr) return "desk/my-business";
-        return "desk/oil-card-ledger";
-    }
-
+    // 0. 路由弹窗保护与容错（默认不强行锁定路由，允许自由访问）
     if (window.frappe) {
-        frappe.re_route = frappe.re_route || {};
-        const defRoute = get_user_default_route();
-        frappe.re_route[""] = defRoute;
-        frappe.re_route["desk"] = defRoute;
-        frappe.re_route["app"] = defRoute;
-        frappe.re_route["home"] = defRoute;
-        frappe.re_route["desk/home"] = defRoute;
-        frappe.re_route["app/home"] = defRoute;
-        frappe.re_route["Workspaces/Home"] = defRoute;
-
-        // 监听路由变更：纯操作员强行路由锁定与保护
         frappe.router && frappe.router.on && frappe.router.on("change", function() {
-            const isOp = is_pure_operator();
             const route = frappe.get_route_str ? frappe.get_route_str() : "";
-
-            if (isOp && route && !route.includes("oil-card-ledger")) {
-                frappe.set_route("desk", "oil-card-ledger");
-                return;
-            }
-
             if (route === "home" || route === "desk/home" || route === "app/home" || route === "Workspaces/Home") {
                 const isMgr = is_oil_card_manager_user();
                 frappe.set_route(isMgr ? "my-business" : "oil-card-ledger");
@@ -72,6 +46,7 @@
 
     // 1. 一级标题 → 对应 Workspace / Page 映射
     const SECTION_WORKSPACE_MAP = {
+        "车辆和车用油管理": "oil-card-ledger",
         "油卡使用明细": "oil-card-ledger",
         "车油能耗中心": "oil-card-ledger",
         "车辆燃油": "oil-card-ledger",
@@ -92,6 +67,14 @@
         "Home": "home",
         "home": "home"
     };
+
+    const FUEL_SECTION_TITLES = [
+        "车辆和车用油管理",
+        "油卡使用明细",
+        "车油能耗中心",
+        "车辆燃油",
+        "燃油管理"
+    ];
 
     const ALL_WS_KEYS = [
         "home", "Home",
@@ -144,7 +127,7 @@
         if (!$sidebar.length) return;
 
         // 1. 如果是纯操作员：
-        // 操作员只能看见左边【油卡使用明细】（且仅保留【油卡综合台账明细台】），彻底移除顶部的总控主页与其他所有模块
+        // 操作员只能看见左边【车辆和车用油管理】（且手风琴下拉仅保留【油卡综合台账明细台】）
         if (is_pure_operator()) {
             // 移除顶部的【我的业务 (总控主页)】
             $sidebar.find("a").filter(function() {
@@ -153,30 +136,29 @@
                 return href.includes("my-business") || href.includes("/desk/home") || text.includes("我的业务") || text.includes("总控主页");
             }).closest(".standard-sidebar-item, .sidebar-item-container").remove();
 
-            // 移除除【油卡使用明细】之外的所有一级分类大项
+            // 移除除【车辆和车用油管理】之外的所有一级分类大项
             $sidebar.find(".section-item").each(function() {
                 const $section = $(this);
                 const title = ($section.attr("item-name") || $section.attr("title") || "").trim();
                 const labelText = $section.find(".sidebar-item-label").first().text().trim();
-                if (title !== "油卡使用明细" && labelText !== "油卡使用明细" && title !== "车油能耗中心" && labelText !== "车油能耗中心") {
-                    $section.nextUntil(".section-item").filter(".sidebar-child-item").remove();
+                if (!FUEL_SECTION_TITLES.includes(title) && !FUEL_SECTION_TITLES.includes(labelText)) {
                     $section.remove();
                 }
             });
 
-            // 在【油卡使用明细】下，只保留【油卡综合台账明细台】，移除所有底层原始单据（油卡档案、充值单、加油单等）
+            // 在【车辆和车用油管理】下，只保留【油卡综合台账明细台】，移除所有底层原始单据
             $sidebar.find(".sidebar-child-item .standard-sidebar-item").filter(function() {
                 const href = ($(this).find("a").attr("href") || "").toLowerCase();
                 const text = $(this).text().trim();
-                const isLedgerPage = href.includes("oil-card-ledger") || text.includes("油卡综合台账明细台");
+                const isLedgerPage = href.includes("oil-card-ledger") || text.includes("油卡综合台账明细台") || text.includes("车辆和车用油管理");
                 return !isLedgerPage;
             }).remove();
 
-            // 确保【油卡使用明细】手风琴结构与小箭头完整呈现，并默认处于展开状态
+            // 确保【车辆和车用油管理】手风琴结构与小箭头完整呈现，并默认处于展开状态
             const $fuelSection = $sidebar.find(".section-item").filter(function() {
                 const title = ($(this).attr("item-name") || $(this).attr("title") || "").trim();
                 const labelText = $(this).find(".sidebar-item-label").first().text().trim();
-                return title === "油卡使用明细" || labelText === "油卡使用明细" || title === "车油能耗中心" || labelText === "车油能耗中心";
+                return FUEL_SECTION_TITLES.includes(title) || FUEL_SECTION_TITLES.includes(labelText);
             });
             if ($fuelSection.length) {
                 $fuelSection.attr("data-state", "opened");
@@ -203,8 +185,6 @@
                 return SYSTEM_MANAGEMENT_SECTIONS.includes(title) || SYSTEM_MANAGEMENT_SECTIONS.includes(labelText);
             }).each(function() {
                 const $section = $(this);
-                // Support both v16 sidebar layouts: children nested in the section
-                // and children following it as sibling sidebar items.
                 $section.nextUntil(".section-item").filter(".sidebar-child-item").remove();
                 $section.remove();
             });
