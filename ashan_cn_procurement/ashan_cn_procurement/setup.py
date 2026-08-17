@@ -40,6 +40,15 @@ def setup_vehicle_custom_fields():
 				"description": "车辆主要使用人/驾驶员姓名，与高速费台账联动同步"
 			},
 			{
+				"fieldname": "custom_vehicle_remark",
+				"label": "车辆备注/用途",
+				"fieldtype": "Data",
+				"insert_after": "custom_primary_driver",
+				"in_list_view": 1,
+				"in_standard_filter": 1,
+				"description": "如：应急车、专职配送等，将在台账与选项卡中联动显示"
+			},
+			{
 				"fieldname": "custom_default_fuel_grade",
 				"label": "默认/上次加油油号",
 				"fieldtype": "Select",
@@ -48,7 +57,6 @@ def setup_vehicle_custom_fields():
 				"in_list_view": 1,
 				"description": "系统自动记忆该车上次加油油品型号，下次加油录入时默认自动带出，也可手动修改"
 			}
-
 		]
 	}
 
@@ -76,16 +84,29 @@ def setup_vehicle_custom_fields():
 			else:
 				v_doc.custom_default_fuel_grade = "0# 柴油"
 			changed = True
-		# 从 Vehicle Toll Config 同步现有主要驾驶员
-		if not v_doc.custom_primary_driver and frappe.db.exists("Vehicle Toll Config", v.name):
-			t_user = frappe.db.get_value("Vehicle Toll Config", v.name, "primary_user")
-			if t_user:
-				v_doc.custom_primary_driver = t_user
+		# 从 Vehicle Toll Config 同步现有主要驾驶员与备注用途
+		if frappe.db.exists("Vehicle Toll Config", v.name):
+			t_cfg = frappe.get_doc("Vehicle Toll Config", v.name)
+			if not v_doc.custom_primary_driver and t_cfg.primary_user:
+				v_doc.custom_primary_driver = t_cfg.primary_user
 				changed = True
+			if not getattr(v_doc, "custom_vehicle_remark", None):
+				d_name = t_cfg.display_name or ""
+				if "(" in d_name and ")" in d_name:
+					remark_extracted = d_name.split("(")[-1].split(")")[0].strip()
+					if remark_extracted:
+						v_doc.custom_vehicle_remark = remark_extracted
+						changed = True
+				elif "（" in d_name and "）" in d_name:
+					remark_extracted = d_name.split("（")[-1].split("）")[0].strip()
+					if remark_extracted:
+						v_doc.custom_vehicle_remark = remark_extracted
+						changed = True
 		if changed:
 			v_doc.save(ignore_permissions=True)
 
 	frappe.db.commit()
+
 
 
 def cleanup_deprecated_roles():

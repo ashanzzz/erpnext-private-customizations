@@ -71,9 +71,10 @@ class VehicleTollLedger {
             <!-- 顶部控制栏 -->
             <div class="toll-header-bar">
                 <div class="toll-title-box">
-                    <h3 class="toll-page-title">🛣️ 高速通行费月度台账</h3>
+                    <h3 class="toll-page-title">🛣️ 高速费月度台账</h3>
                     <span id="toll-status-badge" class="toll-status-badge status-open">🟢 正常录入中</span>
                 </div>
+
                 <div class="toll-period-selector">
                     <button class="toll-btn-nav" id="btn-prev-month">◀</button>
                     <select id="sel-year" class="toll-select-period"></select>
@@ -842,22 +843,24 @@ class VehicleTollLedger {
             };
         };
 
-        // 选车后自动带出车辆档案中维护的主要驾驶员
+        // 选车后自动带出车辆档案中维护的主要驾驶员与备注用途
         d.fields_dict.new_vehicle.$input.on('change', function() {
             const veh = d.get_value('new_vehicle');
             if (veh) {
-                frappe.db.get_value('Vehicle', veh, ['custom_primary_driver', 'model'], (r) => {
+                frappe.db.get_value('Vehicle', veh, ['custom_primary_driver', 'custom_vehicle_remark', 'model'], (r) => {
                     if (r) {
                         if (r.custom_primary_driver && !d.get_value('new_primary_user')) {
                             d.set_value('new_primary_user', r.custom_primary_driver);
                         }
-                        if (r.model && !d.get_value('new_display_name')) {
-                            d.set_value('new_display_name', `${veh} (${r.model})`);
+                        const tag = r.custom_vehicle_remark || r.model || '';
+                        if (tag && !d.get_value('new_display_name')) {
+                            d.set_value('new_display_name', `${veh} (${tag})`);
                         }
                     }
                 });
             }
         });
+
 
         d.show();
 

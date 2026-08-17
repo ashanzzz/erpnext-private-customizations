@@ -20,6 +20,11 @@ def on_vehicle_update(doc, method=None):
 	if frappe.db.exists("Vehicle Toll Config", vehicle_id):
 		t_doc = frappe.get_doc("Vehicle Toll Config", vehicle_id)
 		changed = False
+		remark = cstr(getattr(doc, "custom_vehicle_remark", "")).strip()
+		disp_name = f"{vehicle_id} ({remark})" if remark else vehicle_id
+		if disp_name and t_doc.display_name != disp_name:
+			t_doc.display_name = disp_name
+			changed = True
 		if driver and t_doc.primary_user != driver:
 			t_doc.primary_user = driver
 			changed = True
@@ -31,4 +36,5 @@ def on_vehicle_update(doc, method=None):
 			changed = True
 		if changed:
 			t_doc.save(ignore_permissions=True)
+
 

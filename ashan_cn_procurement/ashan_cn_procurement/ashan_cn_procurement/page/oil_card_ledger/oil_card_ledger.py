@@ -120,6 +120,8 @@ def get_quick_entry_meta():
 		fields.append("custom_vehicle_status")
 	if frappe.db.has_column("Vehicle", "custom_primary_driver"):
 		fields.append("custom_primary_driver")
+	if frappe.db.has_column("Vehicle", "custom_vehicle_remark"):
+		fields.append("custom_vehicle_remark")
 	if frappe.db.has_column("Vehicle", "custom_default_fuel_grade"):
 		fields.append("custom_default_fuel_grade")
 
@@ -153,7 +155,7 @@ def get_quick_entry_meta():
 
 
 @frappe.whitelist()
-def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="柴油", default_fuel_grade=None, last_odometer=0, make=None, company=None, primary_driver=None):
+def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="柴油", default_fuel_grade=None, vehicle_remark=None, last_odometer=0, make=None, company=None, primary_driver=None):
 	"""
 	单页极速新建车辆档案（零跳转，纯中文，默认正常在用，完全同步至车辆主数据）
 	"""
@@ -205,6 +207,8 @@ def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="�
 		doc.custom_default_fuel_grade = actual_grade
 	if primary_driver and frappe.db.has_column("Vehicle", "custom_primary_driver"):
 		doc.custom_primary_driver = primary_driver.strip()
+	if vehicle_remark and frappe.db.has_column("Vehicle", "custom_vehicle_remark"):
+		doc.custom_vehicle_remark = vehicle_remark.strip()
 	doc.insert(ignore_permissions=True)
 	frappe.db.commit()
 
@@ -219,10 +223,12 @@ def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="�
 			"fuel_type_label": fuel_label,
 			"custom_default_fuel_grade": actual_grade,
 			"custom_primary_driver": doc.get("custom_primary_driver") or "",
+			"custom_vehicle_remark": doc.get("custom_vehicle_remark") or "",
 			"custom_vehicle_status": "正常在用",
 			"last_odometer": doc.last_odometer,
 		},
 	}
+
 
 
 

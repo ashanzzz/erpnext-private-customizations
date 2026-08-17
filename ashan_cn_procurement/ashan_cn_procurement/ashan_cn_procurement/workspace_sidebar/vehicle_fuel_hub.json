@@ -200,7 +200,7 @@
    "doctype": "Workspace Sidebar Item"
   },
   {
-   "label": "高速费月度台账大屏",
+   "label": "高速费月度台账",
    "link_type": "Page",
    "type": "Link",
    "link_to": "vehicle-toll-ledger",

@@ -47,6 +47,7 @@ def get_enrolled_vehicles():
     result = []
     for c in configs:
         # 检查底层车辆是否已封存
+        disp_name = c.display_name or c.vehicle or c.name
         if c.vehicle and frappe.db.exists("Vehicle", c.vehicle):
             v_status = frappe.db.get_value("Vehicle", c.vehicle, "custom_vehicle_status")
             if v_status == "封存停用":
@@ -55,14 +56,19 @@ def get_enrolled_vehicles():
             p_user = c.primary_user
             if not p_user:
                 p_user = frappe.db.get_value("Vehicle", c.vehicle, "custom_primary_driver") or ""
+            # 若配置中 display_name 为空或等于车牌，且车辆档案有备注，则带出备注
+            v_remark = frappe.db.get_value("Vehicle", c.vehicle, "custom_vehicle_remark")
+            if v_remark and (not c.display_name or c.display_name == c.vehicle):
+                disp_name = f"{c.vehicle} ({v_remark})"
         else:
             p_user = c.primary_user or ""
 
         result.append({
             "config_name": c.name,
             "vehicle": c.vehicle,
-            "display_name": c.display_name or c.vehicle or c.name,
+            "display_name": disp_name,
             "toll_routes": DEFAULT_TOLL_ROUTES,
+
             "opening_balance_default": flt(c.opening_balance_default),
             "primary_user": p_user,
             "vehicle_manager": c.vehicle_manager or "",
@@ -420,6 +426,17 @@ def add_vehicle_to_toll(vehicle, display_name=None, opening_balance=0, primary_u
         else:
             # 填了驾驶员，反向同步到车辆档案
             frappe.db.set_value("Vehicle", vehicle, "custom_primary_driver", primary_user)
+
+        # 若 display_name 中包含备注用途（如“应急车”），反向同步到车辆档案
+        if display_name and "(" in display_name and ")" in display_name:
+            rmk = display_name.split("(")[-1].split(")")[0].strip()
+            if rmk and frappe.db.has_column("Vehicle", "custom_vehicle_remark"):
+                frappe.db.set_value("Vehicle", vehicle, "custom_vehicle_remark", rmk)
+        elif display_name and "（" in display_name and "）" in display_name:
+            rmk = display_name.split("（")[-1].split("）")[0].strip()
+            if rmk and frappe.db.has_column("Vehicle", "custom_vehicle_remark"):
+                frappe.db.set_value("Vehicle", vehicle, "custom_vehicle_remark", rmk)
+
 
     if frappe.db.exists("Vehicle Toll Config", vehicle):
         doc = frappe.get_doc("Vehicle Toll Config", vehicle)

@@ -835,10 +835,12 @@ class UnifiedOilCardLedgerConsole {
 				const modelTag = v.model ? `<span class="veh-model-tag">${v.model}</span>` : "";
 				const odoText = v.last_odometer ? `${v.last_odometer}km` : "0km";
 
+				const dispPlate = v.license_plate || v.name;
+				const rmkText = v.custom_vehicle_remark ? ` (${v.custom_vehicle_remark})` : "";
 				itemsHtml += `
 					<div class="vehicle-dropdown-item" data-name="${v.name}">
 						<div class="veh-item-left">
-							<span class="veh-plate-text">${v.license_plate || v.name}</span>
+							<span class="veh-plate-text">${dispPlate}${rmkText}</span>
 							${modelTag}
 							${fuelTag}
 						</div>
@@ -858,10 +860,11 @@ class UnifiedOilCardLedgerConsole {
 		`;
 
 		dropdown.html(fullHtml);
-		this.positionFloatingDropdown(inputEl, dropdown, 275);
+		this.positionFloatingDropdown(inputEl, dropdown, 220);
 	}
 
 	renderGradeDropdown(q) {
+
 		this.ensureFloatingDropdowns();
 		const dropdown = $("#grade-autocomplete-dropdown");
 		const inputEl = $("#inline-refuel-grade-input");
@@ -1050,6 +1053,15 @@ class UnifiedOilCardLedgerConsole {
 					fieldtype: "Column Break",
 				},
 				{
+					label: __("车辆用途/备注"),
+					fieldname: "vehicle_remark",
+					fieldtype: "Data",
+					placeholder: "如：应急车、专职配送（选填）",
+				},
+				{
+					fieldtype: "Section Break",
+				},
+				{
 					label: __("当前表显里程 (km)"),
 					fieldname: "last_odometer",
 					fieldtype: "Int",
@@ -1073,10 +1085,12 @@ class UnifiedOilCardLedgerConsole {
 						vehicle_category: values.vehicle_category,
 						fuel_type: values.fuel_type,
 						default_fuel_grade: values.default_fuel_grade,
+						vehicle_remark: values.vehicle_remark || "",
 						primary_driver: values.primary_driver || "",
 						last_odometer: values.last_odometer || 0,
 						company: companyDefault,
 					},
+
 					callback: function (r) {
 						if (r.message && r.message.status === "ok") {
 							frappe.show_alert({ message: r.message.message, indicator: "green" }, 3);
