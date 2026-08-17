@@ -94,10 +94,12 @@ def setup_doctype_and_page_permissions():
 	# 2. 油卡业务 DocType 读写权限
 	oil_doctypes = [
 		"Oil Card",
+		"Oil Card Recharge",
 		"Oil Card Refuel Log",
-		"Oil Card Recharge Log",
+		"Oil Card Invoice Batch",
+		"Oil Card Invoice Batch Item",
 		"Oil Card Monthly Closing",
-		"Vehicle Archive"
+		"Vehicle",
 	]
 	target_roles = ["Oil Card Operator", "Oil Card Manager", "油卡操作员", "油卡管理员"]
 
@@ -121,11 +123,11 @@ def setup_doctype_and_page_permissions():
 			dp.report = 1
 			dp.export = 1
 
-			# 油卡档案（Oil Card）：油卡操作员与油卡管理员均严禁新建、修改和删除，仅保留读取权限
+			# 油卡档案（Oil Card）：操作员仅可读取选择，严禁新建、修改和删除；油卡管理员具备全部原始单据管理权限
 			if dt == "Oil Card":
-				dp.create = 0
-				dp.write = 0
-				dp.delete = 0
+				dp.create = 1 if is_mgr else 0
+				dp.write = 1 if is_mgr else 0
+				dp.delete = 1 if is_mgr else 0
 			else:
 				dp.create = 1
 				dp.write = 1

@@ -45,13 +45,14 @@
 
     // 1. 一级标题 → 对应 Workspace 映射
     const SECTION_WORKSPACE_MAP = {
+        "油卡使用明细": "vehicle-fuel-hub",
+        "车油能耗中心": "vehicle-fuel-hub",
+        "车辆燃油": "vehicle-fuel-hub",
+        "燃油管理": "vehicle-fuel-hub",
         "仓库与库存": "stock-and-inventory",
         "库存": "stock-and-inventory",
         "采购协同": "procurement-management",
         "采购": "procurement-management",
-        "车辆燃油": "vehicle-fuel-hub",
-        "车油能耗中心": "vehicle-fuel-hub",
-        "燃油管理": "vehicle-fuel-hub",
         "公司合规": "company-compliance-center",
         "企业合规中心": "company-compliance-center",
         "公司治理": "company-compliance-center",
@@ -108,49 +109,88 @@
         return null;
     }
 
+    function get_user_roles() {
+        if (!window.frappe) return [];
+        if (frappe.boot && frappe.boot.user && Array.isArray(frappe.boot.user.roles)) {
+            return frappe.boot.user.roles;
+        }
+        if (Array.isArray(frappe.user_roles)) {
+            return frappe.user_roles;
+        }
+        return [];
+    }
+
+    function is_oil_card_manager_user() {
+        const roles = get_user_roles();
+        const mgr_roles = ["System Manager", "Oil Card Manager", "油卡管理员", "Purchase Manager", "Accounts Manager", "Stock Manager"];
+        return roles.some(r => mgr_roles.includes(r)) || (frappe.session && frappe.session.user === "Administrator");
+    }
+
+    function is_pure_operator() {
+        const roles = get_user_roles();
+        const isOp = roles.includes("Oil Card Operator") || roles.includes("油卡操作员");
+        return isOp && !is_oil_card_manager_user();
+    }
+
     // Workspace Sidebar Item has no native role field in Frappe v16. Keep the
     // business navigation clean for ordinary users; actual access remains
     // protected by the standard DocType and System Settings permissions.
     function restrict_system_management_section() {
-        const isSysMgr = get_system_manager_status() === true;
         const $sidebar = $(".body-sidebar");
         if (!$sidebar.length) return;
 
-        // 非系统管理员（包括油卡操作员与油卡管理员）彻底移除【油卡档案】链接，统一使用【油卡综合台账明细台】
-        if (!isSysMgr) {
+        // 1. 如果是操作员（仅具备操作员角色，非管理员）：
+        // 操作员只能看见左边【油卡使用明细】（且仅保留【油卡综合台账明细台】），其他所有原始单据和模块全部隐藏
+        if (is_pure_operator()) {
+            // 移除除【油卡使用明细】之外的所有一级分类大项
+            $sidebar.find(".section-item").each(function() {
+                const $section = $(this);
+                const title = ($section.attr("item-name") || $section.attr("title") || "").trim();
+                const labelText = $section.find(".sidebar-item-label").first().text().trim();
+                if (title !== "油卡使用明细" && labelText !== "油卡使用明细" && title !== "车油能耗中心" && labelText !== "车油能耗中心") {
+                    $section.nextUntil(".section-item").filter(".sidebar-child-item").remove();
+                    $section.remove();
+                }
+            });
+
+            // 在【油卡使用明细】下，只保留【油卡综合台账明细台】，移除所有底层原始单据（油卡档案、充值单、加油单等）
             $sidebar.find("a").filter(function() {
                 const href = ($(this).attr("href") || "").toLowerCase();
                 const text = $(this).text().trim();
-                return href === "/desk/oil-card" || href === "/app/oil-card" || href.startsWith("/desk/oil-card?") || href.startsWith("/app/oil-card?") || text === "油卡档案";
+                const isLedgerPage = href.includes("oil-card-ledger") || text.includes("油卡综合台账明细台");
+                return !isLedgerPage;
             }).closest(".sidebar-child-item").remove();
+
+            return;
         }
 
-        if (get_system_manager_status() !== false) return;
+        // 2. 如果是普通管理员（非系统管理员），移除系统设置菜单
+        if (get_system_manager_status() === false) {
+            $sidebar.find("a").filter(function() {
+                const href = $(this).attr("href") || "";
+                return SYSTEM_MANAGEMENT_ROUTES.some((route) => href === route || href.startsWith(`${route}?`));
+            }).closest(".sidebar-child-item").remove();
 
-        $sidebar.find("a").filter(function() {
-            const href = $(this).attr("href") || "";
-            return SYSTEM_MANAGEMENT_ROUTES.some((route) => href === route || href.startsWith(`${route}?`));
-        }).closest(".sidebar-child-item").remove();
-
-        $sidebar.find(".section-item").filter(function() {
-            const $section = $(this);
-            const title = ($section.attr("item-name") || $section.attr("title") || "").trim();
-            const labelText = $section.find(".sidebar-item-label").first().text().trim();
-            return SYSTEM_MANAGEMENT_SECTIONS.includes(title) || SYSTEM_MANAGEMENT_SECTIONS.includes(labelText);
-        }).each(function() {
-            const $section = $(this);
-            // Support both v16 sidebar layouts: children nested in the section
-            // and children following it as sibling sidebar items.
-            $section.nextUntil(".section-item").filter(".sidebar-child-item").remove();
-            $section.remove();
-        });
+            $sidebar.find(".section-item").filter(function() {
+                const $section = $(this);
+                const title = ($section.attr("item-name") || $section.attr("title") || "").trim();
+                const labelText = $section.find(".sidebar-item-label").first().text().trim();
+                return SYSTEM_MANAGEMENT_SECTIONS.includes(title) || SYSTEM_MANAGEMENT_SECTIONS.includes(labelText);
+            }).each(function() {
+                const $section = $(this);
+                // Support both v16 sidebar layouts: children nested in the section
+                // and children following it as sibling sidebar items.
+                $section.nextUntil(".section-item").filter(".sidebar-child-item").remove();
+                $section.remove();
+            });
+        }
     }
 
     function schedule_system_management_visibility(retries = 20) {
         restrict_system_management_section();
         const status = get_system_manager_status();
-        if (status === true) return;
-        if (status === false) {
+        if (status === true && !is_pure_operator()) return;
+        if (status === false || is_pure_operator()) {
             restrict_system_management_section();
             return;
         }

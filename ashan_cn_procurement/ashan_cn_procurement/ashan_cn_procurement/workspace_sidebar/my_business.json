@@ -164,7 +164,7 @@
    "doctype": "Workspace Sidebar Item"
   },
   {
-   "label": "车油能耗中心",
+   "label": "油卡使用明细",
    "link_type": "DocType",
    "icon": "truck",
    "type": "Section Break",
@@ -180,6 +180,54 @@
    "link_type": "Page",
    "type": "Link",
    "link_to": "oil-card-ledger",
+   "child": 1,
+   "collapsible": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "show_arrow": 0,
+   "doctype": "Workspace Sidebar Item"
+  },
+  {
+   "label": "油卡档案",
+   "link_type": "DocType",
+   "type": "Link",
+   "link_to": "Oil Card",
+   "child": 1,
+   "collapsible": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "show_arrow": 0,
+   "doctype": "Workspace Sidebar Item"
+  },
+  {
+   "label": "油卡充值流水",
+   "link_type": "DocType",
+   "type": "Link",
+   "link_to": "Oil Card Recharge",
+   "child": 1,
+   "collapsible": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "show_arrow": 0,
+   "doctype": "Workspace Sidebar Item"
+  },
+  {
+   "label": "加油与能耗记录",
+   "link_type": "DocType",
+   "type": "Link",
+   "link_to": "Oil Card Refuel Log",
+   "child": 1,
+   "collapsible": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "show_arrow": 0,
+   "doctype": "Workspace Sidebar Item"
+  },
+  {
+   "label": "油票批量录入",
+   "link_type": "DocType",
+   "type": "Link",
+   "link_to": "Oil Card Invoice Batch",
    "child": 1,
    "collapsible": 0,
    "indent": 0,
