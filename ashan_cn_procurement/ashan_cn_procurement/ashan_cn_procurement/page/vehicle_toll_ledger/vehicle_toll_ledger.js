@@ -343,19 +343,19 @@ class VehicleTollLedger {
             }
         }
 
-        // 车辆人员信息栏（主要驾驶员显示，支持点击快速修改）
+        // 车辆人员信息栏（展示主要驾驶员，统一由车辆管理维护）
         const driverName = d.primary_user || d.vehicle_manager || '';
-        const driverDisplay = driverName ? frappe.utils.escape_html(driverName) : '<span style="color:#9ca3af;font-weight:400;">未设置</span>';
+        const driverDisplay = driverName
+            ? `<span class="info-chip driver-chip">👤 主要驾驶员: <b>${frappe.utils.escape_html(driverName)}</b></span>`
+            : '';
         $c.find('#toll-vehicle-info-bar').html(`
             <div class="vehicle-info-left">
                 <span class="info-veh-name">🚗 ${frappe.utils.escape_html(d.display_name)}</span>
-                <span class="info-chip driver-chip">👤 主要驾驶员: <b>${driverDisplay}</b></span>
+                ${driverDisplay}
             </div>
-            <div class="vehicle-info-right">
-                <button class="toll-btn-link" id="btn-edit-personnel">✏️ 修改主要驾驶员</button>
-            </div>
+            <div class="vehicle-info-right"></div>
         `);
-        $c.find('#btn-edit-personnel').on('click', () => self.open_personnel_dialog());
+
 
 
         // 表头
