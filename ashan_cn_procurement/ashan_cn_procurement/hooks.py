@@ -22,7 +22,7 @@ add_to_apps_screen = [
     {
         "name": "ashan_cn_procurement",
         "title": "业务扩展",
-        "route": "/app/home"
+        "route": "/desk/my-business"
     }
 ]
 
@@ -32,8 +32,19 @@ get_website_user_home_page = "ashan_cn_procurement.boot.get_website_user_home_pa
 extend_bootinfo = "ashan_cn_procurement.boot.boot_session"
 
 role_home_page = {
-    "System Manager": "app/home",
-    "All": "app/home"
+    "System Manager": "desk/my-business",
+    "Administrator": "desk/my-business",
+    "Oil Card Operator": "desk/oil-card-ledger",
+    "Oil Card Manager": "desk/oil-card-ledger",
+    "油卡操作员": "desk/oil-card-ledger",
+    "油卡管理员": "desk/oil-card-ledger",
+    "Stock User": "desk/stock-entry",
+    "Stock Manager": "desk/stock-entry",
+    "Purchase User": "desk/purchase-order",
+    "Purchase Manager": "desk/purchase-order",
+    "Accounts User": "desk/reimbursement-request",
+    "Accounts Manager": "desk/reimbursement-request",
+    "All": "desk/oil-card-ledger"
 }
 
 # DocType Specific Client Scripts

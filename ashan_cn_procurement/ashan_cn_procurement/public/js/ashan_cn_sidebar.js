@@ -7,12 +7,40 @@
    ========================================================================== */
 
 (function() {
-    // 0. 路由全局重定向规则
+    // 0. 路由全局重定向规则与拦截保护
+    function get_user_default_route() {
+        if (!window.frappe) return "desk/oil-card-ledger";
+        const isMgr = frappe.boot && (frappe.boot.ashan_is_system_manager || (frappe.user_roles && frappe.user_roles.includes("System Manager")));
+        if (isMgr) return "desk/my-business";
+        if (frappe.user_roles && (frappe.user_roles.includes("Oil Card Operator") || frappe.user_roles.includes("Oil Card Manager") || frappe.user_roles.includes("油卡操作员") || frappe.user_roles.includes("油卡管理员"))) {
+            return "desk/oil-card-ledger";
+        }
+        return "desk/oil-card-ledger";
+    }
+
     if (window.frappe) {
         frappe.re_route = frappe.re_route || {};
-        frappe.re_route[""] = "desk/home";
-        frappe.re_route["desk"] = "desk/home";
-        frappe.re_route["app"] = "desk/home";
+        const defRoute = get_user_default_route();
+        frappe.re_route[""] = defRoute;
+        frappe.re_route["desk"] = defRoute;
+        frappe.re_route["app"] = defRoute;
+        frappe.re_route["home"] = defRoute;
+        frappe.re_route["desk/home"] = defRoute;
+        frappe.re_route["app/home"] = defRoute;
+        frappe.re_route["Workspaces/Home"] = defRoute;
+
+        // 监听路由变更：防止访问不存在的 page home 导致弹窗
+        frappe.router && frappe.router.on && frappe.router.on("change", function() {
+            const isMgr = frappe.boot && (frappe.boot.ashan_is_system_manager || (frappe.user_roles && frappe.user_roles.includes("System Manager")));
+            const route = frappe.get_route_str ? frappe.get_route_str() : "";
+            if (route === "home" || route === "desk/home" || route === "app/home" || route === "Workspaces/Home") {
+                frappe.set_route(isMgr ? "my-business" : "oil-card-ledger");
+                // 自动关闭可能由旧路由触发的 not found 提示弹窗
+                setTimeout(function() {
+                    $(".modal:contains('home not found'), .modal:contains('未找到请求的页面')").modal("hide");
+                }, 50);
+            }
+        });
     }
 
     // 1. 一级标题 → 对应 Workspace 映射
