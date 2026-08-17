@@ -1,5 +1,10 @@
 // -*- coding: utf-8 -*-
 frappe.pages['vehicle-toll-ledger'].on_page_load = function(wrapper) {
+    // ❶ 立即设置背景色，防止白色闪屏（在任何 API 调用之前）
+    $(wrapper).find('.layout-main-section').css({
+        'background-color': '#f8f9fa',
+        'min-height': 'calc(100vh - 60px)'
+    });
     var page = frappe.ui.make_app_page({
         parent: wrapper,
         title: __('高速费月度台账大屏'),
@@ -9,10 +14,16 @@ frappe.pages['vehicle-toll-ledger'].on_page_load = function(wrapper) {
 };
 
 frappe.pages['vehicle-toll-ledger'].on_page_show = function(wrapper) {
+    // ❷ 每次显示此页面时也确保背景色（SPA 导航时也生效）
+    $(wrapper).find('.layout-main-section').css({
+        'background-color': '#f8f9fa',
+        'min-height': 'calc(100vh - 60px)'
+    });
     if (wrapper.vehicle_toll_ledger) {
         wrapper.vehicle_toll_ledger.refresh();
     }
 };
+
 
 /* ============================================================
    VehicleTollLedger — 离开单元格自动保存 · 6趟计费 · 车辆人员配置
@@ -214,10 +225,10 @@ class VehicleTollLedger {
     // ─── 加载入池车辆 ────────────────────────────────────────
     load_vehicles() {
         const self = this;
+        self.set_save_status && self.set_save_status('loading');
+        this.$container.find('#autosave-status').html('<span class="save-pending">⏳ 正在加载车辆列表...</span>');
         frappe.call({
             method: 'ashan_cn_procurement.ashan_cn_procurement.page.vehicle_toll_ledger.vehicle_toll_ledger.get_enrolled_vehicles',
-            freeze: true,
-            freeze_message: '正在加载高速费车辆列表...',
             callback(r) {
                 if (!r.message) return;
                 self.vehicles = r.message.vehicles || [];
@@ -247,11 +258,10 @@ class VehicleTollLedger {
 
         this.vehicles.forEach(v => {
             const isActive = v.config_name === self.activeVehicle;
-            const operatorText = v.primary_user ? ` · ${frappe.utils.escape_html(v.primary_user)}` : '';
             const $tab = $(`
                 <div class="toll-tab-item ${isActive ? 'active' : ''}" data-config="${v.config_name}">
                     <span class="toll-tab-icon">🚗</span>
-                    <span class="toll-tab-label">${frappe.utils.escape_html(v.display_name)}${operatorText}</span>
+                    <span class="toll-tab-label">${frappe.utils.escape_html(v.display_name)}</span>
                 </div>
             `);
             $tab.on('click', () => {
@@ -262,6 +272,7 @@ class VehicleTollLedger {
             });
             $tabsBar.append($tab);
         });
+
 
         if (!this.activeVehicle || !this.vehicles.find(v => v.config_name === this.activeVehicle)) {
             this.activeVehicle = this.vehicles[0].config_name;
@@ -276,6 +287,7 @@ class VehicleTollLedger {
         const self = this;
         if (!this.activeVehicle) return;
 
+        this.$container.find('#autosave-status').html('<span class="save-pending">⏳ 正在加载台账数据...</span>');
         frappe.call({
             method: 'ashan_cn_procurement.ashan_cn_procurement.page.vehicle_toll_ledger.vehicle_toll_ledger.get_vehicle_monthly_sheet',
             args: {
@@ -283,8 +295,6 @@ class VehicleTollLedger {
                 year: self.currentYear,
                 month: self.currentMonth
             },
-            freeze: true,
-            freeze_message: '正在加载台账...',
             callback(r) {
                 if (r.message) {
                     self.sheetData = r.message;
@@ -326,20 +336,20 @@ class VehicleTollLedger {
             }
         }
 
-        // 车辆人员信息栏（纯文本显示，支持点击快速修改）
-        const opName = d.primary_user ? frappe.utils.escape_html(d.primary_user) : '未设置';
-        const mgrName = d.vehicle_manager ? frappe.utils.escape_html(d.vehicle_manager) : '未设置';
+        // 车辆人员信息栏（主要驾驶员显示，支持点击快速修改）
+        const driverName = d.primary_user || d.vehicle_manager || '';
+        const driverDisplay = driverName ? frappe.utils.escape_html(driverName) : '<span style="color:#9ca3af;font-weight:400;">未设置</span>';
         $c.find('#toll-vehicle-info-bar').html(`
             <div class="vehicle-info-left">
                 <span class="info-veh-name">🚗 ${frappe.utils.escape_html(d.display_name)}</span>
-                <span class="info-chip operator-chip">📋 操作员: <b>${opName}</b></span>
-                <span class="info-chip manager-chip">👤 车辆管理员: <b>${mgrName}</b></span>
+                <span class="info-chip driver-chip">👤 主要驾驶员: <b>${driverDisplay}</b></span>
             </div>
             <div class="vehicle-info-right">
-                <button class="toll-btn-link" id="btn-edit-personnel">✏️ 修改人员信息</button>
+                <button class="toll-btn-link" id="btn-edit-personnel">✏️ 修改主要驾驶员</button>
             </div>
         `);
         $c.find('#btn-edit-personnel').on('click', () => self.open_personnel_dialog());
+
 
         // 表头
         let thHtml = `<tr>
@@ -736,44 +746,38 @@ class VehicleTollLedger {
         d.show();
     }
 
-    // ─── 修改人员配置 Dialog（纯文本直接填写） ────────────────
+    // ─── 修改主要驾驶员 Dialog（纯文本直接填写） ────────────────
     open_personnel_dialog() {
         const self = this;
         const d = self.sheetData;
         if (!d) return;
 
+        const currentDriver = d.primary_user || d.vehicle_manager || '';
         const dlg = new frappe.ui.Dialog({
-            title: `👤 人员信息配置 — ${d.display_name}`,
+            title: `👤 主要驾驶员配置 — ${d.display_name}`,
             fields: [
                 {
-                    fieldname: 'primary_user',
+                    fieldname: 'driver_name',
                     fieldtype: 'Data',
-                    label: '车辆操作员（主要使用人/司机）',
-                    default: d.primary_user || '',
-                    description: '直接输入操作员姓名（如“张师傅”），会显示在车辆选项卡和台账头部'
-                },
-                {
-                    fieldname: 'vehicle_manager',
-                    fieldtype: 'Data',
-                    label: '车辆管理员',
-                    default: d.vehicle_manager || '',
-                    description: '直接输入车辆管理员姓名（如“王主管”），仅作台账展示使用'
+                    label: '主要驾驶员姓名',
+                    default: currentDriver,
+                    description: '直接输入主要驾驶员名字（如“张三”、“张师傅”）'
                 }
             ],
-            primary_action_label: '保存人员信息',
+            primary_action_label: '保存驾驶员信息',
             primary_action(values) {
                 frappe.call({
                     method: 'ashan_cn_procurement.ashan_cn_procurement.page.vehicle_toll_ledger.vehicle_toll_ledger.update_vehicle_personnel',
                     args: {
                         vehicle_config: self.activeVehicle,
-                        primary_user: values.primary_user || '',
-                        vehicle_manager: values.vehicle_manager || ''
+                        primary_user: values.driver_name || '',
+                        vehicle_manager: values.driver_name || ''
                     },
                     callback(r) {
                         if (r.message?.success) {
-                            frappe.show_alert({ message: '人员配置已更新！', indicator: 'green' }, 3);
+                            frappe.show_alert({ message: '主要驾驶员信息已更新！', indicator: 'green' }, 3);
                             dlg.hide();
-                            self.load_vehicles();
+                            self.load_sheet();
                         }
                     }
                 });
@@ -795,12 +799,10 @@ class VehicleTollLedger {
                 { fieldname: 'new_vehicle', fieldtype: 'Link', label: '选择车辆', options: 'Vehicle',
                   description: '从系统车辆档案中选择' },
                 { fieldname: 'new_display_name', fieldtype: 'Data', label: '选项卡显示名称',
-                  description: '如"粤B·8888 专车"，留空则使用车牌号' },
+                  description: '如"津AF9527 (应急车)"，留空则使用车牌号' },
                 { fieldname: 'col_break', fieldtype: 'Column Break' },
-                { fieldname: 'new_primary_user', fieldtype: 'Data', label: '车辆操作员姓名',
-                  description: '直接填写驾驶员/操作员名字（如“张师傅”）' },
-                { fieldname: 'new_vehicle_manager', fieldtype: 'Data', label: '车辆管理员姓名',
-                  description: '直接填写管理员名字（如“王经理”）' },
+                { fieldname: 'new_primary_user', fieldtype: 'Data', label: '主要驾驶员姓名',
+                  description: '直接填写主要驾驶员姓名（如“张师傅”）' },
                 { fieldname: 'new_opening_balance', fieldtype: 'Currency', label: '初始期初余额 (启动资金)', default: 0 },
                 { fieldname: 'section_cur', fieldtype: 'Section Break', label: '当前已入池车辆' },
                 { fieldname: 'current_vehicles_html', fieldtype: 'HTML',
@@ -816,7 +818,7 @@ class VehicleTollLedger {
                         display_name: values.new_display_name || values.new_vehicle,
                         opening_balance: values.new_opening_balance || 0,
                         primary_user: values.new_primary_user || '',
-                        vehicle_manager: values.new_vehicle_manager || ''
+                        vehicle_manager: values.new_primary_user || ''
                     },
                     freeze: true,
                     callback(r) {
@@ -857,16 +859,15 @@ class VehicleTollLedger {
             <thead><tr style="background:#f8fafc;font-weight:600;">
                 <th style="padding:6px 10px;border:1px solid #e2e8f0;">车辆</th>
                 <th style="padding:6px 10px;border:1px solid #e2e8f0;">显示名称</th>
-                <th style="padding:6px 10px;border:1px solid #e2e8f0;">操作员</th>
-                <th style="padding:6px 10px;border:1px solid #e2e8f0;">管理员</th>
+                <th style="padding:6px 10px;border:1px solid #e2e8f0;">主要驾驶员</th>
                 <th style="padding:6px 10px;border:1px solid #e2e8f0;">操作</th>
             </tr></thead><tbody>`;
         this.vehicles.forEach(v => {
+            const driver = v.primary_user || v.vehicle_manager || '—';
             html += `<tr>
                 <td style="padding:6px 10px;border:1px solid #e2e8f0;">${frappe.utils.escape_html(v.vehicle || v.config_name)}</td>
                 <td style="padding:6px 10px;border:1px solid #e2e8f0;">${frappe.utils.escape_html(v.display_name)}</td>
-                <td style="padding:6px 10px;border:1px solid #e2e8f0;">${frappe.utils.escape_html(v.primary_user || '—')}</td>
-                <td style="padding:6px 10px;border:1px solid #e2e8f0;">${frappe.utils.escape_html(v.vehicle_manager || '—')}</td>
+                <td style="padding:6px 10px;border:1px solid #e2e8f0;">${frappe.utils.escape_html(driver)}</td>
                 <td style="padding:6px 10px;border:1px solid #e2e8f0;">
                     <button class="btn-deactivate-vehicle" data-config="${v.config_name}" data-label="${frappe.utils.escape_html(v.display_name)}"
                         style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:12px;">
@@ -878,6 +879,7 @@ class VehicleTollLedger {
         html += `</tbody></table>`;
         return html;
     }
+
 }
 
 function fmt_cur(val) {

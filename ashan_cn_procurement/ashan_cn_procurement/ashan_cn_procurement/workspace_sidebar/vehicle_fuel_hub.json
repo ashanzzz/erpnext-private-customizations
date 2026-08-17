@@ -176,6 +176,18 @@
    "doctype": "Workspace Sidebar Item"
   },
   {
+   "label": "车辆档案",
+   "link_type": "DocType",
+   "type": "Link",
+   "link_to": "Vehicle",
+   "child": 1,
+   "collapsible": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "show_arrow": 0,
+   "doctype": "Workspace Sidebar Item"
+  },
+  {
    "label": "油卡综合台账明细台",
    "link_type": "Page",
    "type": "Link",
@@ -199,6 +211,7 @@
    "show_arrow": 0,
    "doctype": "Workspace Sidebar Item"
   },
+
   {
    "label": "油卡档案",
    "link_type": "DocType",
