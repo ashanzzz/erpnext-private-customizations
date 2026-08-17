@@ -143,10 +143,10 @@ def quick_create_equipment(
 	company, equipment_name, equipment_category="场（厂）内专用机动车辆",
 	equipment_variety=None, plate_number=None, internal_number=None,
 	registration_code=None, equipment_code=None, use_registration_certificate_no=None,
-	responsible_person=None, use_location=None
+	use_location=None
 ):
 	"""
-	单页极速新建特种设备档案
+	单页极速新建特种设备档案 (取消责任人，保留地点)
 	"""
 	if not equipment_name:
 		frappe.throw(_("设备名称为必填项！"))
@@ -163,7 +163,6 @@ def quick_create_equipment(
 	doc.registration_code = registration_code.strip() if registration_code else ""
 	doc.equipment_code = equipment_code.strip() if equipment_code else ""
 	doc.use_registration_certificate_no = use_registration_certificate_no.strip() if use_registration_certificate_no else ""
-	doc.responsible_person = responsible_person or None
 	doc.use_location = use_location.strip() if use_location else ""
 	doc.equipment_status = "在用"
 	doc.inspection_status = "待录入"
@@ -176,3 +175,83 @@ def quick_create_equipment(
 		"message": f"特种设备【{doc.plate_number or doc.internal_number or doc.equipment_name}】已成功创建！",
 		"name": doc.name
 	}
+
+
+@frappe.whitelist()
+def quick_add_inspection(special_equipment, inspection_date, valid_until=None, inspection_type="定期检验", inspection_report_no=None, inspection_report_attachment=None, inspection_agency=None):
+	"""
+	弹窗极速录入法定检验记录（默认有效2年）
+	"""
+	if not special_equipment or not frappe.db.exists("Special Equipment", special_equipment):
+		frappe.throw(_("未找到对应的特种设备！"))
+	if not inspection_date:
+		frappe.throw(_("检验日期为必填项！"))
+
+	from frappe.utils import add_to_date, getdate
+	# 若未填截止日，默认 2 年 (24个月)
+	if not valid_until:
+		valid_until = add_to_date(getdate(inspection_date), years=2)
+
+	company = frappe.db.get_value("Special Equipment", special_equipment, "company")
+
+	doc = frappe.new_doc("Special Equipment Inspection")
+	doc.special_equipment = special_equipment
+	doc.company = company
+	doc.inspection_type = inspection_type or "定期检验"
+	doc.inspection_date = inspection_date
+	doc.inspection_result = "合格"
+	doc.due_date_precision = "精确日期"
+	doc.valid_until = valid_until
+	doc.inspection_report_no = inspection_report_no.strip() if inspection_report_no else ""
+	doc.inspection_agency = inspection_agency.strip() if inspection_agency else ""
+	doc.inspection_report_attachment = inspection_report_attachment or None
+	doc.insert(ignore_permissions=True)
+	frappe.db.commit()
+
+	sync_inspection_snapshot(special_equipment)
+
+	return {
+		"status": "ok",
+		"message": f"法定检验记录【{doc.inspection_report_no or doc.name}】已成功录入并同步至主档！",
+		"name": doc.name
+	}
+
+
+@frappe.whitelist()
+def quick_add_annual_inspection(special_equipment, check_date, next_check_date=None, check_result="合格", annual_check_attachment=None, remarks=None):
+	"""
+	弹窗极速录入年度检查记录（默认有效1年）
+	"""
+	if not special_equipment or not frappe.db.exists("Special Equipment", special_equipment):
+		frappe.throw(_("未找到对应的特种设备！"))
+	if not check_date:
+		frappe.throw(_("年度检查日期为必填项！"))
+
+	from frappe.utils import add_to_date, getdate
+	# 若未填下次检查日，默认 1 年 (12个月)
+	if not next_check_date:
+		next_check_date = add_to_date(getdate(check_date), years=1)
+
+	company = frappe.db.get_value("Special Equipment", special_equipment, "company")
+	c_year = getdate(check_date).year
+
+	doc = frappe.new_doc("Special Equipment Annual Inspection")
+	doc.special_equipment = special_equipment
+	doc.company = company
+	doc.inspection_year = c_year
+	doc.check_date = check_date
+	doc.check_result = check_result or "合格"
+	doc.next_check_date = next_check_date
+	doc.annual_check_attachment = annual_check_attachment or None
+	doc.remarks = remarks.strip() if remarks else ""
+	doc.insert(ignore_permissions=True)
+	frappe.db.commit()
+
+	sync_annual_check_snapshot(special_equipment)
+
+	return {
+		"status": "ok",
+		"message": f"年度自查记录【{doc.name}】已成功录入并同步至主档！",
+		"name": doc.name
+	}
+

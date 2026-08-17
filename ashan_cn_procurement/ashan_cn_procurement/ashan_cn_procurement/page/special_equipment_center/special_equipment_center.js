@@ -338,7 +338,9 @@ class SpecialEquipmentCenter {
 	}
 
 	render_table(equipments) {
+		const self = this;
 		const $container = this.wrapper.find("#equipment-table-container");
+
 
 		if (!equipments || equipments.length === 0) {
 			$container.html(`
@@ -402,11 +404,11 @@ class SpecialEquipmentCenter {
 				<td>${regCode}</td>
 				<td>${inspCell}</td>
 				<td>${annualCell}</td>
-				<td><div style="font-size:12px;">${e.responsible_person || "—"}</div><div style="font-size:11px; color:#a0aec0;">${e.use_location || ""}</div></td>
+				<td><div style="font-size:12px; color:#2d3748;">${e.use_location || "—"}</div></td>
 				<td style="white-space:nowrap;">
 					<button class="sec-btn btn-table-detail" data-name="${e.name}" style="padding:3px 8px; font-size:11px;">详情</button>
-					<button class="sec-btn btn-table-add-insp" data-name="${e.name}" data-company="${e.company}" style="padding:3px 8px; font-size:11px; color:#2b6cb0;">➕ 检验</button>
-					<button class="sec-btn btn-table-add-annual" data-name="${e.name}" data-company="${e.company}" style="padding:3px 8px; font-size:11px; color:#2c7a7b;">➕ 年检</button>
+					<button class="sec-btn btn-table-add-insp" data-name="${e.name}" data-label="${e.plate_number || e.internal_number || e.equipment_name}" style="padding:3px 8px; font-size:11px; color:#2b6cb0; font-weight:bold;">➕ 检验</button>
+					<button class="sec-btn btn-table-add-annual" data-name="${e.name}" data-label="${e.plate_number || e.internal_number || e.equipment_name}" style="padding:3px 8px; font-size:11px; color:#2c7a7b; font-weight:bold;">➕ 年检</button>
 					${reportLink}
 				</td>
 			</tr>
@@ -424,7 +426,7 @@ class SpecialEquipmentCenter {
 					<th>注册代码</th>
 					<th>🛡️ 法定检验</th>
 					<th>📋 年度检查</th>
-					<th>责任人/地点</th>
+					<th>使用地点</th>
 					<th>操作</th>
 				</tr>
 			</thead>
@@ -444,23 +446,186 @@ class SpecialEquipmentCenter {
 
 		$container.find(".btn-table-add-insp").on("click", function () {
 			const name = $(this).attr("data-name");
-			const company = $(this).attr("data-company");
-			frappe.new_doc("Special Equipment Inspection", {
-				special_equipment: name,
-				company: company,
-			});
+			const label = $(this).attr("data-label");
+			self.open_add_inspection_dialog(name, label);
 		});
 
 		$container.find(".btn-table-add-annual").on("click", function () {
 			const name = $(this).attr("data-name");
-			const company = $(this).attr("data-company");
-			frappe.new_doc("Special Equipment Annual Inspection", {
-				special_equipment: name,
-				company: company,
-				inspection_year: new Date().getFullYear(),
-			});
+			const label = $(this).attr("data-label");
+			self.open_add_annual_inspection_dialog(name, label);
 		});
 	}
+
+	open_add_inspection_dialog(equipmentName, equipmentLabel) {
+		const self = this;
+		const todayStr = frappe.datetime.get_today();
+		const defaultDue = frappe.datetime.add_months(todayStr, 24);
+
+		const d = new frappe.ui.Dialog({
+			title: __("🛡️ 录入法定检验") + (equipmentLabel ? " · " + equipmentLabel : ""),
+			fields: [
+				{
+					label: __("本次检验日期"),
+					fieldname: "inspection_date",
+					fieldtype: "Date",
+					default: todayStr,
+					reqd: 1,
+					onchange: function () {
+						const v = d.get_value("inspection_date");
+						if (v) {
+							d.set_value("valid_until", frappe.datetime.add_months(v, 24));
+						}
+					},
+				},
+				{
+					fieldtype: "Column Break",
+				},
+				{
+					label: __("下次检验到期日 (默认+2年)"),
+					fieldname: "valid_until",
+					fieldtype: "Date",
+					default: defaultDue,
+					reqd: 1,
+					description: "输入本次检验日期后自动推算2年，也可根据报告手动修改",
+				},
+				{
+					fieldtype: "Section Break",
+				},
+				{
+					label: __("检验报告编号"),
+					fieldname: "inspection_report_no",
+					fieldtype: "Data",
+					placeholder: "如：TJ-2026-XXXXX (选填)",
+				},
+				{
+					fieldtype: "Column Break",
+				},
+				{
+					label: __("检验类别"),
+					fieldname: "inspection_type",
+					fieldtype: "Select",
+					options: ["定期检验", "首次检验", "监督检验", "其他"],
+					default: "定期检验",
+				},
+				{
+					fieldtype: "Section Break",
+				},
+				{
+					label: __("检验机构"),
+					fieldname: "inspection_agency",
+					fieldtype: "Data",
+					placeholder: "如：天津市特种设备监督检验技术研究院 (选填)",
+				},
+				{
+					fieldtype: "Column Break",
+				},
+				{
+					label: __("检验报告附件 (PDF/图片)"),
+					fieldname: "inspection_report_attachment",
+					fieldtype: "Attach",
+				},
+			],
+			primary_action_label: __("💾 保存检验记录"),
+			primary_action(values) {
+				values.special_equipment = equipmentName;
+				frappe.call({
+					method: "ashan_cn_procurement.ashan_cn_procurement.page.special_equipment_center.special_equipment_center.quick_add_inspection",
+					args: values,
+					callback: function (r) {
+						if (r.message && r.message.status === "ok") {
+							frappe.show_alert({ message: r.message.message, indicator: "green" }, 3);
+							d.hide();
+							self.refresh();
+						}
+					},
+				});
+			},
+		});
+
+		d.show();
+	}
+
+	open_add_annual_inspection_dialog(equipmentName, equipmentLabel) {
+		const self = this;
+		const todayStr = frappe.datetime.get_today();
+		const defaultDue = frappe.datetime.add_months(todayStr, 12);
+
+		const d = new frappe.ui.Dialog({
+			title: __("📋 录入年度检查") + (equipmentLabel ? " · " + equipmentLabel : ""),
+			fields: [
+				{
+					label: __("本次检查日期"),
+					fieldname: "check_date",
+					fieldtype: "Date",
+					default: todayStr,
+					reqd: 1,
+					onchange: function () {
+						const v = d.get_value("check_date");
+						if (v) {
+							d.set_value("next_check_date", frappe.datetime.add_months(v, 12));
+						}
+					},
+				},
+				{
+					fieldtype: "Column Break",
+				},
+				{
+					label: __("下次检查日期 (默认+1年)"),
+					fieldname: "next_check_date",
+					fieldtype: "Date",
+					default: defaultDue,
+					reqd: 1,
+					description: "输入检查日期后自动推算1年，可手动修改",
+				},
+				{
+					fieldtype: "Section Break",
+				},
+				{
+					label: __("检查结论"),
+					fieldname: "check_result",
+					fieldtype: "Select",
+					options: ["合格", "存在问题", "整改中", "整改完成"],
+					default: "合格",
+				},
+				{
+					fieldtype: "Column Break",
+				},
+				{
+					label: __("年度检查表附件 (PDF/图片)"),
+					fieldname: "annual_check_attachment",
+					fieldtype: "Attach",
+				},
+				{
+					fieldtype: "Section Break",
+				},
+				{
+					label: __("发现问题与备注说明"),
+					fieldname: "remarks",
+					fieldtype: "Small Text",
+					placeholder: "如检查中发现的问题或整改情况说明 (选填)",
+				},
+			],
+			primary_action_label: __("💾 保存年检记录"),
+			primary_action(values) {
+				values.special_equipment = equipmentName;
+				frappe.call({
+					method: "ashan_cn_procurement.ashan_cn_procurement.page.special_equipment_center.special_equipment_center.quick_add_annual_inspection",
+					args: values,
+					callback: function (r) {
+						if (r.message && r.message.status === "ok") {
+							frappe.show_alert({ message: r.message.message, indicator: "green" }, 3);
+							d.hide();
+							self.refresh();
+						}
+					},
+				});
+			},
+		});
+
+		d.show();
+	}
+
 
 	open_quick_create_dialog() {
 		const self = this;
@@ -542,22 +707,13 @@ class SpecialEquipmentCenter {
 				},
 				{
 					fieldtype: "Section Break",
-					label: __("责任与地点"),
-				},
-				{
-					label: __("责任人"),
-					fieldname: "responsible_person",
-					fieldtype: "Link",
-					options: "Employee",
-				},
-				{
-					fieldtype: "Column Break",
+					label: __("使用地点"),
 				},
 				{
 					label: __("使用地点"),
 					fieldname: "use_location",
 					fieldtype: "Data",
-					placeholder: "例如：一号车间",
+					placeholder: "例如：一号车间成品库 (手动输入)",
 				},
 			],
 			primary_action_label: __("💾 立即创建设备"),
@@ -579,3 +735,4 @@ class SpecialEquipmentCenter {
 		d.show();
 	}
 }
+

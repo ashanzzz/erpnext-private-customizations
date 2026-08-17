@@ -136,39 +136,194 @@ function render_equipment_header_and_cards(frm) {
 
 	frm.dashboard.set_headline(html);
 
-	// 绑定卡片内按钮事件
+	// 绑定卡片内按钮事件 (弹窗极速录入)
 	frm.dashboard.wrapper.find(".btn-add-inspection").on("click", function() {
-		frappe.new_doc("Special Equipment Inspection", {
-			special_equipment: frm.doc.name,
-			company: frm.doc.company,
-		});
+		open_quick_inspection_dialog(frm);
 	});
 
 	frm.dashboard.wrapper.find(".btn-add-annual").on("click", function() {
-		frappe.new_doc("Special Equipment Annual Inspection", {
-			special_equipment: frm.doc.name,
-			company: frm.doc.company,
-			inspection_year: new Date().getFullYear(),
-		});
+		open_quick_annual_dialog(frm);
 	});
+}
+
+function open_quick_inspection_dialog(frm) {
+	const todayStr = frappe.datetime.get_today();
+	const defaultDue = frappe.datetime.add_months(todayStr, 24);
+	const label = frm.doc.plate_number || frm.doc.internal_number || frm.doc.equipment_name || frm.doc.name;
+
+	const d = new frappe.ui.Dialog({
+		title: __("🛡️ 录入法定检验") + (label ? " · " + label : ""),
+		fields: [
+			{
+				label: __("本次检验日期"),
+				fieldname: "inspection_date",
+				fieldtype: "Date",
+				default: todayStr,
+				reqd: 1,
+				onchange: function () {
+					const v = d.get_value("inspection_date");
+					if (v) {
+						d.set_value("valid_until", frappe.datetime.add_months(v, 24));
+					}
+				},
+			},
+			{
+				fieldtype: "Column Break",
+			},
+			{
+				label: __("下次检验到期日 (默认+2年)"),
+				fieldname: "valid_until",
+				fieldtype: "Date",
+				default: defaultDue,
+				reqd: 1,
+				description: "输入本次检验日期后自动推算2年，可手动修改",
+			},
+			{
+				fieldtype: "Section Break",
+			},
+			{
+				label: __("检验报告编号"),
+				fieldname: "inspection_report_no",
+				fieldtype: "Data",
+				placeholder: "如：TJ-2026-XXXXX (选填)",
+			},
+			{
+				fieldtype: "Column Break",
+			},
+			{
+				label: __("检验类别"),
+				fieldname: "inspection_type",
+				fieldtype: "Select",
+				options: ["定期检验", "首次检验", "监督检验", "其他"],
+				default: "定期检验",
+			},
+			{
+				fieldtype: "Section Break",
+			},
+			{
+				label: __("检验机构"),
+				fieldname: "inspection_agency",
+				fieldtype: "Data",
+				placeholder: "如：天津市特种设备监督检验技术研究院 (选填)",
+			},
+			{
+				fieldtype: "Column Break",
+			},
+			{
+				label: __("检验报告附件 (PDF/图片)"),
+				fieldname: "inspection_report_attachment",
+				fieldtype: "Attach",
+			},
+		],
+		primary_action_label: __("💾 保存检验记录"),
+		primary_action(values) {
+			values.special_equipment = frm.doc.name;
+			frappe.call({
+				method: "ashan_cn_procurement.ashan_cn_procurement.page.special_equipment_center.special_equipment_center.quick_add_inspection",
+				args: values,
+				callback: function (r) {
+					if (r.message && r.message.status === "ok") {
+						frappe.show_alert({ message: r.message.message, indicator: "green" }, 3);
+						d.hide();
+						frm.reload_doc();
+					}
+				},
+			});
+		},
+	});
+
+	d.show();
+}
+
+function open_quick_annual_dialog(frm) {
+	const todayStr = frappe.datetime.get_today();
+	const defaultDue = frappe.datetime.add_months(todayStr, 12);
+	const label = frm.doc.plate_number || frm.doc.internal_number || frm.doc.equipment_name || frm.doc.name;
+
+	const d = new frappe.ui.Dialog({
+		title: __("📋 录入年度检查") + (label ? " · " + label : ""),
+		fields: [
+			{
+				label: __("本次检查日期"),
+				fieldname: "check_date",
+				fieldtype: "Date",
+				default: todayStr,
+				reqd: 1,
+				onchange: function () {
+					const v = d.get_value("check_date");
+					if (v) {
+						d.set_value("next_check_date", frappe.datetime.add_months(v, 12));
+					}
+				},
+			},
+			{
+				fieldtype: "Column Break",
+			},
+			{
+				label: __("下次检查日期 (默认+1年)"),
+				fieldname: "next_check_date",
+				fieldtype: "Date",
+				default: defaultDue,
+				reqd: 1,
+				description: "输入检查日期后自动推算1年，可手动修改",
+			},
+			{
+				fieldtype: "Section Break",
+			},
+			{
+				label: __("检查结论"),
+				fieldname: "check_result",
+				fieldtype: "Select",
+				options: ["合格", "存在问题", "整改中", "整改完成"],
+				default: "合格",
+			},
+			{
+				fieldtype: "Column Break",
+			},
+			{
+				label: __("年度检查表附件 (PDF/图片)"),
+				fieldname: "annual_check_attachment",
+				fieldtype: "Attach",
+			},
+			{
+				fieldtype: "Section Break",
+			},
+			{
+				label: __("发现问题与备注说明"),
+				fieldname: "remarks",
+				fieldtype: "Small Text",
+				placeholder: "如检查中发现的问题或整改情况说明 (选填)",
+			},
+		],
+		primary_action_label: __("💾 保存年检记录"),
+		primary_action(values) {
+			values.special_equipment = frm.doc.name;
+			frappe.call({
+				method: "ashan_cn_procurement.ashan_cn_procurement.page.special_equipment_center.special_equipment_center.quick_add_annual_inspection",
+				args: values,
+				callback: function (r) {
+					if (r.message && r.message.status === "ok") {
+						frappe.show_alert({ message: r.message.message, indicator: "green" }, 3);
+						d.hide();
+						frm.reload_doc();
+					}
+				},
+			});
+		},
+	});
+
+	d.show();
 }
 
 function setup_custom_buttons(frm) {
 	if (frm.is_new()) return;
 
 	frm.add_custom_button(__("➕ 新增法定检验"), function() {
-		frappe.new_doc("Special Equipment Inspection", {
-			special_equipment: frm.doc.name,
-			company: frm.doc.company,
-		});
+		open_quick_inspection_dialog(frm);
 	}, __("业务操作"));
 
 	frm.add_custom_button(__("➕ 新增年度检查"), function() {
-		frappe.new_doc("Special Equipment Annual Inspection", {
-			special_equipment: frm.doc.name,
-			company: frm.doc.company,
-			inspection_year: new Date().getFullYear(),
-		});
+		open_quick_annual_dialog(frm);
 	}, __("业务操作"));
 
 	frm.add_custom_button(__("📜 查看法定检验历史"), function() {
@@ -183,3 +338,5 @@ function setup_custom_buttons(frm) {
 		});
 	}, __("历史记录"));
 }
+
+
