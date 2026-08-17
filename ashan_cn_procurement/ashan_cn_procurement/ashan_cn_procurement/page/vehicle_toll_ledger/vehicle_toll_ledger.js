@@ -7,7 +7,7 @@ frappe.pages['vehicle-toll-ledger'].on_page_load = function(wrapper) {
     });
     var page = frappe.ui.make_app_page({
         parent: wrapper,
-        title: __('高速费月度台账大屏'),
+        title: __('高速费月度台账'),
         single_column: true
     });
     wrapper.vehicle_toll_ledger = new VehicleTollLedger(wrapper, page);
@@ -63,42 +63,20 @@ class VehicleTollLedger {
         ];
     }
 
-    // ─── DOM 骨架 ────────────────────────────────────────────
+    // ─── DOM 骨架 (上面看情况，操作放在下面，详情在最下方) ─────
     init_dom() {
         this.$container.html(`
         <div class="toll-ledger-wrapper">
 
-            <!-- 顶部控制栏 -->
+            <!-- ❶ 顶部标题与状态（看情况） -->
             <div class="toll-header-bar">
                 <div class="toll-title-box">
                     <h3 class="toll-page-title">🛣️ 高速费月度台账</h3>
                     <span id="toll-status-badge" class="toll-status-badge status-open">🟢 正常录入中</span>
                 </div>
-
-                <div class="toll-period-selector">
-                    <button class="toll-btn-nav" id="btn-prev-month">◀</button>
-                    <select id="sel-year" class="toll-select-period"></select>
-                    <select id="sel-month" class="toll-select-period"></select>
-                    <button class="toll-btn-nav" id="btn-next-month">▶</button>
-                    <button class="toll-btn-nav" id="btn-cur-month">本月</button>
-                </div>
-                <div class="toll-actions">
-                    <button class="toll-btn toll-btn-secondary" id="btn-manage-vehicles">⚙️ 管理入池车辆</button>
-                    <button class="toll-btn toll-btn-lock" id="btn-toggle-lock" style="display:none;">🔒 本月核定</button>
-                </div>
             </div>
 
-            <!-- 自动保存状态条 -->
-            <div class="toll-autosave-bar" id="toll-autosave-bar">
-                <div class="autosave-left">
-                    <span id="autosave-status">数据已同步</span>
-                </div>
-                <div class="autosave-right">
-                    <span class="autosave-tip">💡 离开单元格或按 Enter/Tab 自动保存</span>
-                </div>
-            </div>
-
-            <!-- KPI 概览卡片 -->
+            <!-- ❷ 4个 KPI 概览指标卡（看情况：期初、通行费、预支、期末） -->
             <div class="toll-kpi-grid" id="kpi-grid" style="display:none;">
                 <div class="toll-kpi-card kpi-opening">
                     <div class="toll-kpi-title">期初结转余额</div>
@@ -118,12 +96,39 @@ class VehicleTollLedger {
                 </div>
             </div>
 
-            <!-- 车辆选项卡栏 -->
+            <!-- ❸ 操作控制栏（日期选择、本月核定、车辆入池、自动保存状态，放在 KPI 下方、详情上方） -->
+            <div class="toll-control-bar" id="toll-control-bar">
+                <div class="toll-control-left">
+                    <div class="toll-period-selector">
+                        <button class="toll-btn-nav" id="btn-prev-month">◀</button>
+                        <select id="sel-year" class="toll-select-period"></select>
+                        <select id="sel-month" class="toll-select-period"></select>
+                        <button class="toll-btn-nav" id="btn-next-month">▶</button>
+                        <button class="toll-btn-nav" id="btn-cur-month">本月</button>
+                    </div>
+                    <div class="toll-actions">
+                        <button class="toll-btn toll-btn-lock" id="btn-toggle-lock" style="display:none;">🔒 本月核定</button>
+                        <button class="toll-btn toll-btn-secondary" id="btn-manage-vehicles">⚙️ 管理入池车辆</button>
+                    </div>
+                </div>
+                <div class="toll-control-right">
+                    <div class="toll-autosave-bar" id="toll-autosave-bar">
+                        <div class="autosave-left">
+                            <span id="autosave-status">数据已同步</span>
+                        </div>
+                        <div class="autosave-right">
+                            <span class="autosave-tip">💡 按 Enter 换行首格 · 离开单元格自动同步</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ❹ 车辆选项卡栏 -->
             <div class="toll-tabs-wrapper" id="toll-tabs-wrapper" style="display:none;">
                 <div class="toll-tabs" id="toll-tabs-bar"></div>
             </div>
 
-            <!-- 台账区域 -->
+            <!-- ❺ 详情台账区域 -->
             <div class="toll-sheet-container" id="toll-sheet-container" style="display:none;">
 
                 <!-- 车辆人员信息栏 -->
@@ -148,7 +153,7 @@ class VehicleTollLedger {
 
                 <div class="toll-footer-bar">
                     <div class="toll-shortcuts">
-                        <span><kbd>Enter</kbd> 向下换格</span>
+                        <span><kbd>Enter</kbd> 换行跳转至首格</span>
                         <span><kbd>Tab</kbd> 向右换格</span>
                         <span>离开单元格自动同步保存</span>
                     </div>
@@ -158,6 +163,7 @@ class VehicleTollLedger {
             <!-- 空态 -->
             <div class="toll-empty-state" id="toll-empty-state" style="display:none;">
                 <div class="toll-empty-icon">🚗</div>
+
                 <div class="toll-empty-title">暂无入池车辆</div>
                 <div class="toll-empty-desc">点击上方「⚙️ 管理入池车辆」添加需要纳入高速费管理的车辆</div>
             </div>
@@ -461,22 +467,22 @@ class VehicleTollLedger {
             self.auto_save();
         });
 
-        // 键盘导航：Enter 向下换行，Tab 向右换格
-        $t.find('.cell-input').on('keydown', function(e) {
+        // 键盘导航：Enter 换行直接跳转到下一行的第一个单元格（趟次1）
+        $t.find('.cell-input, .cell-remark-input').on('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                const $td = $(this).closest('td');
-                const colIdx = $td.index();
-                const $nextRow = $td.closest('tr').next('tr:not(.row-summary)');
+                const $tr = $(this).closest('tr');
+                const $nextRow = $tr.next('tr:not(.row-summary)');
                 if ($nextRow.length) {
-                    const $nextInp = $nextRow.children('td').eq(colIdx).find('.cell-input');
-                    if ($nextInp.length) {
-                        $nextInp.focus().select();
+                    const $firstInp = $nextRow.find('.cell-input').first();
+                    if ($firstInp.length) {
+                        $firstInp.focus().select();
                     }
                 }
             }
         });
     }
+
 
     // ─── 自动保存状态指示 ────────────────────────────────────
     set_save_status(state) {
