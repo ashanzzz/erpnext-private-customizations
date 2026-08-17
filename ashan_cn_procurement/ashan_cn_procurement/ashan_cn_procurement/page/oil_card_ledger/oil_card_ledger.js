@@ -1376,31 +1376,45 @@ class UnifiedOilCardLedgerConsole {
 			const strName = String(c.name);
 			const isActive = this.activeCard && String(this.activeCard.name) === strName ? "is-active" : "";
 			const currentBal = flt(c.current_balance || 0);
-			const bal = formatMoney(currentBal);
+			const balNum = currentBal.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 			const cardNo = c.card_no_masked || c.card_code || "";
-			const balClass = currentBal === 0 ? "balance-zero" : "";
+			const orgText = c.supplier || c.company || "";
+
+			let balClass = "bal-positive";
+			if (currentBal < 0) {
+				balClass = "bal-negative";
+			} else if (currentBal === 0) {
+				balClass = "bal-zero";
+			}
 
 			const deleteBtnHtml = this.isManager ? `
-							<button type="button" class="btn-delete-card" data-name="${strName}" data-title="${c.card_name}" title="删除油卡档案">
-								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-							</button>
+				<button type="button" class="btn-delete-card" data-name="${strName}" data-title="${c.card_name}" title="删除油卡档案">
+					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+				</button>
 			` : "";
 
 			html += `
 				<div class="oil-card-item ${isActive}" data-name="${strName}">
 					<div class="card-item-top">
-						<span class="card-item-name" title="${c.card_name}">${c.card_name}</span>
+						<div class="card-title-wrap">
+							<span class="card-chip-icon">💳</span>
+							<span class="card-item-name" title="${c.card_name}">${c.card_name}</span>
+						</div>
 						<div class="card-top-right-group">
-							<span class="card-item-badge">${c.card_type || "油卡"}</span>
+							<span class="card-item-badge">${c.card_type || "主卡"}</span>
 							${deleteBtnHtml}
 						</div>
 					</div>
 					<div class="card-item-mid">
-						<span>${cardNo}</span>
+						<span class="card-no-text">${cardNo}</span>
+						${orgText ? `<span class="card-org-text" title="${orgText}">· ${orgText}</span>` : ""}
 					</div>
 					<div class="card-item-bot">
-						<span class="card-item-supplier" title="${c.supplier || c.company || ''}">${c.supplier || c.company || ""}</span>
-						<span class="card-item-balance ${balClass}">${bal}</span>
+						<span class="card-bal-label">实时余额</span>
+						<span class="card-item-balance ${balClass}">
+							<span class="currency-symbol">¥</span>
+							<span class="balance-num">${balNum}</span>
+						</span>
 					</div>
 				</div>
 			`;

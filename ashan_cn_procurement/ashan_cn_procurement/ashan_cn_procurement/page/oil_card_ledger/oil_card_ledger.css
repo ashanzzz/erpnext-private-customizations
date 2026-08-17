@@ -15,13 +15,13 @@
 
 /* ===== 左侧油卡导航栏 ===== */
 .oil-cards-sidebar {
-  width: 240px;
-  min-width: 240px;
-  max-width: 240px;
+  width: 256px;
+  min-width: 256px;
+  max-width: 256px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  padding: 12px;
+  padding: 12px 10px;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -32,12 +32,16 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
+  padding: 0 2px;
 }
 
 .sidebar-title {
   font-size: 13.5px;
   font-weight: 800;
   color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .btn-add-card {
@@ -47,85 +51,224 @@
   font-size: 11.5px;
   font-weight: 700;
   border-radius: 6px;
-  padding: 3px 8px;
+  padding: 3px 9px;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 .btn-add-card:hover {
   background: #dbeafe;
+  border-color: #93c5fd;
 }
 
 .card-search-box {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 .card-search-input {
   width: 100%;
-  padding: 6px 9px;
+  padding: 6.5px 10px;
   font-size: 12px;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   background: #fff;
   box-sizing: border-box;
   outline: none;
+  transition: all 0.15s ease;
 }
 .card-search-input:focus {
   border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 2.5px rgba(59, 130, 246, 0.15);
 }
 
 .cards-list-container {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 4px 6px 12px 6px;
+  padding: 2px 2px 12px 2px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
+/* ===== 精致科学油卡卡片 (Oil Card Item) ===== */
 .oil-card-item {
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-left: 3.5px solid #cbd5e1;
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 9px 11px 8px 11px;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 3.5px;
 }
 
 .oil-card-item:hover {
   border-color: #94a3b8;
   border-left-color: #64748b;
-  transform: translateY(-1px);
-  background: #f8fafc;
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1.5px);
+  background: #fcfdfe;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
 }
 
 .oil-card-item.is-active {
-  border-color: #bfdbfe;
+  border-color: #93c5fd;
   border-left: 4px solid #2563eb;
-  background: #f0f7ff;
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.08);
-}
-
-.oil-card-item.is-active .card-item-name {
-  color: #1d4ed8;
+  background: linear-gradient(135deg, #f8fbff 0%, #f0f7ff 100%);
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.08);
 }
 
 .card-item-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  min-width: 0;
+}
+
+.card-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+  margin-right: 6px;
+}
+
+.card-chip-icon {
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.card-item-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.1px;
+}
+
+.oil-card-item.is-active .card-item-name {
+  color: #1d4ed8;
 }
 
 .card-top-right-group {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   flex-shrink: 0;
+}
+
+.card-item-badge {
+  font-size: 10px;
+  padding: 1.5px 5.5px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #475569;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.oil-card-item.is-active .card-item-badge {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.card-item-mid {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 1px;
+}
+
+.card-no-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 600;
+  color: #475569;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.card-org-text {
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+}
+
+.card-item-bot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 3px;
+  padding-top: 5px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.oil-card-item.is-active .card-item-bot {
+  border-top: 1px dashed #bfdbfe;
+}
+
+.card-bal-label {
+  font-size: 10.5px;
+  color: #94a3b8;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+}
+
+.oil-card-item.is-active .card-bal-label {
+  color: #64748b;
+}
+
+.card-item-balance {
+  font-size: 13.5px;
+  font-weight: 800;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1.5px;
+}
+
+.card-item-balance.bal-positive {
+  color: #059669;
+}
+
+.card-item-balance.bal-negative {
+  color: #dc2626;
+}
+
+.card-item-balance.bal-zero {
+  color: #64748b;
+  font-weight: 700;
+}
+
+.card-item-balance .currency-symbol {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.card-item-balance .balance-num {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: -0.2px;
 }
 
 .btn-delete-card {
@@ -133,14 +276,14 @@
   visibility: hidden;
   background: transparent;
   border: none;
-  padding: 2px 4px;
+  padding: 2px 3px;
   border-radius: 4px;
   color: #94a3b8;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1;
   transition: all 0.15s ease;
 }
@@ -154,64 +297,6 @@
 .btn-delete-card:hover {
   color: #ef4444 !important;
   background: #fee2e2 !important;
-}
-
-.card-item-name {
-  font-size: 13px;
-  font-weight: 700;
-  color: #1e293b;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  margin-right: 6px;
-}
-
-.card-item-badge {
-  font-size: 10.5px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: #f1f5f9;
-  color: #475569;
-  font-weight: 600;
-}
-
-.oil-card-item.is-active .card-item-badge {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.card-item-mid {
-  font-size: 11px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  color: #64748b;
-  margin-bottom: 6px;
-}
-
-.card-item-bot {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-
-.card-item-supplier {
-  font-size: 11px;
-  color: #94a3b8;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 130px;
-}
-
-.card-item-balance {
-  font-size: 13px;
-  font-weight: 800;
-  color: #047857;
-}
-
-.card-item-balance.balance-zero {
-  color: #64748b;
-  font-weight: 700;
 }
 
 /* ===== 右侧主控制台 ===== */
