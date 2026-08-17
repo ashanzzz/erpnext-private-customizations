@@ -273,14 +273,22 @@ class TestPropertySettlement(unittest.TestCase):
 			]
 		}
 
-		# 1. 导出全套工作簿
+		# 1. 导出全套工作簿 (每公司 2 Sheet + 合计 2 Sheet)
 		wb_all = generate_settlement_excel_workbook(mock_data, mode="all")
-		self.assertIn("合计单证", wb_all.sheetnames)
-		self.assertTrue(len(wb_all.sheetnames) >= 2)
+		self.assertIn("合计水电费", wb_all.sheetnames)
+		self.assertIn("合计房租物业", wb_all.sheetnames)
+		self.assertTrue(len(wb_all.sheetnames) >= 4)
 
-		# 2. 导出单公司单证
+		# 2. 导出单公司: 产生 2 个 Sheet (水电费 + 房租物业)
 		wb_comp = generate_settlement_excel_workbook(mock_data, company=self.comp_jz, mode="company")
-		self.assertEqual(len(wb_comp.sheetnames), 1)
-		ws = wb_comp.active
-		self.assertEqual(ws.cell(1, 1).value, self.comp_jz)
-		self.assertEqual(ws.cell(2, 1).value, "物业明细（单价含税）")
+		self.assertEqual(len(wb_comp.sheetnames), 2)
+		ws_e = wb_comp.active  # 第一个 Sheet = 水电费
+		self.assertEqual(ws_e.cell(1, 1).value, self.comp_jz)
+		self.assertEqual(ws_e.cell(2, 1).value, "水电费明细（单价含税）")
+		# 第三行应为「所属期」
+		row3_val = str(ws_e.cell(3, 1).value or "")
+		self.assertIn("所属期", row3_val)
+		ws_l = wb_comp[wb_comp.sheetnames[1]]  # 第二个 Sheet = 房租物业
+		self.assertEqual(ws_l.cell(1, 1).value, self.comp_jz)
+		self.assertEqual(ws_l.cell(2, 1).value, "房租物业费明细（单价含税）")
+

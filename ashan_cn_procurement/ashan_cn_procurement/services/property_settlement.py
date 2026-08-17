@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Ashan CN Procurement and contributors
+﻿# Copyright (c) 2026, Ashan CN Procurement and contributors
 # For license information, please see license.txt
 
 import io
@@ -579,363 +579,133 @@ def revert_settlement_to_draft(name):
 def get_sheet_title(company_name):
 	"""根据公司名称匹配原版 Excel Sheet 命名方式"""
 	if "祺富" in company_name:
-		return "祺富单证"
+		return "祺富"
 	elif "吉众" in company_name:
-		return "吉众单证"
+		return "吉众"
 	elif "合计" in company_name or "全公司" in company_name:
-		return "合计单证"
+		return "合计"
 	else:
-		return f"{company_name[:2]}单证" if len(company_name) <= 6 else f"{company_name[:4]}单证"
+		return company_name[:4] if len(company_name) > 4 else company_name
 
 
-def render_excel_bill_sheet(ws, sheet_title, company_name, settlement_month, prop_mgmt_co, meters, leases, adjustments, summary, is_total=False):
-	"""
-	1:1 精确复刻《抄表记录.xlsx》祺富单证 / 吉众单证 / 合计单证 格式、行高、列宽、边框与公式
-	"""
-	ws.title = sheet_title
-	ws.views.sheetView[0].showGridLines = True
-
-	# 1:1 列宽 (完全匹配原版表格)
-	col_widths = {
-		1: 18.0, # 表号 / 公司名
-		2: 14.0, # 上期表数 / 金额
-		3: 14.0, # 本期表数 / 税率
-		4: 14.0, # 本期用电/本期用水 / 税额
-		5: 10.0, # 倍率 / 合计
-		6: 14.0, # 核定度数/核定m³ / 数量
-		7: 12.0, # 单价 / 单位
-		8: 18.0  # 总价 / 水电费合计
-	}
-	for col_idx, width in col_widths.items():
-		ws.column_dimensions[get_column_letter(col_idx)].width = width
-
-	# 边框定义
+def _setup_ws_styles():
+	"""返回公共样式常量字典"""
 	thin_side = Side(style='thin', color='000000')
 	med_side = Side(style='medium', color='000000')
+	return {
+		"thin": thin_side,
+		"med": med_side,
+		"b_all_thin": Border(top=thin_side, bottom=thin_side, left=thin_side, right=thin_side),
+		"b_left_med": Border(top=thin_side, bottom=thin_side, left=med_side, right=thin_side),
+		"b_right_med": Border(top=thin_side, bottom=thin_side, left=thin_side, right=med_side),
+		"b_sec_title": Border(top=med_side, bottom=thin_side, left=med_side, right=med_side),
+		"b_bot_total": Border(top=thin_side, bottom=med_side, left=thin_side, right=thin_side),
+		"b_bot_total_left": Border(top=thin_side, bottom=med_side, left=med_side, right=thin_side),
+		"b_bot_total_right": Border(top=thin_side, bottom=med_side, left=thin_side, right=med_side),
+		"font_main_title": Font(name="等线", size=18, bold=True),
+		"font_subtitle": Font(name="等线", size=12, bold=False),
+		"font_meta": Font(name="等线", size=11, bold=False),
+		"font_sec_hdr": Font(name="等线", size=11, bold=False),
+		"font_tbl_hdr": Font(name="等线", size=11, bold=True),
+		"font_data": Font(name="等线", size=11, bold=False),
+		"font_total": Font(name="等线", size=11, bold=True),
+		"font_grand_total": Font(name="等线", size=20, bold=False),
+		"align_center": Alignment(horizontal="center", vertical="center"),
+		"align_left": Alignment(horizontal="left", vertical="center"),
+	}
 
-	b_all_thin = Border(top=thin_side, bottom=thin_side, left=thin_side, right=thin_side)
-	b_left_med = Border(top=thin_side, bottom=thin_side, left=med_side, right=thin_side)
-	b_right_med = Border(top=thin_side, bottom=thin_side, left=thin_side, right=med_side)
-	b_sec_title = Border(top=med_side, bottom=thin_side, left=med_side, right=med_side)
-	b_bot_total = Border(top=thin_side, bottom=med_side, left=thin_side, right=thin_side)
-	b_bot_total_left = Border(top=thin_side, bottom=med_side, left=med_side, right=thin_side)
-	b_bot_total_right = Border(top=thin_side, bottom=med_side, left=thin_side, right=med_side)
 
-	# 字体定义 (完全匹配原表格：等线 11pt, 标题 18pt, 水电费合计大字 20pt)
-	font_main_title = Font(name="等线", size=18, bold=True)
-	font_subtitle = Font(name="等线", size=12, bold=False)
-	font_meta = Font(name="等线", size=11, bold=False)
-	font_sec_hdr = Font(name="等线", size=11, bold=False)
-	font_tbl_hdr = Font(name="等线", size=11, bold=True)
-	font_data = Font(name="等线", size=11, bold=False)
-	font_total = Font(name="等线", size=11, bold=True)
-	font_grand_total = Font(name="等线", size=20, bold=False)
+def _write_col_widths(ws, widths_map):
+	for col_idx, width in widths_map.items():
+		ws.column_dimensions[get_column_letter(col_idx)].width = width
 
-	align_center = Alignment(horizontal="center", vertical="center")
 
+def _write_header_rows(ws, company_name, sheet_type, settlement_month, prop_mgmt_co, s):
+	"""
+	写入前 3 行通用表头:
+	  Row 1: 公司名 (18pt 粗体, 合并 A:H)
+	  Row 2: 副标题 (水电费明细 or 房租物业费明细)
+	  Row 3: 所属期 YYYY-MM (合并 A:H)
+	"""
+	align_center = s["align_center"]
 	curr_row = 1
 
-	# ─── Row 1: 公司抬头 (Merge A1:H1, height 30) ───
+	# Row 1 公司名
 	ws.row_dimensions[curr_row].height = 30.0
 	ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=8)
 	c1 = ws.cell(curr_row, 1, company_name)
-	c1.font = font_main_title
+	c1.font = s["font_main_title"]
 	c1.alignment = align_center
 	curr_row += 1
 
-	# ─── Row 2: 副标题 物业明细（单价含税） (Merge A2:H2, height 24) ───
+	# Row 2 副标题
 	ws.row_dimensions[curr_row].height = 24.0
 	ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=8)
-	c2 = ws.cell(curr_row, 1, "物业明细（单价含税）")
-	c2.font = font_subtitle
+	subtitle = "水电费明细（单价含税）" if sheet_type == "water_elec" else "房租物业费明细（单价含税）"
+	c2 = ws.cell(curr_row, 1, subtitle)
+	c2.font = s["font_subtitle"]
 	c2.alignment = align_center
 	curr_row += 1
 
-	# ─── Row 3: 元数据 (height 27, 上期日期 / 本期日期 / 核定日期 / 物业公司) ───
+	# Row 3 所属期  改为单一「所属期: YYYY-MM」
 	ws.row_dimensions[curr_row].height = 27.0
-	s_date = str(settlement_month)[:10]
-
-	ws.cell(curr_row, 1, "上期日期").font = font_meta
-	ws.cell(curr_row, 2, s_date).font = font_meta
-	ws.cell(curr_row, 3, "本期日期").font = font_meta
-
-	ws.merge_cells(start_row=curr_row, start_column=4, end_row=curr_row, end_column=5)
-	ws.cell(curr_row, 4, s_date).font = font_meta
-
-	ws.cell(curr_row, 6, "核定日期").font = font_meta
-
-	ws.merge_cells(start_row=curr_row, start_column=7, end_row=curr_row, end_column=8)
-	ws.cell(curr_row, 7, s_date).font = font_meta
-
-	for c in range(1, 9):
-		ws.cell(curr_row, c).alignment = align_center
-	curr_row += 1
-
-	# ─── 1. 电费部分 ───
-	# Row 4: 电费 (Merge A:H, height 27)
-	ws.row_dimensions[curr_row].height = 27.0
+	month_str = str(settlement_month)[:7]  # e.g. "2026-08"
 	ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=8)
-	c_sec_e = ws.cell(curr_row, 1, "电费")
-	c_sec_e.font = font_sec_hdr
-	c_sec_e.alignment = align_center
-	for c in range(1, 9):
-		ws.cell(curr_row, c).border = b_sec_title
+	c3 = ws.cell(curr_row, 1, f"所属期: {month_str}    物业公司: {prop_mgmt_co}")
+	c3.font = s["font_meta"]
+	c3.alignment = align_center
 	curr_row += 1
 
-	# Row 5: 表头
-	ws.row_dimensions[curr_row].height = 27.0
-	e_headers = ["表号", "上期表数", "本期表数", "本期用电", "倍率", "核定度数", "单价", "总价"]
-	for c_idx, h in enumerate(e_headers, start=1):
-		cell = ws.cell(curr_row, c_idx, h)
-		cell.font = font_tbl_hdr
-		cell.alignment = align_center
-		if c_idx == 1:
-			cell.border = b_left_med
-		elif c_idx == 8:
-			cell.border = b_right_med
-		else:
-			cell.border = b_all_thin
-	curr_row += 1
+	return curr_row  # 4
 
-	elec_start_row = curr_row
-	elec_meters = [m for m in meters if m.get("utility_type") in ["电", "电费"]]
-	for m in elec_meters:
-		ws.row_dimensions[curr_row].height = 27.0
-		ws.cell(curr_row, 1, m.get("meter_no"))
-		ws.cell(curr_row, 2, float(m.get("previous_reading", 0)))
-		ws.cell(curr_row, 3, float(m.get("current_reading", 0)))
-		ws.cell(curr_row, 4, f"=+C{curr_row}-B{curr_row}")
-		ws.cell(curr_row, 5, float(m.get("multiplier", 1)))
-		ws.cell(curr_row, 6, f"=+E{curr_row}*D{curr_row}")
-		ws.cell(curr_row, 7, float(m.get("unit_price", 0)))
-		ws.cell(curr_row, 8, f"=ROUND(G{curr_row}*F{curr_row},0)")
 
-		for c in range(1, 9):
-			cell = ws.cell(curr_row, c)
-			cell.font = font_data
-			cell.alignment = align_center
-			if c in [2, 3, 4, 6]:
-				cell.number_format = "#,##0"
-			elif c == 7:
-				cell.number_format = "0.0000"
-			elif c == 8:
-				cell.number_format = "#,##0"
+def render_water_elec_sheet(ws, sheet_name, company_name, settlement_month, prop_mgmt_co,
+							meters, adjustments, summary, is_total=False):
+	"""
+	水电费 Sheet：电费 + 水费 + 水电费合计汇总 (不含房租物业)
+	只保留「表号」列，去掉「表具名称」
+	列布局 (8列): 表号 | 上期表数 | 本期表数 | 本期用电/水 | 倍率 | 核定度数/m³ | 单价 | 总价
+	"""
+	ws.title = sheet_name
+	ws.views.sheetView[0].showGridLines = True
+	s = _setup_ws_styles()
 
-			if c == 1:
-				cell.border = b_left_med
-			elif c == 8:
-				cell.border = b_right_med
-			else:
-				cell.border = b_all_thin
-		curr_row += 1
+	# 列宽 (8列，匹配原版)
+	_write_col_widths(ws, {1: 14.0, 2: 14.0, 3: 14.0, 4: 14.0, 5: 10.0, 6: 14.0, 7: 12.0, 8: 18.0})
 
-	# 电费调整行（名称统一简化为「电费调整」）
-	elec_adjs = [a for a in adjustments if a.get("utility_type") in ["电费", "电"]]
-	for a in elec_adjs:
-		ws.row_dimensions[curr_row].height = 27.0
-		adj_title = "电费调整"
-		ws.cell(curr_row, 1, adj_title)
-		ws.cell(curr_row, 2, "")
-		ws.cell(curr_row, 3, "")
-		ws.cell(curr_row, 4, float(a.get("usage", 0)))
-		ws.cell(curr_row, 5, 1)
-		ws.cell(curr_row, 6, float(a.get("usage", 0)))
-		ws.cell(curr_row, 7, "")
-		ws.cell(curr_row, 8, float(a.get("amount", 0)))
+	curr_row = _write_header_rows(ws, company_name, "water_elec", settlement_month, prop_mgmt_co, s)
 
-		for c in range(1, 9):
-			cell = ws.cell(curr_row, c)
-			cell.font = font_data
-			cell.alignment = align_center
-			if c in [4, 6, 8]:
-				cell.number_format = "#,##0"
-			if c == 1:
-				cell.border = b_left_med
-			elif c == 8:
-				cell.border = b_right_med
-			else:
-				cell.border = b_all_thin
-		curr_row += 1
+	b_all_thin = s["b_all_thin"]
+	b_left_med = s["b_left_med"]
+	b_right_med = s["b_right_med"]
+	b_sec_title = s["b_sec_title"]
+	b_bot_total = s["b_bot_total"]
+	b_bot_total_left = s["b_bot_total_left"]
+	b_bot_total_right = s["b_bot_total_right"]
+	font_data = s["font_data"]
+	font_total = s["font_total"]
+	font_tbl_hdr = s["font_tbl_hdr"]
+	font_sec_hdr = s["font_sec_hdr"]
+	align_center = s["align_center"]
+	med_side = s["med"]
+	thin_side = s["thin"]
 
-	if curr_row == elec_start_row:
-		ws.row_dimensions[curr_row].height = 27.0
-		ws.cell(curr_row, 1, "—")
-		for c in range(1, 9):
-			cell = ws.cell(curr_row, c)
-			cell.font = font_data
-			cell.alignment = align_center
-			cell.border = b_left_med if c == 1 else (b_right_med if c == 8 else b_all_thin)
-		curr_row += 1
-
-	# 电费合计行 (Merge A:C, height 27)
-	ws.row_dimensions[curr_row].height = 27.0
-	ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=3)
-	ws.cell(curr_row, 1, "合计").font = font_total
-	ws.cell(curr_row, 4, f"=SUM(D{elec_start_row}:D{curr_row-1})").font = font_total
-	ws.cell(curr_row, 5, "")
-	ws.cell(curr_row, 6, f"=SUM(F{elec_start_row}:F{curr_row-1})").font = font_total
-	ws.cell(curr_row, 7, "")
-	ws.cell(curr_row, 8, f"=SUM(H{elec_start_row}:H{curr_row-1})").font = font_total
-
-	for c in range(1, 9):
-		cell = ws.cell(curr_row, c)
-		cell.alignment = align_center
-		if c in [4, 6, 8]:
-			cell.number_format = "#,##0"
-		if c <= 3:
-			cell.border = b_bot_total_left if c == 1 else b_bot_total
-		elif c == 8:
-			cell.border = b_bot_total_right
-		else:
-			cell.border = b_bot_total
-
-	elec_total_row = curr_row
-	curr_row += 1
-
-	# 空行间隔 (height 18)
-	ws.row_dimensions[curr_row].height = 18.0
-	curr_row += 1
-
-	# ─── 2. 水费部分 ───
-	# 水费 Section Header (Merge A:H, height 27)
-	ws.row_dimensions[curr_row].height = 27.0
-	ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=8)
-	c_sec_w = ws.cell(curr_row, 1, "水费")
-	c_sec_w.font = font_sec_hdr
-	c_sec_w.alignment = align_center
-	for c in range(1, 9):
-		ws.cell(curr_row, c).border = b_sec_title
-	curr_row += 1
-
-	# 水费表头
-	ws.row_dimensions[curr_row].height = 27.0
-	w_headers = ["表号", "上期表数", "本期表数", "本期用水", "倍率", "核定m³", "单价", "总价"]
-	for c_idx, h in enumerate(w_headers, start=1):
-		cell = ws.cell(curr_row, c_idx, h)
-		cell.font = font_tbl_hdr
-		cell.alignment = align_center
-		if c_idx == 1:
-			cell.border = b_left_med
-		elif c_idx == 8:
-			cell.border = b_right_med
-		else:
-			cell.border = b_all_thin
-	curr_row += 1
-
-	water_start_row = curr_row
-	water_meters = [m for m in meters if m.get("utility_type") in ["水", "水费"]]
-	for m in water_meters:
-		ws.row_dimensions[curr_row].height = 27.0
-		ws.cell(curr_row, 1, m.get("meter_no"))
-		ws.cell(curr_row, 2, float(m.get("previous_reading", 0)))
-		ws.cell(curr_row, 3, float(m.get("current_reading", 0)))
-		ws.cell(curr_row, 4, f"=+C{curr_row}-B{curr_row}")
-		ws.cell(curr_row, 5, float(m.get("multiplier", 1)))
-		ws.cell(curr_row, 6, f"=+E{curr_row}*D{curr_row}")
-		ws.cell(curr_row, 7, float(m.get("unit_price", 0)))
-		ws.cell(curr_row, 8, f"=ROUND(G{curr_row}*F{curr_row},0)")
-
-		for c in range(1, 9):
-			cell = ws.cell(curr_row, c)
-			cell.font = font_data
-			cell.alignment = align_center
-			if c in [2, 3, 4, 6]:
-				cell.number_format = "#,##0"
-			elif c == 7:
-				cell.number_format = "0.0000"
-			elif c == 8:
-				cell.number_format = "#,##0"
-
-			if c == 1:
-				cell.border = b_left_med
-			elif c == 8:
-				cell.border = b_right_med
-			else:
-				cell.border = b_all_thin
-		curr_row += 1
-
-	# 水费调整项（名称统一简化为「水费调整」）
-	water_adjs = [a for a in adjustments if a.get("utility_type") in ["水费", "水"]]
-	for a in water_adjs:
-		ws.row_dimensions[curr_row].height = 27.0
-		adj_title = "水费调整"
-		ws.cell(curr_row, 1, adj_title)
-		ws.cell(curr_row, 2, "")
-		ws.cell(curr_row, 3, "")
-		ws.cell(curr_row, 4, float(a.get("usage", 0)))
-		ws.cell(curr_row, 5, 1)
-		ws.cell(curr_row, 6, float(a.get("usage", 0)))
-		ws.cell(curr_row, 7, "")
-		ws.cell(curr_row, 8, float(a.get("amount", 0)))
-
-		for c in range(1, 9):
-			cell = ws.cell(curr_row, c)
-			cell.font = font_data
-			cell.alignment = align_center
-			if c in [4, 6, 8]:
-				cell.number_format = "#,##0"
-			if c == 1:
-				cell.border = b_left_med
-			elif c == 8:
-				cell.border = b_right_med
-			else:
-				cell.border = b_all_thin
-		curr_row += 1
-
-	if curr_row == water_start_row:
-		ws.row_dimensions[curr_row].height = 27.0
-		ws.cell(curr_row, 1, "—")
-		for c in range(1, 9):
-			cell = ws.cell(curr_row, c)
-			cell.font = font_data
-			cell.alignment = align_center
-			cell.border = b_left_med if c == 1 else (b_right_med if c == 8 else b_all_thin)
-		curr_row += 1
-
-	# 水费合计行 (Merge A:C, height 27)
-	ws.row_dimensions[curr_row].height = 27.0
-	ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=3)
-	ws.cell(curr_row, 1, "合计").font = font_total
-	ws.cell(curr_row, 4, f"=SUM(D{water_start_row}:D{curr_row-1})").font = font_total
-	ws.cell(curr_row, 5, "")
-	ws.cell(curr_row, 6, f"=SUM(F{water_start_row}:F{curr_row-1})").font = font_total
-	ws.cell(curr_row, 7, "")
-	ws.cell(curr_row, 8, f"=SUM(H{water_start_row}:H{curr_row-1})").font = font_total
-
-	for c in range(1, 9):
-		cell = ws.cell(curr_row, c)
-		cell.alignment = align_center
-		if c in [4, 6, 8]:
-			cell.number_format = "#,##0"
-		if c <= 3:
-			cell.border = b_bot_total_left if c == 1 else b_bot_total
-		elif c == 8:
-			cell.border = b_bot_total_right
-		else:
-			cell.border = b_bot_total
-
-	water_total_row = curr_row
-	curr_row += 1
-
-	# 空行间隔 (height 18)
-	ws.row_dimensions[curr_row].height = 18.0
-	curr_row += 1
-
-	# ─── 3. 房租与物业费部分 (若有) ───
-	lease_total_row = None
-	if leases:
+	def write_meter_section(section_title, util_type_list, unit_label):
+		nonlocal curr_row
+		# Section Header
 		ws.row_dimensions[curr_row].height = 27.0
 		ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=8)
-		c_sec_l = ws.cell(curr_row, 1, "房租与物业费")
-		c_sec_l.font = font_sec_hdr
-		c_sec_l.alignment = align_center
+		c_sec = ws.cell(curr_row, 1, section_title)
+		c_sec.font = font_sec_hdr
+		c_sec.alignment = align_center
 		for c in range(1, 9):
 			ws.cell(curr_row, c).border = b_sec_title
 		curr_row += 1
 
+		# 列头 (仅表号, 无表具名称)
 		ws.row_dimensions[curr_row].height = 27.0
-		l_headers = ["场地名称", "面积(㎡)", "计费天数", "房租单价", "物业费计收", "房租金额", "物业费金额", "含税合计"]
-		for c_idx, h in enumerate(l_headers, start=1):
+		headers = ["表号", "上期表数", "本期表数", f"本期用{unit_label}", "倍率", f"核定{unit_label}", "单价", "总价"]
+		for c_idx, h in enumerate(headers, start=1):
 			cell = ws.cell(curr_row, c_idx, h)
 			cell.font = font_tbl_hdr
 			cell.alignment = align_center
@@ -947,73 +717,101 @@ def render_excel_bill_sheet(ws, sheet_title, company_name, settlement_month, pro
 				cell.border = b_all_thin
 		curr_row += 1
 
-		lease_start_row = curr_row
-		for l in leases:
+		# 数据行
+		sec_meters = [m for m in meters if m.get("utility_type") in util_type_list]
+		sec_adjs   = [a for a in adjustments if a.get("utility_type") in (["电费"] if "电" in util_type_list else ["水费"])]
+		data_start = curr_row
+
+		for m in sec_meters:
 			ws.row_dimensions[curr_row].height = 27.0
-			ws.cell(curr_row, 1, l.get("property_name", ""))
-			ws.cell(curr_row, 2, float(l.get("area", 0)))
-			ws.cell(curr_row, 3, int(l.get("billing_days", 30)))
-
-			r_snap = l.get("rent_rate_snapshot")
-			if not r_snap or str(r_snap).strip() == "None":
-				r_snap = "—"
-			p_snap = l.get("property_fee_rate_snapshot")
-			if not p_snap or str(p_snap).strip() == "None":
-				p_snap = "已含在房租中" if l.get("property_fee_mode") != "单独计收物业费" else "—"
-
-			ws.cell(curr_row, 4, str(r_snap))
-			ws.cell(curr_row, 5, str(p_snap))
-			ws.cell(curr_row, 6, float(l.get("rent_amount_tax_incl") or 0))
-			ws.cell(curr_row, 7, float(l.get("property_fee_amount_tax_incl") or 0))
-			ws.cell(curr_row, 8, f"=SUM(F{curr_row}:G{curr_row})")
-
+			ws.cell(curr_row, 1, m.get("meter_no"))
+			ws.cell(curr_row, 2, float(m.get("previous_reading", 0)))
+			ws.cell(curr_row, 3, float(m.get("current_reading", 0)))
+			ws.cell(curr_row, 4, f"=+C{curr_row}-B{curr_row}")
+			ws.cell(curr_row, 5, float(m.get("multiplier", 1)))
+			ws.cell(curr_row, 6, f"=+E{curr_row}*D{curr_row}")
+			ws.cell(curr_row, 7, float(m.get("unit_price", 0)))
+			ws.cell(curr_row, 8, f"=ROUND(G{curr_row}*F{curr_row},0)")
 			for c in range(1, 9):
 				cell = ws.cell(curr_row, c)
 				cell.font = font_data
 				cell.alignment = align_center
-				if c in [2, 6, 7, 8]:
-					cell.number_format = "#,##0.00"
-				if c == 1:
-					cell.border = b_left_med
+				if c in [2, 3, 4, 6]:
+					cell.number_format = "#,##0"
+				elif c == 7:
+					cell.number_format = "0.0000"
 				elif c == 8:
-					cell.border = b_right_med
-				else:
-					cell.border = b_all_thin
+					cell.number_format = "#,##0"
+				cell.border = b_left_med if c == 1 else (b_right_med if c == 8 else b_all_thin)
 			curr_row += 1
 
-		# 房租合计行
-		ws.row_dimensions[curr_row].height = 27.0
-		ws.cell(curr_row, 1, "合计").font = font_total
-		ws.cell(curr_row, 2, f"=SUM(B{lease_start_row}:B{curr_row-1})").font = font_total
-		ws.cell(curr_row, 3, "")
-		ws.cell(curr_row, 4, "")
-		ws.cell(curr_row, 5, "")
-		ws.cell(curr_row, 6, f"=SUM(F{lease_start_row}:F{curr_row-1})").font = font_total
-		ws.cell(curr_row, 7, f"=SUM(G{lease_start_row}:G{curr_row-1})").font = font_total
-		ws.cell(curr_row, 8, f"=SUM(H{lease_start_row}:H{curr_row-1})").font = font_total
+		# 调整行 (电费调整 / 水费调整)
+		for a in sec_adjs:
+			ws.row_dimensions[curr_row].height = 27.0
+			adj_label = "电费调整" if "电" in util_type_list else "水费调整"
+			ws.cell(curr_row, 1, adj_label)
+			ws.cell(curr_row, 2, "")
+			ws.cell(curr_row, 3, "")
+			ws.cell(curr_row, 4, float(a.get("usage", 0)))
+			ws.cell(curr_row, 5, 1)
+			ws.cell(curr_row, 6, float(a.get("usage", 0)))
+			ws.cell(curr_row, 7, "")
+			ws.cell(curr_row, 8, float(a.get("amount", 0)))
+			for c in range(1, 9):
+				cell = ws.cell(curr_row, c)
+				cell.font = font_data
+				cell.alignment = align_center
+				if c in [4, 6, 8]:
+					cell.number_format = "#,##0"
+				cell.border = b_left_med if c == 1 else (b_right_med if c == 8 else b_all_thin)
+			curr_row += 1
 
+		# 若无数据行
+		if curr_row == data_start:
+			ws.row_dimensions[curr_row].height = 27.0
+			ws.cell(curr_row, 1, "—")
+			for c in range(1, 9):
+				cell = ws.cell(curr_row, c)
+				cell.font = font_data
+				cell.alignment = align_center
+				cell.border = b_left_med if c == 1 else (b_right_med if c == 8 else b_all_thin)
+			curr_row += 1
+
+		# 合计行 (A:C 合并)
+		ws.row_dimensions[curr_row].height = 27.0
+		ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=3)
+		ws.cell(curr_row, 1, "合计").font = font_total
+		ws.cell(curr_row, 4, f"=SUM(D{data_start}:D{curr_row-1})").font = font_total
+		ws.cell(curr_row, 5, "")
+		ws.cell(curr_row, 6, f"=SUM(F{data_start}:F{curr_row-1})").font = font_total
+		ws.cell(curr_row, 7, "")
+		ws.cell(curr_row, 8, f"=SUM(H{data_start}:H{curr_row-1})").font = font_total
 		for c in range(1, 9):
 			cell = ws.cell(curr_row, c)
 			cell.alignment = align_center
-			if c in [2, 6, 7, 8]:
-				cell.number_format = "#,##0.00"
-			if c == 1:
-				cell.border = b_bot_total_left
+			if c in [4, 6, 8]:
+				cell.number_format = "#,##0"
+			if c <= 3:
+				cell.border = b_bot_total_left if c == 1 else b_bot_total
 			elif c == 8:
 				cell.border = b_bot_total_right
 			else:
 				cell.border = b_bot_total
-
-		lease_total_row = curr_row
+		total_row = curr_row
 		curr_row += 1
 
+		# 空行间隔
 		ws.row_dimensions[curr_row].height = 18.0
 		curr_row += 1
+		return total_row
 
-	# ─── 4. 水电费合计汇总表 (1:1 匹配原版 Excel 最后大字合计) ───
+	elec_total_row = write_meter_section("电费", ["电", "电费"], "电")
+	water_total_row = write_meter_section("水费", ["水", "水费"], "水")
+
+	# ─── 水电费合计汇总 (不含房租物业) ───────────────────────
 	ws.row_dimensions[curr_row].height = 27.0
 	ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=8)
-	short_comp = "吉众" if "吉众" in company_name else ("祺富" if "祺富" in company_name else ("合计" if is_total or "合计" in company_name else company_name))
+	short_comp = get_sheet_title(company_name)
 	c_sec_tot = ws.cell(curr_row, 1, f"{short_comp}合计水电费")
 	c_sec_tot.font = font_sec_hdr
 	c_sec_tot.alignment = align_center
@@ -1023,22 +821,17 @@ def render_excel_bill_sheet(ws, sheet_title, company_name, settlement_month, pro
 
 	# 汇总表头
 	ws.row_dimensions[curr_row].height = 27.0
-	tot_headers = ["项目", "金额", "税率", "税额", "合计", "数量", "单位", "水电费合计"]
+	tot_headers = ["项目", "不含税金额", "税率", "税额", "含税合计", "数量", "单位", "水电费合计"]
 	for c_idx, h in enumerate(tot_headers, start=1):
 		cell = ws.cell(curr_row, c_idx, h)
 		cell.font = font_tbl_hdr
 		cell.alignment = align_center
-		if c_idx == 1:
-			cell.border = b_left_med
-		elif c_idx == 8:
-			cell.border = b_right_med
-		else:
-			cell.border = b_all_thin
+		cell.border = b_left_med if c_idx == 1 else (b_right_med if c_idx == 8 else b_all_thin)
 	curr_row += 1
 
 	sum_start_row = curr_row
 
-	# 电费行
+	# 电费汇总行
 	ws.row_dimensions[curr_row].height = 27.0
 	ws.cell(curr_row, 1, "电费").font = font_data
 	ws.cell(curr_row, 2, f"=+E{curr_row}-D{curr_row}").font = font_data
@@ -1047,16 +840,6 @@ def render_excel_bill_sheet(ws, sheet_title, company_name, settlement_month, pro
 	ws.cell(curr_row, 5, f"=+H{elec_total_row}").font = font_data
 	ws.cell(curr_row, 6, f"=+F{elec_total_row}").font = font_data
 	ws.cell(curr_row, 7, f"=+E{curr_row}/F{curr_row}").font = font_data
-
-	# H 列大字合计单元格 (Merge H curr_row to sum_end_row)
-	sum_end_row = curr_row + (1 if not lease_total_row else 3)
-	ws.merge_cells(start_row=curr_row, start_column=8, end_row=sum_end_row, end_column=8)
-	sum_terms = "+".join([f"E{r}" for r in range(sum_start_row, sum_end_row + 1)])
-	c_grand = ws.cell(curr_row, 8, f"=+{sum_terms}")
-	c_grand.font = font_grand_total
-	c_grand.alignment = align_center
-	c_grand.number_format = "#,##0"
-
 	for c in range(1, 8):
 		cell = ws.cell(curr_row, c)
 		cell.alignment = align_center
@@ -1069,7 +852,7 @@ def render_excel_bill_sheet(ws, sheet_title, company_name, settlement_month, pro
 		cell.border = b_left_med if c == 1 else b_all_thin
 	curr_row += 1
 
-	# 水费行
+	# 水费汇总行
 	ws.row_dimensions[curr_row].height = 27.0
 	ws.cell(curr_row, 1, "水费").font = font_data
 	ws.cell(curr_row, 2, f"=+E{curr_row}-D{curr_row}").font = font_data
@@ -1078,7 +861,6 @@ def render_excel_bill_sheet(ws, sheet_title, company_name, settlement_month, pro
 	ws.cell(curr_row, 5, f"=+H{water_total_row}").font = font_data
 	ws.cell(curr_row, 6, f"=+F{water_total_row}").font = font_data
 	ws.cell(curr_row, 7, f"=+E{curr_row}/F{curr_row}").font = font_data
-
 	for c in range(1, 8):
 		cell = ws.cell(curr_row, c)
 		cell.alignment = align_center
@@ -1089,58 +871,20 @@ def render_excel_bill_sheet(ws, sheet_title, company_name, settlement_month, pro
 		elif c in [5, 6]:
 			cell.number_format = "#,##0"
 		cell.border = b_left_med if c == 1 else b_all_thin
+	sum_end_row = curr_row
 	curr_row += 1
 
-	# 房租与物业费汇总行 (若有)
-	if lease_total_row:
-		# 房租行
-		ws.row_dimensions[curr_row].height = 27.0
-		ws.cell(curr_row, 1, "房租").font = font_data
-		ws.cell(curr_row, 2, f"=+E{curr_row}-D{curr_row}").font = font_data
-		ws.cell(curr_row, 3, 0.09).font = font_data
-		ws.cell(curr_row, 4, f"=E{curr_row}-E{curr_row}/(C{curr_row}+1)").font = font_data
-		ws.cell(curr_row, 5, f"=+F{lease_total_row}").font = font_data
-		ws.cell(curr_row, 6, f"=+B{lease_total_row}").font = font_data
-		ws.cell(curr_row, 7, "—").font = font_data
-
-		for c in range(1, 8):
-			cell = ws.cell(curr_row, c)
-			cell.alignment = align_center
-			if c in [2, 4]:
-				cell.number_format = "0.00"
-			elif c == 3:
-				cell.number_format = "0%"
-			elif c in [5, 6]:
-				cell.number_format = "#,##0.00"
-			cell.border = b_left_med if c == 1 else b_all_thin
-		curr_row += 1
-
-		# 物业费行
-		ws.row_dimensions[curr_row].height = 27.0
-		ws.cell(curr_row, 1, "物业费").font = font_data
-		ws.cell(curr_row, 2, f"=+E{curr_row}-D{curr_row}").font = font_data
-		ws.cell(curr_row, 3, 0.09).font = font_data
-		ws.cell(curr_row, 4, f"=E{curr_row}-E{curr_row}/(C{curr_row}+1)").font = font_data
-		ws.cell(curr_row, 5, f"=+G{lease_total_row}").font = font_data
-		ws.cell(curr_row, 6, f"=+B{lease_total_row}").font = font_data
-		ws.cell(curr_row, 7, "—").font = font_data
-
-		for c in range(1, 8):
-			cell = ws.cell(curr_row, c)
-			cell.alignment = align_center
-			if c in [2, 4]:
-				cell.number_format = "0.00"
-			elif c == 3:
-				cell.number_format = "0%"
-			elif c in [5, 6]:
-				cell.number_format = "#,##0.00"
-			cell.border = b_left_med if c == 1 else b_all_thin
-		curr_row += 1
+	# H 列大字合计 (跨 2 行: 电费行 + 水费行)
+	ws.merge_cells(start_row=sum_start_row, start_column=8, end_row=sum_end_row, end_column=8)
+	sum_terms = "+".join([f"E{r}" for r in range(sum_start_row, sum_end_row + 1)])
+	c_grand = ws.cell(sum_start_row, 8, f"=+{sum_terms}")
+	c_grand.font = s["font_grand_total"]
+	c_grand.alignment = align_center
+	c_grand.number_format = "#,##0"
 
 	# 封底底边粗边框
-	last_r = curr_row - 1
 	for c in range(1, 9):
-		cell = ws.cell(last_r, c)
+		cell = ws.cell(sum_end_row, c)
 		if c == 1:
 			cell.border = Border(top=cell.border.top, bottom=med_side, left=med_side, right=thin_side)
 		elif c == 8:
@@ -1149,10 +893,282 @@ def render_excel_bill_sheet(ws, sheet_title, company_name, settlement_month, pro
 			cell.border = Border(top=cell.border.top, bottom=med_side, left=thin_side, right=thin_side)
 
 
+def render_lease_sheet(ws, sheet_name, company_name, settlement_month, prop_mgmt_co, leases):
+	"""
+	房租物业费 Sheet：房租 + 物业费 (年缴费明细)
+	列布局 (8列): 场地名称 | 年金额(房租) | 年金额(物业费) | 面积(㎡) | 单价(元/㎡·年) | 物业费模式 | 所属期金额(房租) | 所属期金额(物业费)
+	最后 2 列展示按天折算后的本期费用
+	"""
+	ws.title = sheet_name
+	ws.views.sheetView[0].showGridLines = True
+	s = _setup_ws_styles()
+
+	# 列宽
+	_write_col_widths(ws, {1: 22.0, 2: 14.0, 3: 14.0, 4: 12.0, 5: 14.0, 6: 16.0, 7: 16.0, 8: 16.0})
+
+	curr_row = _write_header_rows(ws, company_name, "lease", settlement_month, prop_mgmt_co, s)
+
+	b_all_thin = s["b_all_thin"]
+	b_left_med = s["b_left_med"]
+	b_right_med = s["b_right_med"]
+	b_sec_title = s["b_sec_title"]
+	b_bot_total = s["b_bot_total"]
+	b_bot_total_left = s["b_bot_total_left"]
+	b_bot_total_right = s["b_bot_total_right"]
+	font_data = s["font_data"]
+	font_total = s["font_total"]
+	font_tbl_hdr = s["font_tbl_hdr"]
+	font_sec_hdr = s["font_sec_hdr"]
+	align_center = s["align_center"]
+	med_side = s["med"]
+	thin_side = s["thin"]
+
+	# ─── 房租部分 ───
+	ws.row_dimensions[curr_row].height = 27.0
+	ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=8)
+	c_sec_r = ws.cell(curr_row, 1, "房租")
+	c_sec_r.font = font_sec_hdr
+	c_sec_r.alignment = align_center
+	for c in range(1, 9):
+		ws.cell(curr_row, c).border = b_sec_title
+	curr_row += 1
+
+	# 列头
+	ws.row_dimensions[curr_row].height = 27.0
+	r_headers = ["场地名称", "年金额(元/年)", "面积(㎡)", "计费天数", "日单价(元/天)", "物业费计收方式", "所属期房租金额", "含税合计"]
+	for c_idx, h in enumerate(r_headers, start=1):
+		cell = ws.cell(curr_row, c_idx, h)
+		cell.font = font_tbl_hdr
+		cell.alignment = align_center
+		cell.border = b_left_med if c_idx == 1 else (b_right_med if c_idx == 8 else b_all_thin)
+	curr_row += 1
+
+	rent_start = curr_row
+	for l in leases:
+		ws.row_dimensions[curr_row].height = 27.0
+		ann_rent = float(l.get("rent_annual_amount") or 0)
+		area = float(l.get("area") or 0)
+		b_days = int(l.get("billing_days") or 0)
+		r_daily = ann_rent / 365.0 if ann_rent > 0 else float(l.get("rent_daily_rate") or 0)
+		rent_this_period = float(l.get("rent_amount_tax_incl") or 0)
+
+		prop_mode_label = "单独计收" if l.get("property_fee_mode") == "单独计收物业费" else "含在房租中"
+
+		ws.cell(curr_row, 1, str(l.get("property_name") or ""))
+		ws.cell(curr_row, 2, ann_rent)
+		ws.cell(curr_row, 3, area)
+		ws.cell(curr_row, 4, b_days)
+		ws.cell(curr_row, 5, round(r_daily, 6))
+		ws.cell(curr_row, 6, prop_mode_label)
+		ws.cell(curr_row, 7, rent_this_period)
+		ws.cell(curr_row, 8, rent_this_period)
+
+		for c in range(1, 9):
+			cell = ws.cell(curr_row, c)
+			cell.font = font_data
+			cell.alignment = align_center
+			if c in [2, 3, 5, 7, 8]:
+				cell.number_format = "#,##0.00"
+			cell.border = b_left_med if c == 1 else (b_right_med if c == 8 else b_all_thin)
+		curr_row += 1
+
+	if curr_row == rent_start:
+		ws.row_dimensions[curr_row].height = 27.0
+		ws.cell(curr_row, 1, "—")
+		for c in range(1, 9):
+			ws.cell(curr_row, c).font = font_data
+			ws.cell(curr_row, c).alignment = align_center
+			ws.cell(curr_row, c).border = b_left_med if c == 1 else (b_right_med if c == 8 else b_all_thin)
+		curr_row += 1
+
+	# 房租合计行
+	ws.row_dimensions[curr_row].height = 27.0
+	ws.cell(curr_row, 1, "合计").font = font_total
+	for c in [2, 3, 7, 8]:
+		ws.cell(curr_row, c, f"=SUM({get_column_letter(c)}{rent_start}:{get_column_letter(c)}{curr_row-1})").font = font_total
+	for c in range(1, 9):
+		cell = ws.cell(curr_row, c)
+		cell.alignment = align_center
+		if c in [2, 3, 7, 8]:
+			cell.number_format = "#,##0.00"
+		cell.border = b_bot_total_left if c == 1 else (b_bot_total_right if c == 8 else b_bot_total)
+	rent_total_row = curr_row
+	curr_row += 1
+
+	# 空行
+	ws.row_dimensions[curr_row].height = 18.0
+	curr_row += 1
+
+	# ─── 物业费部分 ───
+	ws.row_dimensions[curr_row].height = 27.0
+	ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=8)
+	c_sec_p = ws.cell(curr_row, 1, "物业费")
+	c_sec_p.font = font_sec_hdr
+	c_sec_p.alignment = align_center
+	for c in range(1, 9):
+		ws.cell(curr_row, c).border = b_sec_title
+	curr_row += 1
+
+	# 物业费列头
+	ws.row_dimensions[curr_row].height = 27.0
+	p_headers = ["场地名称", "年金额(元/年)", "面积(㎡)", "计费天数", "日单价(元/㎡·天)", "物业费计收方式", "所属期物业费", "含税合计"]
+	for c_idx, h in enumerate(p_headers, start=1):
+		cell = ws.cell(curr_row, c_idx, h)
+		cell.font = font_tbl_hdr
+		cell.alignment = align_center
+		cell.border = b_left_med if c_idx == 1 else (b_right_med if c_idx == 8 else b_all_thin)
+	curr_row += 1
+
+	prop_start = curr_row
+	prop_leases = [l for l in leases if l.get("property_fee_mode") == "单独计收物业费"]
+
+	for l in prop_leases:
+		ws.row_dimensions[curr_row].height = 27.0
+		ann_prop = float(l.get("property_fee_annual_amount") or 0)
+		area = float(l.get("area") or 0)
+		b_days = int(l.get("billing_days") or 0)
+		p_daily = ann_prop / area / 365.0 if (ann_prop > 0 and area > 0) else float(l.get("property_fee_daily_rate") or 0)
+		prop_this = float(l.get("property_fee_amount_tax_incl") or 0)
+		rate_snap = str(l.get("property_fee_rate_snapshot") or "")
+
+		ws.cell(curr_row, 1, str(l.get("property_name") or ""))
+		ws.cell(curr_row, 2, ann_prop)
+		ws.cell(curr_row, 3, area)
+		ws.cell(curr_row, 4, b_days)
+		ws.cell(curr_row, 5, round(p_daily, 6))
+		ws.cell(curr_row, 6, rate_snap)
+		ws.cell(curr_row, 7, prop_this)
+		ws.cell(curr_row, 8, prop_this)
+
+		for c in range(1, 9):
+			cell = ws.cell(curr_row, c)
+			cell.font = font_data
+			cell.alignment = align_center
+			if c in [2, 3, 5, 7, 8]:
+				cell.number_format = "#,##0.00"
+			cell.border = b_left_med if c == 1 else (b_right_med if c == 8 else b_all_thin)
+		curr_row += 1
+
+	if curr_row == prop_start:
+		ws.row_dimensions[curr_row].height = 27.0
+		ws.cell(curr_row, 1, "—")
+		for c in range(1, 9):
+			ws.cell(curr_row, c).font = font_data
+			ws.cell(curr_row, c).alignment = align_center
+			ws.cell(curr_row, c).border = b_left_med if c == 1 else (b_right_med if c == 8 else b_all_thin)
+		curr_row += 1
+
+	# 物业费合计行
+	ws.row_dimensions[curr_row].height = 27.0
+	ws.cell(curr_row, 1, "合计").font = font_total
+	for c in [2, 3, 7, 8]:
+		ws.cell(curr_row, c, f"=SUM({get_column_letter(c)}{prop_start}:{get_column_letter(c)}{curr_row-1})").font = font_total
+	for c in range(1, 9):
+		cell = ws.cell(curr_row, c)
+		cell.alignment = align_center
+		if c in [2, 3, 7, 8]:
+			cell.number_format = "#,##0.00"
+		cell.border = b_bot_total_left if c == 1 else (b_bot_total_right if c == 8 else b_bot_total)
+	prop_total_row = curr_row
+	curr_row += 1
+
+	# 空行
+	ws.row_dimensions[curr_row].height = 18.0
+	curr_row += 1
+
+	# ─── 房租物业费合计汇总 ─────────────────────────────────────
+	ws.row_dimensions[curr_row].height = 27.0
+	ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=8)
+	short_comp = get_sheet_title(company_name)
+	c_sec_tot = ws.cell(curr_row, 1, f"{short_comp}合计房租物业费")
+	c_sec_tot.font = font_sec_hdr
+	c_sec_tot.alignment = align_center
+	for c in range(1, 9):
+		ws.cell(curr_row, c).border = b_sec_title
+	curr_row += 1
+
+	# 汇总列头
+	ws.row_dimensions[curr_row].height = 27.0
+	sum_headers = ["项目", "不含税金额", "税率", "税额", "含税合计", "面积(㎡)", "单位", "房租物业合计"]
+	for c_idx, h in enumerate(sum_headers, start=1):
+		cell = ws.cell(curr_row, c_idx, h)
+		cell.font = font_tbl_hdr
+		cell.alignment = align_center
+		cell.border = b_left_med if c_idx == 1 else (b_right_med if c_idx == 8 else b_all_thin)
+	curr_row += 1
+
+	sum_start_row = curr_row
+
+	# 房租汇总行
+	ws.row_dimensions[curr_row].height = 27.0
+	ws.cell(curr_row, 1, "房租").font = font_data
+	ws.cell(curr_row, 2, f"=+E{curr_row}-D{curr_row}").font = font_data
+	ws.cell(curr_row, 3, 0.09).font = font_data
+	ws.cell(curr_row, 4, f"=E{curr_row}-E{curr_row}/(C{curr_row}+1)").font = font_data
+	ws.cell(curr_row, 5, f"=H{rent_total_row}").font = font_data
+	ws.cell(curr_row, 6, f"=C{rent_total_row}").font = font_data
+	ws.cell(curr_row, 7, "㎡").font = font_data
+	for c in range(1, 8):
+		cell = ws.cell(curr_row, c)
+		cell.alignment = align_center
+		if c in [2, 4]:
+			cell.number_format = "0.00"
+		elif c == 3:
+			cell.number_format = "0%"
+		elif c in [5, 6]:
+			cell.number_format = "#,##0.00"
+		cell.border = b_left_med if c == 1 else b_all_thin
+	curr_row += 1
+
+	# 物业费汇总行
+	ws.row_dimensions[curr_row].height = 27.0
+	ws.cell(curr_row, 1, "物业费").font = font_data
+	ws.cell(curr_row, 2, f"=+E{curr_row}-D{curr_row}").font = font_data
+	ws.cell(curr_row, 3, 0.09).font = font_data
+	ws.cell(curr_row, 4, f"=E{curr_row}-E{curr_row}/(C{curr_row}+1)").font = font_data
+	ws.cell(curr_row, 5, f"=H{prop_total_row}").font = font_data
+	ws.cell(curr_row, 6, f"=C{prop_total_row}").font = font_data
+	ws.cell(curr_row, 7, "㎡").font = font_data
+	for c in range(1, 8):
+		cell = ws.cell(curr_row, c)
+		cell.alignment = align_center
+		if c in [2, 4]:
+			cell.number_format = "0.00"
+		elif c == 3:
+			cell.number_format = "0%"
+		elif c in [5, 6]:
+			cell.number_format = "#,##0.00"
+		cell.border = b_left_med if c == 1 else b_all_thin
+	sum_end_row = curr_row
+	curr_row += 1
+
+	# H 列大字合计 (跨 2 行)
+	ws.merge_cells(start_row=sum_start_row, start_column=8, end_row=sum_end_row, end_column=8)
+	grand_terms = "+".join([f"E{r}" for r in range(sum_start_row, sum_end_row + 1)])
+	c_grand = ws.cell(sum_start_row, 8, f"=+{grand_terms}")
+	c_grand.font = s["font_grand_total"]
+	c_grand.alignment = align_center
+	c_grand.number_format = "#,##0"
+
+	# 封底底边粗边框
+	for c in range(1, 9):
+		cell = ws.cell(sum_end_row, c)
+		med = med_side
+		thn = thin_side
+		if c == 1:
+			cell.border = Border(top=cell.border.top, bottom=med, left=med, right=thn)
+		elif c == 8:
+			cell.border = Border(top=cell.border.top, bottom=med, left=thn, right=med)
+		else:
+			cell.border = Border(top=cell.border.top, bottom=med, left=thn, right=thn)
+
+
 def generate_settlement_excel_workbook(data, company=None, property_management_company=None, mode="single"):
 	"""
-	根据月结数据与指定模式生成 1:1 openpyxl Workbook
-	mode: "company" (单公司) | "total" (全公司合计) | "all" (包含所有分公司与合计的多Sheet工作簿)
+	生成物业月结工作簿:
+	  mode="company"  → 单公司: 水电费 Sheet + 房租物业 Sheet
+	  mode="total"    → 全公司合计: 水电费 Sheet + 房租物业 Sheet
+	  mode="all"      → 所有分公司各 2 Sheet + 合计 2 Sheet
 	"""
 	data = calculate_settlement_matrix(data)
 	wb = openpyxl.Workbook()
@@ -1165,7 +1181,6 @@ def generate_settlement_excel_workbook(data, company=None, property_management_c
 		comp_meters = [m for m in (data.get("meter_readings") or []) if m.get("company") == comp]
 		comp_leases = [l for l in (data.get("lease_charges") or []) if l.get("company") == comp]
 		comp_summary = next((s for s in (data.get("company_summaries") or []) if s.get("company") == comp), {})
-
 		comp_adjs = []
 		for a in (data.get("adjustments") or []):
 			if a.get("adjustment_scope") == "单公司" and a.get("company") == comp:
@@ -1195,51 +1210,52 @@ def generate_settlement_excel_workbook(data, company=None, property_management_c
 					})
 		return comp_meters, comp_leases, comp_adjs, comp_summary
 
+	def build_total_adjs():
+		total_adjs = []
+		for a in (data.get("adjustments") or []):
+			if a.get("adjustment_scope") == "单公司":
+				total_adjs.append({
+					"title": "电费调整" if a.get("utility_type") in ["电费", "电"] else "水费调整",
+					"utility_type": a.get("utility_type"),
+					"usage": flt(a.get("usage_adjustment")),
+					"amount": flt(a.get("amount_adjustment")),
+					"reason": a.get("reason")
+				})
+		return total_adjs
+
 	if mode == "company" and company:
 		comp_meters, comp_leases, comp_adjs, comp_summary = get_company_data(company)
-		sheet_title = get_sheet_title(company)
-		render_excel_bill_sheet(default_ws, sheet_title, company, settlement_month, prop_mgmt, comp_meters, comp_leases, comp_adjs, comp_summary, is_total=False)
+		short = get_sheet_title(company)
+		render_water_elec_sheet(default_ws, f"{short}水电费", company, settlement_month, prop_mgmt, comp_meters, comp_adjs, comp_summary, is_total=False)
+		ws2 = wb.create_sheet(f"{short}房租物业")
+		render_lease_sheet(ws2, f"{short}房租物业", company, settlement_month, prop_mgmt, comp_leases)
 
 	elif mode == "total":
 		all_meters = data.get("meter_readings") or []
 		all_leases = data.get("lease_charges") or []
-		total_adjs = []
-		for a in (data.get("adjustments") or []):
-			if a.get("adjustment_scope") == "单公司":
-				total_adjs.append({
-					"title": "电费调整" if a.get("utility_type") in ["电费", "电"] else "水费调整",
-					"utility_type": a.get("utility_type"),
-					"usage": flt(a.get("usage_adjustment")),
-					"amount": flt(a.get("amount_adjustment")),
-					"reason": a.get("reason")
-				})
-		render_excel_bill_sheet(default_ws, "合计单证", "全公司合计", settlement_month, prop_mgmt, all_meters, all_leases, total_adjs, {}, is_total=True)
+		render_water_elec_sheet(default_ws, "合计水电费", "全公司合计", settlement_month, prop_mgmt, all_meters, build_total_adjs(), {}, is_total=True)
+		ws2 = wb.create_sheet("合计房租物业")
+		render_lease_sheet(ws2, "合计房租物业", "全公司合计", settlement_month, prop_mgmt, all_leases)
 
-	else: # mode == "all"
+	else:  # mode == "all"
 		companies = [s.get("company") for s in (data.get("company_summaries") or []) if s.get("company")]
 		first_sheet = True
 		for comp in companies:
-			ws = default_ws if first_sheet else wb.create_sheet()
-			first_sheet = False
-			sheet_title = get_sheet_title(comp)
 			comp_meters, comp_leases, comp_adjs, comp_summary = get_company_data(comp)
-			render_excel_bill_sheet(ws, sheet_title, comp, settlement_month, prop_mgmt, comp_meters, comp_leases, comp_adjs, comp_summary, is_total=False)
+			short = get_sheet_title(comp)
+			ws_e = default_ws if first_sheet else wb.create_sheet()
+			first_sheet = False
+			render_water_elec_sheet(ws_e, f"{short}水电费", comp, settlement_month, prop_mgmt, comp_meters, comp_adjs, comp_summary, is_total=False)
+			ws_l = wb.create_sheet(f"{short}房租物业")
+			render_lease_sheet(ws_l, f"{short}房租物业", comp, settlement_month, prop_mgmt, comp_leases)
 
-		# 增加合计单证 Sheet
-		ws_tot = default_ws if first_sheet else wb.create_sheet()
+		# 全公司合计 2 Sheet
 		all_meters = data.get("meter_readings") or []
 		all_leases = data.get("lease_charges") or []
-		total_adjs = []
-		for a in (data.get("adjustments") or []):
-			if a.get("adjustment_scope") == "单公司":
-				total_adjs.append({
-					"title": "电费调整" if a.get("utility_type") in ["电费", "电"] else "水费调整",
-					"utility_type": a.get("utility_type"),
-					"usage": flt(a.get("usage_adjustment")),
-					"amount": flt(a.get("amount_adjustment")),
-					"reason": a.get("reason")
-				})
-		render_excel_bill_sheet(ws_tot, "合计单证", "全公司合计", settlement_month, prop_mgmt, all_meters, all_leases, total_adjs, {}, is_total=True)
+		ws_tot_e = default_ws if first_sheet else wb.create_sheet()
+		render_water_elec_sheet(ws_tot_e, "合计水电费", "全公司合计", settlement_month, prop_mgmt, all_meters, build_total_adjs(), {}, is_total=True)
+		ws_tot_l = wb.create_sheet("合计房租物业")
+		render_lease_sheet(ws_tot_l, "合计房租物业", "全公司合计", settlement_month, prop_mgmt, all_leases)
 
 	return wb
 
@@ -1268,8 +1284,9 @@ def export_settlement_excel(settlement_month, company=None, property_management_
 	elif mode == "total":
 		fname = f"全公司合计_{month_str}_物业明细（单价含税）.xlsx"
 	else:
-		fname = f"{month_str}_物业及水电结算全套明细（单价含税）.xlsx"
+		fname = f"{month_str}_全套月结明细.xlsx"
 
 	frappe.response['filename'] = fname
 	frappe.response['filecontent'] = bio.getvalue()
 	frappe.response['type'] = 'binary'
+
