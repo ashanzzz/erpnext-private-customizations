@@ -32,7 +32,6 @@ class TestPropertySettlement(unittest.TestCase):
 			c2.default_currency = "CNY"
 			c2.insert(ignore_permissions=True)
 
-		# 准备测试表具
 		cls.comp_jz = "天津吉众机电设备有限公司"
 		cls.comp_qf = "天津祺富机械加工有限公司"
 
@@ -109,7 +108,6 @@ class TestPropertySettlement(unittest.TestCase):
 		res = calculate_settlement_matrix(mock_data)
 		adj = res["adjustments"][0]
 
-		# 8000 / 1.1957 = 6690.64
 		expected_eq_usage = round(8000.0 / 1.1957, 2)
 		self.assertEqual(adj["equivalent_usage"], expected_eq_usage)
 
@@ -131,9 +129,9 @@ class TestPropertySettlement(unittest.TestCase):
 					"property_name": "大车间+3楼办公",
 					"company": self.comp_jz,
 					"area": 3338.0,
-					"charge_item": "房租含物业",
-					"billing_method": "年金额",
-					"annual_amount_snapshot": 240000.0,
+					"property_fee_mode": "房租含物业",
+					"rent_annual_amount": 240000.0,
+					"rent_daily_rate": 0.196985,
 					"tax_rate": 9.0,
 					"billing_days": 31
 				}
@@ -142,10 +140,11 @@ class TestPropertySettlement(unittest.TestCase):
 		res = calculate_settlement_matrix(mock_data)
 		l0 = res["lease_charges"][0]
 
-		# 日单价 = 240000 / 3338 / 365 = 0.196985
-		# 31天含税金额 = 3338 * 0.196985 * 31 = 20383.56
-		expected_amt = round(3338.0 * (240000.0 / 3338.0 / 365.0) * 31, 2)
+		# 31天含税金额 = (240000 / 365) * 31 = 20383.56
+		expected_amt = round((240000.0 / 365.0) * 31, 2)
 		self.assertEqual(l0["amount_tax_incl"], expected_amt)
+		self.assertEqual(l0["rent_amount_tax_incl"], expected_amt)
+		self.assertEqual(l0["property_fee_amount_tax_incl"], 0.0)
 
 	def test_05_validation_on_finalize(self):
 		"""测试 Case 5: 结算完成校验 (异常本期读数与未填原因拒绝通过)"""
@@ -157,7 +156,7 @@ class TestPropertySettlement(unittest.TestCase):
 					"meter_no": "1",
 					"company": self.comp_jz,
 					"previous_reading": 3000.0,
-					"current_reading": 2000.0, # 本期 < 上期且无备注
+					"current_reading": 2000.0,
 					"remark": ""
 				}
 			],
@@ -166,3 +165,75 @@ class TestPropertySettlement(unittest.TestCase):
 		}
 		with self.assertRaises(frappe.ValidationError):
 			finalize_monthly_settlement(invalid_data)
+
+	def test_06_property_charge_rate_bidirectional_calculation(self):
+		"""测试 Case 6: PropertyChargeRate 日/月/年单价与单独物业费双向自动互算"""
+		if not frappe.db.exists("Property Lease", {"property_name": "测试场地1000平"}):
+			l = frappe.new_doc("Property Lease")
+			l.property_name = "测试场地1000平"
+			l.company = self.comp_jz
+			l.area = 1000.0
+			l.property_fee_mode = "单独计收物业费"
+			l.insert(ignore_permissions=True)
+		else:
+			l = frappe.get_doc("Property Lease", {"property_name": "测试场地1000平"})
+
+		# 测试按日单价录入 0.20 元/㎡·天，物业费 1.0 元/㎡·月
+		rate = frappe.new_doc("Property Charge Rate")
+		rate.property_lease = l.name
+		rate.effective_from = "2026-01-01"
+		rate.rent_pricing_mode = "按日单价 (元/㎡·天)"
+		rate.rent_daily_rate = 0.20
+		rate.property_fee_mode = "单独计收物业费"
+		rate.property_fee_pricing_mode = "按月单价 (元/㎡·月)"
+		rate.property_fee_monthly_rate = 1.0
+		rate.calculate_all_rates()
+
+		# 验证房租互算结果:
+		# 年单价 = 0.20 * 365 = 73.0
+		# 年租金 = 1000 * 0.20 * 365 = 73000.0
+		# 月租金 = 73000 / 12 = 6083.33
+		self.assertEqual(rate.rent_annual_rate, 73.0)
+		self.assertEqual(rate.rent_annual_amount, 73000.0)
+		self.assertEqual(rate.rent_monthly_amount, 6083.33)
+
+		# 验证物业费互算结果:
+		# 年单价 = 1.0 * 12 = 12.0
+		# 年物业费 = 1000 * 1.0 * 12 = 12000.0
+		self.assertEqual(rate.property_fee_annual_rate, 12.0)
+		self.assertEqual(rate.property_fee_annual_amount, 12000.0)
+
+		# 验证总计: 73000 + 12000 = 85000
+		self.assertEqual(rate.total_annual_amount, 85000.0)
+
+	def test_07_lease_charge_with_separate_property_fee(self):
+		"""测试 Case 7: 月结中房租与单独物业费分别核算与公司汇总"""
+		mock_data = {
+			"settlement_month": "2026-08-01", # 31天
+			"lease_charges": [
+				{
+					"property_name": "测试厂房A",
+					"company": self.comp_qf,
+					"area": 1000.0,
+					"property_fee_mode": "单独计收物业费",
+					"rent_pricing_mode": "按年总金额 (元/年)",
+					"rent_annual_amount": 73000.0,
+					"property_fee_annual_amount": 12000.0,
+					"billing_days": 31
+				}
+			]
+		}
+		res = calculate_settlement_matrix(mock_data)
+		l0 = res["lease_charges"][0]
+
+		# 房租 = (73000 / 365) * 31 = 6200.00
+		# 物业费 = (12000 / 365) * 31 = 1019.18
+		# 合计 = 7219.18
+		self.assertEqual(l0["rent_amount_tax_incl"], 6200.00)
+		self.assertEqual(l0["property_fee_amount_tax_incl"], 1019.18)
+		self.assertEqual(l0["amount_tax_incl"], 7219.18)
+
+		summary_qf = next(s for s in res["company_summaries"] if s["company"] == self.comp_qf)
+		self.assertEqual(summary_qf["rent_amount"], 6200.00)
+		self.assertEqual(summary_qf["property_fee_amount"], 1019.18)
+		self.assertEqual(summary_qf["total_amount"], 7219.18)

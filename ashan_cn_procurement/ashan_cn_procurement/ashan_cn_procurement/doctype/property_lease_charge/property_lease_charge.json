@@ -34,36 +34,47 @@
       "in_list_view": 1
     },
     {
-      "label": "计费项目",
-      "fieldname": "charge_item",
+      "label": "物业费模式",
+      "fieldname": "property_fee_mode",
       "fieldtype": "Select",
-      "options": "房租\n物业费\n房租含物业\n其他固定费用",
+      "options": "房租含物业\n单独计收物业费",
       "in_list_view": 1
     },
     {
-      "label": "计费方式",
-      "fieldname": "billing_method",
-      "fieldtype": "Select",
-      "options": "年金额\n按天每平方米"
+      "label": "房租计价方式",
+      "fieldname": "rent_pricing_mode",
+      "fieldtype": "Data"
     },
     {
-      "label": "当月计费天数",
+      "label": "计费天数",
       "fieldname": "billing_days",
       "fieldtype": "Int",
       "in_list_view": 1
     },
     {
-      "label": "含税日单价快照",
-      "fieldname": "daily_rate_snapshot",
-      "fieldtype": "Currency"
+      "label": "房租单价快照",
+      "fieldname": "rent_rate_snapshot",
+      "fieldtype": "Data"
     },
     {
-      "label": "年金额快照",
-      "fieldname": "annual_amount_snapshot",
-      "fieldtype": "Currency"
+      "label": "物业费单价快照",
+      "fieldname": "property_fee_rate_snapshot",
+      "fieldtype": "Data"
     },
     {
-      "label": "含税金额",
+      "label": "房租含税金额",
+      "fieldname": "rent_amount_tax_incl",
+      "fieldtype": "Currency",
+      "in_list_view": 1
+    },
+    {
+      "label": "物业费含税金额",
+      "fieldname": "property_fee_amount_tax_incl",
+      "fieldtype": "Currency",
+      "in_list_view": 1
+    },
+    {
+      "label": "本月含税总额",
       "fieldname": "amount_tax_incl",
       "fieldtype": "Currency",
       "in_list_view": 1
@@ -72,11 +83,6 @@
       "label": "不含税金额",
       "fieldname": "amount_tax_excl",
       "fieldtype": "Currency"
-    },
-    {
-      "label": "税率(%)",
-      "fieldname": "tax_rate",
-      "fieldtype": "Percent"
     },
     {
       "label": "税额",

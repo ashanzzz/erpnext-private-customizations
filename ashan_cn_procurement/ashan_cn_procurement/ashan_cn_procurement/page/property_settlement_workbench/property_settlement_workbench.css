@@ -157,6 +157,8 @@
 }
 .tag-type { background: #fef3c7; color: #b45309; }
 .tag-charge { background: #f3e8ff; color: #6b21a8; }
+.tag-prop-sep { background: #fee2e2; color: #991b1b; }
+.tag-prop-inc { background: #f1f5f9; color: #475569; }
 .company-out { color: #dc2626; font-weight: 600; }
 .company-in { color: #059669; font-weight: 600; }
 .prop-btn-del-adj {

@@ -9,7 +9,7 @@ frappe.pages['property-settlement-workbench'].on_page_load = function(wrapper) {
         title: __('物业月结'),
         single_column: true
     });
-    wrapper.property_monthly_settlement = new PropertyMonthlySettlement(wrapper, page);
+    wrapper.property_settlement_workbench = new PropertyMonthlySettlement(wrapper, page);
 };
 
 frappe.pages['property-settlement-workbench'].on_page_show = function(wrapper) {
@@ -17,8 +17,8 @@ frappe.pages['property-settlement-workbench'].on_page_show = function(wrapper) {
         'background-color': '#f8f9fa',
         'min-height': 'calc(100vh - 60px)'
     });
-    if (wrapper.property_monthly_settlement) {
-        wrapper.property_monthly_settlement.refresh();
+    if (wrapper.property_settlement_workbench) {
+        wrapper.property_settlement_workbench.refresh();
     }
 };
 
@@ -194,25 +194,26 @@ class PropertyMonthlySettlement {
                 </div>
             </div>
 
-            <!-- ❻ 固定房租与物业费明细 -->
+            <!-- ❻ 固定房租与物业费明细 (平米单价·日/月/年多周期自选与物业费自选) -->
             <div class="prop-card-section">
                 <div class="prop-section-header">
-                    <span class="sec-title">🏠 房租与物业费明细 (按生效收费标准自动核算)</span>
+                    <span class="sec-title">🏠 房租与物业费明细 (按平米·日/月/年单价自动核算)</span>
+                    <span class="sec-tip">💡 支持按日/月/年自选单价，支持房租含物业或每平米独立计收物业费</span>
                 </div>
                 <div class="prop-table-responsive">
                     <table class="prop-excel-table" id="table-leases">
                         <thead>
                             <tr>
-                                <th style="width: 140px;">所属公司</th>
-                                <th style="min-width: 160px;">场地名称</th>
-                                <th style="width: 100px; text-align: right;">面积(㎡)</th>
-                                <th style="width: 110px;">计费项目</th>
-                                <th style="width: 90px; text-align: center;">计费方式</th>
-                                <th style="width: 80px; text-align: center;">计费天数</th>
-                                <th style="width: 120px; text-align: right;">日单价/年金额</th>
-                                <th style="width: 110px; text-align: right; background: #ecfdf5; color: #065f46;">本月含税金额</th>
-                                <th style="width: 100px; text-align: right;">不含税金额</th>
-                                <th style="width: 80px; text-align: right;">税额(9%)</th>
+                                <th style="width: 130px;">所属公司</th>
+                                <th style="min-width: 150px;">场地名称</th>
+                                <th style="width: 90px; text-align: right;">面积(㎡)</th>
+                                <th style="width: 130px;">房租计价与单价</th>
+                                <th style="width: 130px;">物业费模式/单价</th>
+                                <th style="width: 70px; text-align: center;">计费天数</th>
+                                <th style="width: 100px; text-align: right;">房租金额</th>
+                                <th style="width: 100px; text-align: right;">物业费金额</th>
+                                <th style="width: 110px; text-align: right; background: #ecfdf5; color: #065f46;">本月含税小计</th>
+                                <th style="width: 80px; text-align: right;">税额</th>
                             </tr>
                         </thead>
                         <tbody id="tbody-leases"></tbody>
@@ -561,7 +562,7 @@ class PropertyMonthlySettlement {
         });
     }
 
-    // ─── 渲染租赁固定费用表格 ─────────────────────────────────
+    // ─── 渲染租赁固定费用表格 (多周期平米单价与物业费明细) ───────────
     render_leases_table() {
         const leases = this.data?.lease_charges || [];
         const $tbody = this.$container.find('#tbody-leases');
@@ -573,20 +574,26 @@ class PropertyMonthlySettlement {
         }
 
         leases.forEach(l => {
+            const propFeeBadge = (l.property_fee_mode === '单独计收物业费')
+                ? `<span class="prop-tag tag-prop-sep">单独计收</span> <span style="font-size:11.5px; color:#475569;">${frappe.utils.escape_html(l.property_fee_rate_snapshot || '')}</span>`
+                : `<span class="prop-tag tag-prop-inc">房租已含</span>`;
+
             const row = `
                 <tr>
                     <td><b>${frappe.utils.escape_html(l.company)}</b></td>
                     <td>${frappe.utils.escape_html(l.property_name)}</td>
                     <td style="text-align: right;">${format_number(l.area)} ㎡</td>
-                    <td><span class="prop-tag tag-charge">${frappe.utils.escape_html(l.charge_item)}</span></td>
-                    <td style="text-align: center;">${l.billing_method}</td>
+                    <td>
+                        <span style="font-weight:600; color:#1e293b;">${frappe.utils.escape_html(l.rent_rate_snapshot || '—')}</span>
+                    </td>
+                    <td>${propFeeBadge}</td>
                     <td style="text-align: center;">${l.billing_days} 天</td>
-                    <td style="text-align: right;">
-                        ${l.billing_method === '年金额' ? '¥ ' + format_currency(l.annual_amount_snapshot) + '/年' : '¥ ' + (l.daily_rate_snapshot || 0) + '/㎡·天'}
+                    <td style="text-align: right;">¥ ${format_currency(l.rent_amount_tax_incl)}</td>
+                    <td style="text-align: right; color: ${l.property_fee_amount_tax_incl > 0 ? '#b45309' : '#94a3b8'};">
+                        ${l.property_fee_amount_tax_incl > 0 ? '¥ ' + format_currency(l.property_fee_amount_tax_incl) : '—'}
                     </td>
                     <td style="text-align: right; font-weight: 700; background: #f0fdf4; color: #166534;">¥ ${format_currency(l.amount_tax_incl)}</td>
-                    <td style="text-align: right;">¥ ${format_currency(l.amount_tax_excl)}</td>
-                    <td style="text-align: right;">¥ ${format_currency(l.tax_amount)}</td>
+                    <td style="text-align: right; color:#64748b;">¥ ${format_currency(l.tax_amount)}</td>
                 </tr>
             `;
             $tbody.append(row);
@@ -778,7 +785,8 @@ class PropertyMonthlySettlement {
                 <div class="confirm-comp-card">
                     <div class="comp-title">🏢 ${frappe.utils.escape_html(s.company)}</div>
                     <div class="comp-details">
-                        <div>房租物业: <b>¥ ${format_currency(s.rent_amount + s.property_fee_amount)}</b></div>
+                        <div>房租金额: <b>¥ ${format_currency(s.rent_amount)}</b></div>
+                        <div>物业费: <b>¥ ${format_currency(s.property_fee_amount)}</b></div>
                         <div>水电费用: <b>¥ ${format_currency(s.electricity_amount + s.water_amount)}</b></div>
                         <div>费用调整: <b>¥ ${format_currency(s.adjustment_amount)}</b></div>
                         <div class="comp-subtotal">应付合计: <span>¥ ${format_currency(s.total_amount)}</span></div>
@@ -854,18 +862,60 @@ class PropertyMonthlySettlement {
     // ─── 弹窗 3: 单一公司结算单预览与打印 ─────────────────────
     open_single_bill_dialog(company) {
         const self = this;
-        frappe.call({
-            method: 'ashan_cn_procurement.ashan_cn_procurement.page.property_settlement_workbench.property_settlement_workbench.get_company_bill_data',
-            args: {
-                settlement_name: self.data.name,
-                company: company
-            },
-            callback(r) {
-                if (r.message) {
-                    self.show_bill_modal(r.message);
+        const d = self.data;
+        if (!d) return;
+
+        const compMeters = (d.meter_readings || []).filter(m => m.company === company);
+        const compLeases = (d.lease_charges || []).filter(l => l.company === company);
+        const compSummary = (d.company_summaries || []).find(s => s.company === company) || {};
+
+        const compAdjustments = [];
+        (d.adjustments || []).forEach(a => {
+            if (a.adjustment_scope === '单公司' && a.company === company) {
+                compAdjustments.push({
+                    title: a.utility_type,
+                    type: a.adjustment_type,
+                    scope: '单公司调整',
+                    usage: a.equivalent_usage,
+                    amount: a.amount_adjustment,
+                    reason: a.reason
+                });
+            } else if (a.adjustment_scope === '公司间转移') {
+                if (a.from_company === company) {
+                    compAdjustments.push({
+                        title: `${a.utility_type}调出 (转至 ${a.to_company})`,
+                        type: `${a.adjustment_type} (公司间转出)`,
+                        scope: '公司间转移',
+                        usage: -a.equivalent_usage,
+                        amount: -a.amount_adjustment,
+                        reason: a.reason
+                    });
+                } else if (a.to_company === company) {
+                    compAdjustments.push({
+                        title: `${a.utility_type}调入 (来自 ${a.from_company})`,
+                        type: `${a.adjustment_type} (公司间转入)`,
+                        scope: '公司间转移',
+                        usage: a.equivalent_usage,
+                        amount: a.amount_adjustment,
+                        reason: a.reason
+                    });
                 }
             }
         });
+
+        const bill = {
+            settlement_month: d.settlement_month,
+            company: company,
+            status: d.status || '草稿',
+            electricity_price: d.electricity_price,
+            water_price: d.water_price,
+            meters: compMeters,
+            leases: compLeases,
+            adjustments: compAdjustments,
+            summary: compSummary
+        };
+
+        self.show_bill_modal(bill);
     }
 
     // ─── 弹窗 4: 预览全部结算单 ───────────────────────────────
@@ -879,7 +929,6 @@ class PropertyMonthlySettlement {
     }
 
     show_bill_modal(bill) {
-        const self = this;
         const monthStr = bill.settlement_month.substring(0, 7);
 
         let meterRows = '';
@@ -901,13 +950,19 @@ class PropertyMonthlySettlement {
 
         let leaseRows = '';
         (bill.leases || []).forEach(l => {
+            const propFeeText = (l.property_fee_mode === '单独计收物业费')
+                ? `¥ ${format_currency(l.property_fee_amount_tax_incl)} (${l.property_fee_rate_snapshot || ''})`
+                : '已包含在房租中';
+
             leaseRows += `
                 <tr>
                     <td>${frappe.utils.escape_html(l.property_name)}</td>
                     <td style="text-align:right;">${format_number(l.area)} ㎡</td>
-                    <td>${l.charge_item}</td>
+                    <td>${frappe.utils.escape_html(l.rent_rate_snapshot || '—')}</td>
+                    <td>${propFeeText}</td>
                     <td style="text-align:center;">${l.billing_days} 天</td>
-                    <td style="text-align:right; font-weight:700;">¥ ${format_currency(l.amount_tax_incl)}</td>
+                    <td style="text-align:right;">¥ ${format_currency(l.rent_amount_tax_incl)}</td>
+                    <td style="text-align:right; font-weight:700; color:#166534;">¥ ${format_currency(l.amount_tax_incl)}</td>
                 </tr>
             `;
         });
@@ -926,6 +981,8 @@ class PropertyMonthlySettlement {
         });
 
         const totalAmt = bill.summary ? bill.summary.total_amount : 0;
+        const rentAmt = bill.summary ? bill.summary.rent_amount : 0;
+        const propAmt = bill.summary ? bill.summary.property_fee_amount : 0;
 
         const dlg = new frappe.ui.Dialog({
             title: `📄 ${bill.company} — ${monthStr} 物业水电结算单`,
@@ -957,11 +1014,11 @@ class PropertyMonthlySettlement {
                             ` : ''}
 
                             ${bill.leases?.length ? `
-                            <div class="bill-section-title" style="margin-top:14px;">二、房租及物业费明细</div>
+                            <div class="bill-section-title" style="margin-top:14px;">二、房租及物业费明细 (房租合计: ¥${format_currency(rentAmt)}, 物业费合计: ¥${format_currency(propAmt)})</div>
                             <table class="bill-table">
                                 <thead>
                                     <tr>
-                                        <th>场地</th><th>面积</th><th>项目</th><th>计费天数</th><th>含税金额</th>
+                                        <th>场地</th><th>面积</th><th>房租单价</th><th>物业费计收</th><th>计费天数</th><th>房租金额</th><th>含税合计</th>
                                     </tr>
                                 </thead>
                                 <tbody>${leaseRows}</tbody>
@@ -1067,7 +1124,7 @@ function calculate_local_matrix(data) {
         }
     });
 
-    // 3. 公司汇总
+    // 3. 租赁明细与公司汇总
     const compMap = {};
     (data.company_summaries || []).forEach(s => {
         compMap[s.company] = {
@@ -1084,13 +1141,38 @@ function calculate_local_matrix(data) {
     });
 
     (data.lease_charges || []).forEach(l => {
-        if (compMap[l.company]) {
-            const amt = parseFloat(l.amount_tax_incl) || 0;
-            if (l.charge_item && l.charge_item.includes('物业') && !l.charge_item.includes('房租')) {
-                compMap[l.company].property_fee_amount += amt;
+        const area = parseFloat(l.area) || 0;
+        const l_days = parseInt(l.billing_days) || 30;
+
+        let rent_amt = parseFloat(l.rent_amount_tax_incl) || 0;
+        if (l.rent_annual_amount > 0) {
+            rent_amt = Math.round((parseFloat(l.rent_annual_amount) / 365 * l_days) * 100) / 100;
+        } else if (l.rent_daily_rate > 0 && area > 0) {
+            rent_amt = Math.round((area * parseFloat(l.rent_daily_rate) * l_days) * 100) / 100;
+        } else if (l.rent_monthly_amount > 0) {
+            rent_amt = Math.round((parseFloat(l.rent_monthly_amount) * (l_days / 30.0)) * 100) / 100;
+        }
+
+        let prop_amt = 0;
+        if (l.property_fee_mode === '单独计收物业费') {
+            if (l.property_fee_annual_amount > 0) {
+                prop_amt = Math.round((parseFloat(l.property_fee_annual_amount) / 365 * l_days) * 100) / 100;
+            } else if (l.property_fee_daily_rate > 0 && area > 0) {
+                prop_amt = Math.round((area * parseFloat(l.property_fee_daily_rate) * l_days) * 100) / 100;
+            } else if (l.property_fee_monthly_amount > 0) {
+                prop_amt = Math.round((parseFloat(l.property_fee_monthly_amount) * (l_days / 30.0)) * 100) / 100;
             } else {
-                compMap[l.company].rent_amount += amt;
+                prop_amt = parseFloat(l.property_fee_amount_tax_incl) || 0;
             }
+        }
+
+        l.rent_amount_tax_incl = rent_amt;
+        l.property_fee_amount_tax_incl = prop_amt;
+        l.amount_tax_incl = Math.round((rent_amt + prop_amt) * 100) / 100;
+
+        if (compMap[l.company]) {
+            compMap[l.company].rent_amount += rent_amt;
+            compMap[l.company].property_fee_amount += prop_amt;
         }
     });
 

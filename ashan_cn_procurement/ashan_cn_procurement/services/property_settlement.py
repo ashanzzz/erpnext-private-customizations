@@ -49,7 +49,6 @@ def get_previous_meter_reading(meter_name, current_month_start):
 	获取指定水电表在上个月或历史最近一次月结中的本期读数
 	如果没有历史月结，则返回该表设置的初始表底数
 	"""
-	# 查询在当前月份之前已结算或存在的月结抄表记录
 	sql = """
 		SELECT r.current_reading
 		FROM `tabProperty Meter Reading` r
@@ -64,7 +63,6 @@ def get_previous_meter_reading(meter_name, current_month_start):
 	if res and res[0].current_reading is not None:
 		return flt(res[0].current_reading)
 
-	# 找不到历史月结，读取表的初始读数
 	meter_doc = frappe.db.get_value("Utility Meter", meter_name, ["initial_reading"], as_dict=True)
 	if meter_doc and meter_doc.initial_reading is not None:
 		return flt(meter_doc.initial_reading)
@@ -73,7 +71,7 @@ def get_previous_meter_reading(meter_name, current_month_start):
 
 def calculate_settlement_matrix(data):
 	"""
-	核心集中计算引擎：重算电表、水表、调整项、租赁费及各公司汇总
+	核心集中计算引擎：重算电表、水表、调整项、租赁费（房租+单独物业费多周期）及各公司汇总
 	"""
 	elec_price = flt(data.get("electricity_price") or 1.1957)
 	elec_tax_rate = flt(data.get("electricity_tax_rate") or 13.0)
@@ -141,40 +139,62 @@ def calculate_settlement_matrix(data):
 		adj["equivalent_usage"] = eq_u
 		adj["unit_price_snapshot"] = curr_price
 
-	# 3. 重算租赁固定费用
+	# 3. 重算租赁固定费用 (房租 + 物业费，支持日/月/年多周期自选)
 	lease_charges = data.get("lease_charges") or []
 	for l_chg in lease_charges:
 		area = flt(l_chg.get("area"))
-		b_method = l_chg.get("billing_method") or "年金额"
 		t_rate = flt(l_chg.get("tax_rate") or 9.0)
 		l_days = cint(l_chg.get("billing_days") or days_in_month)
 
-		daily_rate = flt(l_chg.get("daily_rate_snapshot"))
-		annual_amt = flt(l_chg.get("annual_amount_snapshot"))
+		# 房租核算
+		r_ann_amt = flt(l_chg.get("rent_annual_amount"))
+		r_daily = flt(l_chg.get("rent_daily_rate"))
+		r_mon_amt = flt(l_chg.get("rent_monthly_amount"))
 
-		if b_method == "年金额" and annual_amt > 0:
-			if area > 0:
-				daily_rate = round(annual_amt / area / 365.0, 6)
-				l_chg["daily_rate_snapshot"] = daily_rate
-			amt_incl = round((annual_amt / 365.0) * l_days, 2)
-		elif daily_rate > 0 and area > 0:
-			amt_incl = round(area * daily_rate * l_days, 2)
-		elif annual_amt > 0:
-			amt_incl = round(annual_amt / 12.0, 2)
+		if r_ann_amt > 0:
+			rent_amt = round((r_ann_amt / 365.0) * l_days, 2)
+			if area > 0 and not r_daily:
+				r_daily = round(r_ann_amt / area / 365.0, 6)
+		elif r_daily > 0 and area > 0:
+			rent_amt = round(area * r_daily * l_days, 2)
+		elif r_mon_amt > 0:
+			rent_amt = round(r_mon_amt * (l_days / float(days_in_month)), 2)
 		else:
-			amt_incl = flt(l_chg.get("amount_tax_incl"))
+			rent_amt = flt(l_chg.get("rent_amount_tax_incl"))
 
-		amt_excl = round(amt_incl / (1.0 + (t_rate / 100.0)), 2)
-		tax_amt = round(amt_incl - amt_excl, 2)
+		# 物业费核算 (若单独计收物业费)
+		prop_mode = l_chg.get("property_fee_mode") or "房租含物业"
+		p_ann_amt = flt(l_chg.get("property_fee_annual_amount"))
+		p_daily = flt(l_chg.get("property_fee_daily_rate"))
+		p_mon_amt = flt(l_chg.get("property_fee_monthly_amount"))
+
+		if prop_mode == "单独计收物业费":
+			if p_ann_amt > 0:
+				prop_fee_amt = round((p_ann_amt / 365.0) * l_days, 2)
+				if area > 0 and not p_daily:
+					p_daily = round(p_ann_amt / area / 365.0, 6)
+			elif p_daily > 0 and area > 0:
+				prop_fee_amt = round(area * p_daily * l_days, 2)
+			elif p_mon_amt > 0:
+				prop_fee_amt = round(p_mon_amt * (l_days / float(days_in_month)), 2)
+			else:
+				prop_fee_amt = flt(l_chg.get("property_fee_amount_tax_incl"))
+		else:
+			prop_fee_amt = 0.0
+
+		tot_lease_amt = round(rent_amt + prop_fee_amt, 2)
+		amt_excl = round(tot_lease_amt / (1.0 + (t_rate / 100.0)), 2)
+		tax_amt = round(tot_lease_amt - amt_excl, 2)
 
 		l_chg["billing_days"] = l_days
-		l_chg["amount_tax_incl"] = amt_incl
+		l_chg["rent_amount_tax_incl"] = rent_amt
+		l_chg["property_fee_amount_tax_incl"] = prop_fee_amt
+		l_chg["amount_tax_incl"] = tot_lease_amt
 		l_chg["amount_tax_excl"] = amt_excl
 		l_chg["tax_rate"] = t_rate
 		l_chg["tax_amount"] = tax_amt
 
 	# 4. 按公司聚合汇总
-	# 收集所有涉及的公司
 	all_companies = set()
 	for l in lease_charges:
 		if l.get("company"):
@@ -190,7 +210,6 @@ def calculate_settlement_matrix(data):
 		if a.get("to_company"):
 			all_companies.add(a.get("to_company"))
 
-	# 保证吉众和祺富若存在则默认列入
 	existing_companies = frappe.get_all("Company", fields=["name"], order_by="name ASC")
 	for ec in existing_companies:
 		if "吉众" in ec.name or "祺富" in ec.name:
@@ -214,12 +233,10 @@ def calculate_settlement_matrix(data):
 	for l in lease_charges:
 		comp = l.get("company")
 		if comp in comp_summary_map:
-			c_item = l.get("charge_item") or ""
-			amt = flt(l.get("amount_tax_incl"))
-			if "物业" in c_item and "房租" not in c_item:
-				comp_summary_map[comp]["property_fee_amount"] += amt
-			else:
-				comp_summary_map[comp]["rent_amount"] += amt
+			r_amt = flt(l.get("rent_amount_tax_incl"))
+			p_amt = flt(l.get("property_fee_amount_tax_incl"))
+			comp_summary_map[comp]["rent_amount"] += r_amt
+			comp_summary_map[comp]["property_fee_amount"] += p_amt
 
 	# 累加抄表水电费用
 	for m in meter_readings:
@@ -255,7 +272,6 @@ def calculate_settlement_matrix(data):
 		elif scope == "公司间转移":
 			from_c = a.get("from_company")
 			to_c = a.get("to_company")
-			# 转出公司：费用减少 / 转入公司：费用增加
 			if from_c in comp_summary_map:
 				comp_summary_map[from_c]["adjustment_amount"] -= amt
 				if u_type == "电费":
@@ -348,33 +364,76 @@ def get_month_settlement_data(year, month):
 	leases = frappe.get_all(
 		"Property Lease",
 		filters={"enabled": 1},
-		fields=["name", "property_name", "company", "area", "charge_item", "billing_method"],
+		fields=["name", "property_name", "company", "area", "property_fee_mode"],
 		order_by="company ASC, property_name ASC"
 	)
 
 	lease_charges = []
 	for l in leases:
 		rate = get_applicable_charge_rate(l.name, start_date)
-		daily_rate = 0.0
-		annual_amt = 0.0
+		rent_mode = "按年总金额 (元/年)"
+		prop_mode = l.get("property_fee_mode") or "房租含物业"
+		r_ann_amt = 0.0
+		r_daily = 0.0
+		r_mon_amt = 0.0
+		r_rate_snap = ""
+		p_rate_snap = ""
+		p_ann_amt = 0.0
+		p_daily = 0.0
 		t_rate = 9.0
 
 		if rate:
-			daily_rate = flt(rate.daily_rate_tax_incl)
-			annual_amt = flt(rate.annual_amount_tax_incl)
-			t_rate = flt(rate.tax_rate or 9.0)
+			rent_mode = rate.rent_pricing_mode or "按年总金额 (元/年)"
+			prop_mode = rate.property_fee_mode or "房租含物业"
+			r_ann_amt = flt(rate.rent_annual_amount)
+			r_daily = flt(rate.rent_daily_rate)
+			r_mon_amt = flt(rate.rent_monthly_amount)
+			t_rate = flt(rate.rent_tax_rate or 9.0)
+
+			if rent_mode == "按日单价 (元/㎡·天)":
+				r_rate_snap = f"¥ {r_daily}/㎡·天"
+			elif rent_mode == "按月单价 (元/㎡·月)":
+				r_rate_snap = f"¥ {rate.rent_monthly_rate}/㎡·月"
+			elif rent_mode == "按年单价 (元/㎡·年)":
+				r_rate_snap = f"¥ {rate.rent_annual_rate}/㎡·年"
+			elif rent_mode == "按月总金额 (元/月)":
+				r_rate_snap = f"¥ {r_mon_amt}/月"
+			else:
+				r_rate_snap = f"¥ {r_ann_amt}/年"
+
+			if prop_mode == "单独计收物业费":
+				p_ann_amt = flt(rate.property_fee_annual_amount)
+				p_daily = flt(rate.property_fee_daily_rate)
+				p_mode = rate.property_fee_pricing_mode or "按月单价 (元/㎡·月)"
+				if p_mode == "按日单价 (元/㎡·天)":
+					p_rate_snap = f"¥ {p_daily}/㎡·天"
+				elif p_mode == "按月单价 (元/㎡·月)":
+					p_rate_snap = f"¥ {rate.property_fee_monthly_rate}/㎡·月"
+				elif p_mode == "按年单价 (元/㎡·年)":
+					p_rate_snap = f"¥ {rate.property_fee_annual_rate}/㎡·年"
+				else:
+					p_rate_snap = f"¥ {p_ann_amt}/年"
+			else:
+				p_rate_snap = "含在房租中"
 
 		lease_charges.append({
 			"property_lease": l.name,
 			"property_name": l.property_name,
 			"company": l.company,
 			"area": flt(l.area),
-			"charge_item": l.charge_item,
-			"billing_method": l.billing_method,
+			"property_fee_mode": prop_mode,
+			"rent_pricing_mode": rent_mode,
 			"billing_days": days_in_month,
-			"daily_rate_snapshot": daily_rate,
-			"annual_amount_snapshot": annual_amt,
+			"rent_rate_snapshot": r_rate_snap,
+			"property_fee_rate_snapshot": p_rate_snap,
+			"rent_annual_amount": r_ann_amt,
+			"rent_daily_rate": r_daily,
+			"rent_monthly_amount": r_mon_amt,
+			"property_fee_annual_amount": p_ann_amt,
+			"property_fee_daily_rate": p_daily,
 			"tax_rate": t_rate,
+			"rent_amount_tax_incl": 0.0,
+			"property_fee_amount_tax_incl": 0.0,
 			"amount_tax_incl": 0.0,
 			"amount_tax_excl": 0.0,
 			"tax_amount": 0.0,
@@ -429,7 +488,6 @@ def save_draft_settlement(data):
 	doc.total_amount = flt(calc_data.get("total_amount"))
 	doc.remark = calc_data.get("remark") or ""
 
-	# 更新子表
 	doc.set("meter_readings", calc_data.get("meter_readings") or [])
 	doc.set("adjustments", calc_data.get("adjustments") or [])
 	doc.set("lease_charges", calc_data.get("lease_charges") or [])
@@ -454,7 +512,6 @@ def finalize_monthly_settlement(data):
 	save_res = save_draft_settlement(data)
 	doc = frappe.get_doc("Property Monthly Settlement", save_res["name"])
 
-	# 严格校验
 	for r in doc.meter_readings:
 		if r.current_reading is None:
 			frappe.throw(f"表号 {r.meter_no} ({r.company}) 尚未录入本期读数！")
