@@ -559,12 +559,14 @@ def quick_add_refuel(oil_card, posting_date, vehicle, odometer, liters, amount, 
 			frappe.throw(f"该月份 ({dt.year}年{dt.month}月) 已被核定锁定，非管理员禁止录入加油！若需修改请先申请取消核定。")
 
 	card = frappe.get_doc("Oil Card", oil_card)
+	company = card.company or frappe.defaults.get_user_default("Company") or frappe.db.get_single_value("Global Defaults", "default_company")
+	supplier = card.supplier or frappe.db.get_value("Supplier", {}, "name") or "津科能源"
 	odo = int(flt(odometer))
 	lit = flt(liters)
 	amt = flt(amount)
 
 	# 油标格式化
-	grade_str = str(fuel_grade or "95# 汽油").strip()
+	grade_str = str(fuel_grade or "0# 柴油").strip()
 	grade_map = {
 		"92# 汽油": "92# 汽油", "92#": "92# 汽油", "92": "92# 汽油", "92号": "92# 汽油",
 		"95# 汽油": "95# 汽油", "95#": "95# 汽油", "95": "95# 汽油", "95号": "95# 汽油",
@@ -579,10 +581,14 @@ def quick_add_refuel(oil_card, posting_date, vehicle, odometer, liters, amount, 
 
 	doc = frappe.new_doc("Oil Card Refuel Log")
 	doc.naming_series = "OCRL-.YYYY.-.#####"
+	doc.company = company
+	doc.supplier = supplier
 	doc.oil_card = oil_card
 	doc.vehicle = vehicle
 	doc.posting_date = posting_date
 	doc.current_odometer = odo
+	if hasattr(doc, "odometer"):
+		doc.odometer = odo
 	doc.fuel_grade = fuel_grade_norm
 	doc.liters = lit
 	doc.amount = amt
@@ -592,11 +598,18 @@ def quick_add_refuel(oil_card, posting_date, vehicle, odometer, liters, amount, 
 	doc.remark = remark or ""
 	doc.insert(ignore_permissions=True)
 
-	# 更新车辆里程
+
+	# 更新车辆里程与上次加油油号（供下次加油默认自动带出）
 	if frappe.db.exists("Vehicle", vehicle):
-		veh_doc = frappe.get_doc("Vehicle", vehicle)
-		if odo > flt(veh_doc.last_odometer or 0):
-			frappe.db.set_value("Vehicle", vehicle, "last_odometer", odo, update_modified=True)
+		update_fields = {}
+		veh_odo = flt(frappe.db.get_value("Vehicle", vehicle, "last_odometer") or 0)
+		if odo > veh_odo:
+			update_fields["last_odometer"] = odo
+		if fuel_grade_norm and frappe.db.has_column("Vehicle", "custom_default_fuel_grade"):
+			update_fields["custom_default_fuel_grade"] = fuel_grade_norm
+		if update_fields:
+			frappe.db.set_value("Vehicle", vehicle, update_fields, update_modified=True)
+
 
 	# 重新计算卡内当前总余额
 	recharges_sum = frappe.db.sql(

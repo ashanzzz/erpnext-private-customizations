@@ -536,7 +536,8 @@
       "search_index": 0,
       "not_nullable": 0,
       "mask": 0,
-      "options": "92\n95\n98\n0#\n-10#\n汽油\n柴油",
+      "options": "0# 柴油\n-10# 柴油\n-20# 柴油\n-35# 柴油\n92# 汽油\n95# 汽油\n98# 汽油\n0#\n-10#\n92\n95\n98\n柴油\n汽油\nCNG 天然气\nLNG 液化气\n纯电动\n其他",
+
       "sort_options": 0,
       "show_dashboard": 0,
       "fetch_if_empty": 0,

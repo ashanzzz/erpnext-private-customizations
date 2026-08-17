@@ -41,13 +41,14 @@ def setup_vehicle_custom_fields():
 			},
 			{
 				"fieldname": "custom_default_fuel_grade",
-				"label": "默认油品型号",
+				"label": "默认/上次加油油号",
 				"fieldtype": "Select",
 				"options": "0# 柴油\n-10# 柴油\n92# 汽油\n95# 汽油\n98# 汽油\n纯电动\n天然气\n其他",
 				"insert_after": "fuel_type",
 				"in_list_view": 1,
-				"description": "加油录入选择车辆时自动精准带出"
+				"description": "系统自动记忆该车上次加油油品型号，下次加油录入时默认自动带出，也可手动修改"
 			}
+
 		]
 	}
 
