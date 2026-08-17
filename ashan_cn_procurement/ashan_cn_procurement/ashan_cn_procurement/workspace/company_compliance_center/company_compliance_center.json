@@ -13,7 +13,7 @@
  "hide_custom": 1,
  "public": 1,
  "is_hidden": 0,
- "content": "[{\"id\": \"hdr_main_company_compliance_center\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h3\\\"><b>企业合规中心</b></span>\", \"col\": 12}}, {\"id\": \"hdr_sc_company_compliance_center\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"text-muted small\\\"><b>快捷业务入口</b></span>\", \"col\": 12}}, {\"id\": \"sc_0_special_equipment_center\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"特种设备管理\", \"col\": 4}}, {\"id\": \"sc_1_environmental_compliance_item\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"环保合规台账\", \"col\": 4}}, {\"id\": \"sc_2_employee_certificate_item\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"员工证书资质\", \"col\": 4}}, {\"id\": \"card_block_0_特种设备与合规台账\", \"type\": \"card\", \"data\": {\"card_name\": \"特种设备与合规台账\", \"col\": 6}}, {\"id\": \"card_block_1_合规监控与趋势报表\", \"type\": \"card\", \"data\": {\"card_name\": \"合规监控与趋势报表\", \"col\": 6}}]",
+ "content": "[{\"id\": \"hdr_main_company_compliance_center\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h3\\\"><b>企业合规中心</b></span>\", \"col\": 12}}, {\"id\": \"hdr_sc_company_compliance_center\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"text-muted small\\\"><b>快捷业务入口</b></span>\", \"col\": 12}}, {\"id\": \"sc_0_special_equipment_center\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"特种设备管理\", \"col\": 4}}, {\"id\": \"sc_1_environmental_management\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"环保管理\", \"col\": 4}}, {\"id\": \"sc_2_employee_certificate_item\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"员工证书资质\", \"col\": 4}}, {\"id\": \"card_block_0_特种设备与合规台账\", \"type\": \"card\", \"data\": {\"card_name\": \"特种设备与合规台账\", \"col\": 6}}, {\"id\": \"card_block_1_合规监控与趋势报表\", \"type\": \"card\", \"data\": {\"card_name\": \"合规监控与趋势报表\", \"col\": 6}}]",
  "doctype": "Workspace",
  "number_cards": [],
  "charts": [],
@@ -25,10 +25,9 @@
    "doctype": "Workspace Shortcut"
   },
   {
-   "type": "DocType",
-   "link_to": "Environmental Compliance Item",
-   "doc_view": "List",
-   "label": "环保合规台账",
+   "type": "Page",
+   "link_to": "environmental-management",
+   "label": "环保管理",
    "doctype": "Workspace Shortcut"
   },
   {
@@ -46,6 +45,17 @@
    "hidden": 0,
    "link_type": "DocType",
    "link_to": "",
+   "onboard": 0,
+   "is_query_report": 0,
+   "link_count": 0,
+   "doctype": "Workspace Link"
+  },
+  {
+   "type": "Link",
+   "label": "环保管理 (危废/检测)",
+   "hidden": 0,
+   "link_type": "Page",
+   "link_to": "environmental-management",
    "onboard": 0,
    "is_query_report": 0,
    "link_count": 0,
@@ -97,7 +107,7 @@
   },
   {
    "type": "Link",
-   "label": "环保合规项档案",
+   "label": "环保合规项原始列表",
    "hidden": 0,
    "link_type": "DocType",
    "link_to": "Environmental Compliance Item",

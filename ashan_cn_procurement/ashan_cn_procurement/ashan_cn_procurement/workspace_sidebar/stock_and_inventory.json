@@ -344,10 +344,10 @@
    "doctype": "Workspace Sidebar Item"
   },
   {
-   "label": "环保合规台账",
-   "link_type": "DocType",
+   "label": "环保管理",
+   "link_type": "Page",
    "type": "Link",
-   "link_to": "Environmental Compliance Item",
+   "link_to": "environmental-management",
    "child": 1,
    "collapsible": 0,
    "indent": 0,

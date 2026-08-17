@@ -72,7 +72,8 @@ doc_events = {
 # Scheduled Tasks (Daily Expiry & Reminder Refresh)
 scheduler_events = {
     "daily": [
-        "ashan_cn_procurement.services.special_equipment.refresh_all_special_equipment_status"
+        "ashan_cn_procurement.services.special_equipment.refresh_all_special_equipment_status",
+        "ashan_cn_procurement.services.environmental_management.refresh_all_environmental_status"
     ]
 }
 

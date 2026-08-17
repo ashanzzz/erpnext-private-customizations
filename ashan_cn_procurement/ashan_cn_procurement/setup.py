@@ -204,8 +204,12 @@ def setup_doctype_and_page_permissions():
 		"Vehicle Toll Monthly Sheet",
 		"Vehicle Toll Deposit",
 		"Vehicle",
+		"Environmental Compliance Item",
+		"Special Equipment",
+		"Special Equipment Inspection",
+		"Special Equipment Annual Inspection"
 	]
-	target_roles = ["System Manager", "Fleet Manager", "Oil Card Manager", "油卡管理员", "Oil Card Operator", "油卡操作员"]
+	target_roles = ["System Manager", "Fleet Manager", "Oil Card Manager", "油卡管理员", "Oil Card Operator", "油卡操作员", "Desk User", "All"]
 
 	for dt in oil_doctypes:
 		if not frappe.db.exists("DocType", dt):
@@ -240,7 +244,7 @@ def setup_doctype_and_page_permissions():
 			dp.save(ignore_permissions=True)
 
 	# 3. 确保 Pages 拥有这些角色的访问权限
-	for page_name in ["oil-card-ledger", "vehicle-toll-ledger", "special-equipment-center"]:
+	for page_name in ["oil-card-ledger", "vehicle-toll-ledger", "special-equipment-center", "environmental-management"]:
 		if frappe.db.exists("Page", page_name):
 			page_doc = frappe.get_doc("Page", page_name)
 			existing_roles = {r.role for r in page_doc.roles}
