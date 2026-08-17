@@ -71,25 +71,29 @@ def setup_doctype_and_page_permissions():
 		"Dashboard Chart",
 		"Number Card"
 	]
-	ui_roles = ["Desk User", "All", "Oil Card Operator", "Oil Card Manager", "油卡操作员", "油卡管理员"]
+	ui_roles = ["System Manager", "Desk User", "All", "Oil Card Operator", "Oil Card Manager", "油卡操作员", "油卡管理员"]
 	for udt in core_ui_doctypes:
 		if not frappe.db.exists("DocType", udt):
 			continue
 		for role in ui_roles:
-			if not frappe.db.exists("Custom DocPerm", {"parent": udt, "role": role, "permlevel": 0}):
-				try:
-					dp = frappe.new_doc("Custom DocPerm")
-					dp.parent = udt
-					dp.parenttype = "DocType"
-					dp.parentfield = "permissions"
-					dp.role = role
-					dp.permlevel = 0
-					dp.read = 1
-					dp.select = 1
-					dp.export = 1
-					dp.insert(ignore_permissions=True)
-				except Exception as e:
-					frappe.logger("setup").warning(f"Error adding Custom DocPerm for {udt} / {role}: {e}")
+			existing = frappe.db.get_value("Custom DocPerm", {"parent": udt, "role": role, "permlevel": 0}, "name")
+			if existing:
+				dp = frappe.get_doc("Custom DocPerm", existing)
+			else:
+				dp = frappe.new_doc("Custom DocPerm")
+				dp.parent = udt
+				dp.parenttype = "DocType"
+				dp.parentfield = "permissions"
+				dp.role = role
+				dp.permlevel = 0
+			dp.read = 1
+			dp.select = 1
+			dp.export = 1
+			if role == "System Manager":
+				dp.write = 1
+				dp.create = 1
+				dp.delete = 1
+			dp.save(ignore_permissions=True)
 
 	# 2. 油卡与车用油、高速费业务 DocType 读写权限
 	oil_doctypes = [
@@ -104,13 +108,13 @@ def setup_doctype_and_page_permissions():
 		"Vehicle Toll Deposit",
 		"Vehicle",
 	]
-	target_roles = ["Oil Card Operator", "Oil Card Manager", "油卡操作员", "油卡管理员"]
+	target_roles = ["System Manager", "Fleet Manager", "Oil Card Manager", "油卡管理员", "Oil Card Operator", "油卡操作员"]
 
 	for dt in oil_doctypes:
 		if not frappe.db.exists("DocType", dt):
 			continue
 		for role in target_roles:
-			is_mgr = "Manager" in role or "管理员" in role
+			is_mgr = role in ["System Manager", "Fleet Manager", "Oil Card Manager", "油卡管理员"]
 			existing = frappe.db.get_value("Custom DocPerm", {"parent": dt, "role": role, "permlevel": 0}, "name")
 			if existing:
 				dp = frappe.get_doc("Custom DocPerm", existing)
@@ -126,7 +130,7 @@ def setup_doctype_and_page_permissions():
 			dp.report = 1
 			dp.export = 1
 
-			# 油卡档案（Oil Card）：操作员仅可读取选择，严禁新建、修改和删除；油卡管理员具备全部原始单据管理权限
+			# 油卡档案（Oil Card）：操作员仅可读取选择，严禁新建、修改和删除；油卡管理员与系统管理员具备全部原始单据管理权限
 			if dt == "Oil Card":
 				dp.create = 1 if is_mgr else 0
 				dp.write = 1 if is_mgr else 0
@@ -138,17 +142,18 @@ def setup_doctype_and_page_permissions():
 
 			dp.save(ignore_permissions=True)
 
-	# 3. 确保 Page oil-card-ledger 拥有这些角色的访问权限
-	if frappe.db.exists("Page", "oil-card-ledger"):
-		page_doc = frappe.get_doc("Page", "oil-card-ledger")
-		existing_roles = {r.role for r in page_doc.roles}
-		modified = False
-		for role in target_roles:
-			if role not in existing_roles:
-				page_doc.append("roles", {"role": role})
-				modified = True
-		if modified:
-			page_doc.save(ignore_permissions=True)
+	# 3. 确保 Pages 拥有这些角色的访问权限
+	for page_name in ["oil-card-ledger", "vehicle-toll-ledger"]:
+		if frappe.db.exists("Page", page_name):
+			page_doc = frappe.get_doc("Page", page_name)
+			existing_roles = {r.role for r in page_doc.roles}
+			modified = False
+			for role in ["System Manager", "Fleet Manager", "Oil Card Manager", "油卡管理员", "Oil Card Operator", "油卡操作员", "Desk User"]:
+				if role not in existing_roles:
+					page_doc.append("roles", {"role": role})
+					modified = True
+			if modified:
+				page_doc.save(ignore_permissions=True)
 
 	frappe.db.commit()
 
