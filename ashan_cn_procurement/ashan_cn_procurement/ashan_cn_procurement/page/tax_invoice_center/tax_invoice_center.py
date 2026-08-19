@@ -156,8 +156,9 @@ def upload_tax_invoice_file():
 
 	# 优先同步极速解析，失败时回退至异步队列
 	from ashan_cn_procurement.services.tax_invoice_import import process_import_batch
+	res = {}
 	try:
-		process_import_batch(batch.name)
+		res = process_import_batch(batch.name)
 	except Exception as e:
 		frappe.log_error(title=f"Tax Invoice Direct Import Error: {filename}")
 		try:
@@ -171,14 +172,19 @@ def upload_tax_invoice_file():
 			pass
 
 	batch.reload()
+	is_ok = (batch.batch_status != "失败") and (batch.created_count > 0 or batch.duplicate_count > 0 or batch.review_count > 0)
 	return {
-		"ok": True,
+		"ok": is_ok,
 		"batch_name": batch.name,
 		"filename": filename,
 		"source_type": source_type,
 		"status": batch.batch_status,
-		"success_count": batch.success_count or 0,
-		"failed_count": batch.failed_count or 0
+		"created_count": batch.created_count or 0,
+		"duplicate_count": batch.duplicate_count or 0,
+		"review_count": batch.review_count or 0,
+		"failed_count": batch.failed_count or 0,
+		"current_message": batch.current_message,
+		"error_log": batch.error_log or (res.get("error_log") if isinstance(res, dict) else "") or (res.get("error") if isinstance(res, dict) else "")
 	}
 
 @frappe.whitelist()

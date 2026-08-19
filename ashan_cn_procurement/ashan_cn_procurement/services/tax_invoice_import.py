@@ -5,10 +5,54 @@ import re
 import zipfile
 import traceback
 import frappe
+from frappe import _
+from frappe.utils import now_datetime, cint, flt
 from ashan_cn_procurement.parser.common import normalize_invoice_no, calculate_sha256
 from ashan_cn_procurement.parser.xml_parser import parse_tax_invoice_xml
 from ashan_cn_procurement.parser.pdf_parser import parse_tax_invoice_pdf
 from ashan_cn_procurement.services.tax_invoice_matcher import get_matching_purchase_invoices, update_tax_invoice_match_state
+
+def decode_zip_entry_name(info):
+	"""
+	智能解码 ZIP 内部文件名，兼容 Windows GBK/CP936 与 Linux UTF-8
+	"""
+	filename = info.filename
+	if info.flag_bits & 0x800:
+		# ZIP 规范显式声明 UTF-8
+		return filename
+	try:
+		# 尝试按 CP437 还原字节后按 GBK 解码
+		return filename.encode('cp437').decode('gbk')
+	except Exception:
+		return filename
+
+def extract_invoice_key_from_filename(filename):
+	"""
+	从文件名中智能提取发票号码或配对标识
+	例如:
+	  dzfp_24122000000012345678_... -> 24122000000012345678
+	  24122000000012345678.xml     -> 24122000000012345678
+	  电子发票_24122000000012345678.pdf -> 24122000000012345678
+	"""
+	basename = os.path.basename(filename)
+	name_without_ext = os.path.splitext(basename)[0]
+
+	# 1. 优先匹配 20 位数电发票号码 (全电发票规则)
+	m20 = re.search(r'\b(\d{20})\b', basename)
+	if m20:
+		return m20.group(1)
+
+	# 2. 匹配常见税局前缀 dzfp_xxxx_
+	m_dzfp = re.search(r'dzfp_([a-zA-Z0-9]+)_', basename)
+	if m_dzfp:
+		return m_dzfp.group(1)
+
+	# 3. 匹配传统发票号码 (8位或10位发票号，或 12位代码+8位号码)
+	m_trad = re.search(r'\b(\d{8,12})\b', basename)
+	if m_trad:
+		return m_trad.group(1)
+
+	return name_without_ext
 
 def identify_company(buyer_name, buyer_tax_id):
 	"""
@@ -75,10 +119,10 @@ def save_private_pdf_file(pdf_bytes, filename, docname):
 
 def process_import_batch(batch_name):
 	"""
-	Background Job 异步处理税局发票导入批次
+	同步/异步处理税局发票导入批次
 	"""
 	if not frappe.db.exists("Tax Invoice Import Batch", batch_name):
-		return
+		return {"ok": False, "error": f"批次 {batch_name} 不存在"}
 
 	batch = frappe.get_doc("Tax Invoice Import Batch", batch_name)
 	batch.batch_status = "处理中"
@@ -92,66 +136,93 @@ def process_import_batch(batch_name):
 	error_logs = []
 	created_nos = []
 	updated_nos = []
+	file_doc_name = None
 
 	try:
 		# 1. 读取临时上传文件
 		if not temp_file_url:
-			raise ValueError("未找到临时上传文件")
+			raise ValueError("未找到临时上传文件，请重新上传！")
 
 		file_doc_name = frappe.db.get_value("File", {"file_url": temp_file_url}, "name")
 		if not file_doc_name:
-			raise ValueError(f"File 记录不存在: {temp_file_url}")
+			raise ValueError(f"临时文件记录丢失: {temp_file_url}")
 
 		file_doc = frappe.get_doc("File", file_doc_name)
 		file_content = file_doc.get_content()
 
+		if not file_content:
+			raise ValueError("上传的文件内容为空 (0 字节)！")
+
 		is_zip = (batch.source_type == "ZIP" or batch.source_filename.lower().endswith(".zip"))
 
 		# 2. 组织待解析的发票数据包
-		# { invoice_no_or_key: { "xml": bytes, "pdf": (bytes, filename), "fn_hint": str } }
+		# { invoice_key: { "xml": bytes, "pdf": (bytes, filename), "fn_hint": str } }
 		invoices_map = {}
 
 		if is_zip:
-			batch.current_message = "正在解压并分析 ZIP 结构..."
+			batch.current_message = "正在解压并分析 ZIP 压缩包..."
 			batch.save(ignore_permissions=True)
 			frappe.db.commit()
 
-			with zipfile.ZipFile(io.BytesIO(file_content)) as zf:
-				namelist = zf.namelist()
-				batch.file_count = len(namelist)
+			try:
+				zf = zipfile.ZipFile(io.BytesIO(file_content))
+			except zipfile.BadZipFile:
+				raise ValueError("上传的文件不是有效的 ZIP 压缩文件或已损坏！")
+			except Exception as e_zip:
+				raise ValueError(f"ZIP 解压异常: {str(e_zip)}")
 
-				for entry_name in namelist:
-					# 忽略目录与隐藏文件
-					if entry_name.endswith('/') or '__MACOSX' in entry_name or entry_name.startswith('.'):
-						continue
-					basename = os.path.basename(entry_name)
-					# 忽略汇总文件与非单票发票
-					if basename in ["合并发票.pdf", "全量发票查询导出结果.xlsx"] or basename.endswith(".xlsx") or basename.endswith(".xls"):
+			with zf:
+				infolist = zf.infolist()
+				batch.file_count = len(infolist)
+
+				for info in infolist:
+					decoded_name = decode_zip_entry_name(info)
+					# 忽略目录、隐藏文件与 macOS 专有缓存
+					if info.is_dir() or decoded_name.endswith('/') or '__MACOSX' in decoded_name or os.path.basename(decoded_name).startswith('.'):
 						continue
 
-					m_fn = re.search(r'dzfp_(\d+)_', basename)
-					inv_hint = m_fn.group(1) if m_fn else os.path.splitext(basename)[0]
+					basename = os.path.basename(decoded_name)
+					# 忽略统计汇总表格与非单票文件
+					if basename in ["合并发票.pdf", "全量发票查询导出结果.xlsx"] or basename.lower().endswith((".xlsx", ".xls", ".csv", ".txt")):
+						continue
+
+					ext = os.path.splitext(basename)[1].lower()
+					if ext not in [".xml", ".pdf", ".ofd"]:
+						continue
+
+					inv_hint = extract_invoice_key_from_filename(decoded_name)
 
 					if inv_hint not in invoices_map:
 						invoices_map[inv_hint] = {"xml": None, "pdf": None, "fn_hint": inv_hint}
 
-					entry_bytes = zf.read(entry_name)
-					if basename.lower().endswith(".xml"):
+					entry_bytes = zf.read(info)
+					if ext == ".xml":
 						invoices_map[inv_hint]["xml"] = entry_bytes
-					elif basename.lower().endswith(".pdf"):
+					elif ext == ".pdf":
 						invoices_map[inv_hint]["pdf"] = (entry_bytes, basename)
+
+			if not invoices_map:
+				raise ValueError(
+					"压缩包内未找到任何有效的数电/税局发票文件 (.xml 或 .pdf)！\n"
+					"请检查 ZIP 压缩包内容，确保包含税局导出的 XML 或 PDF 发票原件。"
+				)
+
 		else:
-			# 单个或直接上传的 PDF
+			# 单个或直接上传的 PDF / XML
 			batch.file_count = 1
-			inv_hint = os.path.splitext(batch.source_filename)[0]
-			m_fn = re.search(r'dzfp_(\d+)_', batch.source_filename)
-			if m_fn:
-				inv_hint = m_fn.group(1)
-			invoices_map[inv_hint] = {"xml": None, "pdf": (file_content, batch.source_filename), "fn_hint": inv_hint}
+			inv_hint = extract_invoice_key_from_filename(batch.source_filename)
+			ext = os.path.splitext(batch.source_filename)[1].lower()
+
+			if ext == ".xml":
+				invoices_map[inv_hint] = {"xml": file_content, "pdf": None, "fn_hint": inv_hint}
+			elif ext == ".pdf":
+				invoices_map[inv_hint] = {"xml": None, "pdf": (file_content, batch.source_filename), "fn_hint": inv_hint}
+			else:
+				raise ValueError(f"不支持的文件格式: {ext}，仅支持 .pdf, .xml, .zip 格式发票文件！")
 
 		batch.invoice_candidate_count = len(invoices_map)
 		batch.progress_percent = 15
-		batch.current_message = f"识别出 {len(invoices_map)} 份待处理发票，开始逐票解析..."
+		batch.current_message = f"识别出 {len(invoices_map)} 份待处理发票，开始逐票智能解析..."
 		batch.save(ignore_permissions=True)
 		frappe.db.commit()
 
@@ -176,11 +247,10 @@ def process_import_batch(batch_name):
 
 			try:
 				parsed_data = None
-				# 优先 XML 解析数据
+				# 优先 XML 高精度解析
 				if xml_bytes:
 					parsed_data = parse_tax_invoice_xml(xml_bytes, filename=pdf_filename)
 					if not parsed_data.get("ok"):
-						# XML 失败则尝试降级为 PDF
 						if pdf_bytes:
 							parsed_data = parse_tax_invoice_pdf(pdf_bytes, filename=pdf_filename)
 						else:
@@ -188,20 +258,18 @@ def process_import_batch(batch_name):
 							error_logs.append(f"发票 {key} XML 解析失败: {parsed_data.get('error')}")
 							continue
 				elif pdf_bytes:
-					# 仅有 PDF
 					parsed_data = parse_tax_invoice_pdf(pdf_bytes, filename=pdf_filename)
 					if not parsed_data.get("ok"):
 						batch.failed_count += 1
 						error_logs.append(f"发票 {key} PDF 解析失败: {parsed_data.get('error')}")
 						continue
 				else:
-					# 既无有效 XML 也无 PDF
 					continue
 
 				inv_no = normalize_invoice_no(parsed_data.get("invoice_no") or key)
 				if not inv_no or inv_no == "UNKNOWN":
 					batch.failed_count += 1
-					error_logs.append(f"文件 {pdf_filename} 无法提取有效发票号码")
+					error_logs.append(f"文件 {pdf_filename or key} 无法提取有效发票号码")
 					continue
 
 				batch.parsed_count += 1
@@ -216,14 +284,12 @@ def process_import_batch(batch_name):
 				# 4. 去重与更新检查
 				if frappe.db.exists("Tax Invoice", inv_no):
 					existing_doc = frappe.get_doc("Tax Invoice", inv_no)
-					# 检查关键金额与日期是否一致
 					is_same_amount = (
 						abs(flt(existing_doc.invoice_grand_total) - flt(parsed_data.get("invoice_grand_total"))) < 0.05 and
 						abs(flt(existing_doc.amount_without_tax) - flt(parsed_data.get("amount_without_tax"))) < 0.05
 					)
 
 					if is_same_amount:
-						# 金额一致：若原记录无 PDF 则补挂 PDF
 						if (not existing_doc.invoice_pdf or existing_doc.pdf_removed) and pdf_bytes:
 							new_url = save_private_pdf_file(pdf_bytes, pdf_filename, existing_doc.name)
 							existing_doc.invoice_pdf = new_url
@@ -236,7 +302,6 @@ def process_import_batch(batch_name):
 						else:
 							batch.duplicate_count += 1
 					else:
-						# 金额冲突：标记需复核
 						existing_doc.parse_status = "需复核"
 						existing_doc.parse_warning = (existing_doc.parse_warning or "") + "; 重复导入且关键金额数据与已有记录冲突"
 						existing_doc.save(ignore_permissions=True)
@@ -278,14 +343,11 @@ def process_import_batch(batch_name):
 				doc.business_status = "待录入"
 				doc.match_status = "未匹配"
 
-				# 明细项
 				for it in (parsed_data.get("items") or []):
 					doc.append("items", it)
 
-				# 插入主记录
 				doc.insert(ignore_permissions=True)
 
-				# 挂载 Private PDF 附件 (长期保留，XML 丢弃)
 				if pdf_bytes:
 					pdf_url = save_private_pdf_file(pdf_bytes, pdf_filename, doc.name)
 					doc.invoice_pdf = pdf_url
@@ -321,7 +383,7 @@ def process_import_batch(batch_name):
 				pis = matched_map.get(inv_n, [])
 				update_tax_invoice_match_state(inv_n, matched_pis=pis)
 
-		# 7. 删除临时上传文件 (ZIP / 临时包)
+		# 7. 删除临时上传文件
 		batch.current_message = "正在清理临时上传文件..."
 		try:
 			if file_doc_name and frappe.db.exists("File", file_doc_name):
@@ -341,12 +403,36 @@ def process_import_batch(batch_name):
 		batch.save(ignore_permissions=True)
 		frappe.db.commit()
 
+		return {
+			"ok": True,
+			"batch_name": batch.name,
+			"created_count": batch.created_count,
+			"duplicate_count": batch.duplicate_count,
+			"review_count": batch.review_count,
+			"failed_count": batch.failed_count,
+			"message": batch.current_message
+		}
+
 	except Exception as e_batch:
 		frappe.db.rollback()
 		batch.batch_status = "失败"
 		batch.finished_at = now_datetime()
-		batch.current_message = f"批次处理失败: {str(e_batch)}"
+		batch.current_message = f"导入失败: {str(e_batch)}"
 		batch.error_log = traceback.format_exc()
 		batch.save(ignore_permissions=True)
 		frappe.db.commit()
-		frappe.log_error(batch.error_log, "Tax Invoice Batch Import")
+
+		# 清理临时文件
+		if file_doc_name and frappe.db.exists("File", file_doc_name):
+			try:
+				frappe.get_doc("File", file_doc_name).delete(ignore_permissions=True)
+			except Exception:
+				pass
+
+		return {
+			"ok": False,
+			"batch_name": batch.name,
+			"error": str(e_batch),
+			"error_log": batch.error_log,
+			"message": batch.current_message
+		}
