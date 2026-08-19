@@ -7,7 +7,7 @@ import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
 url = 'http://192.168.8.11:6888'
-token = 'token 781e6538a0816f3:ebfe8d61c03e289'
+token = os.environ["ERPNEXT_TOKEN"]
 headers = {'Authorization': token, 'Content-Type': 'application/json'}
 
 def call_api(endpoint, method='GET', data=None):

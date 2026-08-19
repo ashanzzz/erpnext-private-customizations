@@ -415,3 +415,53 @@ The resource you are looking for is not available,您访问的资源不存在或
 Invalid login credentials,账号或密码错误
 Session Expired,会话已过期，请重新登录
 Please refresh the page,请刷新页面
+Desktop,控制台
+Workspaces,工作区
+Website,网站主页
+Display,界面显示
+Session Defaults,会话默认值
+Reload,重新加载
+Help,帮助与支持
+Logout,退出登录
+Toggle Theme,切换深浅主题
+Toggle Full Width,切换全屏/等宽
+Toggle Sidebar,展开/折叠侧边栏
+Theme,系统主题
+Dark Theme,深色模式
+Dark Mode,深色模式
+Light Theme,浅色模式
+Light Mode,浅色模式
+Automatic,跟随系统
+About,关于系统
+Keyboard Shortcuts,键盘快捷键
+System Health,系统健康状态
+Frappe Support,技术支持
+Documentation,官方文档
+User Forum,用户社区
+Report an Issue,反馈问题
+Notifications,通知中心
+Events,日程事件
+What's New,最新动态
+No New notifications,暂无新通知
+Looks like you haven’t received any notifications.,您当前没有收到任何新通知。
+No Upcoming Events,暂无近期日程
+There are no upcoming events for you.,您当前没有即将开始的日程事件。
+Nothing New,暂无更新动态
+There is nothing new to show you right now.,当前暂无最新动态。
+Accounting,财务会计
+Buying,采购管理
+Stock,库存与仓库
+CRM,客户关系管理 (CRM)
+HR,人力资源 (HR)
+Payroll,薪资管理 (Payroll)
+Quality,质量管理
+Projects,项目管理
+Manufacturing,生产制造
+Selling,销售管理
+Support,客户服务与支持
+Users,用户与权限
+Integrations,集成与对接
+Build,开发与构建
+Retail,零售管理
+Assets,固定资产
+My Business,我的业务 (总控主页)

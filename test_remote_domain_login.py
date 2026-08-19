@@ -13,7 +13,7 @@ def load_env_file(env_path='.env'):
 load_env_file()
 REMOTE_URL = 'https://erpnext.335356119.xyz'
 USERNAME = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
-PASSWORD = os.getenv('ERPNEXT_PASSWORD', 'Woo@@@204317')
+PASSWORD = os.getenv('ERPNEXT_PASSWORD', '')
 
 def main():
     with sync_playwright() as p:

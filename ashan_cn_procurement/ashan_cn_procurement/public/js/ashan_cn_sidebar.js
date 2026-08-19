@@ -30,18 +30,42 @@
         return isOp && !is_oil_card_manager_user();
     }
 
-    // 0. 路由弹窗保护与容错（默认不强行锁定路由，允许自由访问）
-    if (window.frappe) {
-        frappe.router && frappe.router.on && frappe.router.on("change", function() {
-            const route = frappe.get_route_str ? frappe.get_route_str() : "";
-            if (route === "home" || route === "desk/home" || route === "app/home" || route === "Workspaces/Home") {
-                const isMgr = is_oil_card_manager_user();
-                frappe.set_route(isMgr ? "my-business" : "oil-card-ledger");
-                setTimeout(function() {
-                    $(".modal:contains('home not found'), .modal:contains('未找到请求的页面')").modal("hide");
-                }, 50);
+    // 0. 路由守卫与官方 Desktop 映射
+    // Frappe v16 中 Workspace name='Home' 的前端路由为 'Workspaces/Home'
+    // 1) 普通员工阻止访问总控主页，重定向到油卡台账
+    // 2) 管理员访问原生 desktop / desk 路由或大图标页时，平滑直达定制总控主页 Workspaces/Home
+    function handle_route_guard() {
+        if (!window.frappe) return;
+        const route = frappe.get_route_str ? frappe.get_route_str() : "";
+        const routeArr = frappe.get_route ? frappe.get_route() : [];
+        const isMgr = is_oil_card_manager_user();
+
+        if (!isMgr) {
+            if (
+                route === "home" ||
+                route === "Workspaces/Home" ||
+                route === "Workspaces/My Business" ||
+                route === "Workspaces/home" ||
+                route === "desktop" ||
+                (routeArr.length === 1 && routeArr[0] === "desktop")
+            ) {
+                frappe.set_route("oil-card-ledger");
             }
-        });
+        } else {
+            const isDesktopPage = (
+                route === "desktop" ||
+                route === "desk" ||
+                (routeArr.length === 1 && routeArr[0] === "desktop") ||
+                (frappe.container && frappe.container.page && frappe.container.page.page_name === "desktop")
+            );
+            if (isDesktopPage) {
+                frappe.set_route(["Workspaces", "Home"]);
+            }
+        }
+    }
+
+    if (window.frappe) {
+        frappe.router && frappe.router.on && frappe.router.on("change", handle_route_guard);
     }
 
     // 1. 一级标题 → 对应 Workspace / Page 映射
@@ -55,6 +79,8 @@
         "库存": "stock-and-inventory",
         "采购协同": "procurement-management",
         "采购": "procurement-management",
+        "物业与租赁": "property-and-lease",
+        "物业与租赁管理": "property-and-lease",
         "公司合规": "company-compliance-center",
         "企业合规中心": "company-compliance-center",
         "公司治理": "company-compliance-center",
@@ -81,6 +107,7 @@
         "my business", "my-business",
         "stock and inventory", "stock-and-inventory",
         "procurement management", "procurement-management",
+        "property and lease", "property-and-lease",
         "vehicle fuel hub", "vehicle-fuel-hub",
         "company compliance center", "company-compliance-center",
         "accounting and finance", "accounting-and-finance",
@@ -531,16 +558,21 @@
         patch_sidebar_resolver();
         patch_native_section_break();
         schedule_system_management_visibility();
+        handle_route_guard();
 
         $(document).on("sidebar_setup app_ready route-change page-change", function() {
             inject_styles();
             patch_sidebar_resolver();
             patch_native_section_break();
             schedule_system_management_visibility();
+            handle_route_guard();
         });
     }
 
     init();
     $(document).ready(init);
-    $(document).on("app_ready", init);
+    $(document).on("app_ready", function() {
+        init();
+        setTimeout(handle_route_guard, 50);
+    });
 })();

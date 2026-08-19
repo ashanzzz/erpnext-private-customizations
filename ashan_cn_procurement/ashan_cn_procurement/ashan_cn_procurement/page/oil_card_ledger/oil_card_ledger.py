@@ -473,7 +473,7 @@ def get_unified_ledger_data(oil_card, year=None, month=None):
 
 	if frappe.db.exists("Oil Card Monthly Closing", closing_name):
 		closing_doc = frappe.get_doc("Oil Card Monthly Closing", closing_name)
-		is_locked = bool(closing_doc.is_locked)
+		is_locked = bool(closing_doc.get("closing_locked") or closing_doc.get("is_locked"))
 		locked_info = {
 			"locked_by": closing_doc.locked_by or "",
 			"locked_at": str(closing_doc.locked_at) if closing_doc.locked_at else "",
@@ -565,8 +565,8 @@ def quick_add_refuel(oil_card, posting_date, vehicle, odometer, liters, amount, 
 	closing_name = f"{oil_card}-{dt.year}-{dt.month}"
 	if frappe.db.exists("Oil Card Monthly Closing", closing_name):
 		closing_doc = frappe.get_doc("Oil Card Monthly Closing", closing_name)
-		if closing_doc.is_locked and not is_oil_card_manager():
-			frappe.throw(f"该月份 ({dt.year}年{dt.month}月) 已被核定锁定，非管理员禁止录入加油！若需修改请先申请取消核定。")
+		if closing_doc.get("closing_locked") or closing_doc.get("is_locked"):
+			frappe.throw(f"该月份 ({dt.year}年{dt.month}月) 已被月度核定锁定，禁止直接录入加油！如需修改请先在页面右上角执行【解除锁定】或【申请取消核定】。")
 
 	card = frappe.get_doc("Oil Card", oil_card)
 	company = card.company or frappe.defaults.get_user_default("Company") or frappe.db.get_single_value("Global Defaults", "default_company")
@@ -651,8 +651,8 @@ def quick_add_recharge(oil_card, posting_date, recharge_amount, mode_of_payment=
 	closing_name = f"{oil_card}-{dt.year}-{dt.month}"
 	if frappe.db.exists("Oil Card Monthly Closing", closing_name):
 		closing_doc = frappe.get_doc("Oil Card Monthly Closing", closing_name)
-		if closing_doc.is_locked and not is_oil_card_manager():
-			frappe.throw(f"该月份 ({dt.year}年{dt.month}月) 已被核定锁定，非管理员禁止录入充值！若需修改请先申请取消核定。")
+		if closing_doc.get("closing_locked") or closing_doc.get("is_locked"):
+			frappe.throw(f"该月份 ({dt.year}年{dt.month}月) 已被月度核定锁定，禁止直接录入充值！如需修改请先在页面右上角执行【解除锁定】或【申请取消核定】。")
 
 	card = frappe.get_doc("Oil Card", oil_card)
 	rec_amt = flt(recharge_amount)
@@ -710,10 +710,11 @@ def lock_monthly_ledger(oil_card, year, month, remark=None):
 	# 计算当前期末余额
 	data = get_unified_ledger_data(oil_card, y, m)
 	closing_bal = data.get("kpis", {}).get("ending_balance", 0)
+	card_name = data.get("card_info", {}).get("card_name") or oil_card
 
 	if frappe.db.exists("Oil Card Monthly Closing", closing_name):
 		doc = frappe.get_doc("Oil Card Monthly Closing", closing_name)
-		doc.is_locked = 1
+		doc.closing_locked = 1
 		doc.closing_balance = closing_bal
 		doc.locked_by = frappe.session.user
 		doc.locked_at = now_datetime()
@@ -730,16 +731,16 @@ def lock_monthly_ledger(oil_card, year, month, remark=None):
 			"oil_card": oil_card,
 			"fiscal_year": y,
 			"fiscal_month": m,
-			"is_locked": 1,
+			"closing_locked": 1,
 			"closing_balance": closing_bal,
 			"locked_by": frappe.session.user,
 			"locked_at": now_datetime(),
-			"remark": remark or "管理员月度核定锁定",
+			"remark": remark or "月度核定锁定",
 		})
 		doc.insert(ignore_permissions=True)
 
 	frappe.db.commit()
-	return {"status": "ok", "message": f"{y}年{m}月已成功核定并锁定！"}
+	return {"status": "ok", "message": f"【{card_name}】{y}年{m}月已成功核定并锁定（期末结存: ¥{closing_bal:,.2f}）！"}
 
 
 @frappe.whitelist()
@@ -759,7 +760,7 @@ def request_unlock_monthly_ledger(oil_card, year, month, reason):
 		frappe.throw("该月尚未核定锁定，无需申请解锁。")
 
 	doc = frappe.get_doc("Oil Card Monthly Closing", closing_name)
-	if not doc.is_locked:
+	if not (doc.get("closing_locked") or doc.get("is_locked")):
 		frappe.throw("该月当前处于未锁定状态，无需申请解锁。")
 
 	doc.unlock_requested = 1
@@ -792,7 +793,7 @@ def approve_unlock_monthly_ledger(oil_card, year, month, approved=1):
 	is_appr = bool(int(approved)) if str(approved).isdigit() else bool(approved)
 
 	if is_appr:
-		doc.is_locked = 0
+		doc.closing_locked = 0
 		doc.unlock_requested = 0
 		doc.save(ignore_permissions=True)
 		frappe.db.commit()
@@ -824,8 +825,8 @@ def delete_ledger_record(doc_type, name, oil_card, year, month, reason=None):
 
 	if frappe.db.exists("Oil Card Monthly Closing", closing_name):
 		closing_doc = frappe.get_doc("Oil Card Monthly Closing", closing_name)
-		if closing_doc.is_locked and not is_oil_card_manager():
-			frappe.throw(f"该月份 ({y}年{m}月) 已被核定锁定，非管理员禁止删除记录！若需修改请先申请取消核定。")
+		if closing_doc.get("closing_locked") or closing_doc.get("is_locked"):
+			frappe.throw(f"该月份 ({y}年{m}月) 已被核定锁定，禁止删除单据！若需调整请先在页面右上角执行【解除锁定】或【申请取消核定】。")
 
 	if doc_type not in ["Oil Card Recharge", "Oil Card Refuel Log"]:
 		frappe.throw("非法的单据类型")

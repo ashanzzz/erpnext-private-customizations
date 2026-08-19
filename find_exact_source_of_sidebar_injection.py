@@ -14,7 +14,7 @@ def load_env_file(env_path='.env'):
 load_env_file()
 SITE_URL = 'http://192.168.8.11:6888'
 USERNAME = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
-PASSWORD = os.getenv('ERPNEXT_PASSWORD', 'Woo@@@204317')
+PASSWORD = os.getenv('ERPNEXT_PASSWORD', '')
 
 def main():
     with sync_playwright() as p:

@@ -10,19 +10,19 @@ from ashan_cn_procurement.services.property_settlement import (
 	save_draft_settlement,
 	finalize_monthly_settlement,
 	revert_settlement_to_draft,
-	export_settlement_excel
+	export_utility_settlement_excel
 )
 
 
 @frappe.whitelist()
 def get_settlement(year, month):
-	"""获取指定年月的物业月结全量数据（包含水电抄表、调整项、租赁费与公司汇总）"""
+	"""获取指定年月的水电费月结数据"""
 	return get_month_settlement_data(year, month)
 
 
 @frappe.whitelist()
 def save_settlement(data):
-	"""保存草稿月结"""
+	"""保存水电费草稿月结"""
 	if isinstance(data, str):
 		data = json.loads(data)
 	return save_draft_settlement(data)
@@ -30,7 +30,7 @@ def save_settlement(data):
 
 @frappe.whitelist()
 def finalize_settlement(data):
-	"""完成并锁定本月结算"""
+	"""完成并锁定本月水电费结算"""
 	if isinstance(data, str):
 		data = json.loads(data)
 	return finalize_monthly_settlement(data)
@@ -45,32 +45,27 @@ def revert_settlement(name):
 @frappe.whitelist()
 def get_company_bill_data(settlement_name, company):
 	"""
-	获取指定月结单中特定公司的结算单明细数据（用于弹窗预览与打印）
+	获取指定月结单中特定公司的水电费结算单明细数据（用于弹窗预览与打印）
 	"""
 	doc = frappe.get_doc("Property Monthly Settlement", settlement_name)
 	doc_dict = doc.as_dict()
 
-	# 过滤该公司相关的抄表
 	company_meters = [
 		m for m in doc_dict.get("meter_readings", [])
 		if (m.get("company") if isinstance(m, dict) else m.company) == company
 	]
 
-	# 过滤该公司相关的租赁费用
-	company_leases = [
-		l for l in doc_dict.get("lease_charges", [])
-		if (l.get("company") if isinstance(l, dict) else l.company) == company
-	]
-
-	# 过滤该公司相关的调整项
 	company_adjustments = []
 	for adj in doc_dict.get("adjustments", []):
+		u_type = adj.get("utility_type") if isinstance(adj, dict) else adj.utility_type
+		if u_type not in ["电费", "电", "水费", "水"]:
+			continue
+
 		adj_scope = adj.get("adjustment_scope") if isinstance(adj, dict) else adj.adjustment_scope
 		adj_comp = adj.get("company") if isinstance(adj, dict) else adj.company
 		adj_from = adj.get("from_company") if isinstance(adj, dict) else adj.from_company
 		adj_to = adj.get("to_company") if isinstance(adj, dict) else adj.to_company
 		adj_type = adj.get("adjustment_type") if isinstance(adj, dict) else adj.adjustment_type
-		u_type = adj.get("utility_type") if isinstance(adj, dict) else adj.utility_type
 		u_adj = adj.get("usage_adjustment") if isinstance(adj, dict) else adj.usage_adjustment
 		amt_adj = adj.get("amount_adjustment") if isinstance(adj, dict) else adj.amount_adjustment
 		eq_u = adj.get("equivalent_usage") if isinstance(adj, dict) else adj.equivalent_usage
@@ -105,18 +100,61 @@ def get_company_bill_data(settlement_name, company):
 					"reason": reason
 				})
 
-	# 汇总信息
 	summary = next((s for s in doc_dict.get("company_summaries", []) if (s.get("company") if isinstance(s, dict) else s.company) == company), None)
 
 	return {
 		"settlement_name": doc.name,
 		"settlement_month": doc.settlement_month,
+		"property_management_company": doc.property_management_company or "天津金利达物业管理有限公司",
 		"status": doc.status,
 		"company": company,
 		"electricity_price": doc.electricity_price,
 		"water_price": doc.water_price,
 		"meters": company_meters,
-		"leases": company_leases,
 		"adjustments": company_adjustments,
 		"summary": summary
+	}
+
+
+@frappe.whitelist()
+def get_total_bill_data(settlement_name):
+	"""
+	获取全公司合计水电费结算单数据
+	"""
+	doc = frappe.get_doc("Property Monthly Settlement", settlement_name)
+	doc_dict = doc.as_dict()
+
+	total_adjs = []
+	for adj in doc_dict.get("adjustments", []):
+		u_type = adj.get("utility_type") if isinstance(adj, dict) else adj.utility_type
+		if u_type not in ["电费", "电", "水费", "水"]:
+			continue
+		adj_scope = adj.get("adjustment_scope") if isinstance(adj, dict) else adj.adjustment_scope
+		if adj_scope == "单公司":
+			total_adjs.append({
+				"title": f"{u_type}调整",
+				"type": adj.get("adjustment_type") if isinstance(adj, dict) else adj.adjustment_type,
+				"usage": adj.get("usage_adjustment") if isinstance(adj, dict) else adj.usage_adjustment,
+				"amount": adj.get("amount_adjustment") if isinstance(adj, dict) else adj.amount_adjustment,
+				"reason": adj.get("reason") if isinstance(adj, dict) else adj.reason
+			})
+
+	return {
+		"settlement_name": doc.name,
+		"settlement_month": doc.settlement_month,
+		"property_management_company": doc.property_management_company or "天津金利达物业管理有限公司",
+		"status": doc.status,
+		"company": "全公司合计",
+		"is_total": True,
+		"electricity_price": doc.electricity_price,
+		"water_price": doc.water_price,
+		"meters": doc_dict.get("meter_readings", []),
+		"adjustments": total_adjs,
+		"summary": {
+			"electricity_usage": doc.total_electricity_usage,
+			"electricity_amount": doc.total_electricity_amount,
+			"water_usage": doc.total_water_usage,
+			"water_amount": doc.total_water_amount,
+			"total_amount": flt(doc.total_electricity_amount) + flt(doc.total_water_amount)
+		}
 	}

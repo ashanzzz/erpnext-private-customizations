@@ -14,7 +14,7 @@ load_env_file()
 
 SITE_URL = os.getenv('ERPNEXT_SITE_URL', 'http://192.168.8.11:6888')
 USERNAME = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
-USER_PWD = os.getenv('ERPNEXT_PASSWORD', 'Woo@@@204317')
+USER_PWD = os.getenv('ERPNEXT_PASSWORD', '')
 ARTIFACT_DIR = r"C:\Users\ashan\.gemini\antigravity\brain\062db5c0-afb5-4a31-90f4-1728b7cf9460"
 
 def capture_settlement_workbench():

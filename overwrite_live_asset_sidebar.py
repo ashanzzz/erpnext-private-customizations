@@ -15,7 +15,7 @@ def load_env_file(env_path='.env'):
 load_env_file()
 SITE_URL = 'http://192.168.8.11:6888'
 USER = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
-PWD = os.getenv('ERPNEXT_PASSWORD', 'Woo@@@204317')
+PWD = os.getenv('ERPNEXT_PASSWORD', '')
 
 # 1. Remove legacy JSON files in local custom/client_script directory
 legacy_jsons = [

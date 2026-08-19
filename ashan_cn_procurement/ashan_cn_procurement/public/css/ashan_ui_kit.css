@@ -1,0 +1,313 @@
+/* Copyright (c) 2026, Ashan CN Procurement and contributors */
+/* AshanUI Kit - 全局企业级标准交互与样式模块库 */
+
+/* ==========================================================================
+   1. 零位移稳态自动保存指示器 (Zero-Jitter Save Capsule)
+   ========================================================================== */
+.ashan-save-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11.5px;
+    font-weight: 600;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+    user-select: none;
+    box-sizing: border-box;
+    /* 关键：设置最小宽度与 flex 占位，防止文字长短变化导致后方按钮移动 */
+    min-width: 140px;
+    justify-content: center;
+    border: 1px solid transparent;
+}
+
+.ashan-save-indicator .indicator-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.ashan-save-indicator .indicator-text {
+    flex-shrink: 0;
+}
+
+.ashan-save-indicator .indicator-time {
+    font-size: 10.5px;
+    opacity: 0.85;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* 状态：草稿录入中 */
+.ashan-save-indicator.state-draft {
+    background-color: #fefce8;
+    color: #a16207;
+    border-color: #fef08a;
+}
+.ashan-save-indicator.state-draft .indicator-dot {
+    background-color: #eab308;
+}
+
+/* 状态：正在自动保存... */
+.ashan-save-indicator.state-saving {
+    background-color: #eff6ff;
+    color: #1d4ed8;
+    border-color: #bfdbfe;
+}
+.ashan-save-indicator.state-saving .indicator-dot {
+    background-color: #3b82f6;
+    animation: ashanPulse 1s infinite alternate;
+}
+
+/* 状态：已自动保存 */
+.ashan-save-indicator.state-saved {
+    background-color: #f0fdf4;
+    color: #15803d;
+    border-color: #bbf7d0;
+}
+.ashan-save-indicator.state-saved .indicator-dot {
+    background-color: #22c55e;
+}
+
+/* 状态：已核定锁定 */
+.ashan-save-indicator.state-locked {
+    background-color: #fef2f2;
+    color: #b91c1c;
+    border-color: #fecaca;
+}
+.ashan-save-indicator.state-locked .indicator-dot {
+    background-color: #ef4444;
+}
+
+/* 状态：保存错误 */
+.ashan-save-indicator.state-error {
+    background-color: #fdf2f8;
+    color: #be185d;
+    border-color: #fbcfe8;
+}
+.ashan-save-indicator.state-error .indicator-dot {
+    background-color: #ec4899;
+}
+
+@keyframes ashanPulse {
+    0% { transform: scale(0.85); opacity: 0.6; }
+    100% { transform: scale(1.2); opacity: 1; }
+}
+
+
+/* ==========================================================================
+   2. 统一标准年月/账期选择器 (Period Navigator Capsule)
+   ========================================================================== */
+.ashan-period-navigator {
+    display: inline-flex;
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 2px 4px;
+    gap: 3px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.ashan-period-navigator .ashan-nav-btn {
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    color: #334155;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    line-height: 1;
+    transition: all 0.15s ease;
+}
+
+.ashan-period-navigator .ashan-nav-btn:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+    border-color: #cbd5e1;
+}
+
+.ashan-period-select-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.ashan-period-select {
+    border: 1px solid transparent;
+    background: #f1f5f9;
+    padding: 3px 6px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #1e293b;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.15s ease;
+}
+
+.ashan-period-select:hover,
+.ashan-period-select:focus {
+    background: #e2e8f0;
+    border-color: #94a3b8;
+}
+
+.ashan-period-navigator .ashan-nav-today-btn {
+    padding: 3px 8px;
+    height: 26px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+    color: #1d4ed8;
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.ashan-period-navigator .ashan-nav-today-btn:hover {
+    background: #dbeafe;
+    border-color: #93c5fd;
+}
+
+
+/* ==========================================================================
+   3. 统一公司/实体切换选项卡 (Entity Tab Capsule)
+   ========================================================================== */
+.ashan-entity-tabs {
+    display: inline-flex;
+    align-items: center;
+    background: #f1f5f9;
+    padding: 3px;
+    border-radius: 8px;
+    gap: 4px;
+    border: 1px solid #e2e8f0;
+}
+
+.ashan-entity-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #64748b;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.ashan-entity-tab-btn:hover {
+    color: #1e293b;
+    background: rgba(255, 255, 255, 0.6);
+}
+
+.ashan-entity-tab-btn.active {
+    background: #ffffff;
+    color: #0f172a;
+    font-weight: 700;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.ashan-entity-tab-btn .tab-badge {
+    background: #eff6ff;
+    color: #1d4ed8;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 10.5px;
+    font-weight: 700;
+}
+
+
+/* ==========================================================================
+   4. 统一高质感按钮规范 (Standard Action Buttons)
+   ========================================================================== */
+.ashan-btn-primary {
+    background: #2563eb;
+    color: #ffffff;
+    border: 1px solid #1d4ed8;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 2px rgba(37, 99, 235, 0.15);
+}
+
+.ashan-btn-primary:hover {
+    background: #1d4ed8;
+    border-color: #1e40af;
+}
+
+.ashan-btn-success {
+    background: #059669;
+    color: #ffffff;
+    border: 1px solid #047857;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s ease;
+}
+
+.ashan-btn-success:hover {
+    background: #047857;
+}
+
+.ashan-btn-danger {
+    background: #ffffff;
+    color: #dc2626;
+    border: 1px solid #fca5a5;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s ease;
+}
+
+.ashan-btn-danger:hover {
+    background: #fef2f2;
+    border-color: #f87171;
+}
+
+.ashan-btn-outline {
+    background: #ffffff;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s ease;
+}
+
+.ashan-btn-outline:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+    color: #0f172a;
+}

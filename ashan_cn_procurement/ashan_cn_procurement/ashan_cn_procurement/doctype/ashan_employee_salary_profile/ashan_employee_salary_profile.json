@@ -1,0 +1,161 @@
+{
+  "name": "Ashan Employee Salary Profile",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "module": "Ashan CN Procurement",
+  "custom": 0,
+  "istable": 0,
+  "issingle": 0,
+  "track_changes": 1,
+  "autoname": "format:{company}-{employee_no}-{employee_name}",
+  "fields": [
+    {
+      "fieldname": "employee_no",
+      "fieldtype": "Data",
+      "label": "工号",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "employee_name",
+      "fieldtype": "Data",
+      "label": "姓名",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "company",
+      "fieldtype": "Link",
+      "options": "Company",
+      "label": "所属公司",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "id_card",
+      "fieldtype": "Data",
+      "label": "身份证号",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "mobile",
+      "fieldtype": "Data",
+      "label": "手机号"
+    },
+    {
+      "fieldname": "employee_type",
+      "fieldtype": "Select",
+      "label": "人员类型",
+      "options": "正式工\n临时工\n退休返聘\n实习生",
+      "default": "正式工",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "employment_status",
+      "fieldtype": "Select",
+      "label": "在职状态",
+      "options": "在职\n离职\n休假",
+      "default": "在职",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "is_insured",
+      "fieldtype": "Check",
+      "label": "是否参保",
+      "default": "1"
+    },
+    {
+      "fieldname": "salary_mode",
+      "fieldtype": "Select",
+      "label": "计薪方式",
+      "options": "税前动态工资\n税后管理工资",
+      "default": "税前动态工资",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "fixed_net_salary",
+      "fieldtype": "Currency",
+      "label": "约定税后实发工资 (元)"
+    },
+    {
+      "fieldname": "base_salary",
+      "fieldtype": "Currency",
+      "label": "基本工资 (元)",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "base_subsidy",
+      "fieldtype": "Currency",
+      "label": "基本补贴 (元)"
+    },
+    {
+      "fieldname": "performance_bonus_base",
+      "fieldtype": "Currency",
+      "label": "绩效奖金基准 (元)"
+    },
+    {
+      "fieldname": "position_allowance",
+      "fieldtype": "Currency",
+      "label": "职位津贴 (元)"
+    },
+    {
+      "fieldname": "meal_unit_price",
+      "fieldtype": "Currency",
+      "label": "餐补单价 (元/餐)",
+      "default": "15"
+    },
+    {
+      "fieldname": "social_security_base",
+      "fieldtype": "Currency",
+      "label": "社保缴费基数 (元)",
+      "default": "5124"
+    },
+    {
+      "fieldname": "housing_fund_base",
+      "fieldtype": "Currency",
+      "label": "公积金缴费基数 (元)",
+      "default": "2520"
+    },
+    {
+      "fieldname": "special_additional_deduction",
+      "fieldtype": "Currency",
+      "label": "个税专项附加扣除 (元/月)",
+      "default": "0"
+    },
+    {
+      "fieldname": "tax_exemption_monthly",
+      "fieldtype": "Currency",
+      "label": "个税起征点 (元/月)",
+      "default": "5000"
+    },
+    {
+      "fieldname": "bank_name",
+      "fieldtype": "Data",
+      "label": "开户行"
+    },
+    {
+      "fieldname": "bank_account",
+      "fieldtype": "Data",
+      "label": "银行卡号"
+    },
+    {
+      "fieldname": "notes",
+      "fieldtype": "Small Text",
+      "label": "备注说明"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "All",
+      "read": 1
+    }
+  ]
+}

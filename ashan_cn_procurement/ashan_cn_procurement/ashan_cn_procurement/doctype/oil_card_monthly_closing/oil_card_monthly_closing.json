@@ -38,7 +38,7 @@
       "in_list_view": 1
     },
     {
-      "fieldname": "is_locked",
+      "fieldname": "closing_locked",
       "fieldtype": "Check",
       "label": "是否已锁定核定",
       "default": "0",

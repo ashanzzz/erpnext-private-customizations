@@ -1,0 +1,88 @@
+{
+  "name": "Ashan Holiday Calendar",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "module": "Ashan CN Procurement",
+  "custom": 0,
+  "istable": 0,
+  "issingle": 0,
+  "track_changes": 1,
+  "autoname": "field:calendar_date",
+  "fields": [
+    {
+      "fieldname": "calendar_date",
+      "fieldtype": "Date",
+      "label": "日期",
+      "reqd": 1,
+      "in_list_view": 1,
+      "unique": 1
+    },
+    {
+      "fieldname": "year",
+      "fieldtype": "Int",
+      "label": "年份",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "month",
+      "fieldtype": "Int",
+      "label": "月份",
+      "reqd": 1
+    },
+    {
+      "fieldname": "day_type",
+      "fieldtype": "Select",
+      "label": "日期属性",
+      "options": "工作日\n周末\n周末日\n调休\n调休日\n调班\n调班日\n法定节假日",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "is_workday",
+      "fieldtype": "Check",
+      "label": "是否出勤工作日",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "is_legal_holiday",
+      "fieldtype": "Check",
+      "label": "是否法定节假日",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "is_shift_off",
+      "fieldtype": "Check",
+      "label": "是否调休"
+    },
+    {
+      "fieldname": "is_shift_work",
+      "fieldtype": "Check",
+      "label": "是否调班补班"
+    },
+    {
+      "fieldname": "holiday_name",
+      "fieldtype": "Data",
+      "label": "节日名称",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "remark",
+      "fieldtype": "Small Text",
+      "label": "备注说明"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "All",
+      "read": 1
+    }
+  ]
+}

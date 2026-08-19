@@ -21,7 +21,13 @@
   {
    "type": "Page",
    "link_to": "property-settlement-workbench",
-   "label": "物业月结",
+   "label": "水电费月结",
+   "doctype": "Workspace Shortcut"
+  },
+  {
+   "type": "Page",
+   "link_to": "lease-settlement-workbench",
+   "label": "房租物业月结",
    "doctype": "Workspace Shortcut"
   },
   {
@@ -97,10 +103,21 @@
   },
   {
    "type": "Link",
-   "label": "物业月结工作台",
+   "label": "水电费月结工作台",
    "hidden": 0,
    "link_type": "Page",
    "link_to": "property-settlement-workbench",
+   "onboard": 0,
+   "is_query_report": 0,
+   "link_count": 0,
+   "doctype": "Workspace Link"
+  },
+  {
+   "type": "Link",
+   "label": "房租与物业费工作台",
+   "hidden": 0,
+   "link_type": "Page",
+   "link_to": "lease-settlement-workbench",
    "onboard": 0,
    "is_query_report": 0,
    "link_count": 0,
