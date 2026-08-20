@@ -3021,8 +3021,8 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         });
     }
 
-    // 🚀 零中转弹窗：直接唤起本机文件选择框 (Direct File Selection Engine)
-    function direct_file_upload(accept_exts, on_file_selected) {
+    // 🚀 零中转极速上传引擎：基于 FileReader 直接转换 Base64 并提交后端解析核算
+    function direct_file_upload(accept_exts, on_file_read) {
         const file_input = document.createElement('input');
         file_input.type = 'file';
         file_input.accept = accept_exts;
@@ -3034,20 +3034,22 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             document.body.removeChild(file_input);
             if (!file) return;
 
-            frappe.show_alert({ message: `📤 正在上传【${file.name}】...`, indicator: 'blue' });
+            frappe.freeze(`🚀 正在读取文件【${file.name}】并提交后台智能解析核算，请稍候...`);
 
-            frappe.upload_file(file, {
-                folder: 'Home/Attachments',
-                is_private: 1
-            }).then(file_doc => {
-                if (file_doc && file_doc.file_url) {
-                    on_file_selected(file_doc.file_url, file);
-                } else {
-                    frappe.msgprint("文件上传失败，请重试！");
-                }
-            }).catch(err => {
-                frappe.msgprint("文件上传发生错误：" + (err.message || err));
-            });
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const base64_str = evt.target.result;
+                on_file_read(base64_str, file.name, file);
+            };
+            reader.onerror = function() {
+                frappe.unfreeze();
+                frappe.msgprint({
+                    title: '读取文件失败',
+                    indicator: 'red',
+                    message: `无法读取本地文件【${file.name}】，请检查文件是否被锁定或损坏！`
+                });
+            };
+            reader.readAsDataURL(file);
         };
 
         file_input.click();
@@ -3066,15 +3068,18 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 }
             );
         } else {
-            direct_file_upload('.xlsx,.xlsm,.xls', function(file_url, file_obj) {
-                frappe.show_alert({ message: '🔍 正在智能解析车间实发表并倒推税前应发...', indicator: 'blue' });
+            direct_file_upload('.xlsx,.xlsm,.xls', function(base64_str, filename, file_obj) {
                 frappe.call({
                     method: 'ashan_cn_procurement.services.payroll_settlement_service.upload_and_import_qifu_salary',
                     args: {
-                        file_url: file_url,
+                        file_data: base64_str,
+                        filename: filename,
                         period_month: cur_m
                     },
+                    freeze: true,
+                    freeze_message: `🔍 正在智能解析【${filename}】并倒推税前应发与代扣个税...`,
                     callback: function(r) {
+                        frappe.unfreeze();
                         if (r.message && r.message.success) {
                             frappe.msgprint({
                                 title: '🎉 车间实发表导入成功',
@@ -3085,15 +3090,25 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                                         <strong>导入实发人数：</strong> ${r.message.count || 26} 人<br>
                                         <strong>实发总额（税后）：</strong> ¥ ${Number(r.message.total_net || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
                                         <strong>倒推应发总额（税前）：</strong> ¥ ${Number(r.message.total_gross || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
-                                        <strong>归档原件路径：</strong> <a href="${file_url}" target="_blank" style="color:#2563eb; font-weight:700;">📥 在线下载原始 Excel</a>
+                                        <strong>归档原件名称：</strong> <span style="color:#2563eb; font-weight:700;">${filename}</span>
                                     </div>
                                 `
                             });
                             load_monthly_workflow_hub();
-                            if (current_tab === 'import') load_salary_distribution_tab();
+                            load_salary_distribution_tab();
+                            load_qifu_payroll_data();
                             if (current_tab === 'tax') load_tax_settlement_tab();
                             if (current_tab === 'settlement') load_payroll_settlement();
+                        } else {
+                            frappe.msgprint({
+                                title: '导入失败',
+                                indicator: 'red',
+                                message: (r.message && r.message.message) || '处理 Excel 文件时发生错误，请检查文件格式！'
+                            });
                         }
+                    },
+                    error: function(r) {
+                        frappe.unfreeze();
                     }
                 });
             });
@@ -3113,16 +3128,19 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 }
             );
         } else {
-            direct_file_upload('.pdf,.zip', function(file_url, file_obj) {
-                frappe.show_alert({ message: '🔍 正在智能解析社保凭证并比对金额...', indicator: 'blue' });
+            direct_file_upload('.pdf,.zip', function(base64_str, filename, file_obj) {
                 frappe.call({
                     method: 'ashan_cn_procurement.services.payroll_settlement_service.upload_and_verify_social_security_file',
                     args: {
                         company: COMPANY,
                         period_month: cur_m,
-                        file_url: file_url
+                        file_name: filename,
+                        file_base64: base64_str
                     },
+                    freeze: true,
+                    freeze_message: `🔍 正在智能解析【${filename}】社保凭证并比对金额...`,
                     callback: function(r) {
+                        frappe.unfreeze();
                         if (r.message && r.message.success) {
                             frappe.msgprint({
                                 title: '✅ 社保凭证解析完成',
@@ -3130,14 +3148,24 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                                 message: `
                                     <div style="font-size:13px; line-height:1.6;">
                                         ${r.message.message}<br><br>
-                                        <strong>PDF 提取总额：</strong> ¥ ${Number(r.message.parsed_amount).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
-                                        <strong>系统核算总额：</strong> ¥ ${Number(r.message.sys_amount).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
-                                        <strong>归档文件路径：</strong> <a href="${r.message.file_url}" target="_blank" style="color:#2563eb; font-weight:700;">📥 在线查看 / 下载 PDF 原件</a>
+                                        <strong>PDF 提取总额：</strong> ¥ ${Number(r.message.parsed_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
+                                        <strong>系统核算总额：</strong> ¥ ${Number(r.message.sys_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
+                                        <strong>归档文件名称：</strong> <span style="color:#2563eb; font-weight:700;">${filename}</span>
                                     </div>
                                 `
                             });
                             load_monthly_workflow_hub();
+                            load_social_insurance_tab();
+                        } else {
+                            frappe.msgprint({
+                                title: '社保凭证核验失败',
+                                indicator: 'red',
+                                message: (r.message && r.message.message) || '处理社保凭证文件时发生错误！'
+                            });
                         }
+                    },
+                    error: function(r) {
+                        frappe.unfreeze();
                     }
                 });
             });
@@ -3157,16 +3185,19 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 }
             );
         } else {
-            direct_file_upload('.pdf,.zip', function(file_url, file_obj) {
-                frappe.show_alert({ message: '🔍 正在后台解压公积金凭证并比对金额...', indicator: 'blue' });
+            direct_file_upload('.pdf,.zip', function(base64_str, filename, file_obj) {
                 frappe.call({
                     method: 'ashan_cn_procurement.services.payroll_settlement_service.upload_and_verify_housing_fund_file',
                     args: {
                         company: COMPANY,
                         period_month: cur_m,
-                        file_url: file_url
+                        file_name: filename,
+                        file_base64: base64_str
                     },
+                    freeze: true,
+                    freeze_message: `🔍 正在后台解压【${filename}】并比对公积金金额...`,
                     callback: function(r) {
+                        frappe.unfreeze();
                         if (r.message && r.message.success) {
                             frappe.msgprint({
                                 title: '✅ 公积金凭证解析完成',
@@ -3174,14 +3205,24 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                                 message: `
                                     <div style="font-size:13px; line-height:1.6;">
                                         ${r.message.message}<br><br>
-                                        <strong>PDF 提取总额：</strong> ¥ ${Number(r.message.parsed_amount).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
-                                        <strong>系统核算总额：</strong> ¥ ${Number(r.message.sys_amount).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
-                                        <strong>归档文件路径：</strong> <a href="${r.message.file_url}" target="_blank" style="color:#2563eb; font-weight:700;">📥 在线查看 / 下载 PDF 原件</a>
+                                        <strong>PDF 提取总额：</strong> ¥ ${Number(r.message.parsed_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
+                                        <strong>系统核算总额：</strong> ¥ ${Number(r.message.sys_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
+                                        <strong>归档文件名称：</strong> <span style="color:#2563eb; font-weight:700;">${filename}</span>
                                     </div>
                                 `
                             });
                             load_monthly_workflow_hub();
+                            load_housing_fund_tab();
+                        } else {
+                            frappe.msgprint({
+                                title: '公积金凭证核验失败',
+                                indicator: 'red',
+                                message: (r.message && r.message.message) || '处理公积金凭证文件时发生错误！'
+                            });
                         }
+                    },
+                    error: function(r) {
+                        frappe.unfreeze();
                     }
                 });
             });
