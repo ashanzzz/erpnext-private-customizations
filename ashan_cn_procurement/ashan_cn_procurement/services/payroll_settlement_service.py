@@ -967,8 +967,16 @@ def preview_import_excel_data(file_base64=None, file_name=None, file_data=None, 
 	if "," in raw_data:
 		raw_data = raw_data.split(",")[1]
 
-	file_bytes = base64.b64decode(raw_data)
-	wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+	try:
+		file_bytes = base64.b64decode(raw_data)
+		wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+	except Exception as e:
+		err_str = str(e)
+		if "not a zip file" in err_str.lower() or "invalidfile" in err_str.lower() or (fname and fname.lower().endswith(".xls")):
+			frappe.throw(f"【❌ 文件格式不支持】系统仅支持标准 Office OpenXML 格式（.xlsx / .xlsm）。您上传的文件【{fname}】疑似为旧版二进制 .xls 或损坏文件，请使用 Excel 打开并【另存为 .xlsx 格式】后再上传！")
+		else:
+			frappe.throw(f"【❌ Excel 读取失败】解析文件【{fname}】时发生错误: {err_str}")
+
 	ws = wb.active
 
 	# 1. 智能探测与严格校准账期
@@ -1124,26 +1132,33 @@ def upload_and_import_qifu_salary(file_url=None, file_data=None, filename=None, 
 	# 1. 加载工作簿并妥善保存原始凭证文件
 	wb = None
 	raw_file_bytes = None
-	if server_file_path and os.path.exists(server_file_path):
-		with open(server_file_path, "rb") as f:
-			raw_file_bytes = f.read()
-		wb = openpyxl.load_workbook(server_file_path, data_only=True)
-		filename = filename or os.path.basename(server_file_path)
-	elif file_data:
-		# Base64 编码的 Excel
-		if "," in file_data:
-			file_data = file_data.split(",")[1]
-		raw_file_bytes = base64.b64decode(file_data)
-		wb = openpyxl.load_workbook(io.BytesIO(raw_file_bytes), data_only=True)
-	elif file_url:
-		file_doc = frappe.get_doc("File", {"file_url": file_url})
-		file_path = file_doc.get_full_path()
-		with open(file_path, "rb") as f:
-			raw_file_bytes = f.read()
-		wb = openpyxl.load_workbook(file_path, data_only=True)
-		filename = filename or file_doc.file_name
-	else:
-		frappe.throw("未提供有效的 Excel 文件或路径！")
+	try:
+		if server_file_path and os.path.exists(server_file_path):
+			with open(server_file_path, "rb") as f:
+				raw_file_bytes = f.read()
+			wb = openpyxl.load_workbook(server_file_path, data_only=True)
+			filename = filename or os.path.basename(server_file_path)
+		elif file_data:
+			# Base64 编码的 Excel
+			if "," in file_data:
+				file_data = file_data.split(",")[1]
+			raw_file_bytes = base64.b64decode(file_data)
+			wb = openpyxl.load_workbook(io.BytesIO(raw_file_bytes), data_only=True)
+		elif file_url:
+			file_doc = frappe.get_doc("File", {"file_url": file_url})
+			file_path = file_doc.get_full_path()
+			with open(file_path, "rb") as f:
+				raw_file_bytes = f.read()
+			wb = openpyxl.load_workbook(file_path, data_only=True)
+			filename = filename or file_doc.file_name
+		else:
+			frappe.throw("未提供有效的 Excel 文件或路径！")
+	except Exception as e:
+		err_str = str(e)
+		if "not a zip file" in err_str.lower() or "invalidfile" in err_str.lower() or (filename and filename.lower().endswith(".xls")):
+			frappe.throw(f"【❌ 文件格式不支持】系统仅支持标准 Office OpenXML 格式（.xlsx / .xlsm）。您上传的文件【{filename or 'Excel'}】疑似为旧版二进制 .xls 或损坏文件，请使用 Excel 打开并【另存为 .xlsx 格式】后再上传！")
+		else:
+			frappe.throw(f"【❌ Excel 读取失败】解析文件【{filename or 'Excel'}】时发生错误: {err_str}")
 
 	ws = wb.active
 

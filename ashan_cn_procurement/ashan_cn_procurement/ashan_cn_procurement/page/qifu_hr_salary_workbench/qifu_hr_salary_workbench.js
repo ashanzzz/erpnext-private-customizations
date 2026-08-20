@@ -3021,6 +3021,84 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         });
     }
 
+    // ⭐️ 核心统一：车间实发 Excel 上传与解析核算统一执行引擎 (Single Unified Salary Upload Engine)
+    function execute_qifu_salary_upload(base64_str, filename, cur_m, on_complete) {
+        if (!base64_str) {
+            frappe.msgprint({
+                title: '❌ 未选择文件',
+                indicator: 'orange',
+                message: '未检测到文件内容，请重新选择车间实发 Excel 文件！'
+            });
+            if (on_complete) on_complete(false);
+            return;
+        }
+
+        const target_month = cur_m || $("#qifu-month-select").val() || current_month;
+        frappe.freeze(`🔍 正在智能解析【${filename}】并执行税后实发倒推税前与个税核算...`);
+
+        frappe.call({
+            method: 'ashan_cn_procurement.services.payroll_settlement_service.upload_and_import_qifu_salary',
+            type: 'POST',
+            args: {
+                file_data: base64_str,
+                filename: filename,
+                period_month: target_month
+            },
+            callback: function(r) {
+                frappe.unfreeze();
+                if (r.message && r.message.success) {
+                    frappe.msgprint({
+                        title: '🎉 车间实发表导入成功',
+                        indicator: 'green',
+                        message: `
+                            <div style="font-size:13px; line-height:1.6;">
+                                ${r.message.message}<br><br>
+                                <strong>导入实发人数：</strong> ${r.message.total_imported || '—'} 人<br>
+                                <strong>实发总额（税后）：</strong> ¥ ${Number(r.message.total_net_salary || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
+                                <strong>倒推应发总额（税前）：</strong> ¥ ${Number(r.message.total_gross_salary || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
+                                <strong>归档原件：</strong> <span style="color:#2563eb; font-weight:700;">${filename}</span>
+                            </div>
+                        `
+                    });
+                    load_monthly_workflow_hub();
+                    load_salary_distribution_tab();
+                    if (typeof load_qifu_payroll_data === 'function') load_qifu_payroll_data();
+                    if (current_tab === 'tax') load_tax_settlement_tab();
+                    if (current_tab === 'settlement') load_payroll_settlement();
+                    if (on_complete) on_complete(true);
+                } else {
+                    const msg = (r.message && r.message.message) || '处理 Excel 文件时发生错误，请检查文件格式！';
+                    frappe.msgprint({
+                        title: '❌ 导入失败',
+                        indicator: 'red',
+                        message: msg
+                    });
+                    if (on_complete) on_complete(false);
+                }
+            },
+            error: function(r) {
+                frappe.unfreeze();
+                let error_msg = '服务器处理车间实发表时发生异常！';
+                if (r && r._server_messages) {
+                    try {
+                        const msgs = JSON.parse(r._server_messages);
+                        error_msg = msgs.map(m => {
+                            try { return JSON.parse(m).message; } catch(e) { return m; }
+                        }).join('<br>');
+                    } catch(e) {}
+                } else if (r && r.exc) {
+                    error_msg = r.exc.split('\n').filter(Boolean).pop() || r.exc;
+                }
+                frappe.msgprint({
+                    title: '❌ 上传与解析失败',
+                    indicator: 'red',
+                    message: `<div style="line-height:1.6; font-size:13px;">${error_msg}</div>`
+                });
+                if (on_complete) on_complete(false);
+            }
+        });
+    }
+
     // 🚀 零中转极速上传引擎：基于 FileReader 直接转换 Base64 并提交后端解析核算
     function direct_file_upload(accept_exts, on_file_read) {
         const file_input = document.createElement('input');
@@ -3034,16 +3112,12 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             document.body.removeChild(file_input);
             if (!file) return;
 
-            // 仅在此处调用一次 freeze，后续 frappe.call 不再重复 freeze
-            frappe.freeze(`📤 正在读取【${file.name}】并提交后台解析，请稍候...`);
-
             const reader = new FileReader();
             reader.onload = function(evt) {
                 const base64_str = evt.target.result;
                 on_file_read(base64_str, file.name, file);
             };
             reader.onerror = function() {
-                frappe.unfreeze();
                 frappe.msgprint({
                     title: '❌ 读取文件失败',
                     indicator: 'red',
@@ -3069,54 +3143,8 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 }
             );
         } else {
-            direct_file_upload('.xlsx,.xlsm,.xls', function(base64_str, filename, file_obj) {
-                frappe.call({
-                    method: 'ashan_cn_procurement.services.payroll_settlement_service.upload_and_import_qifu_salary',
-                    type: 'POST',
-                    args: {
-                        file_data: base64_str,
-                        filename: filename,
-                        period_month: cur_m
-                    },
-                    // 不再重复 freeze，由 direct_file_upload 统一管理
-                    callback: function(r) {
-                        frappe.unfreeze();
-                        if (r.message && r.message.success) {
-                            frappe.msgprint({
-                                title: '🎉 车间实发表导入成功',
-                                indicator: 'green',
-                                message: `
-                                    <div style="font-size:13px; line-height:1.6;">
-                                        ${r.message.message}<br><br>
-                                        <strong>导入实发人数：</strong> ${r.message.total_imported || '—'} 人<br>
-                                        <strong>实发总额（税后）：</strong> ¥ ${Number(r.message.total_net_salary || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
-                                        <strong>倒推应发总额（税前）：</strong> ¥ ${Number(r.message.total_gross_salary || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
-                                        <strong>归档原件：</strong> <span style="color:#2563eb; font-weight:700;">${filename}</span>
-                                    </div>
-                                `
-                            });
-                            load_monthly_workflow_hub();
-                            load_salary_distribution_tab();
-                            if (typeof load_qifu_payroll_data === 'function') load_qifu_payroll_data();
-                            if (current_tab === 'tax') load_tax_settlement_tab();
-                            if (current_tab === 'settlement') load_payroll_settlement();
-                        } else {
-                            frappe.msgprint({
-                                title: '❌ 导入失败',
-                                indicator: 'red',
-                                message: (r.message && r.message.message) || '处理 Excel 文件时发生错误，请检查文件格式！'
-                            });
-                        }
-                    },
-                    error: function(r) {
-                        frappe.unfreeze();
-                        frappe.msgprint({
-                            title: '❌ 请求异常',
-                            indicator: 'red',
-                            message: '服务器处理车间实发表时发生错误，请检查浏览器 Console 或联系管理员！'
-                        });
-                    }
-                });
+            direct_file_upload('.xlsx,.xlsm,.xls', function(base64_str, filename) {
+                execute_qifu_salary_upload(base64_str, filename, cur_m);
             });
         }
     });
@@ -3511,7 +3539,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         );
     });
 
-    // 6. Tab 2 外部文件上传与 24 列发放表交互
+    // 6. Tab 2 外部文件上传与 24 列发放表交互 (统一使用 execute_qifu_salary_upload 核心引擎)
     let current_selected_file_b64 = null;
     let current_selected_file_name = null;
 
@@ -3524,12 +3552,17 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         const reader = new FileReader();
         reader.onload = function(evt) {
             const raw_b64 = evt.target.result;
-            current_selected_file_b64 = raw_b64.split(',')[1];
+            current_selected_file_b64 = raw_b64;
             $("#qifu-import-preview-tab2").show();
-            $("#qifu-import-badge-tab2").text(`🔍 正在智能预检: ${file.name}...`);
+            $("#qifu-import-badge-tab2").html(
+                `<div style="display:flex; align-items:center; justify-content:space-between;">
+                    <span>🔍 正在智能预检【<strong>${file.name}</strong>】...</span>
+                 </div>`
+            );
 
             frappe.call({
                 method: 'ashan_cn_procurement.services.payroll_settlement_service.preview_import_excel_data',
+                type: 'POST',
                 args: {
                     file_name: current_selected_file_name,
                     file_base64: current_selected_file_b64
@@ -3538,32 +3571,69 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     if (res.message && res.message.success) {
                         const m = res.message;
                         $("#qifu-import-badge-tab2").html(
-                            `<strong>✅ 预检成功！</strong> 探测核算账期：<span style="color:#15803d; font-weight:800;">${m.detected_month}</span> · 识别员工数据：<strong>${m.employee_count}</strong> 行 · 结构连续性：<strong>${m.continuity_status}</strong>`
+                            `<strong>✅ 预检通过！</strong> 探测发薪账期：<span style="color:#15803d; font-weight:800;">${m.detected_period_month || m.detected_month || current_month}</span> · 识别在册员工：<strong>${m.employee_count}</strong> 人 · 外部实发总盘：<strong>¥ ${Number(m.net_salary_total || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}</strong>`
                         );
-                        current_month = m.detected_month;
-                        $("#qifu-month-select").val(current_month);
+                        if (m.detected_period_month) {
+                            current_month = m.detected_period_month;
+                            $("#qifu-month-select").val(current_month);
+                        }
+                    } else {
+                        const err = (res.message && res.message.message) || '预检 Excel 文件失败，请检查文件格式！';
+                        $("#qifu-import-badge-tab2").html(
+                            `<span style="color:#dc2626; font-weight:700;">❌ 预检失败：${err}</span>`
+                        );
                     }
+                },
+                error: function(res) {
+                    let error_msg = '预检 Excel 文件时发生异常！';
+                    if (res && res._server_messages) {
+                        try {
+                            const msgs = JSON.parse(res._server_messages);
+                            error_msg = msgs.map(m => {
+                                try { return JSON.parse(m).message; } catch(e) { return m; }
+                            }).join('<br>');
+                        } catch(e) {}
+                    } else if (res && res.exc) {
+                        error_msg = res.exc.split('\n').filter(Boolean).pop() || res.exc;
+                    }
+                    $("#qifu-import-badge-tab2").html(
+                        `<span style="color:#dc2626; font-weight:700;">❌ 预检失败：${error_msg}</span>`
+                    );
                 }
+            });
+        };
+        reader.onerror = function() {
+            frappe.msgprint({
+                title: '❌ 读取文件失败',
+                indicator: 'red',
+                message: `无法读取本地文件【${file.name}】，请检查文件是否被占用或损坏！`
             });
         };
         reader.readAsDataURL(file);
     });
 
     $container.on("click", "#btn-import-confirm-tab2", function() {
-        if (!current_selected_file_b64) return;
-        frappe.call({
-            method: 'ashan_cn_procurement.services.payroll_settlement_service.import_and_calculate_payroll_excel',
-            args: {
-                company: COMPANY,
-                file_name: current_selected_file_name,
-                file_base64: current_selected_file_b64
-            },
-            callback: function(r) {
-                if (r.message && r.message.success) {
-                    frappe.show_alert({ message: r.message.message, indicator: 'green' });
-                    load_salary_distribution_tab();
-                    $("#qifu-import-preview-tab2").hide();
-                }
+        if (!current_selected_file_b64) {
+            frappe.msgprint({
+                title: '❌ 未选择文件',
+                indicator: 'orange',
+                message: '文件尚未读取完成或未选择有效文件，请点击上方区域重新选择！'
+            });
+            return;
+        }
+
+        const $btn = $(this);
+        $btn.prop('disabled', true).text('⏳ 正在导入并核算...');
+        const cur_m = $("#qifu-month-select").val() || current_month;
+
+        execute_qifu_salary_upload(current_selected_file_b64, current_selected_file_name, cur_m, function(success) {
+            $btn.prop('disabled', false).text('⚡ 立即导入并融合核算 (生成24列薪资发放表)');
+            if (success) {
+                $("#qifu-import-preview-tab2").hide();
+                current_selected_file_b64 = null;
+                current_selected_file_name = null;
+                $("#qifu-filename-display-tab2").text("点击或将车间实发 Excel 文件拖拽至此处上传");
+                $("#qifu-file-input-tab2").val('');
             }
         });
     });
@@ -3573,6 +3643,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         current_selected_file_name = null;
         $("#qifu-filename-display-tab2").text("点击或将车间实发 Excel 文件拖拽至此处上传");
         $("#qifu-import-preview-tab2").hide();
+        $("#qifu-file-input-tab2").val('');
     });
 
     $container.on("click", "#btn-tab2-export-dist", function() { export_excel_action("distribution"); });
