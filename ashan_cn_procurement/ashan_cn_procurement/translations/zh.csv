@@ -149,7 +149,7 @@ Applies to deposits,适用于存入交易
 Applies to withdrawals,适用于支出交易
 Applies to withdrawals and deposits,适用于支出和存入交易
 Apply discounts and margins on products,对产品应用折扣和毛利设置
-Applying a Discount Amount? When this Sales Order is partially fulfilled through multiple Delivery Notes and Sales Invoices,the Discount Amount is allocated on a FIFO basis. The earlier transactions receive a larger share of the discount. To spread the discount proportionally across item prices, use Additional Discount Percentage instead.",如果填写折扣金额，当此销售订单通过多张交货单和销售发票分批履行时，折扣金额将按先进先出顺序分配，较早的交易会分配到更多折扣。如需按物料价格比例分摊折扣，请改用“附加折扣百分比”。
+"Applying a Discount Amount? When this Sales Order is partially fulfilled through multiple Delivery Notes and Sales Invoices, the Discount Amount is allocated on a FIFO basis. The earlier transactions receive a larger share of the discount. To spread the discount proportionally across item prices, use Additional Discount Percentage instead.",如果填写折扣金额，当此销售订单通过多张交货单和销售发票分批履行时，折扣金额将按先进先出顺序分配，较早的交易会分配到更多折扣。如需按物料价格比例分摊折扣，请改用“附加折扣百分比”。
 Appointment Booking Portal Settings,预约门户设置
 Appointment can only be scheduled up to {0} day(s) in advance.,预约最多只能提前 {0} 天安排。
 Appointment cannot be scheduled for a past time.,不能将预约安排在过去的时间。
@@ -206,11 +206,11 @@ Balances as per bank statement before {0},{0} 之前按银行对账单计算的�
 Bank Account Balance,银行账户余额
 Bank account credit for withdrawal,支出时贷记银行科目
 Bank account debit for deposit,存入时借记银行科目
-Bank Charges,Salary, etc.",银行手续费、工资等
+"Bank Charges, Salary, etc.",银行手续费、工资等
 Bank Entries Created,银行凭证已创建
 Bank Entry Created,银行凭证已创建
 Bank Entry Type,银行凭证类型
-Bank Fee,Salary, etc.",银行手续费、工资等
+"Bank Fee, Salary, etc.",银行手续费、工资等
 Bank Reconciliation,银行对账
 Bank Statement,银行对账单
 Bank Statement Balance as per General Ledger,按总账计算的银行对账单余额
@@ -243,7 +243,7 @@ Book Deferred entries based on,递延分录记账依据
 Book deferred entries via Journal Entry,通过日记账凭证记账递延分录
 Book Stock Expense GL Entries,记账库存费用总账分录
 Book tax loss on early payment discount,记账提前付款折扣产生的税额损失
-Books Purchase Expense and Expenses Added To Stock account pairs against stock value. On enabling this,the accounts become mandatory in Company or Item Defaults for Purchase Receipt, Purchase Invoice, Stock Entry, Stock Reconciliation and Landed Cost Voucher",按库存价值记录采购费用科目与计入库存费用科目的对应总账分录。启用后，采购收货单、采购发票、库存凭证、库存盘点和到岸成本凭证所需科目必须在公司或物料默认值中设置。
+"Books Purchase Expense and Expenses Added To Stock account pairs against stock value. On enabling this, the accounts become mandatory in Company or Item Defaults for Purchase Receipt, Purchase Invoice, Stock Entry, Stock Reconciliation and Landed Cost Voucher",按库存价值记录采购费用科目与计入库存费用科目的对应总账分录。启用后，采购收货单、采购发票、库存凭证、库存盘点和到岸成本凭证所需科目必须在公司或物料默认值中设置。
 Budget Amount can not be {0}.,预算金额不能为 {0}。
 Budget cannot be assigned against {0},as its Root Type is not of Income or Expense",无法为 {0} 分配预算，因为其根类型不是收入或费用。
 Budget Distribution,预算分配
@@ -317,9 +317,8 @@ Closing balance is required.,期末余额为必填项。
 Closing balance on bank statement as of {0},截至 {0} 的银行对账单期末余额,Do MMM YYYY
 Closing balance set.,期末余额已设置。
 Co-Product,联产品
-COA Importer,科目表导入工具
-Code to reference this line in formulas (e.g.,REV100, EXP200, ASSET100)",用于在公式中引用此行的代码，例如 REV100、EXP200、ASSET100。
-Color to highlight values (e.g.,red for exceptions)",用于突出显示数值的颜色，例如异常项使用红色。
+"Code to reference this line in formulas (e.g. REV100, EXP200, ASSET100)",用于在公式中引用此行的代码，例如 REV100、EXP200、ASSET100。
+"Color to highlight values (e.g. red for exceptions)",用于突出显示数值的颜色，例如异常项使用红色。
 Column Mapping,列映射
 Search or type a command (Ctrl + K),搜索单据、页面或输入快捷指令 (Ctrl + K)
 List View,列表视图
@@ -415,3 +414,53 @@ The resource you are looking for is not available,您访问的资源不存在或
 Invalid login credentials,账号或密码错误
 Session Expired,会话已过期，请重新登录
 Please refresh the page,请刷新页面
+Desktop,控制台
+Workspaces,工作区
+Website,网站主页
+Display,界面显示
+Session Defaults,会话默认值
+Reload,重新加载
+Help,帮助与支持
+Logout,退出登录
+Toggle Theme,切换深浅主题
+Toggle Full Width,切换全屏/等宽
+Toggle Sidebar,展开/折叠侧边栏
+Theme,系统主题
+Dark Theme,深色模式
+Dark Mode,深色模式
+Light Theme,浅色模式
+Light Mode,浅色模式
+Automatic,跟随系统
+About,关于系统
+Keyboard Shortcuts,键盘快捷键
+System Health,系统健康状态
+Frappe Support,技术支持
+Documentation,官方文档
+User Forum,用户社区
+Report an Issue,反馈问题
+Notifications,通知中心
+Events,日程事件
+What's New,最新动态
+No New notifications,暂无新通知
+Looks like you haven’t received any notifications.,您当前没有收到任何新通知。
+No Upcoming Events,暂无近期日程
+There are no upcoming events for you.,您当前没有即将开始的日程事件。
+Nothing New,暂无更新动态
+There is nothing new to show you right now.,当前暂无最新动态。
+Accounting,财务会计
+Buying,采购管理
+Stock,库存与仓库
+CRM,客户关系管理 (CRM)
+HR,人力资源 (HR)
+Payroll,薪资管理 (Payroll)
+Quality,质量管理
+Projects,项目管理
+Manufacturing,生产制造
+Selling,销售管理
+Support,客户服务与支持
+Users,用户与权限
+Integrations,集成与对接
+Build,开发与构建
+Retail,零售管理
+Assets,固定资产
+My Business,我的业务 (总控主页)

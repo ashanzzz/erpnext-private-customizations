@@ -1,0 +1,16 @@
+{
+  "name": "jizhong-hr-salary-workbench",
+  "doctype": "Page",
+  "page_name": "jizhong-hr-salary-workbench",
+  "title": "吉众人事薪酬工作台*",
+  "module": "Ashan CN Procurement",
+  "standard": "Yes",
+  "roles": [
+    {
+      "role": "System Manager"
+    },
+    {
+      "role": "All"
+    }
+  ]
+}

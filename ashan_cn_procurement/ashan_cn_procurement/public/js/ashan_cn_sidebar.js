@@ -30,18 +30,42 @@
         return isOp && !is_oil_card_manager_user();
     }
 
-    // 0. 路由弹窗保护与容错（默认不强行锁定路由，允许自由访问）
-    if (window.frappe) {
-        frappe.router && frappe.router.on && frappe.router.on("change", function() {
-            const route = frappe.get_route_str ? frappe.get_route_str() : "";
-            if (route === "home" || route === "desk/home" || route === "app/home" || route === "Workspaces/Home") {
-                const isMgr = is_oil_card_manager_user();
-                frappe.set_route(isMgr ? "my-business" : "oil-card-ledger");
-                setTimeout(function() {
-                    $(".modal:contains('home not found'), .modal:contains('未找到请求的页面')").modal("hide");
-                }, 50);
+    // 0. 路由守卫与官方 Desktop 映射
+    // Frappe v16 中 Workspace name='Home' 的前端路由为 'Workspaces/Home'
+    // 1) 普通员工阻止访问总控主页，重定向到油卡台账
+    // 2) 管理员访问原生 desktop / desk 路由或大图标页时，平滑直达定制总控主页 Workspaces/Home
+    function handle_route_guard() {
+        if (!window.frappe) return;
+        const routeArr = (frappe.get_route && frappe.get_route()) || [];
+        const route = Array.isArray(routeArr) ? routeArr.join("/") : "";
+        const isMgr = is_oil_card_manager_user();
+
+        if (!isMgr) {
+            if (
+                route === "home" ||
+                route === "Workspaces/Home" ||
+                route === "Workspaces/My Business" ||
+                route === "Workspaces/home" ||
+                route === "desktop" ||
+                (routeArr.length === 1 && routeArr[0] === "desktop")
+            ) {
+                frappe.set_route("oil-card-ledger");
             }
-        });
+        } else {
+            const isDesktopPage = (
+                route === "desktop" ||
+                route === "desk" ||
+                (routeArr.length === 1 && routeArr[0] === "desktop") ||
+                (frappe.container && frappe.container.page && frappe.container.page.page_name === "desktop")
+            );
+            if (isDesktopPage) {
+                frappe.set_route(["Workspaces", "Home"]);
+            }
+        }
+    }
+
+    if (window.frappe) {
+        frappe.router && frappe.router.on && frappe.router.on("change", handle_route_guard);
     }
 
     // 1. 一级标题 → 对应 Workspace / Page 映射
@@ -55,9 +79,16 @@
         "库存": "stock-and-inventory",
         "采购协同": "procurement-management",
         "采购": "procurement-management",
+        "物业与租赁": "property-and-lease",
+        "物业与租赁管理": "property-and-lease",
         "公司合规": "company-compliance-center",
         "企业合规中心": "company-compliance-center",
-        "公司治理": "company-compliance-center",
+        "财税与发票中心": "accounting-and-finance",
+        "财税中心": "accounting-and-finance",
+        "发票中心": "accounting-and-finance",
+        "人事薪酬与用工": "accounting-and-finance",
+        "人事薪酬": "accounting-and-finance",
+        "人事管理": "accounting-and-finance",
         "财务与报销": "accounting-and-finance",
         "财务": "accounting-and-finance",
         "我的业务 (总主页)": "home",
@@ -70,6 +101,7 @@
 
     const FUEL_SECTION_TITLES = [
         "车辆和车用油管理",
+        "🚗 车辆和车用油管理",
         "油卡使用明细",
         "车油能耗中心",
         "车辆燃油",
@@ -81,6 +113,7 @@
         "my business", "my-business",
         "stock and inventory", "stock-and-inventory",
         "procurement management", "procurement-management",
+        "property and lease", "property-and-lease",
         "vehicle fuel hub", "vehicle-fuel-hub",
         "company compliance center", "company-compliance-center",
         "accounting and finance", "accounting-and-finance",
@@ -448,7 +481,8 @@
                 const targetWs = SECTION_WORKSPACE_MAP[title];
                 if (targetWs) {
                     try {
-                        const currentRoute = (frappe.router && frappe.router.current_route) ? (frappe.get_route_str() || "") : "";
+                        const currentRouteArr = (frappe.get_route && frappe.get_route()) || [];
+                        const currentRoute = Array.isArray(currentRouteArr) ? currentRouteArr.join('/') : '';
                         if (!currentRoute.includes(targetWs)) {
                             frappe.set_route("desk", targetWs);
                         }
@@ -518,11 +552,44 @@
                 padding-left: 24px !important;
                 font-size: 13px !important;
                 font-weight: 400 !important;
+                color: #64748b !important;
                 cursor: pointer !important;
+            }
+            .body-sidebar .sidebar-child-item .standard-sidebar-item .sidebar-item-label {
+                color: #64748b;
+                transition: color 0.15s ease, font-weight 0.15s ease;
+            }
+            /* 工作台置顶加粗高亮 (* 标记项) */
+            .body-sidebar .sidebar-child-item .standard-sidebar-item.workbench-highlight-item .item-anchor,
+            .body-sidebar .sidebar-child-item .standard-sidebar-item .item-anchor:has(.sidebar-item-label:contains('*')) {
+                font-weight: 700 !important;
+                color: #0f172a !important;
+            }
+            .body-sidebar .sidebar-child-item .standard-sidebar-item.workbench-highlight-item .sidebar-item-label,
+            .body-sidebar .sidebar-child-item .standard-sidebar-item .sidebar-item-label:contains('*') {
+                font-weight: 700 !important;
+                color: #0f172a !important;
             }
         </style>
         `;
         $("head").append(styleHtml);
+    }
+
+    function highlight_workbench_items() {
+        $(".body-sidebar .sidebar-child-item .sidebar-item-label").each(function() {
+            const text = $(this).text().trim();
+            if (text.includes("*") || text.includes("工作台") || text.includes("资料库") || text.includes("台账明细台")) {
+                $(this).closest(".standard-sidebar-item").addClass("workbench-highlight-item");
+                $(this).css({
+                    "font-weight": "700",
+                    "color": "#0f172a"
+                });
+                $(this).closest(".standard-sidebar-item").find(".item-anchor").css({
+                    "font-weight": "700",
+                    "color": "#0f172a"
+                });
+            }
+        });
     }
 
     // 5. 初始化挂载
@@ -531,16 +598,26 @@
         patch_sidebar_resolver();
         patch_native_section_break();
         schedule_system_management_visibility();
+        handle_route_guard();
+        highlight_workbench_items();
 
         $(document).on("sidebar_setup app_ready route-change page-change", function() {
             inject_styles();
             patch_sidebar_resolver();
             patch_native_section_break();
             schedule_system_management_visibility();
+            handle_route_guard();
+            highlight_workbench_items();
         });
     }
 
     init();
     $(document).ready(init);
-    $(document).on("app_ready", init);
+    $(document).on("app_ready", function() {
+        init();
+        setTimeout(() => {
+            handle_route_guard();
+            highlight_workbench_items();
+        }, 50);
+    });
 })();

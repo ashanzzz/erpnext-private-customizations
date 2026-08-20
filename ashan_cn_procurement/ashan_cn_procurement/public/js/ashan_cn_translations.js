@@ -5,11 +5,19 @@
 
 (function() {
     const CN_TRANSLATIONS = {
-        // === 1. 顶部栏、导航与系统基础操作 ===
+        // === 1. 顶部栏、导航、主菜单与系统基础操作 ===
         "Search or type a command (Ctrl + K)": "搜索单据、页面或输入快捷指令 (Ctrl + K)",
         "Search": "搜索",
         "Notification": "通知中心",
         "Notifications": "通知中心",
+        "Events": "日程事件",
+        "What's New": "最新动态",
+        "No New notifications": "暂无新通知",
+        "Looks like you haven’t received any notifications.": "您当前没有收到任何新通知。",
+        "No Upcoming Events": "暂无近期日程",
+        "There are no upcoming events for you.": "您当前没有即将开始的日程事件。",
+        "Nothing New": "暂无更新动态",
+        "There is nothing new to show you right now.": "当前暂无最新动态。",
         "Home": "首页",
         "User": "用户与账号",
         "Role": "角色与岗位",
@@ -26,9 +34,32 @@
         "Settings": "系统设置",
         "System Settings": "全局系统设置",
         "My Settings": "个人设置",
+        "Logout": "退出登录",
         "Log out": "退出登录",
         "Switch to standard": "切换至标准界面",
         "Toggle Full Width": "切换全屏/等宽",
+        "Toggle Sidebar": "展开/折叠侧边栏",
+        "Toggle Theme": "切换深浅主题",
+        "Theme": "系统主题",
+        "Dark Theme": "深色模式",
+        "Dark Mode": "深色模式",
+        "Light Theme": "浅色模式",
+        "Light Mode": "浅色模式",
+        "Automatic": "跟随系统",
+        "Session Defaults": "会话默认值",
+        "Reload": "重新加载",
+        "Help": "帮助与支持",
+        "About": "关于系统",
+        "Keyboard Shortcuts": "键盘快捷键",
+        "System Health": "系统健康状态",
+        "Frappe Support": "技术支持",
+        "Documentation": "官方文档",
+        "User Forum": "用户社区",
+        "Report an Issue": "反馈问题",
+        "Desktop": "控制台",
+        "Workspaces": "工作区",
+        "Website": "网站主页",
+        "Display": "界面显示",
         "Session Expired": "会话已过期",
         "Please login again": "请重新登录系统",
         "Logged In": "登录成功",
@@ -38,7 +69,32 @@
         "The resource you are looking for is not available": "您访问的资源不存在或已被移动",
         "You do not have enough permissions to access this resource. Please contact your manager to get access.": "您没有足够的权限访问此资源，请联系管理员为您配置权限。",
 
-        // === 2. 列表视图 (List View)、筛选与排序 ===
+        // === 2. 常用工作区名称 (Workspaces) ===
+        "Accounting": "财务会计",
+        "Buying": "采购管理",
+        "Stock": "库存与仓库",
+        "CRM": "客户关系管理 (CRM)",
+        "HR": "人力资源 (HR)",
+        "Payroll": "薪资管理 (Payroll)",
+        "Quality": "质量管理",
+        "Projects": "项目管理",
+        "Manufacturing": "生产制造",
+        "Selling": "销售管理",
+        "Support": "客户服务与支持",
+        "Users": "用户与权限",
+        "Integrations": "集成与对接",
+        "Build": "开发与构建",
+        "Retail": "零售管理",
+        "Assets": "固定资产",
+        "My Business": "我的业务 (总控主页)",
+        "Property and Lease": "物业与租赁",
+        "Vehicle Fuel Hub": "车辆燃油中心",
+        "Company Compliance Center": "企业合规中心",
+        "Accounting and Finance": "财务与记账中心",
+        "Procurement Management": "采购管理中心",
+        "Stock and Inventory": "库存与仓储中心",
+
+        // === 3. 列表视图 (List View)、筛选与排序 ===
         "List View": "列表视图",
         "Report View": "报表视图",
         "Dashboard View": "仪表盘看板",
@@ -68,7 +124,7 @@
         "No matching records found": "未找到符合条件的单据记录",
         "No Data": "暂无数据",
 
-        // === 3. 表单操作与按钮 (Form Actions & Buttons) ===
+        // === 4. 表单操作与按钮 (Form Actions & Buttons) ===
         "Actions": "操作 ▾",
         "Action": "操作",
         "Save": "保存单据",
@@ -99,79 +155,21 @@
         "Edit": "编辑修改",
         "New": "新建",
         "Create": "创建",
-        "+ Add": "新建",
-        "+ New": "新建",
-        "+ Add Role": "新建角色",
-        "+ Add User": "新建用户",
-        "+ Add {0}": "新建 {0}",
-        "Add {0}": "新建 {0}",
-        "New {0}": "新建 {0}",
+        "Update": "更新",
+        "Import": "批量导入",
+        "Export": "导出数据",
+        "Attach": "选择附件",
+        "Attach File": "上传文件",
+        "Upload File": "上传文件",
+        "Browse": "浏览文件",
+        "Drop files here": "拖拽文件至此区域",
 
-        // === 4. 单据状态 (Document Statuses) ===
-        "Draft": "草稿",
-        "Submitted": "已提交",
-        "Cancelled": "已作废",
-        "Pending": "待处理",
-        "Approved": "已批准",
-        "Rejected": "已驳回",
-        "Open": "进行中",
-        "Closed": "已结案",
-        "Paid": "已支付",
-        "Unpaid": "未付款",
-        "Overdue": "已逾期",
-        "Partly Paid": "部分付款",
-        "To Bill": "待开票",
-        "To Receive": "待入库",
-        "To Deliver": "待出库",
-        "Completed": "已完成",
-        "Active": "启用",
-        "Disabled": "已停用",
-        "Enabled": "已启用",
-        "Unbilled": "未开票",
-        "Billed": "已开票",
-        "Return": "退货/退款",
-
-        // === 5. 权限配置专项翻译 (Permission Manager) ===
-        "Select Document Type or Role to start.": "请在上方选择【单据类型】或【角色】以开始配置权限规则。",
-        "Quick Help for Setting Permissions:": "权限配置快速指南：",
-        "Meaning of Different Permission Types:": "各类权限类型业务释义与应用场景：",
-        "Document Type": "单据类型 (DocType)",
-        "Roles": "角色清单",
-        "Select": "选择查看 (Select)",
-        "Read": "读取详情 (Read)",
-        "Write": "编辑修改 (Write)",
-        "Create": "新建单据 (Create)",
-        "Delete": "删除单据 (Delete)",
-        "Submit": "提交审核 (Submit)",
-        "Cancel": "作废撤销 (Cancel)",
-        "Amend": "重开修改 (Amend)",
-        "Report": "生成报表 (Report)",
-        "Export": "导出数据 (Export)",
-        "Import": "批量导入 (Import)",
+        // === 5. 权限与角色术语 ===
+        "Read": "查看权限 (Read)",
+        "Write": "编辑权限 (Write)",
         "Share": "共享单据 (Share)",
-        "Print": "打印单据 (Print)",
-        "Email": "邮件发送 (Email)",
         "User Permissions": "按用户隔离数据权限",
         "If Owner": "仅限创建者本人",
-        "Permissions are set on Roles and Document Types (called DocTypes) by setting rights like Read, Write, Create, Delete, Submit, Cancel, Amend, Report, Import, Export, Print, Email and Set User Permissions.": "权限基于【角色】与【单据类型】进行配置，包含读取、写入、新建、删除、提交、作废、修改重开、报表、导入导出、打印、邮件及用户数据权限隔离。",
-        "Permissions get applied on Users based on what Roles they are assigned.": "系统会根据为用户分配的角色，自动将相应权限应用到该用户。",
-        "Roles can be set for users from their User page. Setup > User": "可以在【用户与账号】页面为具体用户勾选并分配角色。",
-        "The system provides many pre-defined roles. You can add new roles to set finer permissions. Add a New Role": "系统提供了丰富的预置标准角色，您也可以添加自定义角色进行更精细的权限划分。",
-        "Permissions are automatically applied to Standard Reports and searches.": "配置的权限会自动应用到标准报表与全局搜索中。",
-        "As a best practice, do not assign the same set of permission rule to different Roles. Instead, set multiple Roles to the same User.": "最佳实践建议：不要为不同角色配置完全相同的规则，建议为一个用户分配多个不同职能的角色。",
-        "Allows the user to search and see records.": "允许用户搜索并查看单据摘要记录。",
-        "The user can select a Customer in Sales Order but cannot open the Customer master.": "例如：用户可在订单中选择客户，但无法查看客户详细档案。",
-        "Allows the user to view the document.": "允许用户打开并查看单据的完整详情。",
-        "The user can view Sales Invoices but cannot modify any field values in them.": "例如：用户可查看发票详情，但无法修改其中的任何字段。",
-        "Allows the user to edit existing records they have access to.": "允许用户编辑并修改已有单据。",
-        "The user can update a customer or any other fields in an existing Sales Order but cannot create a new Sales Order.": "例如：用户可修改订单内容，但无法新建订单。",
-        "Allows the user to create new records.": "允许用户创建新单据。",
-        "Allows the user to delete records they have access to.": "允许用户删除单据。",
-        "Allows the user to submit documents.": "允许用户提交审核单据。",
-        "Allows the user to cancel submitted documents.": "允许用户作废已提交的单据。",
-        "Allows the user to amend cancelled documents.": "允许用户基于已作废单据重开修改。",
-
-        // === 6. 采购、仓库、报销与油卡业务术语 ===
         "Purchase Order": "采购订单",
         "Purchase Receipt": "采购入库单",
         "Purchase Invoice": "采购发票",
@@ -257,9 +255,26 @@
         }
     }
 
-    // 3. 动态扫描并汉化未包裹 __() 的原生 DOM 节点（如原生菜单项、未翻译面包屑等）
+    // 3. 动态扫描并汉化原生 DOM 节点（如左上角原生下拉菜单、通知中心、弹出层等）
+    function translateTextNode(node) {
+        if (!node || node.nodeType !== 3) return;
+        const text = node.nodeValue.trim();
+        if (text && CN_TRANSLATIONS[text]) {
+            node.nodeValue = node.nodeValue.replace(text, CN_TRANSLATIONS[text]);
+        }
+    }
+
     function localize_dynamic_dom() {
-        // 汉化 List View 状态、按钮和操作文字
+        // A. 汉化左上角菜单与 context-menu 项
+        $(".menu-item-title, .dropdown-item, .dropdown-menu-item a, .notifications-list .header, .notifications-list .empty-state").each(function() {
+            $(this).contents().each(function() {
+                if (this.nodeType === 3) {
+                    translateTextNode(this);
+                }
+            });
+        });
+
+        // B. 汉化 List View 状态、按钮和操作文字
         $(".btn:contains('Actions'), button:contains('Actions')").each(function() {
             if ($(this).children().length === 0 || $(this).find("svg, .icon").length > 0) {
                 $(this).contents().filter(function() { return this.nodeType === 3 && this.nodeValue.trim() === "Actions"; }).replaceWith("操作 ▾");
@@ -273,10 +288,52 @@
         });
     }
 
+    // 4. 使用 MutationObserver 实时监听动态插入的下拉菜单 (0ms 零延迟汉化)
+    function setup_mutation_observer() {
+        const observer = new MutationObserver(function(mutations) {
+            let shouldLocalize = false;
+            for (let i = 0; i < mutations.length; i++) {
+                const added = mutations[i].addedNodes;
+                for (let j = 0; j < added.length; j++) {
+                    const node = added[j];
+                    if (node.nodeType === 1) {
+                        if (
+                            node.classList?.contains('context-menu') ||
+                            node.classList?.contains('frappe-menu') ||
+                            node.classList?.contains('dropdown-menu') ||
+                            node.classList?.contains('notifications-list') ||
+                            node.querySelector?.('.menu-item-title, .dropdown-item, .dropdown-menu-item')
+                        ) {
+                            shouldLocalize = true;
+                            break;
+                        }
+                    }
+                }
+                if (shouldLocalize) break;
+            }
+            if (shouldLocalize) {
+                localize_dynamic_dom();
+            }
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    }
+
     $(document).ready(function() {
         localize_dynamic_dom();
+        setup_mutation_observer();
+
         $(document).ajaxComplete(function() {
             setTimeout(localize_dynamic_dom, 100);
+        });
+
+        // 监听点击弹出下拉菜单时
+        $(document).on('click mouseenter', '.app-switcher-menu, .navbar-brand, .sidebar-header, .app-switcher, [data-toggle="dropdown"], .dropdown-menu-item', function() {
+            setTimeout(localize_dynamic_dom, 10);
+            setTimeout(localize_dynamic_dom, 50);
         });
     });
 })();

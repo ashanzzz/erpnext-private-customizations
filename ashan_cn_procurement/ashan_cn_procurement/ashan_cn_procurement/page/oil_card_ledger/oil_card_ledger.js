@@ -345,20 +345,28 @@ class UnifiedOilCardLedgerConsole {
 		});
 
 		// 触发【行内快速录入加油】
-		this.wrapper.on("click", "#btn-quick-refuel", function () {
+		this.wrapper.on("click", "#btn-quick-refuel, #btn-empty-quick-refuel", function () {
 			if (!self.activeCard) return;
-			if (self.isLocked && !self.isManager) {
-				frappe.msgprint("当前月份已核定锁定，非管理员禁止录入记录！");
+			if (self.isLocked) {
+				if (self.isManager) {
+					frappe.msgprint("⚠️ <b>当前月份已核定锁定！</b><br><br>您拥有管理员权限，若确需补录加油单据，请先点击右上角的【🔓 解除锁定】。");
+				} else {
+					frappe.msgprint("🔒 <b>当前月份已核定锁定！</b><br><br>单据处于只读保护状态。若需修改或补录，请点击右上角的【📨 申请取消核定】。");
+				}
 				return;
 			}
 			self.startInlineEntry("refuel");
 		});
 
 		// 触发【行内快速录入充值】
-		this.wrapper.on("click", "#btn-quick-recharge", function () {
+		this.wrapper.on("click", "#btn-quick-recharge, #btn-empty-quick-recharge", function () {
 			if (!self.activeCard) return;
-			if (self.isLocked && !self.isManager) {
-				frappe.msgprint("当前月份已核定锁定，非管理员禁止录入记录！");
+			if (self.isLocked) {
+				if (self.isManager) {
+					frappe.msgprint("⚠️ <b>当前月份已核定锁定！</b><br><br>您拥有管理员权限，若确需补录充值，请先点击右上角的【🔓 解除锁定】。");
+				} else {
+					frappe.msgprint("🔒 <b>当前月份已核定锁定！</b><br><br>单据处于只读保护状态。若需修改或补录，请点击右上角的【📨 申请取消核定】。");
+				}
 				return;
 			}
 			self.startInlineEntry("recharge");
@@ -492,27 +500,50 @@ class UnifiedOilCardLedgerConsole {
 		});
 
 		// 本月核定锁定 (操作员与管理员均可执行)
-		this.wrapper.on("click", "#btn-lock-month-action", function () {
+		this.wrapper.on("click", "#btn-lock-month-action, #btn-empty-lock-month", function () {
 			if (!self.activeCard) return;
-			frappe.confirm(
-				`确定要对【${self.activeCard.card_name}】的 <b>${self.selectedYear}年${self.selectedMonth}月</b> 进行【本月核定与锁定】吗？<br><br><span style="color:#b45309;">核定后该月份流水将被保护，单据不可直接修改或删除。</span>`,
-				function () {
-					frappe.call({
-						method: "ashan_cn_procurement.ashan_cn_procurement.page.oil_card_ledger.oil_card_ledger.lock_monthly_ledger",
-						args: {
-							oil_card: self.activeCard.name,
-							year: self.selectedYear,
-							month: self.selectedMonth,
-						},
-						callback: function (r) {
-							if (r.message && r.message.status === "ok") {
-								frappe.show_alert({ message: r.message.message, indicator: "green" }, 4);
-								self.loadLedgerData();
-							}
-						},
-					});
-				}
-			);
+			const cardTitle = self.activeCard.card_name || self.activeCard.name;
+			const endingBal = formatMoney(self.currentEndingBalance);
+			const txnsCount = self.wrapper.find("#tbody-unified-ledger tr:not(.row-opening-balance):not(.row-empty-month):not(.row-inline-entry)").length;
+
+			let confirmMsg = "";
+			if (txnsCount === 0) {
+				confirmMsg = `
+					<div style="font-size:13.5px; line-height:1.6;">
+						确定要对【${cardTitle}】的 <b>${self.selectedYear}年${self.selectedMonth}月</b> 进行<b>【月度核定与锁定】</b>吗？<br><br>
+						<div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:10px 14px; color:#166534; font-size:12.5px;">
+							✓ <b>空月结转核定</b>：本月无资金与能耗变动，期末余额将精准核定为 <b>${endingBal}</b> 并自动结转至下月。
+						</div>
+					</div>
+				`;
+			} else {
+				confirmMsg = `
+					<div style="font-size:13.5px; line-height:1.6;">
+						确定要对【${cardTitle}】的 <b>${self.selectedYear}年${self.selectedMonth}月</b> 进行<b>【本月核定与锁定】</b>吗？<br><br>
+						<div style="background:#fffbeb; border:1px solid #fde68a; border-radius:6px; padding:10px 14px; color:#92400e; font-size:12.5px;">
+							📊 <b>本月汇总</b>：共 <b>${txnsCount}</b> 笔流水，期末核定余额为 <b>${endingBal}</b>。<br>
+							🔒 <b>安全保护</b>：核定后本月所有单据将被锁定为只读状态，防止误改。
+						</div>
+					</div>
+				`;
+			}
+
+			frappe.confirm(confirmMsg, function () {
+				frappe.call({
+					method: "ashan_cn_procurement.ashan_cn_procurement.page.oil_card_ledger.oil_card_ledger.lock_monthly_ledger",
+					args: {
+						oil_card: self.activeCard.name,
+						year: self.selectedYear,
+						month: self.selectedMonth,
+					},
+					callback: function (r) {
+						if (r.message && r.message.status === "ok") {
+							frappe.show_alert({ message: r.message.message, indicator: "green" }, 4);
+							self.loadLedgerData();
+						}
+					},
+				});
+			});
 		});
 
 		// 操作员申请取消核定
@@ -1592,7 +1623,7 @@ class UnifiedOilCardLedgerConsole {
 						</div>
 					`).show();
 				} else {
-					lockedBanner.html(`<span>🔒 本月流水已核定锁定。当前为【油卡管理员】权限，可直接解锁或调整。</span>`).show();
+					lockedBanner.html(`<span>🔒 <b>本月流水已核定锁定</b>：当前月份处于保护状态，录入与删除功能已关闭。如需调整请点击右上角【🔓 解除锁定】。</span>`).show();
 				}
 				lockBtnContainer.html(`<button class="btn-cmd-unlock" id="btn-unlock-month-action"><span>🔓</span> 解除锁定</button>`);
 			} else {
@@ -1601,13 +1632,16 @@ class UnifiedOilCardLedgerConsole {
 					lockedBanner.html(`<span>⏳ <b>【已提交取消核定申请】</b>：已向管理员申请解除锁定（理由：“${data.locked_info.unlock_request_reason}”），等待管理员审批中...</span>`).show();
 					lockBtnContainer.html(`<span class="status-pill-subtle status-pill-amber" style="padding:5px 9px; font-size:12px;">⏳ 申请反核定待审</span>`);
 				} else {
-					lockedBanner.html(`<span>🔒 本月加油与充值已完成核定锁定，当前处于只读保护状态。如需修改请点击【申请取消核定】。</span>`).show();
+					lockedBanner.html(`<span>🔒 <b>本月流水已完成核定锁定</b>：单据处于只读保护状态。如需修改请点击右上角【📨 申请取消核定】。</span>`).show();
 					lockBtnContainer.html(`<button class="btn-cmd-request-unlock" id="btn-request-unlock-action" style="background:#d97706; color:#fff; border:none; padding:5px 10px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer;"><span>📨</span> 申请取消核定</button>`);
 				}
 			}
 
-			// 锁定状态下非管理员禁用快捷录入
-			this.wrapper.find("#btn-quick-refuel, #btn-quick-recharge").css("opacity", this.isManager ? "1" : "0.5");
+			// 锁定状态下全部禁用快捷录入按钮，并提示
+			this.wrapper.find("#btn-quick-refuel, #btn-quick-recharge")
+				.css({ "opacity": "0.45", "cursor": "not-allowed" })
+				.attr("title", "当前月份已核定锁定，若需录入请先点击【解除锁定】");
+			$("#row-inline-entry").remove();
 		} else {
 			lockCard.removeClass("is-locked").addClass("is-unlocked");
 			lockTitle.text("🟢 正常进行中").css("color", "#15803d");
@@ -1616,7 +1650,9 @@ class UnifiedOilCardLedgerConsole {
 
 			// 操作员和管理员均可点击【本月核定】
 			lockBtnContainer.html(`<button class="btn-cmd-lock" id="btn-lock-month-action"><span>🔒</span> 本月核定</button>`);
-			this.wrapper.find("#btn-quick-refuel, #btn-quick-recharge").css("opacity", "1");
+			this.wrapper.find("#btn-quick-refuel, #btn-quick-recharge")
+				.css({ "opacity": "1", "cursor": "pointer" })
+				.removeAttr("title");
 		}
 
 		// 管理员高级模块展示
@@ -1682,9 +1718,9 @@ class UnifiedOilCardLedgerConsole {
 					? '<span class="status-pill-subtle status-pill-green">已开票</span>'
 					: '<span class="status-pill-subtle status-pill-amber">未开票</span>';
 
-				// 操作列（单页闭环：完全移除离开本页的查看链接，仅保留单页即时删除）
-				let actionHtml = '<span style="color:#94a3b8;">--</span>';
-				if (!isLocked || isMgr) {
+				// 操作列（锁定状态下禁止删除，显示🔒只读）
+				let actionHtml = '<span style="color:#94a3b8; font-size:11.5px;">🔒 只读</span>';
+				if (!isLocked) {
 					actionHtml = `<a href="javascript:void(0)" class="btn-delete-row" data-doctype="${t.doc_type}" data-name="${t.name}" style="color:#dc2626; font-weight:600; text-decoration:none; cursor:pointer;" title="删除记录">🗑️ 删除</a>`;
 				}
 
@@ -1704,6 +1740,30 @@ class UnifiedOilCardLedgerConsole {
 					</tr>
 				`;
 			});
+		} else {
+			// 空月份无流水占位提示
+			html += `
+				<tr class="row-empty-month">
+					<td colspan="${isMgr ? 13 : 10}" style="text-align: center; padding: 36px 16px; color: #64748b; background: #fafbfc;">
+						<div style="font-size: 22px; margin-bottom: 6px;">🍃</div>
+						<div style="font-size: 14px; font-weight: 700; color: #334155; margin-bottom: 4px;">本月暂无加油与充值流水变动</div>
+						<div style="font-size: 12.5px; color: #64748b; margin-bottom: 12px;">
+							期初结存 <b>${openingBalFmt}</b> ｜ 本月发生额 <b>¥ 0.00</b> ｜ 期末结存 <b>${openingBalFmt}</b>
+						</div>
+						${!isLocked ? `
+							<div style="display: flex; justify-content: center; gap: 10px;">
+								<button class="btn-cmd-primary btn-sm" id="btn-empty-quick-refuel" style="font-size: 12px; padding: 5px 12px;">⛽ 录入本月加油</button>
+								<button class="btn-cmd-secondary btn-sm" id="btn-empty-quick-recharge" style="font-size: 12px; padding: 5px 12px;">💳 录入本月充值</button>
+								<button class="btn-cmd-lock btn-sm" id="btn-empty-lock-month" style="font-size: 12px; padding: 5px 14px;">🔒 直接核定本月 (结转至下月)</button>
+							</div>
+						` : `
+							<div>
+								<span class="status-pill-subtle status-pill-green" style="font-size: 12px; padding: 4px 10px;">✓ 本月已完成空月核定并结转</span>
+							</div>
+						`}
+					</td>
+				</tr>
+			`;
 		}
 
 		tbody.html(html);

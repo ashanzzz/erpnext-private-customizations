@@ -34,22 +34,28 @@
       "in_list_view": 1
     },
     {
-      "label": "物业费模式",
-      "fieldname": "property_fee_mode",
-      "fieldtype": "Select",
-      "options": "房租含物业\n单独计收物业费",
+      "label": "押金(元)",
+      "fieldname": "deposit_amount",
+      "fieldtype": "Currency",
       "in_list_view": 1
-    },
-    {
-      "label": "房租计价方式",
-      "fieldname": "rent_pricing_mode",
-      "fieldtype": "Data"
     },
     {
       "label": "计费天数",
       "fieldname": "billing_days",
       "fieldtype": "Int",
       "in_list_view": 1
+    },
+    {
+      "label": "物业费模式",
+      "fieldname": "property_fee_mode",
+      "fieldtype": "Select",
+      "options": "免物业费\n单独计物业费",
+      "in_list_view": 1
+    },
+    {
+      "label": "房租计价方式",
+      "fieldname": "rent_pricing_mode",
+      "fieldtype": "Data"
     },
     {
       "label": "房租单价快照",
@@ -77,6 +83,16 @@
       "fieldtype": "Currency"
     },
     {
+      "label": "房租年单价",
+      "fieldname": "rent_annual_rate",
+      "fieldtype": "Float"
+    },
+    {
+      "label": "房租月单价",
+      "fieldname": "rent_monthly_rate",
+      "fieldtype": "Float"
+    },
+    {
       "label": "年物业费基准",
       "fieldname": "property_fee_annual_amount",
       "fieldtype": "Currency"
@@ -92,10 +108,26 @@
       "fieldtype": "Currency"
     },
     {
-      "label": "税率(%)",
-      "fieldname": "tax_rate",
+      "label": "物业费年单价",
+      "fieldname": "property_fee_annual_rate",
+      "fieldtype": "Float"
+    },
+    {
+      "label": "物业费月单价",
+      "fieldname": "property_fee_monthly_rate",
+      "fieldtype": "Float"
+    },
+    {
+      "label": "房租税率(%)",
+      "fieldname": "rent_tax_rate",
       "fieldtype": "Percent",
-      "default": "9.0"
+      "default": "5.0"
+    },
+    {
+      "label": "物业费税率(%)",
+      "fieldname": "property_fee_tax_rate",
+      "fieldtype": "Percent",
+      "default": "6.0"
     },
     {
       "label": "房租含税金额",
