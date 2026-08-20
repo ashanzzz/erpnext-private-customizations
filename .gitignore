@@ -16,5 +16,7 @@ node_modules/
 
 # Temporary screenshots & scratch files
 temp_screenshots/
+scratch/
+my git/
 *.png
 *.jpg
