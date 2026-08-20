@@ -631,19 +631,19 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 <table class="qifu-table" id="table-qifu-emp">
                     <thead>
                         <tr>
-                            <th style="width:36px; text-align:center;"><input type="checkbox" id="check-all-tab1-employees" title="全选/反选"></th>
-                            <th style="width:40px; text-align:center;">序号</th>
-                            <th>工号</th>
-                            <th>姓名</th>
-                            <th>证件号码</th>
-                            <th>岗位职务</th>
-                            <th>用工性质</th>
-                            <th>计薪方式</th>
-                            <th>固定/车间薪资</th>
-                            <th>社保基数</th>
-                            <th>公积金基数</th>
-                            <th>专项扣除</th>
-                            <th style="width:130px; text-align:center;">操作</th>
+                            <th style="width:36px; min-width:36px; max-width:36px; text-align:center;"><input type="checkbox" id="check-all-tab1-employees" title="全选/反选"></th>
+                            <th style="width:44px; min-width:44px; max-width:44px; text-align:center;">序号</th>
+                            <th style="width:75px; min-width:75px; max-width:75px; text-align:center;">工号</th>
+                            <th style="width:90px; min-width:90px; max-width:90px; text-align:left;">姓名</th>
+                            <th style="min-width:170px; text-align:center;">证件号码</th>
+                            <th style="min-width:90px; text-align:left;">岗位职务</th>
+                            <th style="min-width:95px; text-align:center;">用工性质</th>
+                            <th style="min-width:100px; text-align:center;">计薪方式</th>
+                            <th style="min-width:110px; text-align:right;">固定/车间薪资</th>
+                            <th style="min-width:100px; text-align:right;">社保基数</th>
+                            <th style="min-width:100px; text-align:right;">公积金基数</th>
+                            <th style="min-width:100px; text-align:right;">专项扣除</th>
+                            <th style="width:130px; min-width:130px; text-align:center;">操作</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-qifu-emp"></tbody>
@@ -1178,23 +1178,23 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 const isHf = !isResigned && (emp.housing_fund_base > 0);
                 html += `
                 <tr style="${isResigned ? 'background:#fff1f2;' : ''}">
-                    <td style="text-align:center;"><input type="checkbox" class="tab1-emp-check" data-emp-no="${emp.employee_no}" data-emp-name="${emp.employee_name}"></td>
-                    <td style="color:#94a3b8; text-align:center;">${idx + 1}</td>
-                    <td style="text-align:center;"><strong>${emp.employee_no || '-'}</strong></td>
-                    <td>
+                    <td style="text-align:center; width:36px; min-width:36px; max-width:36px;"><input type="checkbox" class="tab1-emp-check" data-emp-no="${emp.employee_no}" data-emp-name="${emp.employee_name}"></td>
+                    <td style="color:#94a3b8; text-align:center; width:44px; min-width:44px; max-width:44px;">${idx + 1}</td>
+                    <td style="text-align:center; width:75px; min-width:75px; max-width:75px;"><strong>${emp.employee_no || '-'}</strong></td>
+                    <td style="width:90px; min-width:90px; max-width:90px; text-align:left;">
                         <strong style="color:${isResigned ? '#991b1b' : '#1e3a8a'};">${emp.employee_name}</strong>
                     </td>
-                    <td style="font-family:monospace; text-align:center;">${emp.id_card || '-'}</td>
-                    <td>${emp.job_title || '操作工'}</td>
-                    <td style="text-align:center;">
+                    <td style="font-family:monospace; text-align:center; min-width:170px;">${emp.id_card || '-'}</td>
+                    <td style="min-width:90px; text-align:left;">${emp.job_title || '操作工'}</td>
+                    <td style="text-align:center; min-width:95px;">
                         ${isResigned ? `<span class="qifu-status-badge" style="background:#fee2e2; color:#b91c1c; font-weight:700; border:1px solid #fca5a5;" title="离职日期: ${emp.relieving_date || '当月'}">🚪 本月离职</span>` : `<span class="qifu-status-badge ${emp.employee_type === '正式工' ? 'qifu-status-locked' : 'qifu-status-draft'}">${emp.employee_type || '正式工'}</span>`}
                     </td>
-                    <td style="text-align:center;">${emp.salary_mode || '固定一口价'}</td>
-                    <td class="qifu-money-cell" style="font-weight:600;">${fmtMoney(emp.fixed_salary)}</td>
-                    <td class="qifu-money-cell" style="color:${isInsured ? '#2563eb' : '#94a3b8'}; font-weight:600;">${fmtMoney(emp.social_security_base)}</td>
-                    <td class="qifu-money-cell" style="color:${isHf ? '#059669' : '#94a3b8'}; font-weight:600;">${fmtMoney(emp.housing_fund_base)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(emp.total_deduction || emp.special_deductions_total)}</td>
-                    <td style="text-align:center; white-space:nowrap;">
+                    <td style="text-align:center; min-width:100px;">${emp.salary_mode || '固定一口价'}</td>
+                    <td class="qifu-money-cell" style="font-weight:600; min-width:110px;">${fmtMoney(emp.fixed_salary)}</td>
+                    <td class="qifu-money-cell" style="color:${isInsured ? '#2563eb' : '#94a3b8'}; font-weight:600; min-width:100px;">${fmtMoney(emp.social_security_base)}</td>
+                    <td class="qifu-money-cell" style="color:${isHf ? '#059669' : '#94a3b8'}; font-weight:600; min-width:100px;">${fmtMoney(emp.housing_fund_base)}</td>
+                    <td class="qifu-money-cell" style="min-width:100px;">${fmtMoney(emp.total_deduction || emp.special_deductions_total)}</td>
+                    <td style="text-align:center; white-space:nowrap; width:130px; min-width:130px;">
                         <button class="btn btn-default btn-xs btn-edit-emp" data-id="${emp.name}" style="color:#2563eb; margin-right:4px;">✏️ 修改</button>
                         ${isResigned ? `<button class="btn btn-default btn-xs btn-unresign-emp" data-emp-no="${emp.employee_no}" data-emp-name="${emp.employee_name}" style="color:#059669; border-color:#86efac;" title="撤销离职，恢复在职">🔄 恢复</button>` : `<button class="btn btn-default btn-xs btn-resign-emp" data-emp-no="${emp.employee_no}" data-emp-name="${emp.employee_name}" style="color:#dc2626; border-color:#fca5a5;" title="办理离职，次月社保公积金自动减员">🚪 离职</button>`}
                     </td>
