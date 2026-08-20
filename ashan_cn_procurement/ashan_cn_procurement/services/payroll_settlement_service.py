@@ -3675,10 +3675,20 @@ def _empty_proof_batch(expected_period):
 
 
 def _proof_type_config(proof_type):
-	if proof_type == "social_security":
-		return {"field": "ss_payment_file", "token": "社会保险缴费申报表_原始凭证", "title": "社会保险缴费申报表"}
-	if proof_type == "housing_fund":
-		return {"field": "hf_payment_file", "token": "住房公积金缴存凭证_原始凭证", "title": "住房公积金缴存凭证"}
+	if proof_type in ["social_security", "ss", "pdf_ss"]:
+		return {
+			"field": "ss_payment_file",
+			"token": "社会保险缴费申报表_原始凭证",
+			"tokens": ["社会保险", "社保", "ss_payment"],
+			"title": "社会保险缴费申报表"
+		}
+	if proof_type in ["housing_fund", "hf", "pdf_hf"]:
+		return {
+			"field": "hf_payment_file",
+			"token": "住房公积金缴存凭证_原始凭证",
+			"tokens": ["住房公积金", "公积金", "hf_payment"],
+			"title": "住房公积金缴存凭证"
+		}
 	raise ValueError(f"未知凭证类型: {proof_type}")
 
 
@@ -3717,11 +3727,20 @@ def _get_attached_proof_files(settle_doc, proof_type):
 		"File",
 		filters={"attached_to_doctype": "Ashan Monthly Payroll Settlement", "attached_to_name": settle_doc.name},
 		fields=["name", "file_name", "file_url", "creation"],
-		order_by="creation asc",
+		order_by="creation desc",
 	)
-	matched = [r for r in rows if config["token"] in (r.get("file_name") or "")]
+	matched = [r for r in rows if any(t in (r.get("file_name") or "") or t in (r.get("file_url") or "") for t in config["tokens"])]
 	if matched:
-		return matched
+		# 按 file_url 和 file_name 深度去重，确保同一凭证绝不被多次统计
+		seen = set()
+		unique_matched = []
+		for r in matched:
+			key = (r.get("file_name") or "", r.get("file_url") or "")
+			if key not in seen:
+				seen.add(key)
+				unique_matched.append(r)
+		return unique_matched
+
 	legacy_url = settle_doc.get(config["field"])
 	if legacy_url:
 		legacy = frappe.db.get_value("File", {"file_url": legacy_url}, ["name", "file_name", "file_url", "creation"], as_dict=True)
@@ -3748,9 +3767,26 @@ def _inspect_saved_proof_batch(settle_doc, proof_type, payroll_period_month):
 
 
 def _delete_existing_proof_files(settle_doc, proof_type):
-	for row in _get_attached_proof_files(settle_doc, proof_type):
-		if row and row.get("name") and frappe.db.exists("File", row.get("name")):
-			frappe.delete_doc("File", row.get("name"), ignore_permissions=True, force=True)
+	if not settle_doc:
+		return
+	config = _proof_type_config(proof_type)
+	all_attached = frappe.get_all(
+		"File",
+		filters={"attached_to_doctype": "Ashan Monthly Payroll Settlement", "attached_to_name": settle_doc.name},
+		fields=["name", "file_name", "file_url"],
+	)
+	for row in all_attached:
+		fname = row.get("file_name") or ""
+		furl = row.get("file_url") or ""
+		is_match = any(t in fname or t in furl for t in config["tokens"])
+		if not is_match and settle_doc.get(config["field"]) and furl == settle_doc.get(config["field"]):
+			is_match = True
+		if is_match:
+			try:
+				frappe.delete_doc("File", row["name"], ignore_permissions=True, force=True)
+			except Exception:
+				frappe.db.delete("File", {"name": row["name"]})
+	frappe.db.commit()
 
 
 def _save_proof_pdf_batch(settle_doc, proof_type, payroll_period_month, pdf_entries):
@@ -3761,7 +3797,14 @@ def _save_proof_pdf_batch(settle_doc, proof_type, payroll_period_month, pdf_entr
 	for idx, entry in enumerate(pdf_entries, start=1):
 		suffix = f"_{idx:02d}" if count > 1 else ""
 		file_name = f"{actual_period}_{settle_doc.company}_{config['token']}{suffix}.pdf"
-		file_doc = frappe.get_doc({"doctype": "File", "file_name": file_name, "attached_to_doctype": "Ashan Monthly Payroll Settlement", "attached_to_name": settle_doc.name, "content": entry["pdf_bytes"], "is_private": 1})
+		file_doc = frappe.get_doc({
+			"doctype": "File",
+			"file_name": file_name,
+			"attached_to_doctype": "Ashan Monthly Payroll Settlement",
+			"attached_to_name": settle_doc.name,
+			"content": entry["pdf_bytes"],
+			"is_private": 1
+		})
 		file_doc.save(ignore_permissions=True)
 		saved.append({"file_name": file_doc.file_name, "file_url": file_doc.file_url})
 	return saved
