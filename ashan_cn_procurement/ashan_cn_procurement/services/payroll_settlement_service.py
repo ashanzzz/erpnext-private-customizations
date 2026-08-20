@@ -3519,6 +3519,13 @@ def get_monthly_workflow_status(company, period_month):
 	# 系统计薪 vs 外部车间计薪人数
 	sys_calc_count = sum(1 for e in emp_profiles if (flt(e.get("fixed_salary")) > 0 and e.get("employee_no") == "A0006"))
 	ext_calc_count = emp_count - sys_calc_count
+
+	# 离职动态分析
+	resigned_in_period = [e for e in emp_profiles if e.get("employment_status") == "离职" or (e.get("relieving_date") and str(e.get("relieving_date")).startswith(period_month))]
+	if resigned_in_period:
+		profile_change_text = f"当月办理离职 {len(resigned_in_period)} 人 (次月已减员)"
+	else:
+		profile_change_text = "人员及配置无异动"
 	
 	# 2. 社保与公积金系统核算总额与参保人数
 	ss_data = get_social_insurance_sheet(company, period_month)
