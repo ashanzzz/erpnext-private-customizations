@@ -1,31 +1,20 @@
-# 忽略本地环境变量与敏感凭据
+# Environment variables (do not commit sensitive tokens/passwords)
 .env
-.env.local
-.env.*.local
 
-# Python 缓存
+# Python bytecode and caches
 __pycache__/
-*.py[cod]
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
 
-# Node / JS 缓存与依赖
+# Node & IDE
 node_modules/
-dist/
+.vscode/
+.idea/
 .DS_Store
 
-# 临时抓取与截图
-desk_body.html
-real_sidebar.html
-sidebar_dump.html
+# Temporary screenshots & scratch files
+temp_screenshots/
 *.png
-*.zip
-ashanzzz-docker-erpnext16-complete-fix/
-*.bat
-*.ps1
-
-# 根目录本地诊断与自动化测试脚本 (只保留 ashan_cn_procurement 核心包与 Markdown 文档)
-/*.py
-user_translations.csv
-
-# 容器热同步前生成的可回退 App 备份
-/backups/
+*.jpg

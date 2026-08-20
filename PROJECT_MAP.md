@@ -34,13 +34,17 @@
 
 ## 🖥️ 3. Unraid 服务器与 Docker 运维配置
 
-- **Unraid 服务器 IP**: `192.168.8.11`
-- **Unraid 官方 GraphQL API**: `http://192.168.8.11/graphql`
+- **Unraid 局域网 IP**: `192.168.8.11`
+- **Tailscale 远程访问地址 (异地办公/远程连接自动故障转移)**:
+  - **ERPNext16 Web 远程**: `http://100.80.0.4:6888/`
+  - **Unraid Web 远程**: `http://100.80.0.4/` (备选端口 `http://100.80.0.4:33/`)
+  - **Unraid SSH 远程**: `100.80.0.4:22` (已废弃 `unraid.335356119.xyz`，因其不支持 SSH)
+- **Unraid 官方 GraphQL API**: `http://192.168.8.11/graphql` (Tailscale: `http://100.80.0.4/graphql`)
 - **Unraid 官方 API Key**: 记录于 `.env` 中的 `UNRAID_OFFICIAL_API_KEY`
 - **Unraid 容器名称**:
   - `/erpnext16` (镜像: `ghcr.io/ashanzzz/erpnext16:latest`, 核心部署容器)
   - `/ERPNext` (镜像: `ghcr.io/ashanzzz/erpnext15-aio:latest`, 备用/运行端口 8888)
-- **UnraidClaw 网关**: `http://192.168.8.11:9876`
+- **UnraidClaw 网关**: `http://192.168.8.11:9876` (Tailscale: `http://100.80.0.4:9876`)
 
 ---
 
@@ -72,7 +76,8 @@ d:\SynologyDrive团队\antigravity\erpnext16/
 │       ├── ERPNext_PROJECT_RULES.md
 │       ├── ERPNext16_UI_GUIDE.md
 │       ├── ERPNext16_LEARN.md
-│       └── ERPNext16_API_MAP.md
+│       ├── ERPNext16_API_MAP.md
+│       └── AI_HANDOVER_LOGIN_AND_GIT_SAFETY.md # 登录路由与公开仓库安全交接，相关任务必须先读
 │
 ├── PROJECT_MAP.md                    # ⭐️ 本规范与映射说明文件
 ├── AGENTS.md & .agents/              # 🤖 AI 开发指导规则与环境限制
