@@ -3610,24 +3610,26 @@ def get_monthly_workflow_status(company, period_month):
 	import_net_total = flt(dist_sheet.get("totals", {}).get("net_salary", 0.0))
 	import_file_url = doc.get("imported_excel_file") if doc else None
 
-	# 任务 3: 社保凭证状态
+	# 任务 3: 社保凭证状态。已上传/已解析不等于核验通过；必须与当前系统核算金额逐分一致。
 	ss_file_url = doc.get("ss_payment_file") if doc else None
 	ss_parsed_amount = flt(doc.get("ss_parsed_amount")) if doc else 0.0
 	ss_verify_status = doc.get("ss_verify_status") if doc else ("核验一致" if ss_file_url else "未上传")
+	ss_difference_amount = round(abs(ss_parsed_amount - ss_sys_total), 2)
 	if not ss_file_url:
 		ss_status = "pending"
-	elif abs(ss_parsed_amount - ss_sys_total) < 0.01 or ss_parsed_amount > 0:
+	elif ss_verify_status == "核验一致" and ss_difference_amount < 0.01:
 		ss_status = "verified"
 	else:
 		ss_status = "mismatch"
 
-	# 任务 4: 公积金凭证状态
+	# 任务 4: 公积金凭证状态。同样必须与当前系统核算金额逐分一致。
 	hf_file_url = doc.get("hf_payment_file") if doc else None
 	hf_parsed_amount = flt(doc.get("hf_parsed_amount")) if doc else 0.0
 	hf_verify_status = doc.get("hf_verify_status") if doc else ("核验一致" if hf_file_url else "未上传")
+	hf_difference_amount = round(abs(hf_parsed_amount - hf_sys_total), 2)
 	if not hf_file_url:
 		hf_status = "pending"
-	elif abs(hf_parsed_amount - hf_sys_total) < 0.01 or hf_parsed_amount > 0:
+	elif hf_verify_status == "核验一致" and hf_difference_amount < 0.01:
 		hf_status = "verified"
 	else:
 		hf_status = "mismatch"
@@ -3638,8 +3640,14 @@ def get_monthly_workflow_status(company, period_month):
 	total_tax = flt(doc.total_tax) if doc else 0.0
 	total_company_cost = total_gross_salary + ss_sys_comp + hf_sys_comp
 
-	# 必须 1.母表有员工 2.已导入实发表 3.已上传社保PDF 4.已上传公积金ZIP/PDF 全部就绪才允许最终核定
-	can_lock = bool(emp_count > 0 and has_items and ss_file_url and hf_file_url)
+	# 最终核定必须同时满足：基础数据就绪 + 两类法定凭证金额均核验一致。
+	# 仅“上传了文件”绝不能视为可封账。
+	can_lock = bool(
+		emp_count > 0
+		and has_items
+		and ss_status == "verified"
+		and hf_status == "verified"
+	)
 
 	return {
 		"company": company,
@@ -3672,6 +3680,7 @@ def get_monthly_workflow_status(company, period_month):
 			"company_amount": ss_sys_comp,
 			"person_amount": ss_sys_pers,
 			"sys_amount": ss_sys_total,
+			"difference_amount": ss_difference_amount,
 			"verify_status": ss_verify_status,
 			"label": f"{ss_insured_count}人参保 · 申报总盘 ¥{ss_parsed_amount:,.2f}" if ss_file_url else f"{ss_insured_count}人参保 · 待上传社保PDF (系统应缴: ¥{ss_sys_total:,.2f})"
 		},
@@ -3683,6 +3692,7 @@ def get_monthly_workflow_status(company, period_month):
 			"company_amount": hf_parsed_amount / 2.0 if hf_parsed_amount > 0 else hf_sys_comp,
 			"person_amount": hf_parsed_amount / 2.0 if hf_parsed_amount > 0 else hf_sys_pers,
 			"sys_amount": hf_sys_total,
+			"difference_amount": hf_difference_amount,
 			"verify_status": hf_verify_status,
 			"label": f"{hf_insured_count}人参缴 · 凭证总额 ¥{hf_parsed_amount:,.2f}" if hf_file_url else f"{hf_insured_count}人参缴 · 待上传公积金ZIP/PDF (系统应缴: ¥{hf_sys_total:,.2f})"
 		},
@@ -3735,9 +3745,9 @@ def upload_and_verify_social_security_file(company, period_month, file_name=None
 	ss_data = get_social_insurance_sheet(company, period_month)
 	sys_amount = flt(ss_data.get("totals", {}).get("grand_total", 0.0))
 
-	# 对比金额
-	diff = abs(parsed_amount - sys_amount)
-	is_matched = (diff < 0.01) or (parsed_amount > 0 and abs(parsed_amount - 36119.92) < 0.01)
+	# 对比金额：严格按当前系统动态核算结果逐分核验，禁止任何固定金额豁免。
+	diff = round(abs(parsed_amount - sys_amount), 2)
+	is_matched = diff < 0.01
 
 	# 保存文件到 Frappe
 	doc_name = f"{company}-{period_month}"
@@ -3769,9 +3779,14 @@ def upload_and_verify_social_security_file(company, period_month, file_name=None
 
 	return {
 		"success": True,
-		"message": f"✅ 社保缴费申报表解析成功！PDF 缴费总额: ¥{parsed_amount:,.2f}，系统核算总额: ¥{sys_amount:,.2f}" + ("（金额完全一致）" if is_matched else "（存在差异，已为您记录）"),
+		"message": (
+			f"✅ 社保缴费申报表解析成功！PDF 缴费总额: ¥{parsed_amount:,.2f}，系统核算总额: ¥{sys_amount:,.2f}（金额完全一致）"
+			if is_matched else
+			f"⚠️ 社保缴费申报表已解析并归档，但凭证金额 ¥{parsed_amount:,.2f} 与系统核算金额 ¥{sys_amount:,.2f} 不一致，差额 ¥{diff:,.2f}。当前账期禁止最终核定封账，请核对并重新上传正确凭证。"
+		),
 		"parsed_amount": parsed_amount,
 		"sys_amount": sys_amount,
+		"difference_amount": diff,
 		"is_matched": is_matched,
 		"file_url": _file.file_url,
 		"parse_detail": parse_res
@@ -3817,9 +3832,9 @@ def upload_and_verify_housing_fund_file(company, period_month, file_name=None, f
 	hf_data = get_housing_fund_sheet(company, period_month)
 	sys_amount = flt(hf_data.get("totals", {}).get("total_amount", 0.0))
 
-	# 对比金额
-	diff = abs(parsed_amount - sys_amount)
-	is_matched = (diff < 0.01) or (parsed_amount > 0 and abs(parsed_amount - 2000.0) < 0.01)
+	# 对比金额：严格按当前系统动态核算结果逐分核验，禁止任何固定金额豁免。
+	diff = round(abs(parsed_amount - sys_amount), 2)
+	is_matched = diff < 0.01
 
 	# 保存文件到 Frappe
 	doc_name = f"{company}-{period_month}"
@@ -3851,9 +3866,14 @@ def upload_and_verify_housing_fund_file(company, period_month, file_name=None, f
 
 	return {
 		"success": True,
-		"message": f"✅ 住房公积金凭证解析成功！PDF 缴存总额: ¥{parsed_amount:,.2f}，系统核算总额: ¥{sys_amount:,.2f}" + ("（金额完全一致）" if is_matched else "（存在差异，已为您记录）"),
+		"message": (
+			f"✅ 住房公积金凭证解析成功！PDF 缴存总额: ¥{parsed_amount:,.2f}，系统核算总额: ¥{sys_amount:,.2f}（金额完全一致）"
+			if is_matched else
+			f"⚠️ 住房公积金凭证已解析并归档，但凭证金额 ¥{parsed_amount:,.2f} 与系统核算金额 ¥{sys_amount:,.2f} 不一致，差额 ¥{diff:,.2f}。当前账期禁止最终核定封账，请核对并重新上传正确凭证。"
+		),
 		"parsed_amount": parsed_amount,
 		"sys_amount": sys_amount,
+		"difference_amount": diff,
 		"is_matched": is_matched,
 		"file_url": _file.file_url,
 		"parse_detail": parse_res
@@ -3879,6 +3899,27 @@ def execute_monthly_settlement_lock(company, period_month):
 
 	if not settle_doc.hf_payment_file:
 		frappe.throw(f"【❌ 前置任务未完成】尚未上传【{period_month} 住房公积金缴存凭证 ZIP/PDF】并完成核验！请先完成任务 4 上传。")
+
+	# 服务器端最终硬拦截：封账瞬间重新按当前台账计算金额，不能信任前端状态或历史缓存。
+	ss_current_total = flt(get_social_insurance_sheet(company, period_month).get("totals", {}).get("grand_total", 0.0))
+	ss_parsed_amount = flt(settle_doc.ss_parsed_amount)
+	ss_diff = round(abs(ss_parsed_amount - ss_current_total), 2)
+	if settle_doc.ss_verify_status != "核验一致" or ss_diff >= 0.01:
+		frappe.throw(
+			f"【⛔ 禁止最终核定封账】第 3 步 · 社保凭证金额与系统当前核算不一致："
+			f"凭证 ¥{ss_parsed_amount:,.2f}，系统 ¥{ss_current_total:,.2f}，差额 ¥{ss_diff:,.2f}。"
+			"请删除错误凭证并重新上传核验一致后再封账。"
+		)
+
+	hf_current_total = flt(get_housing_fund_sheet(company, period_month).get("totals", {}).get("total_amount", 0.0))
+	hf_parsed_amount = flt(settle_doc.hf_parsed_amount)
+	hf_diff = round(abs(hf_parsed_amount - hf_current_total), 2)
+	if settle_doc.hf_verify_status != "核验一致" or hf_diff >= 0.01:
+		frappe.throw(
+			f"【⛔ 禁止最终核定封账】第 4 步 · 公积金凭证金额与系统当前核算不一致："
+			f"凭证 ¥{hf_parsed_amount:,.2f}，系统 ¥{hf_current_total:,.2f}，差额 ¥{hf_diff:,.2f}。"
+			"请删除错误凭证并重新上传核验一致后再封账。"
+		)
 
 	settle_doc.status = "已核定锁定"
 	settle_doc.locked = 1
