@@ -1745,36 +1745,37 @@ def get_social_insurance_sheet(company="天津祺富机械加工有限公司", p
 	ss_setting = get_insurance_setting(company, period_month.split("-")[0] if "-" in period_month else 2026)
 
 	rows = []
-	for idx, it in enumerate(items, start=1):
+	seq_idx = 1
+	for it in items:
 		ss_base = flt(it.get("social_security_base"))
 		emp_type = it.get("employee_type") or "正式工"
 		is_retired = (emp_type == "退休返聘" or emp_type == "返聘工")
 		is_other = (emp_type in ["临时工", "外籍工", "实习生", "劳务派遣"])
 
+		# 纯净权责边界：不缴纳社保人员（退休返聘、临时工、外籍工、实习生或基数<=0）自动过滤排除
 		if is_retired or is_other or ss_base <= 0:
-			comp_pension = comp_unemp = comp_med = comp_other_med = comp_injury = comp_tot = 0.0
-			pers_pension = pers_unemp = pers_med = pers_large_med = pers_tot = grand_tot = 0.0
-		else:
-			comp_pension = round(ss_base * (flt(ss_setting.get("ss_company_pension", 16.0)) / 100.0), 2)
-			comp_unemp = round(ss_base * (flt(ss_setting.get("ss_company_unemployment", 0.5)) / 100.0), 2)
-			comp_med = round(ss_base * (flt(ss_setting.get("ss_company_medical", 10.0)) / 100.0), 2)
-			comp_other_med = round(ss_base * (flt(ss_setting.get("ss_company_other_medical", 0.5)) / 100.0), 2)
-			comp_injury = round(ss_base * (flt(ss_setting.get("ss_company_injury", 0.55)) / 100.0), 2)
-			comp_tot = round(comp_pension + comp_unemp + comp_med + comp_other_med + comp_injury, 2)
+			continue
 
-			pers_pension = round(ss_base * (flt(ss_setting.get("ss_person_pension", 8.0)) / 100.0), 2)
-			pers_unemp = round(ss_base * (flt(ss_setting.get("ss_person_unemployment", 0.5)) / 100.0), 2)
-			pers_med = round(ss_base * (flt(ss_setting.get("ss_person_medical", 2.0)) / 100.0), 2)
+		comp_pension = round(ss_base * (flt(ss_setting.get("ss_company_pension", 16.0)) / 100.0), 2)
+		comp_unemp = round(ss_base * (flt(ss_setting.get("ss_company_unemployment", 0.5)) / 100.0), 2)
+		comp_med = round(ss_base * (flt(ss_setting.get("ss_company_medical", 10.0)) / 100.0), 2)
+		comp_other_med = round(ss_base * (flt(ss_setting.get("ss_company_other_medical", 0.5)) / 100.0), 2)
+		comp_injury = round(ss_base * (flt(ss_setting.get("ss_company_injury", 0.55)) / 100.0), 2)
+		comp_tot = round(comp_pension + comp_unemp + comp_med + comp_other_med + comp_injury, 2)
 
-			cur_m_num = int(period_month.split("-")[1]) if "-" in period_month else 7
-			spec_months = [int(m.strip()) for m in str(ss_setting.get("big_medical_special_months", "3,12")).split(",") if m.strip().isdigit()]
-			pers_large_med = flt(ss_setting.get("big_medical_amount_special", 21.0)) if cur_m_num in spec_months else flt(ss_setting.get("big_medical_amount_default", 22.0))
+		pers_pension = round(ss_base * (flt(ss_setting.get("ss_person_pension", 8.0)) / 100.0), 2)
+		pers_unemp = round(ss_base * (flt(ss_setting.get("ss_person_unemployment", 0.5)) / 100.0), 2)
+		pers_med = round(ss_base * (flt(ss_setting.get("ss_person_medical", 2.0)) / 100.0), 2)
 
-			pers_tot = round(pers_pension + pers_unemp + pers_med + pers_large_med, 2)
-			grand_tot = round(comp_tot + pers_tot, 2)
+		cur_m_num = int(period_month.split("-")[1]) if "-" in period_month else 7
+		spec_months = [int(m.strip()) for m in str(ss_setting.get("big_medical_special_months", "3,12")).split(",") if m.strip().isdigit()]
+		pers_large_med = flt(ss_setting.get("big_medical_amount_special", 21.0)) if cur_m_num in spec_months else flt(ss_setting.get("big_medical_amount_default", 22.0))
+
+		pers_tot = round(pers_pension + pers_unemp + pers_med + pers_large_med, 2)
+		grand_tot = round(comp_tot + pers_tot, 2)
 
 		rows.append({
-			"seq": idx,
+			"seq": seq_idx,
 			"employee_no": it.get("employee_no"),
 			"employee_name": it.get("employee_name"),
 			"id_card": it.get("id_card") or "-",
@@ -1794,10 +1795,11 @@ def get_social_insurance_sheet(company="天津祺富机械加工有限公司", p
 			"pers_total": pers_tot,
 			"grand_total": grand_tot
 		})
+		seq_idx += 1
 
 	totals = {
 		"seq": "合计",
-		"employee_no": f"共 {len(items)} 人",
+		"employee_no": f"参保共 {len(rows)} 人",
 		"ss_base": sum(r["ss_base"] for r in rows),
 		"comp_pension": sum(r["comp_pension"] for r in rows),
 		"comp_unemp": sum(r["comp_unemp"] for r in rows),
@@ -1839,25 +1841,27 @@ def get_housing_fund_sheet(company="天津祺富机械加工有限公司", perio
 	pers_rate = flt(ss_setting.get("hf_person_rate", 5.0))
 
 	rows = []
-	for idx, it in enumerate(items, start=1):
+	seq_idx = 1
+	for it in items:
 		hf_base = flt(it.get("housing_fund_base"))
 		emp_type = it.get("employee_type") or "正式工"
 		emp_name = it.get("employee_name") or ""
 
+		# 纯净权责边界：不缴纳公积金人员（退休返聘、临时工、外籍工、实习生或基数<=0）自动过滤排除
 		if emp_type in ["退休返聘", "返聘工", "临时工", "外籍工", "实习生"] or hf_base <= 0:
-			c_amt = p_amt = tot_amt = 0.0
+			continue
+
+		if "孟祥山" in emp_name:
+			c_amt = 1000.0
+			p_amt = 1000.0
+			tot_amt = 2000.0
 		else:
-			if "孟祥山" in emp_name:
-				c_amt = 1000.0
-				p_amt = 1000.0
-				tot_amt = 2000.0
-			else:
-				c_amt = round(hf_base * (comp_rate / 100.0), 2)
-				p_amt = round(hf_base * (pers_rate / 100.0), 2)
-				tot_amt = round(c_amt + p_amt, 2)
+			c_amt = round(hf_base * (comp_rate / 100.0), 2)
+			p_amt = round(hf_base * (pers_rate / 100.0), 2)
+			tot_amt = round(c_amt + p_amt, 2)
 
 		rows.append({
-			"seq": idx,
+			"seq": seq_idx,
 			"employee_no": it.get("employee_no"),
 			"employee_name": emp_name,
 			"id_card": it.get("id_card") or "-",
@@ -1870,10 +1874,11 @@ def get_housing_fund_sheet(company="天津祺富机械加工有限公司", perio
 			"pers_amount": p_amt,
 			"total_amount": tot_amt
 		})
+		seq_idx += 1
 
 	totals = {
 		"seq": "合计",
-		"employee_no": f"共 {len(items)} 人",
+		"employee_no": f"参缴共 {len(rows)} 人",
 		"hf_base": sum(r["hf_base"] for r in rows),
 		"comp_amount": sum(r["comp_amount"] for r in rows),
 		"pers_amount": sum(r["pers_amount"] for r in rows),

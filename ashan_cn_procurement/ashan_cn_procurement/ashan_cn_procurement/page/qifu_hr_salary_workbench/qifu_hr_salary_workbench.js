@@ -1316,21 +1316,21 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
                 let tfoot_html = `
                 <tr>
-                    <td colspan="5" style="text-align:center; color:#334155;">合计</td>
-                    <td style="text-align:center;">0</td>
+                    <td colspan="5" style="text-align:center; color:#334155; font-weight:700;">合计</td>
+                    <td style="text-align:center; font-weight:700; color:#1e40af;">${rows.length}人参保</td>
                     <td class="qifu-money-cell">${fmtMoney(tot.ss_base)}</td>
                     <td class="qifu-money-cell">${fmtMoney(tot.comp_pension)}</td>
                     <td class="qifu-money-cell">${fmtMoney(tot.comp_unemp)}</td>
                     <td class="qifu-money-cell">${fmtMoney(tot.comp_med)}</td>
                     <td class="qifu-money-cell">${fmtMoney(tot.comp_other_med)}</td>
                     <td class="qifu-money-cell">${fmtMoney(tot.comp_injury)}</td>
-                    <td class="qifu-money-cell" style="color:#1e40af;">${fmtMoney(tot.comp_total)}</td>
+                    <td class="qifu-money-cell" style="color:#1e40af; font-weight:700;">${fmtMoney(tot.comp_total)}</td>
                     <td class="qifu-money-cell">${fmtMoney(tot.pers_pension)}</td>
                     <td class="qifu-money-cell">${fmtMoney(tot.pers_unemp)}</td>
                     <td class="qifu-money-cell">${fmtMoney(tot.pers_med)}</td>
                     <td class="qifu-money-cell">${fmtMoney(tot.pers_large_med)}</td>
-                    <td class="qifu-money-cell" style="color:#166534;">${fmtMoney(tot.pers_total)}</td>
-                    <td class="qifu-money-cell" style="color:#c2410c; font-size:13px;">${fmtMoney(tot.grand_total)}</td>
+                    <td class="qifu-money-cell" style="color:#166534; font-weight:700;">${fmtMoney(tot.pers_total)}</td>
+                    <td class="qifu-money-cell" style="color:#c2410c; font-size:13px; font-weight:800;">${fmtMoney(tot.grand_total)}</td>
                 </tr>
                 `;
                 $("#tfoot-tab3-ss-sheet").html(tfoot_html);
@@ -1379,14 +1379,14 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
                 let tfoot_html = `
                 <tr>
-                    <td colspan="5" style="text-align:center; color:#334155;">合计</td>
-                    <td style="text-align:center;">0</td>
+                    <td colspan="5" style="text-align:center; color:#334155; font-weight:700;">合计</td>
+                    <td style="text-align:center; font-weight:700; color:#1e40af;">${rows.length}人参缴</td>
                     <td class="qifu-money-cell">${fmtMoney(tot.hf_base)}</td>
                     <td style="text-align:center;">5%</td>
-                    <td class="qifu-money-cell" style="color:#0369a1;">${fmtMoney(tot.comp_amount)}</td>
+                    <td class="qifu-money-cell" style="color:#0369a1; font-weight:700;">${fmtMoney(tot.comp_amount)}</td>
                     <td style="text-align:center;">5%</td>
-                    <td class="qifu-money-cell" style="color:#15803d;">${fmtMoney(tot.pers_amount)}</td>
-                    <td class="qifu-money-cell" style="color:#c2410c; font-size:13px;">${fmtMoney(tot.total_amount)}</td>
+                    <td class="qifu-money-cell" style="color:#15803d; font-weight:700;">${fmtMoney(tot.pers_amount)}</td>
+                    <td class="qifu-money-cell" style="color:#c2410c; font-size:13px; font-weight:800;">${fmtMoney(tot.total_amount)}</td>
                 </tr>
                 `;
                 $("#tfoot-tab4-hf-sheet").html(tfoot_html);
