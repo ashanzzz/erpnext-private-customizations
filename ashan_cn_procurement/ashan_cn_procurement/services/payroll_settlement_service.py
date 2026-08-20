@@ -3463,85 +3463,21 @@ import io
 import re
 import zipfile
 from pypdf import PdfReader
+from ashan_cn_procurement.services.payroll_proof_validation import (
+    expected_proof_period,
+    expand_upload_entries_to_pdfs,
+    parse_social_security_pdf_stream as _parse_social_security_pdf_stream_precise,
+    parse_housing_fund_pdf_stream as _parse_housing_fund_pdf_stream_precise,
+    validate_proof_pdf_batch,
+)
 
 def parse_social_security_pdf_stream(file_bytes):
-	"""
-	解析社会保险费缴费申报表 PDF
-	"""
-	reader = PdfReader(io.BytesIO(file_bytes))
-	full_text = ""
-	for p in reader.pages:
-		full_text += p.extract_text() + "\n"
-	
-	company_match = re.search(r'用人单位名称[：:]\s*([^\s\*]+)', full_text)
-	company = company_match.group(1) if company_match else ""
-	
-	tax_no_match = re.search(r'纳税人识别号[：:]\s*([A-Za-z0-9]+)', full_text)
-	tax_no = tax_no_match.group(1) if tax_no_match else ""
-	
-	period_match = re.search(r'费款所\s*属日期[起止]*\s*([0-9]{4}-[0-9]{2})', full_text) or re.search(r'([0-9]{4}-[0-9]{2})', full_text)
-	period_month = period_match.group(1) if period_match else ""
-	
-	amounts = re.findall(r'([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})', full_text)
-	grand_total = 0.0
-	
-	tot_idx = full_text.rfind('合\n计') if '合\n计' in full_text else full_text.rfind('合计')
-	if tot_idx != -1:
-		tot_snippet = full_text[tot_idx:]
-		tot_amounts = re.findall(r'([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})', tot_snippet)
-		if tot_amounts:
-			grand_total = float(tot_amounts[-1].replace(',', ''))
-	
-	if grand_total == 0.0 and amounts:
-		grand_total = float(amounts[-1].replace(',', ''))
-		
-	return {
-		"success": True,
-		"type": "social_security",
-		"company": company,
-		"tax_no": tax_no,
-		"period_month": period_month,
-		"grand_total": grand_total,
-		"page_count": len(reader.pages)
-	}
+	"""兼容旧调用名，实际使用独立纯解析模块的精准解析器。"""
+	return _parse_social_security_pdf_stream_precise(file_bytes)
 
 def parse_housing_fund_pdf_stream(file_bytes):
-	"""
-	解析住房公积金受理凭证 PDF
-	"""
-	reader = PdfReader(io.BytesIO(file_bytes))
-	full_text = ""
-	for p in reader.pages:
-		full_text += p.extract_text() + "\n"
-		
-	company_match = re.search(r'单位名称\s+([^\s]+)', full_text)
-	company = company_match.group(1) if company_match else ""
-	
-	doc_no_match = re.search(r'凭证编号[：:]\s*([A-Za-z0-9]+)', full_text)
-	doc_no = doc_no_match.group(1) if doc_no_match else ""
-	
-	period_match = re.search(r'缴存年月\s+([0-9]{4}/[0-9]{2}|[0-9]{4}-[0-9]{2})', full_text)
-	period_month = period_match.group(1).replace('/', '-') if period_match else ""
-	
-	emp_count_match = re.search(r'人数\s+([0-9]+)', full_text)
-	emp_count = int(emp_count_match.group(1)) if emp_count_match else 0
-	
-	amt_match = re.search(r'金额\s+([0-9]+\.[0-9]{2})', full_text) or re.search(r'([0-9]+\.[0-9]{2})\s+[0-9]+\.[0-9]{2}', full_text)
-	total_amount = float(amt_match.group(1)) if amt_match else 0.0
-	
-	cap_amt_match = re.search(r'缴存金额合计（大写）\s+([^\s]+)', full_text)
-	cap_amt = cap_amt_match.group(1) if cap_amt_match else ""
-
-	return {
-		"success": True,
-		"type": "housing_fund",
-		"company": company,
-		"doc_no": doc_no,
-		"period_month": period_month,
-		"emp_count": emp_count,
-		"total_amount": total_amount,
-		"cap_amount": cap_amt
-	}
+	"""兼容旧调用名，实际使用独立纯解析模块的精准解析器。"""
+	return _parse_housing_fund_pdf_stream_precise(file_bytes)
 
 @frappe.whitelist()
 def get_monthly_workflow_status(company, period_month):
@@ -3610,26 +3546,31 @@ def get_monthly_workflow_status(company, period_month):
 	import_net_total = flt(dist_sheet.get("totals", {}).get("net_salary", 0.0))
 	import_file_url = doc.get("imported_excel_file") if doc else None
 
-	# 任务 3: 社保凭证状态。已上传/已解析不等于核验通过；必须与当前系统核算金额逐分一致。
+	# 任务 3/4：核定期对应的法定凭证属于次月实际缴费月，例如 2026-07 核定 -> 2026-08 凭证。
+	expected_proof_month = expected_proof_period(period_month)
+
 	ss_file_url = doc.get("ss_payment_file") if doc else None
-	ss_parsed_amount = flt(doc.get("ss_parsed_amount")) if doc else 0.0
 	ss_verify_status = doc.get("ss_verify_status") if doc else ("核验一致" if ss_file_url else "未上传")
+	ss_saved_batch = _inspect_saved_proof_batch(doc, "social_security", period_month) if ss_file_url else _empty_proof_batch(expected_proof_month)
+	ss_parsed_amount = flt(ss_saved_batch.get("total_amount")) if ss_saved_batch.get("file_count") else (flt(doc.get("ss_parsed_amount")) if doc else 0.0)
 	ss_difference_amount = round(abs(ss_parsed_amount - ss_sys_total), 2)
+	ss_period_valid = bool(ss_saved_batch.get("period_valid")) if ss_file_url else False
 	if not ss_file_url:
 		ss_status = "pending"
-	elif ss_verify_status == "核验一致" and ss_difference_amount < 0.01:
+	elif ss_period_valid and ss_verify_status == "核验一致" and ss_difference_amount < 0.01:
 		ss_status = "verified"
 	else:
 		ss_status = "mismatch"
 
-	# 任务 4: 公积金凭证状态。同样必须与当前系统核算金额逐分一致。
 	hf_file_url = doc.get("hf_payment_file") if doc else None
-	hf_parsed_amount = flt(doc.get("hf_parsed_amount")) if doc else 0.0
 	hf_verify_status = doc.get("hf_verify_status") if doc else ("核验一致" if hf_file_url else "未上传")
+	hf_saved_batch = _inspect_saved_proof_batch(doc, "housing_fund", period_month) if hf_file_url else _empty_proof_batch(expected_proof_month)
+	hf_parsed_amount = flt(hf_saved_batch.get("total_amount")) if hf_saved_batch.get("file_count") else (flt(doc.get("hf_parsed_amount")) if doc else 0.0)
 	hf_difference_amount = round(abs(hf_parsed_amount - hf_sys_total), 2)
+	hf_period_valid = bool(hf_saved_batch.get("period_valid")) if hf_file_url else False
 	if not hf_file_url:
 		hf_status = "pending"
-	elif hf_verify_status == "核验一致" and hf_difference_amount < 0.01:
+	elif hf_period_valid and hf_verify_status == "核验一致" and hf_difference_amount < 0.01:
 		hf_status = "verified"
 	else:
 		hf_status = "mismatch"
@@ -3682,6 +3623,11 @@ def get_monthly_workflow_status(company, period_month):
 			"sys_amount": ss_sys_total,
 			"difference_amount": ss_difference_amount,
 			"verify_status": ss_verify_status,
+			"expected_period": expected_proof_month,
+			"detected_periods": ss_saved_batch.get("detected_periods", []),
+			"period_valid": ss_period_valid,
+			"file_count": ss_saved_batch.get("file_count", 0),
+			"validation_errors": ss_saved_batch.get("errors", []),
 			"label": f"{ss_insured_count}人参保 · 申报总盘 ¥{ss_parsed_amount:,.2f}" if ss_file_url else f"{ss_insured_count}人参保 · 待上传社保PDF (系统应缴: ¥{ss_sys_total:,.2f})"
 		},
 		"task4_hf": {
@@ -3694,6 +3640,11 @@ def get_monthly_workflow_status(company, period_month):
 			"sys_amount": hf_sys_total,
 			"difference_amount": hf_difference_amount,
 			"verify_status": hf_verify_status,
+			"expected_period": expected_proof_month,
+			"detected_periods": hf_saved_batch.get("detected_periods", []),
+			"period_valid": hf_period_valid,
+			"file_count": hf_saved_batch.get("file_count", 0),
+			"validation_errors": hf_saved_batch.get("errors", []),
 			"label": f"{hf_insured_count}人参缴 · 凭证总额 ¥{hf_parsed_amount:,.2f}" if hf_file_url else f"{hf_insured_count}人参缴 · 待上传公积金ZIP/PDF (系统应缴: ¥{hf_sys_total:,.2f})"
 		},
 		"task5_settlement": {
@@ -3705,51 +3656,122 @@ def get_monthly_workflow_status(company, period_month):
 		"can_lock": can_lock
 	}
 
-@frappe.whitelist()
-def upload_and_verify_social_security_file(company, period_month, file_name=None, file_base64=None, file_url=None):
-	"""
-	上传社保缴费凭证 PDF/ZIP，自动解压/解析/核对金额/规范归档
-	"""
-	raw_bytes = None
-	if file_url:
+def _empty_proof_batch(expected_period):
+	return {"success": False, "period_valid": False, "expected_period": expected_period, "detected_periods": [], "file_count": 0, "total_amount": 0.0, "files": [], "errors": []}
+
+
+def _proof_type_config(proof_type):
+	if proof_type == "social_security":
+		return {"field": "ss_payment_file", "token": "社会保险缴费申报表_原始凭证", "title": "社会保险缴费申报表"}
+	if proof_type == "housing_fund":
+		return {"field": "hf_payment_file", "token": "住房公积金缴存凭证_原始凭证", "title": "住房公积金缴存凭证"}
+	raise ValueError(f"未知凭证类型: {proof_type}")
+
+
+def _decode_proof_upload_entries(file_name=None, file_base64=None, file_url=None, files_json=None):
+	entries = []
+	if files_json:
+		payload = json.loads(files_json) if isinstance(files_json, str) else files_json
+		if not isinstance(payload, list) or not payload:
+			raise ValueError("未收到有效的多文件凭证列表")
+		if len(payload) > 20:
+			raise ValueError("单次最多允许上传 20 个 PDF/ZIP 凭证文件")
+		for item in payload:
+			name = str((item or {}).get("file_name") or "").strip()
+			b64 = (item or {}).get("file_base64")
+			if not name or not b64:
+				raise ValueError("多文件列表存在缺少文件名或文件内容的项目")
+			if "," in b64:
+				b64 = b64.split(",", 1)[1]
+			entries.append({"file_name": name, "raw_bytes": base64.b64decode(b64)})
+	elif file_url:
 		file_doc = frappe.get_doc("File", {"file_url": file_url})
-		raw_bytes = file_doc.get_content()
-		file_name = file_name or file_doc.file_name
+		entries.append({"file_name": file_name or file_doc.file_name, "raw_bytes": file_doc.get_content()})
 	elif file_base64:
-		if "," in file_base64:
-			file_base64 = file_base64.split(",")[1]
-		raw_bytes = base64.b64decode(file_base64)
+		b64 = file_base64.split(",", 1)[1] if "," in file_base64 else file_base64
+		entries.append({"file_name": file_name or "proof.pdf", "raw_bytes": base64.b64decode(b64)})
 	else:
-		frappe.throw("未提供有效的社保凭证文件或路径！")
+		raise ValueError("未提供有效的凭证文件")
+	return entries
 
-	pdf_bytes = None
+
+def _get_attached_proof_files(settle_doc, proof_type):
+	if not settle_doc:
+		return []
+	config = _proof_type_config(proof_type)
+	rows = frappe.get_all(
+		"File",
+		filters={"attached_to_doctype": "Ashan Monthly Payroll Settlement", "attached_to_name": settle_doc.name},
+		fields=["name", "file_name", "file_url", "creation"],
+		order_by="creation asc",
+	)
+	matched = [r for r in rows if config["token"] in (r.get("file_name") or "")]
+	if matched:
+		return matched
+	legacy_url = settle_doc.get(config["field"])
+	if legacy_url:
+		legacy = frappe.db.get_value("File", {"file_url": legacy_url}, ["name", "file_name", "file_url", "creation"], as_dict=True)
+		return [legacy] if legacy else []
+	return []
+
+
+def _inspect_saved_proof_batch(settle_doc, proof_type, payroll_period_month):
+	expected = expected_proof_period(payroll_period_month)
+	files = _get_attached_proof_files(settle_doc, proof_type)
+	if not files:
+		return _empty_proof_batch(expected)
+	pdf_entries = []
+	for row in files:
+		file_doc = frappe.get_doc("File", row.get("name"))
+		content = file_doc.get_content()
+		if isinstance(content, str):
+			content = content.encode()
+		pdf_entries.append({"source_name": row.get("file_name"), "pdf_name": row.get("file_name"), "pdf_bytes": content})
+	validation = validate_proof_pdf_batch(proof_type, pdf_entries, expected)
+	validation["detected_periods"] = sorted({p for item in validation.get("files", []) for p in item.get("period_months", [])})
+	validation["period_valid"] = bool(validation.get("success"))
+	return validation
+
+
+def _delete_existing_proof_files(settle_doc, proof_type):
+	for row in _get_attached_proof_files(settle_doc, proof_type):
+		if row and row.get("name") and frappe.db.exists("File", row.get("name")):
+			frappe.delete_doc("File", row.get("name"), ignore_permissions=True, force=True)
+
+
+def _save_proof_pdf_batch(settle_doc, proof_type, payroll_period_month, pdf_entries):
+	config = _proof_type_config(proof_type)
+	actual_period = expected_proof_period(payroll_period_month)
+	count = len(pdf_entries)
+	saved = []
+	for idx, entry in enumerate(pdf_entries, start=1):
+		suffix = f"_{idx:02d}" if count > 1 else ""
+		file_name = f"{actual_period}_{settle_doc.company}_{config['token']}{suffix}.pdf"
+		file_doc = frappe.get_doc({"doctype": "File", "file_name": file_name, "attached_to_doctype": "Ashan Monthly Payroll Settlement", "attached_to_name": settle_doc.name, "content": entry["pdf_bytes"], "is_private": 1})
+		file_doc.save(ignore_permissions=True)
+		saved.append({"file_name": file_doc.file_name, "file_url": file_doc.file_url})
+	return saved
+
+
+@frappe.whitelist()
+def upload_and_verify_social_security_file(company, period_month, file_name=None, file_base64=None, file_url=None, files_json=None):
+	"""一个或多个社保 PDF/ZIP：先校验次月所属期，日期错误整批拒绝且不保存，再汇总金额。"""
 	check_payroll_workbench_permission("write")
-	save_file_name = f"{period_month}_{company}_社会保险缴费申报表_原始凭证.pdf"
+	expected_period = expected_proof_period(period_month)
+	try:
+		upload_entries = _decode_proof_upload_entries(file_name, file_base64, file_url, files_json)
+		pdf_entries = expand_upload_entries_to_pdfs(upload_entries)
+		validation = validate_proof_pdf_batch("social_security", pdf_entries, expected_period)
+	except Exception as exc:
+		return {"success": False, "validation_type": "file_or_parse_error", "message": f"⛔ 社保凭证解析失败：{exc}。未保存任何文件。"}
 
-	if file_name.lower().endswith(".zip"):
-		with zipfile.ZipFile(io.BytesIO(raw_bytes), "r") as zf:
-			for name in zf.namelist():
-				if name.lower().endswith(".pdf") and not name.startswith("__MACOSX"):
-					pdf_bytes = zf.read(name)
-					break
-		if not pdf_bytes:
-			return {"success": False, "message": "ZIP 压缩包中未找到任何 PDF 格式的社保缴费凭证文件！"}
-	else:
-		pdf_bytes = raw_bytes
+	if not validation.get("success"):
+		return {"success": False, "validation_type": "period_mismatch", "message": f"⛔ 社保凭证所属期校验未通过。当前核定期 {period_month} 对应实际社保缴费所属期必须为 {expected_period}。<br>" + "<br>".join(validation.get("errors") or []) + "<br><strong>本批文件已全部拒绝，未保存任何附件。</strong>", "expected_period": expected_period, "files": validation.get("files", [])}
 
-	# 解析 PDF
-	parse_res = parse_social_security_pdf_stream(pdf_bytes)
-	parsed_amount = flt(parse_res.get("grand_total", 0.0))
-
-	# 获取系统计算的社保总金额
-	ss_data = get_social_insurance_sheet(company, period_month)
-	sys_amount = flt(ss_data.get("totals", {}).get("grand_total", 0.0))
-
-	# 对比金额：严格按当前系统动态核算结果逐分核验，禁止任何固定金额豁免。
+	parsed_amount = flt(validation.get("total_amount", 0.0))
+	sys_amount = flt(get_social_insurance_sheet(company, period_month).get("totals", {}).get("grand_total", 0.0))
 	diff = round(abs(parsed_amount - sys_amount), 2)
 	is_matched = diff < 0.01
-
-	# 保存文件到 Frappe
 	doc_name = f"{company}-{period_month}"
 	if not frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
 		settle_doc = frappe.new_doc("Ashan Monthly Payroll Settlement")
@@ -3759,84 +3781,32 @@ def upload_and_verify_social_security_file(company, period_month, file_name=None
 		settle_doc.insert(ignore_permissions=True)
 	else:
 		settle_doc = frappe.get_doc("Ashan Monthly Payroll Settlement", doc_name)
-
-	# 创建或更新 File Doc
-	_file = frappe.get_doc({
-		"doctype": "File",
-		"file_name": save_file_name,
-		"attached_to_doctype": "Ashan Monthly Payroll Settlement",
-		"attached_to_name": doc_name,
-		"content": pdf_bytes,
-		"is_private": 1
-	})
-	_file.save(ignore_permissions=True)
-
-	settle_doc.ss_payment_file = _file.file_url
+	_delete_existing_proof_files(settle_doc, "social_security")
+	saved_files = _save_proof_pdf_batch(settle_doc, "social_security", period_month, pdf_entries)
+	settle_doc.ss_payment_file = saved_files[0]["file_url"] if saved_files else None
 	settle_doc.ss_parsed_amount = parsed_amount
 	settle_doc.ss_verify_status = "核验一致" if is_matched else "金额不符"
 	settle_doc.save(ignore_permissions=True)
 	frappe.db.commit()
-
-	return {
-		"success": True,
-		"message": (
-			f"✅ 社保缴费申报表解析成功！PDF 缴费总额: ¥{parsed_amount:,.2f}，系统核算总额: ¥{sys_amount:,.2f}（金额完全一致）"
-			if is_matched else
-			f"⚠️ 社保缴费申报表已解析并归档，但凭证金额 ¥{parsed_amount:,.2f} 与系统核算金额 ¥{sys_amount:,.2f} 不一致，差额 ¥{diff:,.2f}。当前账期禁止最终核定封账，请核对并重新上传正确凭证。"
-		),
-		"parsed_amount": parsed_amount,
-		"sys_amount": sys_amount,
-		"difference_amount": diff,
-		"is_matched": is_matched,
-		"file_url": _file.file_url,
-		"parse_detail": parse_res
-	}
+	return {"success": True, "message": f"✅ 社保凭证所属期全部通过（核定期 {period_month} -> 实际缴费所属期 {expected_period}），共 {len(saved_files)} 份 PDF。" + (f" 合计 ¥{parsed_amount:,.2f} 与系统核算 ¥{sys_amount:,.2f} 完全一致。" if is_matched else f" 但凭证合计 ¥{parsed_amount:,.2f} 与系统核算 ¥{sys_amount:,.2f} 不一致，差额 ¥{diff:,.2f}，禁止最终封账。"), "expected_period": expected_period, "proof_count": len(saved_files), "parsed_amount": parsed_amount, "sys_amount": sys_amount, "difference_amount": diff, "is_matched": is_matched, "file_url": saved_files[0]["file_url"] if saved_files else None, "file_urls": saved_files, "files": validation.get("files", [])}
 
 @frappe.whitelist()
-def upload_and_verify_housing_fund_file(company, period_month, file_name=None, file_base64=None, file_url=None):
-	"""
-	上传公积金缴存凭证 ZIP/PDF，自动解压提取 PDF/解析/核对金额/规范归档
-	"""
-	raw_bytes = None
-	if file_url:
-		file_doc = frappe.get_doc("File", {"file_url": file_url})
-		raw_bytes = file_doc.get_content()
-		file_name = file_name or file_doc.file_name
-	elif file_base64:
-		if "," in file_base64:
-			file_base64 = file_base64.split(",")[1]
-		raw_bytes = base64.b64decode(file_base64)
-	else:
-		frappe.throw("未提供有效的公积金凭证文件或路径！")
-
-	pdf_bytes = None
+def upload_and_verify_housing_fund_file(company, period_month, file_name=None, file_base64=None, file_url=None, files_json=None):
+	"""一个或多个公积金 PDF/ZIP：先校验次月缴存年月，日期错误整批拒绝且不保存，再汇总金额。"""
 	check_payroll_workbench_permission("write")
-	save_file_name = f"{period_month}_{company}_住房公积金缴存凭证_原始凭证.pdf"
-
-	if file_name.lower().endswith(".zip"):
-		with zipfile.ZipFile(io.BytesIO(raw_bytes), "r") as zf:
-			for name in zf.namelist():
-				if name.lower().endswith(".pdf") and not name.startswith("__MACOSX"):
-					pdf_bytes = zf.read(name)
-					break
-		if not pdf_bytes:
-			return {"success": False, "message": "ZIP 压缩包中未找到任何 PDF 格式的公积金凭证文件！"}
-	else:
-		pdf_bytes = raw_bytes
-
-	# 解析 PDF
-	parse_res = parse_housing_fund_pdf_stream(pdf_bytes)
-	parsed_amount = flt(parse_res.get("total_amount", 0.0))
-
-	# 获取系统计算的公积金总金额
-	hf_data = get_housing_fund_sheet(company, period_month)
-	sys_amount = flt(hf_data.get("totals", {}).get("total_amount", 0.0))
-
-	# 对比金额：严格按当前系统动态核算结果逐分核验，禁止任何固定金额豁免。
+	expected_period = expected_proof_period(period_month)
+	try:
+		upload_entries = _decode_proof_upload_entries(file_name, file_base64, file_url, files_json)
+		pdf_entries = expand_upload_entries_to_pdfs(upload_entries)
+		validation = validate_proof_pdf_batch("housing_fund", pdf_entries, expected_period)
+	except Exception as exc:
+		return {"success": False, "validation_type": "file_or_parse_error", "message": f"⛔ 公积金凭证解析失败：{exc}。未保存任何文件。"}
+	if not validation.get("success"):
+		return {"success": False, "validation_type": "period_mismatch", "message": f"⛔ 公积金凭证所属期校验未通过。当前核定期 {period_month} 对应实际公积金缴存年月必须为 {expected_period}。<br>" + "<br>".join(validation.get("errors") or []) + "<br><strong>本批文件已全部拒绝，未保存任何附件。</strong>", "expected_period": expected_period, "files": validation.get("files", [])}
+	parsed_amount = flt(validation.get("total_amount", 0.0))
+	sys_amount = flt(get_housing_fund_sheet(company, period_month).get("totals", {}).get("total_amount", 0.0))
 	diff = round(abs(parsed_amount - sys_amount), 2)
 	is_matched = diff < 0.01
-
-	# 保存文件到 Frappe
 	doc_name = f"{company}-{period_month}"
 	if not frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
 		settle_doc = frappe.new_doc("Ashan Monthly Payroll Settlement")
@@ -3846,38 +3816,14 @@ def upload_and_verify_housing_fund_file(company, period_month, file_name=None, f
 		settle_doc.insert(ignore_permissions=True)
 	else:
 		settle_doc = frappe.get_doc("Ashan Monthly Payroll Settlement", doc_name)
-
-	# 创建或更新 File Doc
-	_file = frappe.get_doc({
-		"doctype": "File",
-		"file_name": save_file_name,
-		"attached_to_doctype": "Ashan Monthly Payroll Settlement",
-		"attached_to_name": doc_name,
-		"content": pdf_bytes,
-		"is_private": 1
-	})
-	_file.save(ignore_permissions=True)
-
-	settle_doc.hf_payment_file = _file.file_url
+	_delete_existing_proof_files(settle_doc, "housing_fund")
+	saved_files = _save_proof_pdf_batch(settle_doc, "housing_fund", period_month, pdf_entries)
+	settle_doc.hf_payment_file = saved_files[0]["file_url"] if saved_files else None
 	settle_doc.hf_parsed_amount = parsed_amount
 	settle_doc.hf_verify_status = "核验一致" if is_matched else "金额不符"
 	settle_doc.save(ignore_permissions=True)
 	frappe.db.commit()
-
-	return {
-		"success": True,
-		"message": (
-			f"✅ 住房公积金凭证解析成功！PDF 缴存总额: ¥{parsed_amount:,.2f}，系统核算总额: ¥{sys_amount:,.2f}（金额完全一致）"
-			if is_matched else
-			f"⚠️ 住房公积金凭证已解析并归档，但凭证金额 ¥{parsed_amount:,.2f} 与系统核算金额 ¥{sys_amount:,.2f} 不一致，差额 ¥{diff:,.2f}。当前账期禁止最终核定封账，请核对并重新上传正确凭证。"
-		),
-		"parsed_amount": parsed_amount,
-		"sys_amount": sys_amount,
-		"difference_amount": diff,
-		"is_matched": is_matched,
-		"file_url": _file.file_url,
-		"parse_detail": parse_res
-	}
+	return {"success": True, "message": f"✅ 公积金凭证所属期全部通过（核定期 {period_month} -> 实际缴费所属期 {expected_period}），共 {len(saved_files)} 份 PDF。" + (f" 合计 ¥{parsed_amount:,.2f} 与系统核算 ¥{sys_amount:,.2f} 完全一致。" if is_matched else f" 但凭证合计 ¥{parsed_amount:,.2f} 与系统核算 ¥{sys_amount:,.2f} 不一致，差额 ¥{diff:,.2f}，禁止最终封账。"), "expected_period": expected_period, "proof_count": len(saved_files), "parsed_amount": parsed_amount, "sys_amount": sys_amount, "difference_amount": diff, "is_matched": is_matched, "file_url": saved_files[0]["file_url"] if saved_files else None, "file_urls": saved_files, "files": validation.get("files", [])}
 
 @frappe.whitelist()
 def execute_monthly_settlement_lock(company, period_month):
@@ -3900,26 +3846,25 @@ def execute_monthly_settlement_lock(company, period_month):
 	if not settle_doc.hf_payment_file:
 		frappe.throw(f"【❌ 前置任务未完成】尚未上传【{period_month} 住房公积金缴存凭证 ZIP/PDF】并完成核验！请先完成任务 4 上传。")
 
-	# 服务器端最终硬拦截：封账瞬间重新按当前台账计算金额，不能信任前端状态或历史缓存。
+	# 服务器端最终硬拦截：重新读取所有已归档 PDF，先重验所属期，再重验多文件金额合计。
+	expected_period = expected_proof_period(period_month)
+	ss_saved_batch = _inspect_saved_proof_batch(settle_doc, "social_security", period_month)
+	if not ss_saved_batch.get("success"):
+		frappe.throw(f"【⛔ 禁止最终核定封账】第 3 步 · 社保凭证所属期/结构校验失败。核定期 {period_month} 对应实际缴费所属期应为 {expected_period}。" + "；".join(ss_saved_batch.get("errors") or ["无法确认社保凭证所属期"]))
 	ss_current_total = flt(get_social_insurance_sheet(company, period_month).get("totals", {}).get("grand_total", 0.0))
-	ss_parsed_amount = flt(settle_doc.ss_parsed_amount)
+	ss_parsed_amount = flt(ss_saved_batch.get("total_amount"))
 	ss_diff = round(abs(ss_parsed_amount - ss_current_total), 2)
 	if settle_doc.ss_verify_status != "核验一致" or ss_diff >= 0.01:
-		frappe.throw(
-			f"【⛔ 禁止最终核定封账】第 3 步 · 社保凭证金额与系统当前核算不一致："
-			f"凭证 ¥{ss_parsed_amount:,.2f}，系统 ¥{ss_current_total:,.2f}，差额 ¥{ss_diff:,.2f}。"
-			"请删除错误凭证并重新上传核验一致后再封账。"
-		)
+		frappe.throw(f"【⛔ 禁止最终核定封账】第 3 步 · 社保 {ss_saved_batch.get('file_count', 0)} 份凭证合计 ¥{ss_parsed_amount:,.2f} 与系统 ¥{ss_current_total:,.2f} 不一致，差额 ¥{ss_diff:,.2f}。")
 
+	hf_saved_batch = _inspect_saved_proof_batch(settle_doc, "housing_fund", period_month)
+	if not hf_saved_batch.get("success"):
+		frappe.throw(f"【⛔ 禁止最终核定封账】第 4 步 · 公积金凭证所属期/结构校验失败。核定期 {period_month} 对应实际缴费所属期应为 {expected_period}。" + "；".join(hf_saved_batch.get("errors") or ["无法确认公积金凭证所属期"]))
 	hf_current_total = flt(get_housing_fund_sheet(company, period_month).get("totals", {}).get("total_amount", 0.0))
-	hf_parsed_amount = flt(settle_doc.hf_parsed_amount)
+	hf_parsed_amount = flt(hf_saved_batch.get("total_amount"))
 	hf_diff = round(abs(hf_parsed_amount - hf_current_total), 2)
 	if settle_doc.hf_verify_status != "核验一致" or hf_diff >= 0.01:
-		frappe.throw(
-			f"【⛔ 禁止最终核定封账】第 4 步 · 公积金凭证金额与系统当前核算不一致："
-			f"凭证 ¥{hf_parsed_amount:,.2f}，系统 ¥{hf_current_total:,.2f}，差额 ¥{hf_diff:,.2f}。"
-			"请删除错误凭证并重新上传核验一致后再封账。"
-		)
+		frappe.throw(f"【⛔ 禁止最终核定封账】第 4 步 · 公积金 {hf_saved_batch.get('file_count', 0)} 份凭证合计 ¥{hf_parsed_amount:,.2f} 与系统 ¥{hf_current_total:,.2f} 不一致，差额 ¥{hf_diff:,.2f}。")
 
 	settle_doc.status = "已核定锁定"
 	settle_doc.locked = 1
@@ -4049,12 +3994,14 @@ def delete_payroll_proof_file(company, period_month, proof_type):
 
 	elif proof_type in ["social_security", "ss", "pdf_ss"]:
 		deleted_type_name = "社会保险缴费申报表"
+		_delete_existing_proof_files(settle_doc, "social_security")
 		settle_doc.ss_payment_file = None
 		settle_doc.ss_parsed_amount = 0.0
 		settle_doc.ss_verify_status = "未上传"
 
 	elif proof_type in ["housing_fund", "hf", "pdf_hf"]:
 		deleted_type_name = "住房公积金缴存凭证"
+		_delete_existing_proof_files(settle_doc, "housing_fund")
 		settle_doc.hf_payment_file = None
 		settle_doc.hf_parsed_amount = 0.0
 		settle_doc.hf_verify_status = "未上传"

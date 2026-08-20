@@ -2640,8 +2640,8 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         if (has_proof_mismatch) {
                             $("#btn-wf-lock-action").text("⛔ 凭证金额不一致 · 禁止封账").addClass("btn-default").removeClass("btn-primary").css({"background":"#fee2e2","color":"#b91c1c","border-color":"#ef4444","font-weight":"800"});
                             $("#wf-step5-icon").text("⛔");
-                            $("#wf-step5-main").text("社保/公积金凭证存在金额差异");
-                            $("#wf-step5-sub").text("必须核验一致后才允许最终核定封账").css("color", "#b91c1c");
+                            $("#wf-step5-main").text("社保/公积金凭证日期或金额未通过");
+                            $("#wf-step5-sub").text("所属期与金额必须全部一致后才允许最终核定封账").css("color", "#b91c1c");
                             $("#wf-step5-lock-badge").text("禁止核定").css({"color":"#b91c1c","background":"#fee2e2","border-color":"#fecaca"});
                             $("#wf-step-5").css({"background":"#fff1f2","border-color":"#ef4444"});
                         } else {
@@ -2702,14 +2702,19 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
                 if (wf.task3_ss.status === 'verified') {
                     $("#wf-step3-icon").text("🟢");
-                    $("#wf-step3-main").text(`${ss_insured_cnt} 人参保 · 申报总盘 ¥ ${ss_tot_str}`);
-                    $("#wf-step3-sub").text(`公司 ¥${ss_comp_str} ｜ 个人 ¥${ss_pers_str}`);
+                    $("#wf-step3-main").text(`${ss_insured_cnt} 人参保 · ${wf.task3_ss.file_count || 1}份凭证合计 ¥ ${ss_tot_str}`);
+                    $("#wf-step3-sub").text(`所属期 ${wf.task3_ss.expected_period || '—'} 已通过 ｜ 公司 ¥${ss_comp_str} ｜ 个人 ¥${ss_pers_str}`).css("color", "#15803d");
                     $("#wf-step-3").css({"background":"#f0fdf4","border-color":"#bbf7d0"});
                 } else if (wf.task3_ss.status === 'mismatch') {
                     const ss_diff_str = Number(wf.task3_ss.difference_amount != null ? wf.task3_ss.difference_amount : Math.abs(wf.task3_ss.parsed_amount - wf.task3_ss.sys_amount)).toLocaleString('zh-CN', {minimumFractionDigits:2});
                     $("#wf-step3-icon").text("⛔");
-                    $("#wf-step3-main").text(`${ss_insured_cnt} 人参保 · 凭证与系统核算不一致 · 差额 ¥${ss_diff_str}`);
-                    $("#wf-step3-sub").text(`凭证 ¥${ss_tot_str} ｜ 系统 ¥${Number(wf.task3_ss.sys_amount).toLocaleString('zh-CN', {minimumFractionDigits:2})} ｜ 禁止最终核定封账`).css("color", "#b91c1c");
+                    if (wf.task3_ss.period_valid === false && wf.task3_ss.file_url) {
+                        $("#wf-step3-main").text(`社保凭证所属期错误 · 应为 ${wf.task3_ss.expected_period || '—'}`);
+                        $("#wf-step3-sub").text(`检测到 ${(wf.task3_ss.detected_periods || []).join('、') || '无法识别'} ｜ 禁止最终核定封账`).css("color", "#b91c1c");
+                    } else {
+                        $("#wf-step3-main").text(`${ss_insured_cnt} 人参保 · 日期通过但金额不符 · 差额 ¥${ss_diff_str}`);
+                        $("#wf-step3-sub").text(`所属期 ${wf.task3_ss.expected_period || '—'} ｜ 凭证 ¥${ss_tot_str} ｜ 系统 ¥${Number(wf.task3_ss.sys_amount).toLocaleString('zh-CN', {minimumFractionDigits:2})}`).css("color", "#b91c1c");
+                    }
                     $("#wf-step-3").css({"background":"#fff1f2","border-color":"#ef4444","box-shadow":"0 0 0 1px rgba(239,68,68,0.08)"});
                 } else {
                     $("#wf-step3-icon").text("🟡");
@@ -2743,14 +2748,19 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
                 if (wf.task4_hf.status === 'verified') {
                     $("#wf-step4-icon").text("🟢");
-                    $("#wf-step4-main").text(`${hf_insured_cnt} 人参缴 · 凭证总额 ¥ ${hf_tot_str}`);
-                    $("#wf-step4-sub").text(`公司 ¥${hf_comp_str} ｜ 个人 ¥${hf_pers_str}`);
+                    $("#wf-step4-main").text(`${hf_insured_cnt} 人参缴 · ${wf.task4_hf.file_count || 1}份凭证合计 ¥ ${hf_tot_str}`);
+                    $("#wf-step4-sub").text(`所属期 ${wf.task4_hf.expected_period || '—'} 已通过 ｜ 公司 ¥${hf_comp_str} ｜ 个人 ¥${hf_pers_str}`).css("color", "#15803d");
                     $("#wf-step-4").css({"background":"#f0fdf4","border-color":"#bbf7d0"});
                 } else if (wf.task4_hf.status === 'mismatch') {
                     const hf_diff_str = Number(wf.task4_hf.difference_amount != null ? wf.task4_hf.difference_amount : Math.abs(wf.task4_hf.parsed_amount - wf.task4_hf.sys_amount)).toLocaleString('zh-CN', {minimumFractionDigits:2});
                     $("#wf-step4-icon").text("⛔");
-                    $("#wf-step4-main").text(`${hf_insured_cnt} 人参缴 · 凭证与系统核算不一致 · 差额 ¥${hf_diff_str}`);
-                    $("#wf-step4-sub").text(`凭证 ¥${hf_tot_str} ｜ 系统 ¥${Number(wf.task4_hf.sys_amount).toLocaleString('zh-CN', {minimumFractionDigits:2})} ｜ 禁止最终核定封账`).css("color", "#b91c1c");
+                    if (wf.task4_hf.period_valid === false && wf.task4_hf.file_url) {
+                        $("#wf-step4-main").text(`公积金凭证所属期错误 · 应为 ${wf.task4_hf.expected_period || '—'}`);
+                        $("#wf-step4-sub").text(`检测到 ${(wf.task4_hf.detected_periods || []).join('、') || '无法识别'} ｜ 禁止最终核定封账`).css("color", "#b91c1c");
+                    } else {
+                        $("#wf-step4-main").text(`${hf_insured_cnt} 人参缴 · 日期通过但金额不符 · 差额 ¥${hf_diff_str}`);
+                        $("#wf-step4-sub").text(`所属期 ${wf.task4_hf.expected_period || '—'} ｜ 凭证 ¥${hf_tot_str} ｜ 系统 ¥${Number(wf.task4_hf.sys_amount).toLocaleString('zh-CN', {minimumFractionDigits:2})}`).css("color", "#b91c1c");
+                    }
                     $("#wf-step-4").css({"background":"#fff1f2","border-color":"#ef4444","box-shadow":"0 0 0 1px rgba(239,68,68,0.08)"});
                 } else {
                     $("#wf-step4-icon").text("🟡");
@@ -3141,6 +3151,36 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         file_input.click();
     }
 
+    function direct_multi_file_upload(accept_exts, on_files_read) {
+        const file_input = document.createElement('input');
+        file_input.type = 'file';
+        file_input.accept = accept_exts;
+        file_input.multiple = true;
+        file_input.style.display = 'none';
+        document.body.appendChild(file_input);
+        file_input.onchange = async function(e) {
+            const files = Array.from(e.target.files || []);
+            document.body.removeChild(file_input);
+            if (!files.length) return;
+            if (files.length > 20) {
+                frappe.msgprint({title:'⛔ 文件过多', indicator:'red', message:'单次最多选择 20 个 PDF/ZIP 凭证文件。'});
+                return;
+            }
+            try {
+                const payload = await Promise.all(files.map(file => new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = evt => resolve({file_name: file.name, file_base64: evt.target.result});
+                    reader.onerror = () => reject(new Error(`无法读取 ${file.name}`));
+                    reader.readAsDataURL(file);
+                })));
+                on_files_read(payload, files);
+            } catch (err) {
+                frappe.msgprint({title:'❌ 读取文件失败', indicator:'red', message: err.message || String(err)});
+            }
+        };
+        file_input.click();
+    }
+
     $container.on("click", "#btn-wf-upload-salary", function(e) {
         e.preventDefault();
         e.stopPropagation();
@@ -3166,71 +3206,29 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         const state = $(this).attr("data-state");
         const cur_m = $("#qifu-month-select").val() || current_month;
         if (state === "uploaded") {
-            frappe.confirm(
-                `⚠️ 确定要删除【${cur_m}】已上传的社保缴费申报表 PDF 凭证吗？<br><br><span style="color:#dc2626; font-size:12px;">删除后该月社保核验状态将重置为待上传，需重新上传 PDF 凭证。</span>`,
-                function() {
-                    execute_delete_proof('social_security', '社保申报表凭证');
-                }
-            );
-        } else {
-            direct_file_upload('.pdf,.zip', function(base64_str, filename, file_obj) {
-                frappe.call({
-                    method: 'ashan_cn_procurement.services.payroll_settlement_service.upload_and_verify_social_security_file',
-                    type: 'POST',
-                    freeze: true,
-                    freeze_message: `🔍 正在智能解析【${filename}】社保凭证并比对金额...`,
-                    args: {
-                        company: COMPANY,
-                        period_month: cur_m,
-                        file_name: filename,
-                        file_base64: base64_str
-                    },
-                    callback: function(r) {
-                        if (r.message && r.message.success) {
-                            const ss_diff = Number(r.message.difference_amount != null ? r.message.difference_amount : Math.abs(Number(r.message.parsed_amount || 0) - Number(r.message.sys_amount || 0)));
-                            frappe.msgprint({
-                                title: r.message.is_matched ? '✅ 社保凭证核验一致' : '⛔ 社保凭证金额不一致',
-                                indicator: r.message.is_matched ? 'green' : 'red',
-                                message: `
-                                    <div style="font-size:13px; line-height:1.6;">
-                                        ${r.message.message}<br><br>
-                                        <strong>PDF 提取总额：</strong> ¥ ${Number(r.message.parsed_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
-                                        <strong>系统核算总额：</strong> ¥ ${Number(r.message.sys_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
-                                        <strong>差额：</strong> ¥ ${ss_diff.toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
-                                        <strong>归档文件：</strong> <span style="color:#2563eb; font-weight:700;">${filename}</span>
-                                        ${r.message.is_matched ? '' : '<div style="margin-top:10px;padding:9px 10px;border:1px solid #ef4444;background:#fff1f2;color:#b91c1c;border-radius:6px;font-weight:700;">⛔ 当前凭证与系统核算金额不一致，本账期已禁止执行最终核定封账。请删除该凭证并重新上传正确凭证。</div>'}
-                                    </div>
-                                `
-                            });
-                            load_monthly_workflow_hub();
-                            if (typeof load_social_insurance_tab === 'function') load_social_insurance_tab();
-                        } else {
-                            frappe.msgprint({
-                                title: '❌ 社保凭证核验失败',
-                                indicator: 'red',
-                                message: (r.message && r.message.message) || '处理社保凭证文件时发生错误！'
-                            });
-                        }
-                    },
-                    error: function(r) {
-                        let error_msg = '服务器处理社保凭证时发生错误！';
-                        if (r && r._server_messages) {
-                            try {
-                                const msgs = JSON.parse(r._server_messages);
-                                error_msg = msgs.map(m => {
-                                    try { return JSON.parse(m).message; } catch(e) { return m; }
-                                }).join('<br>');
-                            } catch(e) {}
-                        }
-                        frappe.msgprint({
-                            title: '❌ 请求异常',
-                            indicator: 'red',
-                            message: error_msg
-                        });
-                    }
-                });
-            });
+            frappe.confirm(`⚠️ 确定要删除【${cur_m}】已上传的全部社保缴费申报表凭证吗？`, function() { execute_delete_proof('social_security', '社保申报表凭证'); });
+            return;
         }
+        direct_multi_file_upload('.pdf,.zip', function(file_payload, raw_files) {
+            const names = raw_files.map(f => f.name).join('、');
+            frappe.call({
+                method: 'ashan_cn_procurement.services.payroll_settlement_service.upload_and_verify_social_security_file',
+                type: 'POST', freeze: true,
+                freeze_message: `🔍 正在解析 ${raw_files.length} 个社保文件：先校验所属期，再汇总金额...`,
+                args: {company: COMPANY, period_month: cur_m, files_json: JSON.stringify(file_payload)},
+                callback: function(r) {
+                    if (r.message && r.message.success) {
+                        const diff = Number(r.message.difference_amount || 0);
+                        frappe.msgprint({title: r.message.is_matched ? '✅ 社保日期与金额均核验一致' : '⛔ 社保日期正确但金额不一致', indicator: r.message.is_matched ? 'green' : 'red', message: `<div style="font-size:13px;line-height:1.7;">${r.message.message}<br><br><strong>核定期：</strong>${cur_m}<br><strong>凭证应属实际缴费期：</strong>${r.message.expected_period || '—'}<br><strong>本批 PDF：</strong>${r.message.proof_count || 0} 份<br><strong>凭证合计：</strong>¥ ${Number(r.message.parsed_amount || 0).toLocaleString('zh-CN',{minimumFractionDigits:2})}<br><strong>系统核算：</strong>¥ ${Number(r.message.sys_amount || 0).toLocaleString('zh-CN',{minimumFractionDigits:2})}<br><strong>差额：</strong>¥ ${diff.toLocaleString('zh-CN',{minimumFractionDigits:2})}<br><strong>选择文件：</strong>${names}${r.message.is_matched ? '' : '<div style="margin-top:9px;padding:8px;border:1px solid #ef4444;background:#fff1f2;color:#b91c1c;border-radius:6px;font-weight:700;">⛔ 金额未通过，凭证已归档但禁止最终核定封账。</div>'}</div>`});
+                        load_monthly_workflow_hub();
+                        if (typeof load_social_insurance_tab === 'function') load_social_insurance_tab();
+                    } else {
+                        frappe.msgprint({title: (r.message && r.message.validation_type === 'period_mismatch') ? '⛔ 社保凭证所属期错误 · 已拒绝上传' : '❌ 社保凭证核验失败', indicator: 'red', message: (r.message && r.message.message) || '社保凭证处理失败。'});
+                    }
+                },
+                error: function(r) { let msg='服务器处理社保凭证时发生错误！'; if (r && r._server_messages) { try { msg=JSON.parse(r._server_messages).map(m=>{try{return JSON.parse(m).message}catch(e){return m}}).join('<br>'); } catch(e){} } frappe.msgprint({title:'❌ 请求异常',indicator:'red',message:msg}); }
+            });
+        });
     });
 
     $container.on("click", "#btn-wf-upload-hf", function(e) {
@@ -3239,71 +3237,29 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         const state = $(this).attr("data-state");
         const cur_m = $("#qifu-month-select").val() || current_month;
         if (state === "uploaded") {
-            frappe.confirm(
-                `⚠️ 确定要删除【${cur_m}】已上传的住房公积金缴存凭证吗？<br><br><span style="color:#dc2626; font-size:12px;">删除后该月公积金核验状态将重置为待上传，需重新上传 ZIP/PDF 凭证。</span>`,
-                function() {
-                    execute_delete_proof('housing_fund', '公积金缴存凭证');
-                }
-            );
-        } else {
-            direct_file_upload('.pdf,.zip', function(base64_str, filename, file_obj) {
-                frappe.call({
-                    method: 'ashan_cn_procurement.services.payroll_settlement_service.upload_and_verify_housing_fund_file',
-                    type: 'POST',
-                    freeze: true,
-                    freeze_message: `🔍 正在智能解析【${filename}】公积金凭证并比对金额...`,
-                    args: {
-                        company: COMPANY,
-                        period_month: cur_m,
-                        file_name: filename,
-                        file_base64: base64_str
-                    },
-                    callback: function(r) {
-                        if (r.message && r.message.success) {
-                            const hf_diff = Number(r.message.difference_amount != null ? r.message.difference_amount : Math.abs(Number(r.message.parsed_amount || 0) - Number(r.message.sys_amount || 0)));
-                            frappe.msgprint({
-                                title: r.message.is_matched ? '✅ 公积金凭证核验一致' : '⛔ 公积金凭证金额不一致',
-                                indicator: r.message.is_matched ? 'green' : 'red',
-                                message: `
-                                    <div style="font-size:13px; line-height:1.6;">
-                                        ${r.message.message}<br><br>
-                                        <strong>PDF 提取总额：</strong> ¥ ${Number(r.message.parsed_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
-                                        <strong>系统核算总额：</strong> ¥ ${Number(r.message.sys_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
-                                        <strong>差额：</strong> ¥ ${hf_diff.toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
-                                        <strong>归档文件：</strong> <span style="color:#2563eb; font-weight:700;">${filename}</span>
-                                        ${r.message.is_matched ? '' : '<div style="margin-top:10px;padding:9px 10px;border:1px solid #ef4444;background:#fff1f2;color:#b91c1c;border-radius:6px;font-weight:700;">⛔ 当前凭证与系统核算金额不一致，本账期已禁止执行最终核定封账。请删除该凭证并重新上传正确凭证。</div>'}
-                                    </div>
-                                `
-                            });
-                            load_monthly_workflow_hub();
-                            if (typeof load_housing_fund_tab === 'function') load_housing_fund_tab();
-                        } else {
-                            frappe.msgprint({
-                                title: '❌ 公积金凭证核验失败',
-                                indicator: 'red',
-                                message: (r.message && r.message.message) || '处理公积金凭证文件时发生错误！'
-                            });
-                        }
-                    },
-                    error: function(r) {
-                        let error_msg = '服务器处理公积金凭证时发生错误！';
-                        if (r && r._server_messages) {
-                            try {
-                                const msgs = JSON.parse(r._server_messages);
-                                error_msg = msgs.map(m => {
-                                    try { return JSON.parse(m).message; } catch(e) { return m; }
-                                }).join('<br>');
-                            } catch(e) {}
-                        }
-                        frappe.msgprint({
-                            title: '❌ 请求异常',
-                            indicator: 'red',
-                            message: error_msg
-                        });
-                    }
-                });
-            });
+            frappe.confirm(`⚠️ 确定要删除【${cur_m}】已上传的全部住房公积金缴存凭证吗？`, function() { execute_delete_proof('housing_fund', '公积金缴存凭证'); });
+            return;
         }
+        direct_multi_file_upload('.pdf,.zip', function(file_payload, raw_files) {
+            const names = raw_files.map(f => f.name).join('、');
+            frappe.call({
+                method: 'ashan_cn_procurement.services.payroll_settlement_service.upload_and_verify_housing_fund_file',
+                type: 'POST', freeze: true,
+                freeze_message: `🔍 正在解析 ${raw_files.length} 个公积金文件：先校验缴存年月，再汇总金额...`,
+                args: {company: COMPANY, period_month: cur_m, files_json: JSON.stringify(file_payload)},
+                callback: function(r) {
+                    if (r.message && r.message.success) {
+                        const diff = Number(r.message.difference_amount || 0);
+                        frappe.msgprint({title: r.message.is_matched ? '✅ 公积金日期与金额均核验一致' : '⛔ 公积金日期正确但金额不一致', indicator: r.message.is_matched ? 'green' : 'red', message: `<div style="font-size:13px;line-height:1.7;">${r.message.message}<br><br><strong>核定期：</strong>${cur_m}<br><strong>凭证应属实际缴费期：</strong>${r.message.expected_period || '—'}<br><strong>本批 PDF：</strong>${r.message.proof_count || 0} 份<br><strong>凭证合计：</strong>¥ ${Number(r.message.parsed_amount || 0).toLocaleString('zh-CN',{minimumFractionDigits:2})}<br><strong>系统核算：</strong>¥ ${Number(r.message.sys_amount || 0).toLocaleString('zh-CN',{minimumFractionDigits:2})}<br><strong>差额：</strong>¥ ${diff.toLocaleString('zh-CN',{minimumFractionDigits:2})}<br><strong>选择文件：</strong>${names}${r.message.is_matched ? '' : '<div style="margin-top:9px;padding:8px;border:1px solid #ef4444;background:#fff1f2;color:#b91c1c;border-radius:6px;font-weight:700;">⛔ 金额未通过，凭证已归档但禁止最终核定封账。</div>'}</div>`});
+                        load_monthly_workflow_hub();
+                        if (typeof load_housing_fund_tab === 'function') load_housing_fund_tab();
+                    } else {
+                        frappe.msgprint({title: (r.message && r.message.validation_type === 'period_mismatch') ? '⛔ 公积金凭证所属期错误 · 已拒绝上传' : '❌ 公积金凭证核验失败', indicator: 'red', message: (r.message && r.message.message) || '公积金凭证处理失败。'});
+                    }
+                },
+                error: function(r) { let msg='服务器处理公积金凭证时发生错误！'; if (r && r._server_messages) { try { msg=JSON.parse(r._server_messages).map(m=>{try{return JSON.parse(m).message}catch(e){return m}}).join('<br>'); } catch(e){} } frappe.msgprint({title:'❌ 请求异常',indicator:'red',message:msg}); }
+            });
+        });
     });
 
     // 右上角胶囊文件【🔒 权限受控安全下载】
@@ -3378,16 +3334,24 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 if (wf.task1_profile.status !== 'done') missing_steps.push("• <strong>第 1 步 · 员工底册</strong>：在册员工人数为 0，请先在档案库录入员工。");
                 if (wf.task2_import.status !== 'done') missing_steps.push("• <strong>第 2 步 · 车间实发</strong>：尚未上传并导入【车间外部实发工资表 Excel】。");
                 if (wf.task3_ss.status === 'mismatch') {
-                    const ss_diff = Number(wf.task3_ss.difference_amount != null ? wf.task3_ss.difference_amount : Math.abs(wf.task3_ss.parsed_amount - wf.task3_ss.sys_amount)).toLocaleString('zh-CN', {minimumFractionDigits:2});
-                    missing_steps.push(`• <strong>第 3 步 · 社保申报</strong>：<span style="color:#b91c1c;font-weight:700;">凭证金额 ¥${Number(wf.task3_ss.parsed_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})} 与系统核算 ¥${Number(wf.task3_ss.sys_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})} 不一致，差额 ¥${ss_diff}。禁止最终核定封账。</span>`);
+                    if (wf.task3_ss.period_valid === false && wf.task3_ss.file_url) {
+                        missing_steps.push(`• <strong>第 3 步 · 社保申报</strong>：<span style="color:#b91c1c;font-weight:700;">凭证所属期 ${(wf.task3_ss.detected_periods || []).join('、') || '无法识别'} 与核定期 ${cur_m} 对应的实际缴费期 ${wf.task3_ss.expected_period || '—'} 不一致。禁止最终核定封账。</span>`);
+                    } else {
+                        const ss_diff = Number(wf.task3_ss.difference_amount != null ? wf.task3_ss.difference_amount : Math.abs(wf.task3_ss.parsed_amount - wf.task3_ss.sys_amount)).toLocaleString('zh-CN', {minimumFractionDigits:2});
+                        missing_steps.push(`• <strong>第 3 步 · 社保申报</strong>：<span style="color:#b91c1c;font-weight:700;">所属期已通过，但凭证合计 ¥${Number(wf.task3_ss.parsed_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})} 与系统核算 ¥${Number(wf.task3_ss.sys_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})} 不一致，差额 ¥${ss_diff}。</span>`);
+                    }
                 } else if (wf.task3_ss.status !== 'verified') {
-                    missing_steps.push("• <strong>第 3 步 · 社保申报</strong>：尚未上传【社保缴费申报表 PDF】并完成金额核验。");
+                    missing_steps.push(`• <strong>第 3 步 · 社保申报</strong>：请上传属于 <strong>${wf.task3_ss.expected_period || '次月'}</strong> 的社保 PDF/ZIP，并完成日期+金额双重核验。`);
                 }
                 if (wf.task4_hf.status === 'mismatch') {
-                    const hf_diff = Number(wf.task4_hf.difference_amount != null ? wf.task4_hf.difference_amount : Math.abs(wf.task4_hf.parsed_amount - wf.task4_hf.sys_amount)).toLocaleString('zh-CN', {minimumFractionDigits:2});
-                    missing_steps.push(`• <strong>第 4 步 · 公积金凭证</strong>：<span style="color:#b91c1c;font-weight:700;">凭证金额 ¥${Number(wf.task4_hf.parsed_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})} 与系统核算 ¥${Number(wf.task4_hf.sys_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})} 不一致，差额 ¥${hf_diff}。禁止最终核定封账。</span>`);
+                    if (wf.task4_hf.period_valid === false && wf.task4_hf.file_url) {
+                        missing_steps.push(`• <strong>第 4 步 · 公积金凭证</strong>：<span style="color:#b91c1c;font-weight:700;">凭证所属期 ${(wf.task4_hf.detected_periods || []).join('、') || '无法识别'} 与核定期 ${cur_m} 对应的实际缴费期 ${wf.task4_hf.expected_period || '—'} 不一致。禁止最终核定封账。</span>`);
+                    } else {
+                        const hf_diff = Number(wf.task4_hf.difference_amount != null ? wf.task4_hf.difference_amount : Math.abs(wf.task4_hf.parsed_amount - wf.task4_hf.sys_amount)).toLocaleString('zh-CN', {minimumFractionDigits:2});
+                        missing_steps.push(`• <strong>第 4 步 · 公积金凭证</strong>：<span style="color:#b91c1c;font-weight:700;">所属期已通过，但凭证合计 ¥${Number(wf.task4_hf.parsed_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})} 与系统核算 ¥${Number(wf.task4_hf.sys_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})} 不一致，差额 ¥${hf_diff}。</span>`);
+                    }
                 } else if (wf.task4_hf.status !== 'verified') {
-                    missing_steps.push("• <strong>第 4 步 · 公积金凭证</strong>：尚未上传【住房公积金缴存凭证 ZIP/PDF】并完成金额核验。");
+                    missing_steps.push(`• <strong>第 4 步 · 公积金凭证</strong>：请上传属于 <strong>${wf.task4_hf.expected_period || '次月'}</strong> 的公积金 PDF/ZIP，并完成日期+金额双重核验。`);
                 }
 
                 if (missing_steps.length > 0) {
