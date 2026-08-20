@@ -1,0 +1,54 @@
+{
+  ".github/workflows/erpnext16-single-container-aio.yml": {
+    "sha256": "b379d6151f474a6fb6b4eb0aa002186b8da627b14cf0acce85c1a3649d286aa8",
+    "size": 10606
+  },
+  "CONTAINERFILE_SHELL_VALIDATION.txt": {
+    "sha256": "459eb7a85557e3fd6c36b5497b5b5ae20f57ed110e760a9ca965d1014cf2ecb3",
+    "size": 22
+  },
+  "FIX_SUMMARY.patch": {
+    "sha256": "e596955c59c3b0765a795188e593c835704f79967c68fd2d716f6a8050169d58",
+    "size": 2305
+  },
+  "README_FIX.md": {
+    "sha256": "f32326906fb84dac5b7c5062e24c2a0b1d034dc437a133abf9a373b3028e1cb8",
+    "size": 3344
+  },
+  "VALIDATION_RESULT.txt": {
+    "sha256": "3e3701ead25f79b3df0fe720a3931d0a9fc14c8ecb42f4434b99d22c26757c2b",
+    "size": 1315
+  },
+  "YAML_VALIDATION.txt": {
+    "sha256": "7843e12db3dd87fe9d43beab9b2a473cc8ebdb43b6c75ff3d653e06931ed07f8",
+    "size": 17
+  },
+  "apply-to-existing-repo.sh": {
+    "sha256": "d8df42f58abbd19a830c8c386ffda06f0669720d104b8d28d42451bd494884dd",
+    "size": 1446
+  },
+  "erpnext16/.dockerignore": {
+    "sha256": "bac6f1ac31b8a5938bda29595191440563785d51baf58c22ec8030159acf0d51",
+    "size": 225
+  },
+  "erpnext16/ERPNEXT_VERSION": {
+    "sha256": "9f1fde4c9064a3bac1aef4a23c4efdb7b67d72b599305a49b120507b52853e35",
+    "size": 9
+  },
+  "erpnext16/image/apps.json": {
+    "sha256": "b338302b73bb0d1ff9cc79db86cbfa13e02157f36435cf5eec347485d671d4f7",
+    "size": 87
+  },
+  "erpnext16/scripts/fetch-ashan-custom-app.sh": {
+    "sha256": "d5c36f11d65048abf29edbd844682d7783f473e4af84dce15627c5763ddda237",
+    "size": 2216
+  },
+  "erpnext16/single-aio/Containerfile": {
+    "sha256": "73b0072b97ec33c8850e251a0cadd03c01eaf4400a36838a937f5f4643578ddd",
+    "size": 4758
+  },
+  "validate-fix.sh": {
+    "sha256": "1f484ae6a9fb2a5628823d27536a3eabcd8f48d41014e47998622039d6ce6e1c",
+    "size": 1426
+  }
+}

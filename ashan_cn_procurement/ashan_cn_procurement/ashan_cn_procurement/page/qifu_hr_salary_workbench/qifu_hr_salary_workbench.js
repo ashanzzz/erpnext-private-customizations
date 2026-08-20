@@ -469,7 +469,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 </div>
 
                 <!-- 卡片 2: 📤 车间实发工资导入 -->
-                <div class="workflow-step-card" id="wf-step-2" title="💡 上传说明：支持 .xlsx / .xlsm / .xls 车间实发表。系统将自动提取考勤工时、加班达标率，并自动执行税后实发倒推税前应发与代扣个税。" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; display:flex; flex-direction:column; justify-content:space-between; min-height:130px; box-shadow:0 1px 2px rgba(0,0,0,0.02); transition:all 0.15s ease;">
+                <div class="workflow-step-card" id="wf-step-2" title="支持 .xlsx / .xlsm / .xls 车间实发表，系统自动提取考勤工时、加班达标率，并执行税后实发倒推税前应发与代扣个税" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; display:flex; flex-direction:column; justify-content:space-between; min-height:130px; box-shadow:0 1px 2px rgba(0,0,0,0.02); transition:all 0.15s ease;">
                     <div>
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                             <span style="font-size:11px; font-weight:700; color:#64748b;">第 2 步 · 车间实发</span>
@@ -477,7 +477,6 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         </div>
                         <div style="font-size:12.5px; font-weight:700; color:#0f172a; display:flex; align-items:center; gap:5px;">
                             <span id="wf-step2-icon">🟡</span> 外部实发导入
-                            <span style="font-size:10.5px; color:#64748b; background:#f1f5f9; padding:1px 5px; border-radius:4px; margin-left:auto; font-weight:normal; cursor:help;" title="💡 上传说明：点击按钮直接选择本机 .xlsx 实发表，系统自动生成 24 列实操台账">ℹ️ 说明</span>
                         </div>
                         <div style="font-size:12px; font-weight:700; color:#1e293b; margin-top:3px;" id="wf-step2-main">
                             数据加载中...
@@ -488,11 +487,12 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     </div>
                     <div style="margin-top:8px;">
                         <button class="btn btn-default btn-xs" id="btn-wf-upload-salary" style="width:100%; font-size:11px; font-weight:700; padding:3px 6px; background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe;">📤 上传车间实发表</button>
+                        <div style="font-size:9.5px; color:#94a3b8; text-align:center; margin-top:3px;">支持 .xlsx / .xls 格式</div>
                     </div>
                 </div>
 
                 <!-- 卡片 3: 🛡️ 社保缴费申报表 PDF -->
-                <div class="workflow-step-card" id="wf-step-3" title="💡 上传说明：支持电子税务局下载的社保缴费申报表 PDF 或 ZIP。系统自动解析识别码与金额，比对公司与个人承担。" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; display:flex; flex-direction:column; justify-content:space-between; min-height:130px; box-shadow:0 1px 2px rgba(0,0,0,0.02); transition:all 0.15s ease;">
+                <div class="workflow-step-card" id="wf-step-3" title="支持电子税务局社保缴费申报表 PDF 或 ZIP，系统自动解析金额并比对公司与个人承担" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; display:flex; flex-direction:column; justify-content:space-between; min-height:130px; box-shadow:0 1px 2px rgba(0,0,0,0.02); transition:all 0.15s ease;">
                     <div>
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                             <span style="font-size:11px; font-weight:700; color:#64748b;">第 3 步 · 社保申报</span>
@@ -500,7 +500,6 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         </div>
                         <div style="font-size:12.5px; font-weight:700; color:#0f172a; display:flex; align-items:center; gap:5px;">
                             <span id="wf-step3-icon">🟡</span> 社保申报核验
-                            <span style="font-size:10.5px; color:#64748b; background:#f1f5f9; padding:1px 5px; border-radius:4px; margin-left:auto; font-weight:normal; cursor:help;" title="💡 上传说明：直接选择本机社保 PDF 凭证，系统自动核验总额与参保人数">ℹ️ 说明</span>
                         </div>
                         <div style="font-size:12px; font-weight:700; color:#1e293b; margin-top:3px;" id="wf-step3-main">
                             数据加载中...
@@ -511,11 +510,12 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     </div>
                     <div style="margin-top:8px;">
                         <button class="btn btn-default btn-xs" id="btn-wf-upload-ss" style="width:100%; font-size:11px; font-weight:700; padding:3px 6px; background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe;">📤 上传社保凭证</button>
+                        <div style="font-size:9.5px; color:#94a3b8; text-align:center; margin-top:3px;">支持 .pdf / .zip 格式</div>
                     </div>
                 </div>
 
                 <!-- 卡片 4: 🏛️ 公积金缴存凭证 ZIP/PDF -->
-                <div class="workflow-step-card" id="wf-step-4" title="💡 上传说明：支持公积金中心 ZIP 压缩包或 PDF 凭证。ZIP 包在后台自动解压，仅保留归档纯净 PDF 原件并比对金额。" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; display:flex; flex-direction:column; justify-content:space-between; min-height:130px; box-shadow:0 1px 2px rgba(0,0,0,0.02); transition:all 0.15s ease;">
+                <div class="workflow-step-card" id="wf-step-4" title="支持公积金中心 ZIP 压缩包或 PDF 凭证，ZIP 后台自动解压仅保留归档 PDF 原件并比对金额" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; display:flex; flex-direction:column; justify-content:space-between; min-height:130px; box-shadow:0 1px 2px rgba(0,0,0,0.02); transition:all 0.15s ease;">
                     <div>
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                             <span style="font-size:11px; font-weight:700; color:#64748b;">第 4 步 · 公积金凭证</span>
@@ -523,7 +523,6 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         </div>
                         <div style="font-size:12.5px; font-weight:700; color:#0f172a; display:flex; align-items:center; gap:5px;">
                             <span id="wf-step4-icon">🟡</span> 公积金凭证核验
-                            <span style="font-size:10.5px; color:#64748b; background:#f1f5f9; padding:1px 5px; border-radius:4px; margin-left:auto; font-weight:normal; cursor:help;" title="💡 上传说明：直接选择本机公积金 ZIP/PDF，后台自动解压提纯归档 PDF">ℹ️ 说明</span>
                         </div>
                         <div style="font-size:12px; font-weight:700; color:#1e293b; margin-top:3px;" id="wf-step4-main">
                             数据加载中...
@@ -534,6 +533,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     </div>
                     <div style="margin-top:8px;">
                         <button class="btn btn-default btn-xs" id="btn-wf-upload-hf" style="width:100%; font-size:11px; font-weight:700; padding:3px 6px; background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe;">📤 上传公积金凭证</button>
+                        <div style="font-size:9.5px; color:#94a3b8; text-align:center; margin-top:3px;">支持 .pdf / .zip 格式</div>
                     </div>
                 </div>
 
@@ -3034,7 +3034,8 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             document.body.removeChild(file_input);
             if (!file) return;
 
-            frappe.freeze(`🚀 正在读取文件【${file.name}】并提交后台智能解析核算，请稍候...`);
+            // 仅在此处调用一次 freeze，后续 frappe.call 不再重复 freeze
+            frappe.freeze(`📤 正在读取【${file.name}】并提交后台解析，请稍候...`);
 
             const reader = new FileReader();
             reader.onload = function(evt) {
@@ -3044,9 +3045,9 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             reader.onerror = function() {
                 frappe.unfreeze();
                 frappe.msgprint({
-                    title: '读取文件失败',
+                    title: '❌ 读取文件失败',
                     indicator: 'red',
-                    message: `无法读取本地文件【${file.name}】，请检查文件是否被锁定或损坏！`
+                    message: `无法读取本地文件【${file.name}】，请检查文件是否被占用或损坏！`
                 });
             };
             reader.readAsDataURL(file);
@@ -3071,13 +3072,13 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             direct_file_upload('.xlsx,.xlsm,.xls', function(base64_str, filename, file_obj) {
                 frappe.call({
                     method: 'ashan_cn_procurement.services.payroll_settlement_service.upload_and_import_qifu_salary',
+                    type: 'POST',
                     args: {
                         file_data: base64_str,
                         filename: filename,
                         period_month: cur_m
                     },
-                    freeze: true,
-                    freeze_message: `🔍 正在智能解析【${filename}】并倒推税前应发与代扣个税...`,
+                    // 不再重复 freeze，由 direct_file_upload 统一管理
                     callback: function(r) {
                         frappe.unfreeze();
                         if (r.message && r.message.success) {
@@ -3087,21 +3088,21 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                                 message: `
                                     <div style="font-size:13px; line-height:1.6;">
                                         ${r.message.message}<br><br>
-                                        <strong>导入实发人数：</strong> ${r.message.count || 26} 人<br>
-                                        <strong>实发总额（税后）：</strong> ¥ ${Number(r.message.total_net || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
-                                        <strong>倒推应发总额（税前）：</strong> ¥ ${Number(r.message.total_gross || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
-                                        <strong>归档原件名称：</strong> <span style="color:#2563eb; font-weight:700;">${filename}</span>
+                                        <strong>导入实发人数：</strong> ${r.message.total_imported || '—'} 人<br>
+                                        <strong>实发总额（税后）：</strong> ¥ ${Number(r.message.total_net_salary || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
+                                        <strong>倒推应发总额（税前）：</strong> ¥ ${Number(r.message.total_gross_salary || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
+                                        <strong>归档原件：</strong> <span style="color:#2563eb; font-weight:700;">${filename}</span>
                                     </div>
                                 `
                             });
                             load_monthly_workflow_hub();
                             load_salary_distribution_tab();
-                            load_qifu_payroll_data();
+                            if (typeof load_qifu_payroll_data === 'function') load_qifu_payroll_data();
                             if (current_tab === 'tax') load_tax_settlement_tab();
                             if (current_tab === 'settlement') load_payroll_settlement();
                         } else {
                             frappe.msgprint({
-                                title: '导入失败',
+                                title: '❌ 导入失败',
                                 indicator: 'red',
                                 message: (r.message && r.message.message) || '处理 Excel 文件时发生错误，请检查文件格式！'
                             });
@@ -3109,6 +3110,11 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     },
                     error: function(r) {
                         frappe.unfreeze();
+                        frappe.msgprint({
+                            title: '❌ 请求异常',
+                            indicator: 'red',
+                            message: '服务器处理车间实发表时发生错误，请检查浏览器 Console 或联系管理员！'
+                        });
                     }
                 });
             });
@@ -3131,14 +3137,13 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             direct_file_upload('.pdf,.zip', function(base64_str, filename, file_obj) {
                 frappe.call({
                     method: 'ashan_cn_procurement.services.payroll_settlement_service.upload_and_verify_social_security_file',
+                    type: 'POST',
                     args: {
                         company: COMPANY,
                         period_month: cur_m,
                         file_name: filename,
                         file_base64: base64_str
                     },
-                    freeze: true,
-                    freeze_message: `🔍 正在智能解析【${filename}】社保凭证并比对金额...`,
                     callback: function(r) {
                         frappe.unfreeze();
                         if (r.message && r.message.success) {
@@ -3150,15 +3155,15 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                                         ${r.message.message}<br><br>
                                         <strong>PDF 提取总额：</strong> ¥ ${Number(r.message.parsed_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
                                         <strong>系统核算总额：</strong> ¥ ${Number(r.message.sys_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
-                                        <strong>归档文件名称：</strong> <span style="color:#2563eb; font-weight:700;">${filename}</span>
+                                        <strong>归档文件：</strong> <span style="color:#2563eb; font-weight:700;">${filename}</span>
                                     </div>
                                 `
                             });
                             load_monthly_workflow_hub();
-                            load_social_insurance_tab();
+                            if (typeof load_social_insurance_tab === 'function') load_social_insurance_tab();
                         } else {
                             frappe.msgprint({
-                                title: '社保凭证核验失败',
+                                title: '❌ 社保凭证核验失败',
                                 indicator: 'red',
                                 message: (r.message && r.message.message) || '处理社保凭证文件时发生错误！'
                             });
@@ -3166,6 +3171,11 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     },
                     error: function(r) {
                         frappe.unfreeze();
+                        frappe.msgprint({
+                            title: '❌ 请求异常',
+                            indicator: 'red',
+                            message: '服务器处理社保凭证时发生错误，请检查浏览器 Console 或联系管理员！'
+                        });
                     }
                 });
             });
@@ -3188,14 +3198,13 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             direct_file_upload('.pdf,.zip', function(base64_str, filename, file_obj) {
                 frappe.call({
                     method: 'ashan_cn_procurement.services.payroll_settlement_service.upload_and_verify_housing_fund_file',
+                    type: 'POST',
                     args: {
                         company: COMPANY,
                         period_month: cur_m,
                         file_name: filename,
                         file_base64: base64_str
                     },
-                    freeze: true,
-                    freeze_message: `🔍 正在后台解压【${filename}】并比对公积金金额...`,
                     callback: function(r) {
                         frappe.unfreeze();
                         if (r.message && r.message.success) {
@@ -3207,15 +3216,15 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                                         ${r.message.message}<br><br>
                                         <strong>PDF 提取总额：</strong> ¥ ${Number(r.message.parsed_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
                                         <strong>系统核算总额：</strong> ¥ ${Number(r.message.sys_amount || 0).toLocaleString('zh-CN', {minimumFractionDigits:2})}<br>
-                                        <strong>归档文件名称：</strong> <span style="color:#2563eb; font-weight:700;">${filename}</span>
+                                        <strong>归档文件：</strong> <span style="color:#2563eb; font-weight:700;">${filename}</span>
                                     </div>
                                 `
                             });
                             load_monthly_workflow_hub();
-                            load_housing_fund_tab();
+                            if (typeof load_housing_fund_tab === 'function') load_housing_fund_tab();
                         } else {
                             frappe.msgprint({
-                                title: '公积金凭证核验失败',
+                                title: '❌ 公积金凭证核验失败',
                                 indicator: 'red',
                                 message: (r.message && r.message.message) || '处理公积金凭证文件时发生错误！'
                             });
@@ -3223,6 +3232,11 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     },
                     error: function(r) {
                         frappe.unfreeze();
+                        frappe.msgprint({
+                            title: '❌ 请求异常',
+                            indicator: 'red',
+                            message: '服务器处理公积金凭证时发生错误，请检查浏览器 Console 或联系管理员！'
+                        });
                     }
                 });
             });

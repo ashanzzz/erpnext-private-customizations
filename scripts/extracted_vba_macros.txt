@@ -1,0 +1,5807 @@
+
+============================================================
+MODULE: ThisWorkbook.cls | STREAM: VBA/ThisWorkbook
+============================================================
+
+Attribute VB_Name = "ThisWorkbook"
+Attribute VB_Base = "0{00020819-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+
+
+============================================================
+MODULE: Sheet1.cls | STREAM: VBA/Sheet1
+============================================================
+
+Attribute VB_Name = "Sheet1"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+
+
+============================================================
+MODULE: 日期管理.bas | STREAM: VBA/日期管理
+============================================================
+
+Attribute VB_Name = "日期管理"
+Sub 日期管理_生成日期数据()
+    ' 定义变量
+    Dim ws As Worksheet
+    Dim yearInput As Variant
+    Dim startDate As Date, endDate As Date
+    Dim i As Long, row As Long
+    Dim 调休数组, 调班数组, 节假日数组
+    Dim titleRow As Integer
+    ' 获取表格范围
+    Dim lastCol As Long
+    Dim rangeResult As Variant
+    rangeResult = 公共函数_表格范围("日期数据")
+    If rangeResult(1) = 0 Then
+        MsgBox "未能获取表格范围"
+        Exit Sub
+    End If
+    lastCol = rangeResult(2)(2)
+    ' 调休数组和调班数组
+    调休数组 = Array(20240101, 20240210, 20240211, 20240212, 20240213, 20240214, 20240215, 20240216, 20240217, 20240404, 20240405, 20240406, 20240501, 20240502, 20240503, 20240504, 20240505, 20240610, 20240915, 20240916, 20240917, 20241001, 20241002, 20241003, 20241004, 20241005, 20241006, 20241007)
+    调班数组 = Array(20240204, 20240218, 20240407, 20240428, 20240511, 20240914, 20240929, 20241012)
+    节假日数组 = Array(20240101, 20240210, 20240211, 20240212, 20240404, 20240501, 20240610, 20240917, 20241001, 20241002, 20241003)
+    
+    ' 使用日期管理_辅助函数_日期化数组函数转换日期格式
+    调休数组 = 日期管理_辅助函数_日期化数组(调休数组)
+    调班数组 = 日期管理_辅助函数_日期化数组(调班数组)
+    节假日数组 = 日期管理_辅助函数_日期化数组(节假日数组)
+    
+    ' 获取当前年份
+    Dim currentYear As Integer
+    currentYear = Year(Now)
+    
+    ' 获取年份输入，默认为当前年份
+    yearInput = InputBox("请输入需要生成的年份:", "年份输入", currentYear)
+    If yearInput = "" Then Exit Sub ' 如果点击取消或输入为空，则退出宏
+    If Not IsNumeric(yearInput) Then
+        MsgBox "请输入有效的年份。"
+        Exit Sub
+    End If
+    
+    
+    
+    ' 检查数组中的日期是否属于同一年份
+    If Not 日期管理_辅助函数_判断数组是否当年(调休数组, yearInput) Or Not 日期管理_辅助函数_判断数组是否当年(调班数组, yearInput) Or Not 日期管理_辅助函数_判断数组是否当年(节假日数组, yearInput) Then
+        Stop
+        MsgBox "数组中包含与输入年份不一致的日期，请检查数据。"
+        Exit Sub
+    End If
+    
+    ' 检查是否存在名为"日期数据"的工作表，如果不存在则创建
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("日期数据")
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        ws.Name = "日期数据"
+        MsgBox "已创建新的'日期数据'工作表。"
+    End If
+    On Error GoTo 0
+    
+    
+    
+    ' 设置起始和结束日期
+    startDate = DateSerial(yearInput, 1, 1)
+    endDate = DateSerial(yearInput + 1, 1, 1) - 1
+    
+    ' 清除工作表内容和格式
+    ws.Cells.Clear
+    
+    ' 设置标题行
+    titleRow = 1
+    With ws
+        .Cells(titleRow, 1).Value = "日期"
+        .Cells(titleRow, 2).Value = "工作日"
+        .Cells(titleRow, 3).Value = "周末日"
+        .Cells(titleRow, 4).Value = "调休日"
+        .Cells(titleRow, 5).Value = "调班日"
+        .Cells(titleRow, 6).Value = "法定节假日"
+        .Cells(titleRow, 7).Value = "综合判断"
+    End With
+    
+    ' 填充日期和标记
+    row = titleRow + 1
+    For i = startDate To endDate
+        With ws
+            .Cells(row, 1).Value = i
+            .Cells(row, 2).Value = IIf(Weekday(i, vbMonday) <= 5, 1, 0)
+            .Cells(row, 3).Value = IIf(Weekday(i, vbMonday) > 5, 1, 0)
+            .Cells(row, 4).Value = IIf(IsInArray(i, 调休数组), 1, 0)
+            .Cells(row, 5).Value = IIf(IsInArray(i, 调班数组), 1, 0)
+            .Cells(row, 6).Value = IIf(IsInArray(i, 节假日数组), 1, 0)
+            Dim dateType As Integer
+            dateType = 日期管理_辅助函数_判断日期类型(.Cells(row, 2).Value, .Cells(row, 3).Value, .Cells(row, 4).Value, .Cells(row, 5).Value, .Cells(row, 6).Value)
+            
+            Dim rowRange As Range
+            Set rowRange = .Range(.Cells(row, 1), .Cells(row, lastCol))
+            
+            Select Case dateType
+                Case 5
+                    .Cells(row, 7).Value = "法定节假日"
+                    .Range(.Cells(row, 1), .Cells(row, lastCol)).Interior.Color = RGB(255, 165, 0) ' 法定节假日 - 橙色
+                Case 4
+                    .Cells(row, 7).Value = "调休日"
+                    .Range(.Cells(row, 1), .Cells(row, lastCol)).Interior.Color = RGB(255, 224, 102) ' 调休日 - 橙黄色
+                    
+                Case 3
+                    .Cells(row, 7).Value = "周末"
+                    .Range(.Cells(row, 1), .Cells(row, lastCol)).Interior.Color = RGB(255, 255, 0) ' 周末 - 黄色
+                Case 2
+                    .Cells(row, 7).Value = "调班日"
+                    .Range(.Cells(row, 1), .Cells(row, lastCol)).Interior.Color = RGB(255, 255, 102) ' 调班日 - 黄白色
+                    
+                Case 1
+                    .Cells(row, 7).Value = "工作日"
+                    .Range(.Cells(row, 1), .Cells(row, lastCol)).Interior.Color = RGB(255, 255, 255) ' 工作日 - 白色
+                Case Else
+                    .Cells(row, 7).Value = "未知"
+                    ' 不设置颜色
+            End Select
+            
+        End With
+        row = row + 1
+    Next i
+    
+    MsgBox "日期数据已生成。"
+    
+End Sub
+
+
+
+Function 日期管理_辅助函数_判断日期类型(工作日 As Integer, 周末日 As Integer, 调休日 As Integer, 调班日 As Integer, 法定节假日 As Integer) As Integer
+    On Error GoTo ErrorHandler
+    
+    ' 根据输入的参数判断日期类型
+    If 法定节假日 = 1 Then
+        日期管理_辅助函数_判断日期类型 = 5
+    ElseIf 调休日 = 1 Then
+        日期管理_辅助函数_判断日期类型 = 4
+    ElseIf 调班日 = 1 Then
+        日期管理_辅助函数_判断日期类型 = 2
+    ElseIf 周末日 = 1 Then
+        日期管理_辅助函数_判断日期类型 = 3
+    ElseIf 工作日 = 1 Then
+        日期管理_辅助函数_判断日期类型 = 1
+    Else
+        日期管理_辅助函数_判断日期类型 = 0
+    End If
+    
+    Exit Function
+    
+ErrorHandler:
+    ' 错误处理
+    MsgBox "发生错误: " & Err.Description
+    日期管理_辅助函数_判断日期类型 = 0
+End Function
+
+Function 日期管理_辅助函数_日期化数组(arr As Variant) As Variant
+    Dim i As Integer
+    Dim result() As Date
+    ReDim result(LBound(arr) To UBound(arr))
+
+    For i = LBound(arr) To UBound(arr)
+        Dim strDate As String
+        strDate = Format(arr(i), "00000000")  ' 确保字符串是八位数，例如："20240101"
+
+        If Len(strDate) = 8 Then
+            result(i) = DateSerial(Left(strDate, 4), Mid(strDate, 5, 2), Right(strDate, 2))
+        Else
+            MsgBox "日期格式错误: " & strDate
+            Exit Function
+        End If
+    Next i
+
+    日期管理_辅助函数_日期化数组 = result
+
+End Function
+Function 日期管理_辅助函数_判断数组是否当年(arr As Variant, yearInput As Variant) As Boolean
+    Dim element As Variant
+    For Each element In arr
+        If Year(element) <> CInt(yearInput) Then
+            日期管理_辅助函数_判断数组是否当年 = False
+            Exit Function
+        End If
+    Next element
+    日期管理_辅助函数_判断数组是否当年 = True
+End Function
+
+Sub 日期管理_格式整理()
+    Dim ws As Worksheet
+    Dim result As Variant
+    Dim titleRow As Long
+    Dim rowMax As Long, colMax As Long
+    Dim i As Long, j As Long
+    
+    ' 设置工作表
+    Set ws = ThisWorkbook.Sheets("日期数据")
+    
+    ' 查找"综合判断"的位置，确定标题行
+    result = 公共函数_查找位置("日期数据", "综合判断")
+    If result(1) = 0 Then
+        MsgBox "未找到'综合判断'"
+        Exit Sub
+    End If
+    titleRow = result(2)(1)
+    
+    ' 确定日期列的位置
+    Dim 日期列 As Integer
+    result = 公共函数_查找位置("日期数据", "日期")
+    If result(1) = 1 Then
+        日期列 = result(2)(2)
+    Else
+        MsgBox "未找到'日期'列"
+        Exit Sub
+    End If
+    
+    ' 获取整个表格的范围
+    result = 公共函数_表格范围("日期数据")
+    If result(1) = 0 Then
+        MsgBox "未能获取表格范围"
+        Exit Sub
+    End If
+    rowMax = result(2)(1)
+    colMax = result(2)(2)
+    
+    ' 设置行高和列宽
+    ws.Rows.RowHeight = 15
+    ws.Columns.ColumnWidth = 8
+    ' 设置日期列的列宽为15
+    ws.Columns(日期列).ColumnWidth = 15
+    
+    ' 查找"综合判断"的位置，以便调整列宽
+    Dim 法定节假日列 As Long
+    result = 公共函数_查找位置("日期数据", "综合判断")
+    If result(1) = 0 Then
+        MsgBox "未找到'综合判断'"
+        Exit Sub
+    Else
+        综合判断 = result(2)(2)
+    End If
+    
+    ' 调整综合判断列的列宽为15
+    ws.Columns(综合判断).ColumnWidth = 15
+    
+    ' 设置标题行格式
+    With ws.Rows(titleRow).Font
+        .Size = 12
+        .Bold = True
+    End With
+    
+    ' 设置所有单元格的边框
+    With ws.Range(ws.Cells(titleRow, 1), ws.Cells(rowMax, colMax)).Borders
+        .LineStyle = xlContinuous
+        .Color = RGB(0, 0, 0)
+        .Weight = xlThin
+    End With
+    
+    ' 设置条件格式
+    Dim 综合判断列 As Long
+    result = 公共函数_查找位置("日期数据", "综合判断")
+    If result(1) = 0 Then
+        MsgBox "未找到'综合判断'"
+        Exit Sub
+    Else
+        综合判断列 = result(2)(2)
+    End If
+    
+    
+    
+    
+    
+    ' 设置日期列的数据格式为"YYYY年MM月DD日"
+    With ws.Columns(日期列)
+        .NumberFormat = "YYYY""年""MM""月""DD""日"""
+    End With
+    
+End Sub
+Function 日期管理_本月工时(yyyymm As String) As Variant
+    Dim ws As Worksheet
+    Dim row As Long, lastRow As Long
+    Dim 日期列 As Long
+    Dim 工作日数 As Integer, 调班日数 As Integer, 周末数 As Integer, 调休日数 As Integer, 法定节假日数 As Integer
+    Dim result(1 To 5) As Variant
+    Dim startDate As Date, endDate As Date
+    
+    ' 设置工作表
+    Set ws = ThisWorkbook.Sheets("日期数据")
+    
+    ' 查找“日期”的列号
+    Dim findResult As Variant
+    findResult = 公共函数_查找位置("日期数据", "日期")
+    综合判断位置 = 公共函数_查找位置("日期数据", "综合判断")
+    If findResult(1) = 0 Then
+        ' 找不到就直接返回0
+        日期管理_本月工时 = Array(0, 0, 0, 0, 0)
+        Exit Function
+    End If
+    日期列 = findResult(2)(2)
+    
+    ' 设置起始和结束日期
+    startDate = DateSerial(Left(yyyymm, 4), Right(yyyymm, 2), 1)
+    endDate = DateSerial(Left(yyyymm, 4), Right(yyyymm, 2) + 1, 0)
+    
+    ' 获取工作表的最后一行
+    Dim rangeResult As Variant
+    rangeResult = 公共函数_表格范围("日期数据")
+    lastRow = rangeResult(2)(1)
+    
+    ' 统计指定月份的各类天数
+    For row = findResult(2)(1) + 1 To lastRow
+        Dim currentDate As Date
+        currentDate = ws.Cells(row, 日期列).Value
+        If currentDate >= startDate And currentDate <= endDate Then
+            If ws.Cells(row, 综合判断位置(2)(2)).Value = "工作日" Then 工作日数 = 工作日数 + 1 ' 工作日
+   
+            If ws.Cells(row, 综合判断位置(2)(2)).Value = "调班日" Then 调班日数 = 调班日数 + 1 ' 调班日
+            If ws.Cells(row, 综合判断位置(2)(2)).Value = "周末" Then 周末数 = 周末数 + 1  ' 周末
+            If ws.Cells(row, 综合判断位置(2)(2)).Value = " 调休日" Then 调休日数 = 调休日数 + 1 ' 调休日
+            If ws.Cells(row, 综合判断位置(2)(2)).Value = "法定节假日" Then 法定节假日数 = 法定节假日数 + 1 ' 法定节假日
+        End If
+    Next row
+    
+    ' 返回结果
+    result(1) = 工作日数
+    result(2) = 调班日数
+    result(3) = 周末数
+    result(4) = 调休日数
+    result(5) = 法定节假日数
+    日期管理_本月工时 = result
+End Function
+Sub 测试本月工时()
+    c = 日期管理_本月工时("202401")
+    Stop
+End Sub
+
+Sub 日期管理_合并执行()
+Call 日期管理_生成日期数据
+Call 日期管理_格式整理
+End Sub
+
+
+
+
+============================================================
+MODULE: 公共函数.bas | STREAM: VBA/公共函数
+============================================================
+
+Attribute VB_Name = "公共函数"
+Public Function 公共函数_查找位置(表格名 As String, 关键词 As Variant) As Variant
+    Dim ws As Worksheet
+    Dim rng As Range
+    Dim result(1 To 2) As Variant
+    Dim pos(1 To 2) As Long
+
+    ' 尝试获取工作表对象
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(表格名)
+    If ws Is Nothing Then
+        result(1) = 0 ' 表示运行失败
+        公共函数_查找位置 = result ' 返回结果数组
+        Exit Function
+    End If
+    On Error GoTo 0
+
+    ' 在工作表中查找关键词
+
+        Set rng = ws.UsedRange.Find(What:=关键词, LookIn:=xlFormulas, LookAt:=xlWhole)
+
+    
+    If Not rng Is Nothing Then
+        result(1) = 1 ' 找到关键词，表示运行成功
+        pos(1) = rng.row
+        pos(2) = rng.Column
+        result(2) = pos ' 将行号和列号存入数组
+        
+    Else
+        result(1) = 0 ' 没有找到关键词，表示运行失败
+    End If
+
+    ' 返回结果数组
+    公共函数_查找位置 = result
+    
+    
+End Function
+
+Public Function 公共函数_表格范围(表格名 As String) As Variant
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim lastColumn As Long
+    Dim result(1 To 2) As Variant
+    
+    ' 尝试获取工作表对象
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(表格名)
+    If ws Is Nothing Then
+        result(1) = 0 ' 表示运行失败
+        公共函数_表格范围 = result ' 返回结果数组
+        Exit Function
+    End If
+    On Error GoTo 0
+    
+    ' 获取工作表的使用范围的最后一行和最后一列
+    With ws.UsedRange
+        lastRow = .row + .Rows.Count - 1
+        lastColumn = .Column + .Columns.Count - 1
+    End With
+    
+    ' 将结果存入数组
+    result(1) = 1 ' 表示运行成功
+    Dim maxRowCol(1 To 2) As Long
+    maxRowCol(1) = lastRow ' 最大行数
+    maxRowCol(2) = lastColumn ' 最大列数
+    result(2) = maxRowCol ' 将行列数组放入结果数组
+    
+    ' 返回数组
+    公共函数_表格范围 = result
+End Function
+
+Sub 公共函数_清空表格(表格名 As String)
+    Dim ws As Worksheet
+    
+    ' 尝试获取指定名字的工作表
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(表格名)
+    On Error GoTo 0
+    
+    ' 检查工作表是否存在
+    If ws Is Nothing Then
+        MsgBox "没有找到名为 '" & 表格名 & "' 的工作表。", vbExclamation, "错误"
+        Exit Sub
+    End If
+    
+    ' 清除工作表的所有内容和格式
+    ws.Cells.Clear
+    
+    ' 删除所有形状
+    Dim shape As shape
+    For Each shape In ws.Shapes
+        shape.Delete
+    Next shape
+    
+    ' 重置默认的行高和列宽
+    ws.Rows.RowHeight = 15  ' Excel的默认行高
+    ws.Columns.ColumnWidth = 8.43  ' Excel的默认列宽
+    
+    ' 可选：提供反馈信息
+    ' MsgBox "表格 '" & 表格名 & "' 已被清空。", vbInformation, "完成"
+End Sub
+
+
+Function 公共函数_导入到临时工作表(Optional 工作表名 As String = "") As Integer
+    Dim sourceWorkbook As Workbook
+    Dim tempSheet As Worksheet
+    Dim sourceSheet As Worksheet
+    Dim filePath As Variant
+    Dim originalPath As String
+    
+    ' 初始化返回值为-1，假设导入失败或被取消
+    公共函数_导入到临时工作表 = -1
+    
+    ' 保存原始默认路径
+    originalPath = Application.DefaultFilePath
+    
+    ' 将默认路径设置为当前工作簿所在目录
+    Application.DefaultFilePath = ThisWorkbook.Path
+    
+    ' 打开文件对话框以选择工作簿，包括所有Excel类型
+    filePath = Application.GetOpenFilename("Excel 文件 (*.xlsx; *.xls; *.xlsm), *.xlsx; *.xls; *.xlsm", , "请选择导入表格")
+    
+    ' 还原默认路径
+    Application.DefaultFilePath = originalPath
+    
+    If filePath = False Then
+        ' 用户取消选择，函数返回-1
+        'MsgBox "导入已取消。", vbInformation, "导入取消"
+        Exit Function
+    End If
+    
+    ' 打开选择的工作簿
+    Set sourceWorkbook = Workbooks.Open(filePath)
+    
+    ' 确定目标工作表是否存在（如果提供了工作表名）
+    If 工作表名 <> "" Then
+        On Error Resume Next
+        Set sourceSheet = sourceWorkbook.Sheets(工作表名)
+        On Error GoTo 0
+        If sourceSheet Is Nothing Then
+            MsgBox "在工作簿中未找到名为 '" & 工作表名 & "' 的工作表。", vbExclamation
+            sourceWorkbook.Close SaveChanges:=False
+            Exit Function
+        End If
+    End If
+    
+    ' 检查或创建临时工作表
+    On Error Resume Next
+    Set tempSheet = ThisWorkbook.Sheets("临时工作表")
+    If tempSheet Is Nothing Then
+        Set tempSheet = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        tempSheet.Name = "临时工作表"
+    Else
+        tempSheet.Cells.Clear ' 清空现有数据
+    End If
+    On Error GoTo 0
+    
+    ' 复制数据到临时工作表
+    If 工作表名 <> "" Then
+        ' 如果提供了特定的工作表名，则复制该工作表的内容
+        sourceSheet.UsedRange.Copy Destination:=tempSheet.Range("A1")
+    Else
+        ' 否则，复制整个工作簿的内容
+        sourceWorkbook.Sheets(1).UsedRange.Copy Destination:=tempSheet.Range("A1")
+    End If
+    
+    ' 取消复制模式
+    Application.CutCopyMode = False
+    
+    ' 关闭导入的工作簿
+    sourceWorkbook.Close SaveChanges:=False
+    
+    ' 如果代码执行到这里，说明导入成功，返回1
+    公共函数_导入到临时工作表 = 1
+End Function
+
+Function 公共函数_复制相同标题(导出工作表名 As String, 导出标题行关键词 As String, 导入工作表名 As String, 导入标题行关键词 As String) As Boolean
+    Dim 源工作表 As Worksheet, 目标工作表 As Worksheet
+    Dim 源最后行 As Long, 目标最后行 As Long
+    Dim 源标题单元格 As Range, 目标标题单元格 As Range
+    Dim i As Long, j As Long
+    Dim 源单元格 As Range, 目标单元格 As Range
+
+    ' 获取源和目标工作表
+    Set 源工作表 = ThisWorkbook.Sheets(导出工作表名)
+    Set 目标工作表 = ThisWorkbook.Sheets(导入工作表名)
+
+    ' 查找源和目标工作表中的标题单元格
+    Set 源标题单元格 = 源工作表.Rows.Find(What:=导出标题行关键词, LookIn:=xlValues, LookAt:=xlWhole)
+    Set 目标标题单元格 = 目标工作表.Rows.Find(What:=导入标题行关键词, LookIn:=xlValues, LookAt:=xlWhole)
+
+    If 源标题单元格 Is Nothing Or 目标标题单元格 Is Nothing Then
+        公共函数_复制相同标题 = False
+        Exit Function
+    End If
+
+    ' 确定源和目标工作表的数据范围
+    源最后行 = 源工作表.Cells(源工作表.Rows.Count, 源标题单元格.Column).End(xlUp).row
+    目标最后行 = 目标工作表.Cells(目标工作表.Rows.Count, 目标标题单元格.Column).End(xlUp).row + 1
+
+    ' 遍历源标题单元格所在的行
+    For i = 源标题单元格.row To 源标题单元格.row + 源标题单元格.MergeArea.Rows.Count - 1
+        For j = 1 To 源工作表.Cells(i, 源工作表.Columns.Count).End(xlToLeft).Column
+            ' 遍历目标标题单元格所在的行
+            Dim 目标列 As Long
+            For 目标列 = 1 To 目标工作表.Cells(目标标题单元格.row, 目标工作表.Columns.Count).End(xlToLeft).Column
+                If 源工作表.Cells(i, j).Value = 目标工作表.Cells(目标标题单元格.row, 目标列).Value Then
+                    ' 匹配到标题，逐行复制数据
+                    For k = 源标题单元格.row + 源标题单元格.MergeArea.Rows.Count To 源最后行
+                        Set 源单元格 = 源工作表.Cells(k, j)
+                        Set 目标单元格 = 目标工作表.Cells(目标最后行 + (k - 源标题单元格.row - 源标题单元格.MergeArea.Rows.Count), 目标列)
+                        目标单元格.Value = 源单元格.Value
+                    Next k
+                End If
+            Next 目标列
+        Next j
+    Next i
+
+    公共函数_复制相同标题 = True
+End Function
+
+
+
+' 辅助函数：获取合并单元格的值
+Function GetMergedValue(cell As Range) As Variant
+    If cell.MergeCells Then
+        GetMergedValue = cell.MergeArea.Cells(1, 1).Value
+    Else
+        GetMergedValue = cell.Value
+    End If
+End Function
+
+
+
+Function 公共函数_重复判断(工作表名 As String, 标题名 As String) As Integer
+    Dim ws As Worksheet
+    Dim titleRow As Long
+    Dim titleCol As Long
+    Dim cell As Range
+    Dim cellValue As Variant
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    
+    ' 设置工作表
+    Set ws = ThisWorkbook.Sheets(工作表名)
+
+    ' 查找标题行和列
+    titleRow = 公共函数_查找位置(工作表名, 标题名)(2)(1)
+    titleCol = 公共函数_查找位置(工作表名, 标题名)(2)(2)
+
+    ' 遍历该列并检查重复
+    For Each cell In ws.Range(ws.Cells(titleRow + 1, titleCol), ws.Cells(ws.Rows.Count, titleCol).End(xlUp))
+        cellValue = cell.Value
+        If Not IsEmpty(cellValue) Then
+            If dict.Exists(cellValue) Then
+                公共函数_重复判断 = 1
+                Exit Function
+            Else
+                dict.Add cellValue, Nothing
+            End If
+        End If
+    Next cell
+
+    ' 没有重复
+    公共函数_重复判断 = 0
+End Function
+Function 公共函数_根据工号和标题复制(工号 As String, 导入工作表 As String, 导出工作表 As String) As Integer
+    Dim sourceWs As Worksheet, targetWs As Worksheet
+    Dim sourceTitleRow As Long, targetTitleRow As Long
+    Dim sourceRow As Long, targetRow As Long, colNum As Long
+    Dim dict As Object, title As String
+    Dim findResult As Variant
+    
+    ' 创建一个字典对象
+    Set dict = CreateObject("Scripting.Dictionary")
+    
+    ' 获取工作表对象
+    Set sourceWs = ThisWorkbook.Sheets(导出工作表)
+    Set targetWs = ThisWorkbook.Sheets(导入工作表)
+    
+    ' 获取源和目标工作表的标题行位置
+    sourceTitleRow = 公共函数_查找位置_最下位置(导出工作表, 标题_检验("工号"))(2)(1)
+    targetTitleRow = 公共函数_查找位置_最下位置(导入工作表, 标题_检验("工号"))(2)(1)
+    
+    ' 在源工作表中查找工号
+    findResult = 公共函数_查找位置(导出工作表, 工号)
+    If findResult(1) = 1 Then
+        sourceRow = findResult(2)(1)
+    Else
+        公共函数_根据工号和标题复制 = 0
+        Exit Function
+    End If
+    
+    ' 在目标工作表中查找或添加工号
+    findResult = 公共函数_查找位置(导入工作表, 工号)
+    If findResult(1) = 1 Then
+        targetRow = findResult(2)(1)
+    Else
+        targetRow = targetWs.Cells(targetWs.Rows.Count, 1).End(xlUp).row + 1
+        targetWs.Cells(targetRow, 1).Value = 工号
+    End If
+    
+    ' 构建标题字典
+    For colNum = 1 To sourceWs.Cells(sourceTitleRow, Columns.Count).End(xlToLeft).Column
+        title = sourceWs.Cells(sourceTitleRow, colNum).Value
+        If Not dict.Exists(title) Then
+            dict.Add title, colNum
+        End If
+    Next colNum
+ 
+    ' 复制匹配标题的数据
+    For colNum = 1 To targetWs.Cells(targetTitleRow, Columns.Count).End(xlToLeft).Column
+        title = targetWs.Cells(targetTitleRow, colNum).Value
+        If dict.Exists(title) Then
+        ls = sourceWs.Cells(sourceRow, dict(title)).Value
+  
+            targetWs.Cells(targetRow, colNum).Value = sourceWs.Cells(sourceRow, dict(title)).Value
+        End If
+    Next colNum
+    
+    ' 返回成功标识
+    公共函数_根据工号和标题复制 = 1
+End Function
+
+Function 公共函数_数组维度判断(arr As Variant) As Integer
+    Dim tempArr As Variant
+    tempArr = arr
+    Dim dimCount As Integer
+    dimCount = 0
+    
+    ' 循环检查 tempArr 是否仍为数组
+    While TypeName(tempArr) = "Variant()"
+        dimCount = dimCount + 1
+        tempArr = tempArr(LBound(tempArr)) ' 使用数组的第一个元素进行下一次迭代
+    Wend
+    
+    公共函数_数组维度判断 = dimCount
+End Function
+
+Public Sub 公共函数_读取历史数据匹配标题(yyyymm As String, 导入表格 As String)
+    Dim tempSheet As Worksheet
+    Dim key As String
+    Dim 历史表格名 As String
+    Dim 年月标题 As String
+    Dim findResult As Variant
+    Dim rangeResult As Variant
+    Dim titleRow As Long
+    Dim i As Long, j As Long
+    Dim 年月Col As Long
+
+    ' 初始化变量
+    key = 标题_检验("工号")
+    历史表格名 = "历史数据"
+    年月标题 = "历史记录年月"
+
+    ' 创建或清空临时工作表
+    On Error Resume Next
+    Set tempSheet = ThisWorkbook.Sheets("临时工作表")
+    If tempSheet Is Nothing Then
+        Set tempSheet = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        tempSheet.Name = "临时工作表"
+    Else
+        tempSheet.Cells.Clear
+    End If
+    On Error GoTo 0
+
+    ' 查找导入表格中工号的位置
+    findResult = 公共函数_查找位置(导入表格, key)
+    If findResult(1) = 0 Then
+        MsgBox "在 '" & 导入表格 & "' 工作表中未找到 '" & key & "'。", vbExclamation
+        Exit Sub
+    End If
+    Dim 导入表格工号Row As Long
+    导入表格工号Row = findResult(2)(1)
+
+    ' 查找历史数据表格中工号的位置
+    findResult = 公共函数_查找位置(历史表格名, key)
+    If findResult(1) = 0 Then
+        MsgBox "在 '" & 历史表格名 & "' 工作表中未找到 '" & key & "'。", vbExclamation
+        Exit Sub
+    End If
+    titleRow = findResult(2)(1)
+
+    ' 检查历史数据表格范围
+    rangeResult = 公共函数_表格范围(历史表格名)
+    If rangeResult(1) = 0 Or rangeResult(2)(1) = titleRow Then
+        MsgBox "历史数据表中没有数据或仅有标题行。", vbExclamation
+        Exit Sub
+    End If
+
+    ' 复制历史数据标题行到临时工作表
+    For i = 1 To rangeResult(2)(2)
+        tempSheet.Cells(1, i).Value = ThisWorkbook.Sheets(历史表格名).Cells(titleRow, i).Value
+        ' 查找年月列
+        If tempSheet.Cells(1, i).Value = 年月标题 Then
+            年月Col = i
+        End If
+    Next i
+
+    ' 确保找到了年月列
+    If 年月Col = 0 Then
+        MsgBox "在 '" & 历史表格名 & "' 工作表中未找到 '" & 年月标题 & "'。", vbExclamation
+        Exit Sub
+    End If
+
+    ' 复制满足条件的行
+    Dim rowCount As Long
+    rowCount = 2 ' 从临时工作表的第二行开始复制
+    For i = titleRow + 1 To rangeResult(2)(1)
+        If ThisWorkbook.Sheets(历史表格名).Cells(i, 年月Col).Value = yyyymm Then
+            ' 复制整行
+            For j = 1 To rangeResult(2)(2)
+                tempSheet.Cells(rowCount, j).Value = ThisWorkbook.Sheets(历史表格名).Cells(i, j).Value
+            Next j
+            rowCount = rowCount + 1
+        End If
+    Next i
+
+    ' 使用公共函数复制相同标题的数据
+    If 公共函数_复制相同标题("临时工作表", key, 导入表格, key) = False Then
+        MsgBox "复制数据时发生错误。", vbExclamation
+        Exit Sub
+    End If
+
+    ' 可以选择在此处删除临时工作表，如果不再需要
+    ' Application.DisplayAlerts = False
+    ' tempSheet.Delete
+    ' Application.DisplayAlerts = True
+End Sub
+
+Public Function 公共函数_填写序号(wsName As String) As Variant
+    ' 定义工作表对象
+    Dim ws As Worksheet
+    Dim findResult As Variant
+    Dim rangeResult As Variant
+    Dim i As Long
+    Dim result(1 To 2) As Variant ' 初始化结果数组
+
+    ' 尝试获取工作表对象
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(wsName)
+    If ws Is Nothing Then
+        result(1) = 0 ' 表示运行失败
+        result(2) = "错误：没有找到名为 '" & wsName & "' 的工作表。" ' 失败原因
+        公共函数_填写序号 = result ' 返回结果数组
+        Exit Function
+    End If
+    On Error GoTo 0
+
+    ' 查找关键词位置
+    findResult = 公共函数_查找位置_最下位置(wsName, 标题_检验("序号"))
+    
+    ' 检查是否成功找到关键词位置
+    If findResult(1) = 0 Then
+        result(1) = 0 ' 失败标志
+        result(2) = "错误：没有找到关键词" & 标题_检验("序号")  ' 失败原因
+        公共函数_填写序号 = result ' 返回结果数组
+        Exit Function
+    End If
+    
+    ' 获取工作表的使用范围
+    rangeResult = 公共函数_表格范围(wsName)
+    If rangeResult(1) = 0 Then
+        result(1) = 0 ' 失败标志
+        result(2) = "错误：无法获取工作表的使用范围。" ' 失败原因
+        公共函数_填写序号 = result ' 返回结果数组
+        Exit Function
+    End If
+    
+    ' 从序号的下一行开始，自动写序号
+    For i = findResult(2)(1) + 1 To rangeResult(2)(1)
+        ws.Cells(i, findResult(2)(2)).Value = i - findResult(2)(1)
+    Next i
+    
+    ' 序号填写成功，返回成功信息和填写的序号数量
+    result(1) = 1 ' 成功标志
+    result(2) = "成功：已填写 " & rangeResult(2)(1) - findResult(2)(1) & " 个序号。" ' 填写的序号数量
+    公共函数_填写序号 = result ' 返回结果数组
+End Function
+
+' 辅助函数：检查元素是否在数组中
+Function IsInArray(stringToBeFound As String, arr As Variant) As Boolean
+    IsInArray = (UBound(Filter(arr, stringToBeFound)) > -1)
+End Function
+Function 公共函数_复制相同标题_限定条件(导出工作表名 As String, 导出标题行关键词 As String, _
+        导出表格条件关键词 As String, 导出条件字符串数组 As Variant, _
+        导入工作表名 As String, 导入标题行关键词 As String) As Boolean
+    Dim 源工作表 As Worksheet, 目标工作表 As Worksheet
+    Dim 源最后行 As Long, 目标最后行 As Long
+    Dim 源标题单元格 As Range, 目标标题单元格 As Range
+    Dim i As Long, j As Long, k As Long
+    Dim 源单元格 As Range, 目标单元格 As Range
+    Dim 条件列号 As Integer
+    Dim 源标题实际行数 As Long, 目标标题实际行数 As Long
+    
+    ' 获取源和目标工作表
+    Set 源工作表 = ThisWorkbook.Sheets(导出工作表名)
+    Set 目标工作表 = ThisWorkbook.Sheets(导入工作表名)
+    
+    ' 查找源和目标工作表中的标题单元格
+    Set 源标题单元格 = 源工作表.Rows.Find(What:=导出标题行关键词, LookIn:=xlValues, LookAt:=xlWhole)
+    Set 目标标题单元格 = 目标工作表.Rows.Find(What:=导入标题行关键词, LookIn:=xlValues, LookAt:=xlWhole)
+    
+    If 源标题单元格 Is Nothing Or 目标标题单元格 Is Nothing Then
+        公共函数_复制相同标题_限定条件 = False
+        Exit Function
+    End If
+
+    ' 计算源工作表标题的实际行数
+    If 源标题单元格.MergeCells Then
+        源标题实际行数 = 源标题单元格.MergeArea.Rows.Count
+    Else
+        源标题实际行数 = 1
+    End If
+
+    ' 计算目标工作表标题的实际行数
+    If 目标标题单元格.MergeCells Then
+        目标标题实际行数 = 目标标题单元格.MergeArea.Rows.Count
+    Else
+        目标标题实际行数 = 1
+    End If
+
+    ' 找到源工作表中的条件列
+    条件列号 = 源工作表.Rows.Find(What:=导出表格条件关键词, LookIn:=xlValues, LookAt:=xlWhole).Column
+    
+    ' 确定源和目标工作表的数据范围
+    源最后行 = 源工作表.Cells(源工作表.Rows.Count, 源标题单元格.Column).End(xlUp).row
+    目标最后行 = 目标工作表.Cells(目标工作表.Rows.Count, 目标标题单元格.Column).End(xlUp).row + 目标标题实际行数
+
+    ' 遍历源工作表数据行，从合并单元格的下一行开始
+    For i = 源标题单元格.row + 源标题实际行数 To 源最后行
+        ' 检查条件列是否满足条件
+        If IsInArray(源工作表.Cells(i, 条件列号).Value, 导出条件字符串数组) Then
+            ' 遍历源标题行的每一列
+            For j = 1 To 源工作表.Cells(源标题单元格.row, 源工作表.Columns.Count).End(xlToLeft).Column
+                ' 遍历目标标题行的每一列
+                For k = 1 To 目标工作表.Cells(目标标题单元格.row, 目标工作表.Columns.Count).End(xlToLeft).Column
+                    If 源工作表.Cells(源标题单元格.row, j).Value = 目标工作表.Cells(目标标题单元格.row, k).Value Then
+                        ' 匹配到标题，复制数据
+                        Set 源单元格 = 源工作表.Cells(i, j)
+                        Set 目标单元格 = 目标工作表.Cells(目标最后行, k)
+                        目标单元格.Value = 源单元格.Value
+                    End If
+                Next k
+            Next j
+            目标最后行 = 目标最后行 + 1 ' 更新目标最后行，为下一次复制做准备
+        End If
+    Next i
+    
+    公共函数_复制相同标题_限定条件 = True
+End Function
+
+
+
+
+
+
+
+Public Function 公共函数_查找位置_最下位置(工作表名 As String, 关键词 As String) As Variant
+    Dim ws As Worksheet
+    Dim rng As Range
+    Dim result(1 To 2) As Variant
+    Dim pos(1 To 2) As Long
+
+    ' 尝试获取工作表对象
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(工作表名)
+    If ws Is Nothing Then
+        result(1) = 0 ' 表示运行失败
+        公共函数_查找位置_最下位置 = result ' 返回结果数组
+        Exit Function
+    End If
+    On Error GoTo 0
+
+    ' 在工作表中查找关键词
+    Set rng = ws.UsedRange.Find(What:=关键词, LookIn:=xlFormulas, LookAt:=xlWhole)
+
+    If Not rng Is Nothing Then
+        result(1) = 1 ' 找到关键词，表示运行成功
+        ' 如果单元格在合并单元格中，获取合并单元格的最底部行
+        If rng.MergeCells Then
+            pos(1) = rng.MergeArea.row + rng.MergeArea.Rows.Count - 1
+        Else
+            pos(1) = rng.row
+        End If
+        pos(2) = rng.Column
+        result(2) = pos ' 将行号和列号存入数组
+    Else
+        result(1) = 0 ' 没有找到关键词，表示运行失败
+    End If
+
+    ' 返回结果数组
+    公共函数_查找位置_最下位置 = result
+End Function
+
+
+Function 标题_检验(标题名称 As String) As String
+    Select Case 标题名称
+        Case "序号", "工号", "姓名", "身份证号", "手机号", "性别", "上月年龄", _
+                "人员类型", "在职状态", "是否社险", "是否商险", "是否公积金", _
+                "个税附加扣除", "计薪方式", "薪资标准", _
+                "基本工资", "基本补贴", "绩效奖金", "职位津贴", "餐补单价", _
+                "考勤天数", "整天", "半天", "缺勤", _
+                "工时", "基本工时", "1.5倍工时", "2倍工时", "3倍工时", "包括调休工时", "餐补次数", _
+                "工时工资", "基本工时工资", "1.5倍工资", "2倍工资", "3倍工资", _
+                "补贴工资", "基本补贴工资", "绩效奖金工资", "职位津贴工资", "餐补工资", _
+                "工资调整", "应发薪资合计", "公司成本", "住房公积金c", "社保合计c", "公司成本合计", _
+                "个人扣除", "住房公积金p", "社保合计p", "代缴个税", "个人成本合计", _
+                "实发薪资合计", "现金发放工资", _
+                "当月个税免征额", "当月专项扣除", "当月附加扣除", "以往税前薪酬", "以往个税免征额", "以往专项扣除", "以往附加扣除", "以往缴纳所得税", _
+                "社险基数", "公积金基数", "个税专项附加扣除核定", "历史记录年月", "周期内应缴纳所得税", "当月应缴纳所得税", "当月核算所得额", _
+                "税后管理工资"
+                
+            标题_检验 = 标题名称
+        Case Else
+            标题_检验 = "未找到匹配标题: " & 标题名称
+            MsgBox 标题_检验
+    End Select
+End Function
+
+Function 公共函数_复制工号数据_限定条件(工号 As String, 导入工作表名 As String, 导出工作表名 As String, 条件标题 As String, 条件关键词 As Variant) As Boolean
+    Dim 源工作表 As Worksheet, 目标工作表 As Worksheet
+    Dim 源标题行 As Long, 源工号列 As Long, 目标标题行 As Long
+    Dim 源工号行 As Long, 目标工号行 As Long
+    Dim 条件列号 As Long, 条件满足 As Boolean
+    Dim 字典 As Object, 标题 As Variant, 列号 As Long
+    Dim 结果 As Variant
+    Dim 条件值 As String
+    
+    ' 获取工作表对象
+    Set 源工作表 = ThisWorkbook.Sheets(导出工作表名)
+    Set 目标工作表 = ThisWorkbook.Sheets(导入工作表名)
+    
+    ' 创建一个字典对象来存储源工作表标题和列号
+    Set 字典 = CreateObject("Scripting.Dictionary")
+    
+    ' 获取源和目标工作表的标题行位置
+    结果 = 公共函数_查找位置_最下位置(导出工作表名, "工号")
+    If 结果(1) = 1 Then
+        源标题行 = 结果(2)(1)
+        源工号列 = 结果(2)(2)
+    Else
+        MsgBox "在导出工作表 '" & 导出工作表名 & "' 中未找到 '工号'，终止运行。", vbExclamation
+        Exit Function
+    End If
+    
+    结果 = 公共函数_查找位置_最下位置(导入工作表名, "工号")
+    If 结果(1) = 1 Then
+        目标标题行 = 结果(2)(1)
+    Else
+        MsgBox "在导入工作表 '" & 导入工作表名 & "' 中未找到 '工号'，终止运行。", vbExclamation
+        Exit Function
+    End If
+    
+    ' 在源工作表中查找工号对应的行
+    
+    ' 在源工作表中从下向上查找工号对应的行
+    With 源工作表.Columns(源工号列)  ' 假设工号位于第一列
+        Set 找到的单元格 = .Find(What:=工号, After:=.Cells(1, 源工号列), LookIn:=xlValues, LookAt:=xlWhole, _
+            SearchOrder:=xlByRows, SearchDirection:=xlPrevious, MatchCase:=False)
+        If Not 找到的单元格 Is Nothing Then
+            源工号行 = 找到的单元格.row
+  
+        Else
+            ' 如果没找到符合条件的工号行，则跳过该行
+            公共函数_复制工号数据_限定条件 = False
+            Exit Function
+        End If
+    End With
+    
+    
+    
+    
+    
+    ' 在目标工作表中查找或添加工号
+    结果 = 公共函数_查找位置(导入工作表名, 工号)
+    
+    If 结果(1) = 1 Then
+        目标工号行 = 结果(2)(1)
+    Else
+        目标工号行 = 目标工作表.Cells(targetWs.Rows.Count, 1).End(xlUp).row + 1
+        目标工作表.Cells(目标工号行, 1).Value = 工号
+    End If
+    
+    ' 构建标题字典
+    For 列号 = 1 To 源工作表.Cells(源标题行, Columns.Count).End(xlToLeft).Column
+        标题 = 源工作表.Cells(源标题行, 列号).Value
+        If Not 字典.Exists(标题) Then
+            字典.Add 标题, 列号
+        End If
+    Next 列号
+    
+    ' 检查条件
+    结果 = 公共函数_查找位置(导出工作表名, 条件标题)
+    条件列号 = 结果(2)(2)
+    
+    条件值 = CStr(源工作表.Cells(源工号行, 条件列号).Value)
+    
+    条件值 = 公共函数_日期调整(条件值, 1)
+    
+    If 结果(1) = 1 Then
+        条件满足 = (条件值 = 条件关键词)
+  
+    Else
+   
+        ' 如果条件列号未找到，则认为条件不满足
+        公共函数_复制工号数据_限定条件 = False
+        Exit Function
+    End If
+    
+    ' 如果条件满足，复制匹配标题的数据
+    If 条件满足 Then
+        For Each 标题 In 字典.Keys()
+            列号 = 字典(标题)
+            
+            目标标题位置 = 公共函数_查找位置(导入工作表名, 标题)
+            If 目标标题位置(1) = 1 Then
+                目标列 = 目标标题位置(2)(2)
+                写入值 = 源工作表.Cells(源工号行, 列号).Value
+                目标值 = 目标工作表.Cells(目标工号行, 目标列).Value
+                目标工作表.Cells(目标工号行, 目标列).Value = 源工作表.Cells(源工号行, 列号).Value
+ 
+            End If
+            
+        Next 标题
+        公共函数_复制工号数据_限定条件 = True
+    Else
+        公共函数_复制工号数据_限定条件 = False
+    End If
+End Function
+
+
+Function 公共函数_日期调整(yyyymm As String, 调整值 As Integer) As String
+    Dim 年 As Integer
+    Dim 月 As Integer
+    Dim 调整后的日期 As Date
+    
+    ' 从字符串中提取年和月
+    年 = Left(yyyymm, 4)
+    月 = Right(yyyymm, 2)
+    
+    ' 使用DateSerial获取对应的日期（将日设为1）
+    Dim 当前日期 As Date
+    当前日期 = DateSerial(年, 月, 1)
+    
+    ' 使用DateAdd根据调整值计算新的日期
+    调整后的日期 = DateAdd("m", 调整值, 当前日期)
+    
+    ' 将调整后的日期格式化为yyyymm格式并返回
+    公共函数_日期调整 = Format(调整后的日期, "yyyymm")
+End Function
+
+Public Function 公共函数_文件名位置数组() As Variant
+    Dim ws As Worksheet
+    Dim 文件信息位置 As Variant
+    Dim 结果数组() As Variant
+    Dim 行索引 As Long
+    Dim 数组索引 As Long
+    Dim 文件名 As String
+    Dim 文件地址 As String
+
+    ' 尝试获取"基本参数"工作表
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("基本参数")
+    On Error GoTo 0
+    If ws Is Nothing Then
+        MsgBox "没有找到名为 '基本参数' 的工作表。", vbExclamation, "错误"
+        Exit Function
+    End If
+    
+    ' 查找"导入文件信息"的位置
+    文件信息位置 = 公共函数_查找位置("基本参数", "导入文件信息")
+    
+    ' 检查是否找到了"导入文件信息"
+    If 文件信息位置(1) = 0 Then
+        MsgBox "在 '基本参数' 工作表中未找到 '导入文件信息'。", vbExclamation, "错误"
+        Exit Function
+    End If
+    
+    ' 初始化数组索引
+    数组索引 = 1
+    
+    ' 遍历"导入文件信息"下的行
+    行索引 = 文件信息位置(2)(1) + 1
+    Do While Len(ws.Cells(行索引, 文件信息位置(2)(2)).Value) > 0
+        文件名 = ws.Cells(行索引, 文件信息位置(2)(2)).Value
+        文件地址 = ws.Cells(行索引, 文件信息位置(2)(2) + 1).Value
+        
+        ' 扩展数组以容纳新的文件名和地址
+        ReDim Preserve 结果数组(1 To 2, 1 To 数组索引)
+        
+        ' 存储文件名和地址到数组
+        结果数组(1, 数组索引) = 文件名
+        结果数组(2, 数组索引) = 文件地址
+        
+        ' 更新索引和行号
+        数组索引 = 数组索引 + 1
+        行索引 = 行索引 + 1
+    Loop
+    
+    ' 返回结果数组
+    公共函数_文件名位置数组 = 结果数组
+End Function
+
+
+
+Public Sub 公共函数_导入文件窗口更新()
+    Dim 文件信息数组 As Variant
+    Dim i As Integer
+    Dim 文件名 As String
+    导入文件窗口.Show vbModeless
+    ' 获取文件信息数组
+    文件信息数组 = 公共函数_文件名位置数组()
+
+    ' 检查数组是否有内容
+    If Not IsEmpty(文件信息数组) Then
+        ' 循环遍历数组，但最多处理3个文件
+        For i = 1 To WorksheetFunction.Min(UBound(文件信息数组, 2), 3)
+            ' 根据索引更新文件名Label
+            With 导入文件窗口
+                Select Case i
+                    Case 1
+                        .label11.Caption = 文件信息数组(1, i) ' 文件名
+                        .Label13.Caption = 文件信息数组(2, i) ' 完整路径
+                    Case 2
+                        .Label21.Caption = 文件信息数组(1, i) ' 文件名
+                        .Label23.Caption = 文件信息数组(2, i) ' 完整路径
+                    Case 3
+                        .Label31.Caption = 文件信息数组(1, i) ' 文件名
+                        .Label33.Caption = 文件信息数组(2, i) ' 完整路径
+                End Select
+                
+                ' 根据完整路径更新文件地址Label
+                Dim 文件地址 As String
+                文件地址 = 文件信息数组(2, i)
+                If 文件地址 <> "" Then
+                    Dim 文件名WithExt As String
+                    文件名WithExt = Right(文件地址, Len(文件地址) - InStrRev(文件地址, "\"))
+                    Select Case i
+                        Case 1
+                            .Label12.Caption = 文件名WithExt
+                        Case 2
+                            .Label22.Caption = 文件名WithExt
+                        Case 3
+                            .Label32.Caption = 文件名WithExt
+                    End Select
+                Else
+                    ' 如果没有文件地址，则清空对应的Label
+                    Select Case i
+                        Case 1
+                            .Label12.Caption = ""
+                        Case 2
+                            .Label22.Caption = ""
+                        Case 3
+                            .Label32.Caption = ""
+                    End Select
+                End If
+            End With
+        Next i
+    End If
+End Sub
+
+Public Sub 公共函数_修改对应地址(题目名 As String, 地址名 As String)
+    Dim ws As Worksheet
+    Dim rng As Range
+    Dim 文件信息行 As Long
+    Dim 是否找到 As Boolean
+
+    ' 默认设置是否找到为假
+    是否找到 = False
+
+    ' 尝试获取"基本参数"工作表
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("基本参数")
+    On Error GoTo 0
+
+    ' 检查是否成功获取工作表
+    If ws Is Nothing Then
+        MsgBox "没有找到名为 '基本参数' 的工作表。", vbExclamation, "错误"
+        Exit Sub
+    End If
+
+    ' 查找"导入文件信息"的位置
+    Set rng = ws.UsedRange.Find(What:="导入文件信息", LookIn:=xlValues, LookAt:=xlWhole)
+    
+    ' 检查是否找到"导入文件信息"
+    If Not rng Is Nothing Then
+        文件信息行 = rng.row + 1 ' 从"导入文件信息"下一行开始查找
+
+        ' 向下遍历，直到空行
+        Do While ws.Cells(文件信息行, rng.Column).Value <> ""
+            If ws.Cells(文件信息行, rng.Column).Value = 题目名 Then
+                ' 如果找到题目名，则更新地址
+                ws.Cells(文件信息行, rng.Column + 1).Value = 地址名
+                是否找到 = True
+                Exit Do
+            End If
+            文件信息行 = 文件信息行 + 1
+        Loop
+
+        If 是否找到 Then
+            MsgBox "已成功更新地址。", vbInformation, "操作成功"
+        Else
+            MsgBox "未找到题目名 '" & 题目名 & "'。", vbExclamation, "未找到"
+        End If
+    Else
+        MsgBox "在 '基本参数' 工作表中未找到 '导入文件信息'。", vbExclamation, "错误"
+    End If
+End Sub
+Public Function 公共函数_查找题目地址(题目 As String) As Variant
+    Dim ws As Worksheet
+    Dim rng As Range
+    Dim 文件信息行 As Long
+    Dim 地址 As String
+    
+    ' 尝试获取"基本参数"工作表
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("基本参数")
+    On Error GoTo 0
+    
+    ' 检查是否成功获取工作表
+    If ws Is Nothing Then
+        MsgBox "没有找到名为 '基本参数' 的工作表。", vbExclamation, "错误"
+        公共函数_查找题目地址 = -1
+        Exit Function
+    End If
+    
+    ' 查找"导入文件信息"的位置
+    Set rng = ws.UsedRange.Find(What:="导入文件信息", LookIn:=xlValues, LookAt:=xlWhole)
+    
+    ' 检查是否找到"导入文件信息"
+    If Not rng Is Nothing Then
+        文件信息行 = rng.row + 1 ' 从"导入文件信息"下一行开始查找
+        
+        ' 向下遍历，直到空行
+        Do While ws.Cells(文件信息行, rng.Column).Value <> ""
+            If ws.Cells(文件信息行, rng.Column).Value = 题目 Then
+                ' 如果找到题目名，则获取地址
+                地址 = ws.Cells(文件信息行, rng.Column + 1).Value
+                公共函数_查找题目地址 = 地址
+                Exit Function
+            End If
+            文件信息行 = 文件信息行 + 1
+        Loop
+    Else
+        MsgBox "在 '基本参数' 工作表中未找到 '导入文件信息'。", vbExclamation, "错误"
+    End If
+    
+    ' 如果没有找到题目名，则返回-1
+    公共函数_查找题目地址 = -1
+End Function
+Public Sub 公共函数_标题写入(工作表名 As String, 标题后缀 As String)
+    Dim ws As Worksheet
+    Dim rectShape As shape
+    Dim 标题内容 As String
+    Dim 表格范围结果 As Variant
+    Dim 最大列数 As Long
+    Dim 矩形宽度 As Double
+
+    ' 确保工作表存在
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(工作表名)
+    If ws Is Nothing Then
+        MsgBox "指定的工作表不存在。", vbExclamation
+        Exit Sub
+    End If
+    On Error GoTo 0
+
+    ' 使用公共函数_表格范围获取最大列数
+    表格范围结果 = 公共函数_表格范围(工作表名)
+    If 表格范围结果(1) = 0 Then
+        MsgBox "无法获取工作表的范围。", vbExclamation
+        Exit Sub
+    Else
+        最大列数 = 表格范围结果(2)(2)
+    End If
+
+    ' 计算矩形的宽度
+    矩形宽度 = ws.Cells(1, 最大列数).Left + ws.Cells(1, 最大列数).Width
+
+    ' 检查A1单元格是否是日期格式，设置标题内容
+    If IsDate(ws.Cells(1, 1).Value) Then
+        标题内容 = Format(ws.Cells(1, 1).Value, "yyyy""年""mm""月"" ") & 标题后缀
+    Else
+        标题内容 = 标题后缀
+    End If
+
+    ' 添加矩形并设置它的属性
+    Set rectShape = ws.Shapes.AddShape(msoShapeRectangle, 0, ws.Cells(1, 1).Top, 矩形宽度, ws.Cells(1, 1).Height)
+
+    With rectShape
+        .Fill.ForeColor.RGB = RGB(255, 255, 255) ' 设置填充颜色为白色
+        .Line.Visible = msoFalse ' 设置边框为不可见
+        .TextFrame2.TextRange.Text = 标题内容
+        .TextFrame2.TextRange.Font.Name = "宋体"
+        .TextFrame2.TextRange.Font.Size = 20
+        .TextFrame2.TextRange.Font.Bold = msoTrue
+        .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(0, 0, 0) ' 设置文字颜色为黑色
+        .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter ' 文字居中
+    End With
+
+    ' 设置宏动作
+    rectShape.OnAction = "公共函数_导入文件窗口更新"
+End Sub
+
+
+
+
+============================================================
+MODULE: 日历.bas | STREAM: VBA/日历
+============================================================
+
+Attribute VB_Name = "日历"
+Sub 日历_格式整理()
+    Dim ws As Worksheet
+    
+    ' 检查是否存在名为"日历"的工作表
+    On Error Resume Next ' 忽略错误
+    Set ws = ThisWorkbook.Sheets("日历")
+    If ws Is Nothing Then
+        ' 如果不存在，则创建新的工作表
+        Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        ws.Name = "日历"
+        MsgBox "已创建新的'日历'工作表。"
+    End If
+    On Error GoTo 0 ' 恢复正常的错误处理
+    
+    ' 设置行高
+    Dim i As Integer
+    For i = 1 To 13
+        If i Mod 2 = 1 And i >= 5 Then
+            ws.Rows(i).RowHeight = 20 ' 设置5, 7, 9, 11, 13行的行高为25
+        Else
+            ws.Rows(i).RowHeight = 40 ' 其他行的行高设置为50
+        End If
+    Next i
+    
+    ' 设置列宽
+    ws.Columns.ColumnWidth = 10
+    ' 设置单元格对齐方式和文字缩放
+    With ws.Cells
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .ShrinkToFit = True
+    End With
+    ' 设置背景色
+    ws.Cells.Interior.Color = RGB(255, 255, 255) ' 设置全部背景色为白色
+    ' 设置条件格式
+    
+    
+    ws.Range("B4:H13").FormatConditions.Delete
+    
+    ' 应用条件格式到指定行的日期单元格及其下方单元格
+    Dim row As Integer
+    Dim col As Integer
+    For row = 4 To 12 Step 2
+        For col = 2 To 8 ' 从B列到H列
+            ' 对当前单元格及其下方单元格设置条件格式
+            With ws.Range(ws.Cells(row, col), ws.Cells(row + 1, col))
+                .FormatConditions.Add Type:=xlExpression, Formula1:="=TEXT(" & ws.Cells(row, col).Address & ", ""YYYYMM"") <> TEXT(DATE($B$1,$D$1,1), ""YYYYMM"")"
+                .FormatConditions(.FormatConditions.Count).Interior.Color = RGB(211, 211, 211)
+            End With
+        Next col
+    Next row
+    
+    ' 加粗B3到H3行，并设置内外边框
+    With ws.Range("B3:H3")
+        .Font.Bold = True
+        .Borders(xlEdgeBottom).LineStyle = xlContinuous
+        .Borders(xlEdgeTop).LineStyle = xlContinuous
+        .Borders(xlEdgeLeft).LineStyle = xlContinuous
+        .Borders(xlEdgeRight).LineStyle = xlContinuous
+        .Borders(xlInsideVertical).LineStyle = xlContinuous
+        .Borders(xlInsideHorizontal).LineStyle = xlContinuous
+    End With
+    
+    ' 设置竖线边框
+    With ws.Range("B4:H13")
+        .Borders(xlInsideVertical).LineStyle = xlContinuous
+        .Borders(xlEdgeLeft).LineStyle = xlContinuous
+        .Borders(xlEdgeRight).LineStyle = xlContinuous
+    End With
+    
+    
+    ' 设置5, 7, 9, 11, 13行的下边框
+    For i = 5 To 13 Step 2
+        ws.Range("B" & i & ":H" & i).Borders(xlEdgeBottom).LineStyle = xlContinuous
+    Next i
+    ' 应用条件格式到指定行的日期单元格及其下方单元格
+
+    For row = 4 To 12 Step 2
+        For col = 2 To 8 ' 从B列到H列
+            ' 对当前单元格及其下方单元格设置条件格式
+            With ws.Range(ws.Cells(row, col), ws.Cells(row + 1, col))
+                ' 删除已有的条件格式
+                .FormatConditions.Delete
+                
+                ' 不是当前年月的日期
+                .FormatConditions.Add Type:=xlExpression, Formula1:="=TEXT(" & ws.Cells(row, col).Address & ", ""YYYYMM"") <> TEXT(DATE($B$1,$D$1,1), ""YYYYMM"")"
+                .FormatConditions(.FormatConditions.Count).Interior.Color = RGB(211, 211, 211)
+                
+                ' 工作日
+                .FormatConditions.Add Type:=xlExpression, Formula1:="=" & ws.Cells(row + 1, col).Address & "=""工作日"""
+                .FormatConditions(.FormatConditions.Count).Interior.Color = RGB(255, 255, 255)
+                
+                ' 法定节假日
+                .FormatConditions.Add Type:=xlExpression, Formula1:="=" & ws.Cells(row + 1, col).Address & "=""法定节假日"""
+                .FormatConditions(.FormatConditions.Count).Interior.Color = RGB(255, 165, 0)
+                
+                ' 调休日
+                .FormatConditions.Add Type:=xlExpression, Formula1:="=" & ws.Cells(row + 1, col).Address & "=""调休日"""
+                .FormatConditions(.FormatConditions.Count).Interior.Color = RGB(255, 224, 102)
+                
+                ' 周末
+                .FormatConditions.Add Type:=xlExpression, Formula1:="=" & ws.Cells(row + 1, col).Address & "=""周末"""
+                .FormatConditions(.FormatConditions.Count).Interior.Color = RGB(255, 255, 0)
+                
+                ' 调班日
+                .FormatConditions.Add Type:=xlExpression, Formula1:="=" & ws.Cells(row + 1, col).Address & "=""调班日"""
+                .FormatConditions(.FormatConditions.Count).Interior.Color = RGB(255, 255, 102)
+            End With
+        Next col
+    Next row
+    ' 进一步的格式设置和日历填充逻辑可以在这里添加
+    ' ...
+    
+End Sub
+Sub 日历_日历信息写入()
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets("日历")
+    
+    ' 准备输入单元格
+    
+    ws.Cells(1, 2).Value = Year(Now) ' 默认为当前年份
+    ws.Cells(1, 3).Value = "年" ' B1
+    ws.Cells(1, 5).Value = "月" ' E1
+    ws.Cells(1, 4).Value = Month(Now) ' 默认为当前月份
+    
+    ws.Cells(2, 2).Value = "起始星期" ' B2
+    ' 为 C2 设置公式以显示起始星期的名称
+    ws.Cells(2, 3).Formula = "星期一"
+    
+    ' 为 C2 设置下拉列表数据验证
+    With ws.Cells(2, 3).Validation
+        .Delete
+        .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:="星期日,星期一,星期二,星期三,星期四,星期五,星期六"
+        .IgnoreBlank = True
+        .InCellDropdown = True
+    End With
+    
+    
+    
+    ' 计算并填充日期
+    Dim row As Integer, dayCol As Integer
+    Dim daysInMonth As Integer
+    daysInMonth = Day(DateSerial(Year(Now), Month(Now) + 1, 0)) ' 获取所选月份的天数
+    ' 设置星期标题
+
+    For dayCol = 2 To 8 ' 星期日到星期六的列
+        ws.Cells(3, dayCol).Formula = "=TEXT(WEEKDAY(DATE($B$1, $D$1, 1) - WEEKDAY(DATE($B$1, $D$1, 1), MATCH($C$2, {""星期日"", ""星期一"", ""星期二"", ""星期三"", ""星期四"", ""星期五"", ""星期六""}, 0)) + " & dayCol - 2 & ", MATCH($C$2, {""星期日"", ""星期一"", ""星期二"", ""星期三"", ""星期四"", ""星期五"", ""星期六""}, 0)), ""dddd"")"
+
+    Next dayCol
+    ' 固定填充5行，从第四行开始，每隔一行填充一行
+    Dim fillRow As Integer
+    fillRow = 4 ' 开始填充的行号
+    
+    For i = 0 To 34
+        row = fillRow + 2 * Int(i / 7) ' 每七天换行，每隔一行填充
+        col = 2 + (i Mod 7)
+        ws.Cells(row, col).Formula = "=DATE(B1, D1, 1) + " & i & " + (MATCH(C2, {""星期日"", ""星期一"", ""星期二"", ""星期三"", ""星期四"", ""星期五"", ""星期六""}, 0) - WEEKDAY(DATE(B1, D1, 1))) + IF(WEEKDAY(DATE(B1, D1, 1)) > MATCH(C2, {""星期日"", ""星期一"", ""星期二"", ""星期三"", ""星期四"", ""星期五"", ""星期六""}, 0), -0, 0)"
+        
+        ' 在日期下方添加综合判断数据的公式
+        ws.Cells(row + 1, col).Formula = "=IFERROR(VLOOKUP(" & ws.Cells(row, col).Address & ",日期数据!A:G,7,FALSE), """")"
+        
+        
+        If row > fillRow + 8 Then Exit For ' 如果超出5行的范围，则停止填充
+    Next i
+    
+End Sub
+
+
+
+Sub 日历_整合执行()
+    Call 公共函数_清空表格("日历")
+    Call 日历_日历信息写入
+    Call 日历_格式整理
+End Sub
+
+
+
+
+============================================================
+MODULE: Sheet2.cls | STREAM: VBA/Sheet2
+============================================================
+
+Attribute VB_Name = "Sheet2"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+
+
+============================================================
+MODULE: 本月在职信息.bas | STREAM: VBA/本月在职信息
+============================================================
+
+Attribute VB_Name = "本月在职信息"
+Sub 本月人员_在职表导入(inputMonth As Variant)
+    Dim ws As Worksheet
+    Dim titles As Variant
+    Dim i As Integer
+    Dim yearPart As Integer, monthPart As Integer
+    Dim validDate As Date
+    Dim 判断重复字符 As String
+    判断重复字符 = 标题_检验("工号")
+    ' 验证并解析 inputMonth
+    On Error Resume Next
+    validDate = DateValue("1/" & Right(inputMonth, 2) & "/" & Left(inputMonth, 4))
+    If Err.Number <> 0 Then
+        MsgBox "inputMonth 输入错误。请确保输入格式为 'YYYYMM'。", vbExclamation
+        Exit Sub
+    End If
+    On Error GoTo 0
+    yearPart = Year(validDate)
+    monthPart = Month(validDate)
+    
+    ' 检查或创建本月在职信息工作表
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("本月在职信息")
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        ws.Name = "本月在职信息"
+    End If
+    On Error GoTo 0
+    ' 写入标题
+    ' 设置日期值
+    ws.Cells(1, 1).Value = DateSerial(yearPart, monthPart, 1)
+    
+    ' 设置单元格格式为 "YYYY年MM月 在职信息 综合"
+    ws.Cells(1, 1).NumberFormat = "yyyy""年""mm""月 在职信息 综合"""
+    
+    ' 写入列标题
+    titles = Array(标题_检验("序号"), 标题_检验("工号"), 标题_检验("姓名"), 标题_检验("身份证号"), 标题_检验("手机号"), 标题_检验("性别"), 标题_检验("上月年龄"), 标题_检验("人员类型"), 标题_检验("在职状态"), 标题_检验("是否社险"), 标题_检验("是否商险"), 标题_检验("是否公积金"), 标题_检验("个税附加扣除"))
+    Dim idCardCol As Integer
+    For i = LBound(titles) To UBound(titles)
+        ws.Cells(3, i + 1).Value = titles(i)
+        If titles(i) = 标题_检验("身份证号") Then
+            idCardCol = i + 1 ' 记录标题_检验("身份证号")列的列号
+        End If
+    Next i
+    
+    ' 设置标题_检验("身份证号")列的格式为文本
+    If idCardCol > 0 Then
+        ws.Columns(idCardCol).NumberFormat = "@"
+    End If
+    
+    ' 检查是否有重复
+    If 公共函数_重复判断("本月在职信息", 判断重复字符) = 1 Then
+        MsgBox "在 '本月在职信息' 工作表中存在重复:" & 判断重复字符
+        Exit Sub ' 停止执行
+    End If
+    ' 获取复制后的最大行数
+    rangeResult = 公共函数_表格范围("本月在职信息")
+    lastRow = rangeResult(2)(1)
+    ' 使用公共函数复制数据
+    公共函数_复制相同标题 "临时工作表", 标题_检验("序号"), "本月在职信息", 标题_检验("序号")
+    
+    
+    
+    ' 再次检查复制后是否有重复
+    If 公共函数_重复判断("本月在职信息", 判断重复字符) = 1 Then
+        MsgBox "复制后在 '本月在职信息' 工作表中出现了重复:" & 判断重复字符
+        ' 删除复制后添加的行
+        Dim LastRow_last As Variant
+        LastRow_last = 公共函数_表格范围("本月在职信息")(2)(1)
+        
+        If lastRow < LastRow_last Then
+            ws.Rows((LastRow_last + 1) & ":" & lastRow + 1).Delete
+        End If
+        Exit Sub ' 停止执行
+    End If
+    ' 获取复制后的最大列数
+
+    rangeResult = 公共函数_表格范围("本月在职信息")
+    Dim lastColumn As Long
+    lastColumn = rangeResult(2)(2)
+    
+    ' 合并第一行从第一列到最后一列的单元格
+    ws.Range(ws.Cells(1, 1), ws.Cells(1, lastColumn)).Merge
+    
+    Call 公共函数_标题写入("本月在职信息", "在职情况表-吉众")
+End Sub
+
+
+Public Function 本月人员_在职打并开导入整合(inputMonth As String) As Integer
+    Dim 导入结果 As Integer
+    Dim 文件地址 As Variant
+    Dim 题目数组 As Variant
+    Dim i As Integer
+    Dim sourceWorkbook As Workbook
+    Dim sourceSheet As Worksheet
+    Dim tempSheet As Worksheet
+    Dim 题目 As String
+    ' 设置题目数组
+    题目数组 = Array("在职信息", "在职信息-其他")
+    
+    ' 确保临时工作表存在
+    On Error Resume Next
+    Set tempSheet = ThisWorkbook.Sheets("临时工作表")
+    If tempSheet Is Nothing Then
+        Set tempSheet = ThisWorkbook.Worksheets.Add
+        tempSheet.Name = "临时工作表"
+    End If
+    On Error GoTo 0
+    ' 根据输入月份设置目标工作表名
+    targetSheetName = "本月在职信息"
+    ' 清空临时工作表
+    tempSheet.Cells.Clear
+    
+    For i = LBound(题目数组) To UBound(题目数组)
+        ' 确保临时工作表存在或创建新的临时工作表
+        On Error Resume Next
+        Set tempSheet = ThisWorkbook.Sheets("临时工作表")
+        If tempSheet Is Nothing Then
+            Set tempSheet = ThisWorkbook.Worksheets.Add
+            tempSheet.Name = "临时工作表"
+        Else
+            tempSheet.Cells.Clear ' 清空临时工作表
+        End If
+        On Error GoTo 0
+        ' 获取题目对应的文件地址
+        题目 = 题目数组(i)
+        文件地址 = 公共函数_查找题目地址(题目)
+        
+        ' 检查地址是否有效
+        If 文件地址 = -1 Then
+            MsgBox "没有找到题目 '" & 题目数组(i) & "' 的地址。", vbExclamation, "地址错误"
+            本月人员_在职打并开导入整合 = -1
+            Exit Function
+        Else
+            ' 打开对应的工作簿
+            Set sourceWorkbook = Workbooks.Open(文件地址)
+            ' 检查是否存在名为 targetSheetName 的工作表
+            On Error Resume Next
+            Set sourceSheet = sourceWorkbook.Sheets(targetSheetName)
+            If sourceSheet Is Nothing Then
+                MsgBox "工作簿中没有找到名为 '" & targetSheetName & "' 的工作表。", vbExclamation, "错误"
+                sourceWorkbook.Close False
+
+            End If
+            On Error GoTo 0
+            
+            ' 复制数据到临时工作表
+            sourceSheet.UsedRange.Copy Destination:=tempSheet.Cells(tempSheet.Rows.Count, 1).End(xlUp).Offset(1, 0)
+            
+            ' 关闭源工作簿
+            sourceWorkbook.Close False
+            本月人员_在职表导入 inputMonth
+
+        End If
+    Next i
+    
+    ' 数据导入完成
+    本月人员_在职打并开导入整合 = 1
+    
+    ' 删除临时工作表的逻辑保持不变
+    Application.DisplayAlerts = False
+    On Error Resume Next ' 如果工作表不存在，则忽略错误
+    ThisWorkbook.Sheets("临时工作表").Delete
+    On Error GoTo 0 ' 恢复默认的错误处理
+    Application.DisplayAlerts = True
+End Function
+
+
+
+
+============================================================
+MODULE: 考勤.bas | STREAM: VBA/考勤
+============================================================
+
+Attribute VB_Name = "考勤"
+Function 考勤_导入数据() As Integer
+    
+    Dim sourceWorkbook As Workbook
+    Dim attendanceSheet As Worksheet
+    Dim ws As Worksheet
+    Dim filePath As Variant
+    Dim attendanceSheetName As String
+    Dim pasteRow As Long, startRow As Long
+    Dim lastRow As Long, lastColumn As Long
+    Dim hasContent As Boolean
+    Dim hasKeyword As Boolean
+    
+    ' 这个代码就是遍历工作簿只要含有工作时间的，全部复制过来
+    attendanceSheetName = "考勤表"
+    hasContent = False
+    hasKeyword = False
+    
+    ' 使用公共函数查找题目地址
+    文件地址 = 公共函数_查找题目地址(attendanceSheetName)
+    
+    ' 检查文件地址是否有效
+    If 文件地址 = -1 Then
+        考勤_导入数据 = -1 ' 未找到文件地址
+        Exit Function
+    End If
+    
+    ' 打开对应的工作簿
+    Set sourceWorkbook = Workbooks.Open(文件地址)
+    
+
+    
+    ' 检查是否存在考勤表，如果不存在则创建
+    On Error Resume Next
+    Set attendanceSheet = ThisWorkbook.Sheets(attendanceSheetName)
+    If attendanceSheet Is Nothing Then
+        Set attendanceSheet = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        attendanceSheet.Name = attendanceSheetName
+    End If
+    On Error GoTo 0
+    attendanceSheet.Cells.Clear
+    
+    ' 初始化粘贴行
+    pasteRow = 1
+    
+    ' 遍历目标工作簿的每个工作表
+    For Each ws In sourceWorkbook.Sheets
+        
+        ' 检查工作表中是否含有“作业时间”
+        If Not ws.UsedRange.Find("班次", LookIn:=xlValues) Is Nothing Then
+            
+            hasContent = True
+            hasKeyword = True
+            
+            ' 确定工作表的使用范围
+            With ws.UsedRange
+                lastRow = .row + .Rows.Count - 1
+                lastColumn = .Column + .Columns.Count - 1
+            End With
+            
+            ' 确定开始复制的行
+            startRow = pasteRow
+            
+            ' 复制确定范围内的数据，从startRow开始
+            ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastColumn)).Copy
+            attendanceSheet.Cells(pasteRow, 1).PasteSpecial Paste:=xlPasteValues
+            
+            ' 更新粘贴行
+            pasteRow = attendanceSheet.Cells(attendanceSheet.Rows.Count, 1).End(xlUp).row + 1
+            Application.CutCopyMode = False ' 取消复制模式
+        End If
+        
+    Next ws
+    
+    ' 关闭源工作簿
+    sourceWorkbook.Close SaveChanges:=False
+    
+    ' 根据是否成功导入数据返回不同的值
+    If Not hasContent Then
+        Stop
+        If Not hasKeyword Then
+            
+            考勤_导入数据 = -2 ' 选择的文件不含关键词
+        Else
+            考勤_导入数据 = -1 ' 此处应为另一种情况，但原逻辑中未详细说明，可以视为代码逻辑需要调整的部分
+        End If
+    Else
+        
+        Application.GoTo attendanceSheet.Cells(1, 1), True
+        考勤_导入数据 = 1 ' 成功导入数据
+    End If
+    ' 取消所有选择
+    Application.GoTo attendanceSheet.Cells(1, 1), True
+    
+End Function
+
+Sub 考勤_格式整理(inputMonth As Variant)
+    Dim ws As Worksheet
+    Dim lastRow As Long, lastColumn As Long
+    Dim i As Long, lastDateColumn As Long
+    Dim targetDate As Date
+    Dim dateColumn As Long
+    Dim findResult As Variant
+    Dim rangeResult As Variant
+    Dim 日期标题行 As Integer
+    ' 新增变量
+    Dim 综合判断列 As Long
+    Dim 日期数据表 As Worksheet
+    Dim 日期匹配行 As Long
+    Dim 综合判断结果 As String
+    Dim 日期开始列 As Integer
+    日期开始列 = 4
+    ' 确定综合判断列位置
+    findResult = 公共函数_查找位置("日期数据", "综合判断")
+    If findResult(1) = 0 Then
+        MsgBox "在'日期数据'表中未找到'综合判断'列。"
+        Exit Sub
+    End If
+    综合判断列 = findResult(2)(2)
+    ' 设置日期数据表
+    Set 日期数据表 = ThisWorkbook.Sheets("日期数据")
+    
+    ' 确定综合判断列位置
+    findResult = 公共函数_查找位置("日期数据", "综合判断")
+    If findResult(1) = 0 Then
+        MsgBox "在'日期数据'表中未找到'综合判断'列。"
+        Exit Sub
+    End If
+    综合判断列 = findResult(2)(2)
+    日期标题行 = 3
+    Set ws = ThisWorkbook.Sheets("考勤表")
+    
+    ' 使用公共函数_查找位置来确定“日期”列的位置
+    findResult = 公共函数_查找位置("考勤表", "日期")
+    If findResult(1) = 0 Then
+        MsgBox "在工作表中未找到日期列。"
+        Exit Sub
+    End If
+    dateColumn = findResult(2)(2) ' 获取“日期”列的列号
+    
+    ' 使用公共函数_表格范围来获取最后一行和最后一列
+    rangeResult = 公共函数_表格范围("考勤表")
+    If rangeResult(1) = 0 Then
+        MsgBox "无法确定工作表的范围。"
+        Exit Sub
+    End If
+    lastRow = rangeResult(2)(1)
+    lastColumn = rangeResult(2)(2)
+    
+    ' 删除不符合条件的行
+    For i = lastRow To 1 Step -1
+        If IsEmpty(ws.Cells(i, dateColumn).Value) Or _
+            (ws.Cells(i, dateColumn).Value <> "班次" And _
+            ws.Cells(i, dateColumn).Value <> "作业时间" And _
+            ws.Cells(i, dateColumn).Value <> "加班时间" And _
+            ws.Cells(i, dateColumn).Value <> "餐补") Then
+            ws.Rows(i).Delete
+        End If
+    Next i
+    ' 更新最后一行的行号
+    rangeResult = 公共函数_表格范围("考勤表")
+    If rangeResult(1) = 0 Then
+        MsgBox "无法确定工作表的范围。"
+        Exit Sub
+    End If
+    lastRow = rangeResult(2)(1)
+    ' 根据输入的月份填写日期
+    targetDate = DateSerial(Left(inputMonth, 4), Right(inputMonth, 2), 1)
+    ' 在最上方插入两行
+    ws.Rows(1 & ":" & 日期标题行).Insert Shift:=xlDown, CopyOrigin:=xlFormatFromLeftOrAbove
+    
+    ' 根据输入的月份设置标题
+    Dim yearPart As String
+    Dim monthPart As String
+    yearPart = Left(inputMonth, 4) ' 提取年份
+    monthPart = Right(inputMonth, 2) ' 提取月份
+    
+    ws.Cells(1, 1).Value = DateSerial(yearPart, monthPart, 1) ' 写入日期值
+
+    Call 公共函数_标题写入("考勤表", "考勤表-吉众")
+    
+    
+    ws.Cells(日期标题行, 1).Value = 标题_检验("工号")
+    ws.Cells(日期标题行, 2).Value = 标题_检验("姓名")
+    ws.Cells(日期标题行, 3).Value = "日期"
+    
+    
+    ' 写入日期并调整格式
+    ws.Cells(日期标题行 - 1, 日期开始列 - 1).Value = "日期类型"
+    For i = 1 To Day(DateSerial(Year(targetDate), Month(targetDate) + 1, 0))
+        
+        formattedDate = Format(DateSerial(Year(targetDate), Month(targetDate), i), "yyyy/m/d")
+        
+        ws.Cells(日期标题行, 日期开始列 - 1 + i).Value = DateSerial(Year(targetDate), Month(targetDate), i)
+        ws.Cells(日期标题行, 日期开始列 - 1 + i).NumberFormat = "dd" ' 设置单元格的显示格式
+        
+        
+        Dim currentDate As Date
+        currentDate = DateSerial(Year(targetDate), Month(targetDate), i)
+        
+        ' 使用公共函数_查找位置查找日期在日期数据表中的位置
+        Dim 查找结果 As Variant
+        查找结果 = 公共函数_查找位置("日期数据", currentDate)
+        
+        ' 检查是否找到匹配项
+        If 查找结果(1) = 1 Then
+            ' 找到日期，获取综合判断列的数据
+            Dim row As Long
+            row = 查找结果(2)(1)
+            综合判断结果 = 日期数据表.Cells(row, 综合判断列).Value
+            
+            ' 将结果写入考勤表的相应位置
+            ws.Cells(日期标题行 - 1, 日期开始列 - 1 + i).Value = 综合判断结果 ' 只取前两个字符
+        Else
+            ' 未找到日期，填写"无"
+            ws.Cells(日期标题行 - 1, 日期开始列 - 1 + i).Value = "无"
+        End If
+        
+        
+        
+    Next i
+    
+    ' 确定最后一个日期所在的列
+    lastDateColumn = 3 + Day(DateSerial(Year(targetDate), Month(targetDate) + 1, 0))
+    
+    ' 删除后续的列
+    For i = lastColumn To lastDateColumn + 1 Step -1
+        ws.Columns(i).Delete
+    Next i
+    ' 格式设置
+    
+    With ws
+        ' 设置单元格缩小填充，上下左右居中
+        .Cells.HorizontalAlignment = xlCenter
+        .Cells.VerticalAlignment = xlCenter
+        .Cells.ShrinkToFit = True
+        
+        .Cells.Font.Size = 11
+        ' 设置工作表背景色为白色
+        .Cells.Interior.Color = RGB(255, 255, 255)
+        ' 设置列宽和行高
+        .Columns.ColumnWidth = 3.5
+        .Rows.RowHeight = 16
+        .Columns("A").ColumnWidth = 5 ' 工号列宽
+        .Columns("B").ColumnWidth = 8 ' 姓名列宽
+        .Columns("C").ColumnWidth = 8 ' 姓名列宽
+        ' 设置工号行的边框和填充
+        With .Range(.Cells(2, 1), .Cells(日期标题行, lastDateColumn)).Borders
+            .LineStyle = xlContinuous
+        End With
+        
+        .Range(.Cells(1, 1), .Cells(1, lastDateColumn)).Merge
+        .Rows(1).RowHeight = 36
+        .Rows(1).Font.Size = 20
+        
+        ' 从工号行开始的下一行到最后一行，每四行检查并设置边框和填充
+        i = 日期标题行 + 1
+        Do While i <= lastRow
+            ' 检查姓名列下四行是否为空
+            Dim isEmptyGroup As Boolean
+            isEmptyGroup = True
+            For j = i To i + 3
+                If j > lastRow Then Exit For ' 防止超出范围
+                If Trim(.Cells(j, 2).Value) <> "" Then ' 假设姓名在第二列
+                    isEmptyGroup = False
+                    Exit For
+                End If
+            Next j
+            
+            If isEmptyGroup And i + 3 <= lastRow Then
+                ' 如果这四行都为空，则删除
+                .Range(.Cells(i, 1), .Cells(i + 3, lastColumn)).Delete Shift:=xlUp
+                lastRow = lastRow - 4 ' 更新最后一行的行号
+            Else
+                ' 设置边框和填充
+                With .Range(.Cells(i, 1), .Cells(i + 3, lastColumn))
+                    .Borders(xlInsideHorizontal).LineStyle = xlThin
+                    .Borders(xlInsideVertical).LineStyle = xlThin
+                    .Borders(xlEdgeTop).LineStyle = xlContinuous
+                    .Borders(xlEdgeBottom).LineStyle = xlContinuous
+                    .Borders(xlEdgeLeft).LineStyle = xlContinuous
+                    .Borders(xlEdgeRight).LineStyle = xlContinuous
+                    .Interior.Color = RGB(255, 255, 255)
+                End With
+                i = i + 4 ' 移到下一个四行单元
+            End If
+        Loop
+        rangeResult = 公共函数_表格范围("考勤表")
+        lastRow = rangeResult(2)(1)
+        lastColumn = rangeResult(2)(2)
+        
+        ' 遍历标题行上一行的每一列，根据内容设置颜色
+        For i = 日期开始列 To lastColumn
+            ' 获取该列标题行上一行的内容
+            Dim 列内容 As String
+            列内容 = ws.Cells(日期标题行 - 1, i).Value
+            
+            ' 设置背景色
+            Select Case 列内容
+                Case "工作日"
+                    ws.Range(ws.Cells(日期标题行 - 1, i), ws.Cells(lastRow, i)).Interior.Color = RGB(255, 255, 255) ' 白色
+                Case "调班日"
+                    ws.Range(ws.Cells(日期标题行 - 1, i), ws.Cells(lastRow, i)).Interior.Color = RGB(255, 255, 204) ' 淡黄色
+                Case "周末"
+                    ws.Range(ws.Cells(日期标题行 - 1, i), ws.Cells(lastRow, i)).Interior.Color = RGB(255, 255, 0) ' 黄色
+                Case "调休日"
+                    ws.Range(ws.Cells(日期标题行 - 1, i), ws.Cells(lastRow, i)).Interior.Color = RGB(255, 200, 0) ' 更橙的黄色
+                Case "法定节假日"
+                    ws.Range(ws.Cells(日期标题行 - 1, i), ws.Cells(lastRow, i)).Interior.Color = RGB(255, 165, 0) ' 橙黄色
+                Case Else
+                    ws.Range(ws.Cells(日期标题行 - 1, i), ws.Cells(lastRow, i)).Interior.Color = RGB(255, 0, 0) ' 红色
+            End Select
+        Next i
+        
+    End With
+End Sub
+
+Function 考勤_更新考勤表(yyyymm As String) As Integer
+    Dim importResult As Integer
+    importResult = 考勤_导入数据()
+    
+    ' 判断是否导入成功
+    If importResult = 1 Then
+        ' 导入成功，继续执行后续操作
+        考勤_格式整理 yyyymm
+        Call 考勤_更新工号
+        考勤_更新考勤表 = 1 ' 表示更新成功
+    Else
+        ' 导入失败，直接返回导入函数的返回值
+        考勤_更新考勤表 = importResult ' 返回导入数据函数的错误代码
+    End If
+End Function
+
+
+
+Sub 考勤_更新工号()
+    Dim 考勤表Ws As Worksheet, 在职信息Ws As Worksheet
+    Dim 姓名列 As Long, 工号列 As Long
+    Dim 姓名 As String, 对应工号 As String
+    Dim row As Long, lastRow As Long
+    Dim 考勤表范围 As Variant, findResult As Variant
+    
+    ' 设置工作表
+    Set 考勤表Ws = ThisWorkbook.Sheets("考勤表")
+    Set 在职信息Ws = ThisWorkbook.Sheets("本月在职信息")
+    
+    ' 在考勤表中找到姓名列和工号列
+    findResult = 公共函数_查找位置("考勤表", 标题_检验("姓名"))
+    If findResult(1) = 0 Then
+        MsgBox "在 '考勤表' 中未找到 '姓名'。", vbExclamation
+        Exit Sub
+    End If
+    姓名列 = findResult(2)(2)
+    
+    findResult = 公共函数_查找位置("考勤表", 标题_检验("工号"))
+    If findResult(1) = 0 Then
+        MsgBox "在 '考勤表' 中未找到 '工号'。", vbExclamation
+        Exit Sub
+    End If
+    工号列 = findResult(2)(2)
+    
+    ' 获取考勤表的范围
+    考勤表范围 = 公共函数_表格范围("考勤表")
+    lastRow = 考勤表范围(2)(1)
+    
+    ' 遍历姓名列的数据
+    For row = findResult(2)(1) + 1 To lastRow
+        姓名 = 考勤表Ws.Cells(row, 姓名列).Value
+        If 姓名 <> "" Then
+            ' 在本月在职信息中查找对应的工号
+            findResult = 公共函数_查找位置("本月在职信息", 姓名)
+            If findResult(1) = 1 Then
+                对应工号 = 在职信息Ws.Cells(findResult(2)(1), findResult(2)(2) - 1).Value ' 假设工号列在姓名列的左侧
+                ' 考勤_更新工号
+                考勤表Ws.Cells(row, 工号列).Value = 对应工号
+            End If
+        End If
+    Next row
+    
+   ' MsgBox "工号替换完成。"
+End Sub
+
+
+
+
+
+============================================================
+MODULE: Sheet5.cls | STREAM: VBA/Sheet5
+============================================================
+
+Attribute VB_Name = "Sheet5"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+
+
+============================================================
+MODULE: Sheet3.cls | STREAM: VBA/Sheet3
+============================================================
+
+Attribute VB_Name = "Sheet3"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+
+
+============================================================
+MODULE: Sheet7.cls | STREAM: VBA/Sheet7
+============================================================
+
+Attribute VB_Name = "Sheet7"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+
+
+============================================================
+MODULE: 本月工资核定表.bas | STREAM: VBA/本月工资核定表
+============================================================
+
+Attribute VB_Name = "本月工资核定表"
+Public Const 满天工时 As Double = 8#
+Public Const 固定计薪天 As Double = 21.5
+Sub 本月工资_基本格式写入(工作表名 As String, yyyymm As String)
+    Dim ws As Worksheet
+    Dim maxLength As Integer
+    
+    Dim 起始行 As Integer
+    Dim 起始列 As Integer
+    Dim 结束行 As Integer
+    Dim 写入标题 As Variant
+    Dim 标题行数 As Integer
+    起始行 = 4
+    起始列 = 1
+    标题行数 = 2
+    
+    ' 检查或创建工作表
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(工作表名)
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        ws.Name = 工作表名
+    Else
+        ws.Cells.Clear
+    End If
+    On Error GoTo 0
+    
+    ' 设置工作表的基本格式
+    With ws
+        .Columns.ColumnWidth = 6
+        .Rows.RowHeight = 25
+        .Cells.Font.Name = "宋体"
+        .Cells.Font.Size = 10
+        .Cells.HorizontalAlignment = xlCenter
+        .Cells.VerticalAlignment = xlCenter
+        .Cells.ShrinkToFit = True
+        .Cells.Interior.Color = RGB(255, 255, 255)
+    End With
+    
+    
+    ' 解析 yyyymm 并写入 cell(1,1)
+    yearPart = Left(yyyymm, 4) ' 提取年份
+    monthPart = Right(yyyymm, 2) ' 提取月份
+    日期 = DateSerial(yearPart, monthPart, 1)
+    ws.Cells(1, 1).Value = Format(日期, "yyyy""年""mm""月")
+    ws.Rows(1).RowHeight = 30 ' 设置第一行行高为30
+    ' 写入内容
+    
+    写入标题 = Array(标题_检验("序号"), 标题_检验("工号"), 标题_检验("姓名"), _
+        标题_检验("薪资标准"), Array(标题_检验("基本工资"), 标题_检验("基本补贴"), 标题_检验("绩效奖金"), 标题_检验("职位津贴"), 标题_检验("餐补单价")), _
+        标题_检验("考勤天数"), Array(标题_检验("整天"), 标题_检验("半天"), 标题_检验("缺勤")), 标题_检验("工时"), Array(标题_检验("基本工时"), 标题_检验("1.5倍工时"), 标题_检验("2倍工时"), 标题_检验("3倍工时"), 标题_检验("包括调休工时"), 标题_检验("餐补次数")), _
+        标题_检验("工时工资"), Array(标题_检验("基本工时工资"), 标题_检验("1.5倍工资"), 标题_检验("2倍工资"), 标题_检验("3倍工资")), _
+        标题_检验("补贴工资"), Array(标题_检验("基本补贴工资"), 标题_检验("绩效奖金工资"), 标题_检验("职位津贴工资"), 标题_检验("餐补工资")), 标题_检验("工资调整"), 标题_检验("应发薪资合计"), _
+        标题_检验("公司成本"), Array(标题_检验("住房公积金c"), 标题_检验("社保合计c"), 标题_检验("公司成本合计")), 标题_检验("个人扣除"), Array(标题_检验("住房公积金p"), 标题_检验("社保合计p"), 标题_检验("代缴个税"), 标题_检验("个人成本合计")), 标题_检验("实发薪资合计"), 标题_检验("现金发放工资"))
+    
+    
+    ' 写入标题_检验("工时")数组
+    maxLength = 本月工资_辅助函数_数组标题写入(ws, 起始行, 标题行数, 起始列, 写入标题)
+    
+    ' 调用函数获取表格的最大列数
+    表格范围结果 = 公共函数_表格范围(工作表名)
+    If 表格范围结果(1) = 0 Then
+        ' 如果函数返回失败，则退出子程序
+        Exit Sub
+    Else
+        最大列数 = 表格范围结果(2)(2) ' 获取最大列数
+    End If
+    ' 合并单元格和设置背景色
+    ws.Cells(2, 最大列数 - 5).Value = "作成:"
+    ws.Cells(3, 最大列数 - 5).Value = "复核:"
+    ws.Range(ws.Cells(1, 1), ws.Cells(1, 最大列数)).Merge
+    With ws.Range(ws.Cells(起始行, 1), ws.Cells(起始行 + 标题行数 - 1, 最大列数))
+        .Interior.Color = RGB(192, 192, 192) ' 灰色
+        .WrapText = True ' 自动换行
+        .Font.Bold = True ' 字体加粗
+    End With
+    Call 公共函数_标题写入(工作表名, "工资福利核定表-吉众")
+End Sub
+
+
+
+Function 本月工资_辅助函数_数组标题写入(ws As Worksheet, startRow As Integer, maxlevel As Integer, startCol As Integer, data As Variant, Optional level As Integer = 1) As Integer
+    Dim i As Integer
+    Dim currentCol As Integer
+    Dim isNextItemArray As Boolean
+    currentCol = startCol
+
+    For i = LBound(data) To UBound(data)
+        ' 检查下一个元素是否为数组（如果存在下一个元素）
+        isNextItemArray = False
+        If i < UBound(data) Then
+            isNextItemArray = IsArray(data(i + 1))
+        End If
+
+        If IsArray(data(i)) Then
+            ' 如果是数组，递归调用函数处理下一层
+            currentCol = currentCol - 1
+            currentCol = 本月工资_辅助函数_数组标题写入(ws, startRow + 1, maxlevel, currentCol, data(i), level + 1)
+        Else
+            ' 如果是字符串，写入单元格
+            ws.Cells(startRow, currentCol).Value = data(i)
+
+            ' 如果是第一层并且下一个元素不是数组，进行竖向合并单元格
+            If level = 1 And Not isNextItemArray Then
+                ws.Range(ws.Cells(startRow, currentCol), ws.Cells(startRow + maxlevel - level, currentCol)).Merge
+            End If
+
+            currentCol = currentCol + 1
+        End If
+    Next i
+
+    ' 处理完当前层后，合并上一层的单元格
+    If level > 1 And currentCol - 1 > startCol Then
+        ws.Range(ws.Cells(startRow - 1, startCol), ws.Cells(startRow - 1, currentCol - 1)).Merge
+    End If
+
+    ' 返回更新后的列号
+    本月工资_辅助函数_数组标题写入 = currentCol
+End Function
+Function 本月工资核定表_员工考勤(工号 As String) As Variant
+    
+    ' 声明所需变量
+    Dim ws As Worksheet
+    Dim findResult As Variant
+    Dim 工号行 As Long, 日期列 As Long, 工号列 As Long, 日期行 As Long, 数据有效列 As Long, 日期类型行 As Long
+    Dim 作业时间行 As Long, 加班时间行 As Long, 餐补行 As Long
+    Dim 行间隔数 As Integer, 每天基础工时 As Integer, 工作日数 As Integer
+    Dim 工作日工时总和 As Double, 倒休时长 As Double, 二倍工时 As Double, 三倍工时 As Double, 一点五倍工时 As Double, 餐补数 As Double
+    Dim 整天 As Integer, 半天 As Integer, 缺勤天 As Integer
+    Dim 结果合计数组 As Variant
+    Dim 姓名列 As Long
+    ' 设置工作表
+    Set ws = ThisWorkbook.Sheets("考勤表")
+    
+    ' 找到日期行和数据有效列
+    findResult = 公共函数_查找位置("考勤表", "日期")
+    If findResult(1) = 0 Then
+        MsgBox "在 '考勤表' 中未找到 '日期'。", vbExclamation
+        Exit Function
+    End If
+    日期行 = findResult(2)(1)
+    日期列 = findResult(2)(2)
+    数据有效列 = ws.Cells(日期行, ws.Columns.Count).End(xlToLeft).Column
+    ' 找到日期类型行
+    findResult = 公共函数_查找位置("考勤表", "日期类型")
+    If findResult(1) = 0 Then
+        MsgBox "在 '考勤表' 中未找到 '日期'。", vbExclamation
+        Exit Function
+    End If
+    日期类型行 = findResult(2)(1)
+    ' 查找工号对应的行和列
+    findResult = 公共函数_查找位置("考勤表", 工号)
+    If findResult(1) = 0 Then
+        'MsgBox "未找到工号 '" & 工号 & "'。", vbExclamation
+        ' 设置所有结果为0
+        
+        本月工资核定表_员工考勤 = 0
+        Exit Function
+        
+        
+    End If
+    工号行 = findResult(2)(1)
+    工号列 = findResult(2)(2)
+    
+    ' 查找姓名对应的列
+    findResult = 公共函数_查找位置("考勤表", 标题_检验("姓名"))
+    If findResult(1) = 0 Then
+        MsgBox "在 '考勤表' 中未找到 '姓名'。", vbExclamation
+        Exit Function
+    End If
+    姓名列 = findResult(2)(2)
+    ' 初始化间隔确认值
+    Dim 间隔确认值 As Variant
+    
+    
+    间隔确认值 = ws.Cells(工号行, 日期列).Value
+    
+    ' 计算行间隔数
+    行间隔数 = 0
+    For i = 工号行 + 1 To ws.Rows.Count
+        If ws.Cells(i, 日期列).Value <> 间隔确认值 And Len(ws.Cells(i, 日期列).Value) > 0 Then
+            行间隔数 = 行间隔数 + 1
+        Else
+            
+            ' 一旦发现不符合条件的行，立即退出循环
+            Exit For
+        End If
+    Next i
+    
+    ' 设定工号所在区域
+    Set 工号区域 = ws.Range(ws.Cells(工号行, 日期列), ws.Cells(工号行 + 行间隔数, 日期列))
+    
+    ' 在工号区域内查找作业时间、加班时间和餐补的行号
+    Set findResult = 工号区域.Find("作业时间", LookIn:=xlValues)
+    If Not findResult Is Nothing Then 作业时间行 = findResult.row
+    Set findResult = 工号区域.Find("加班时间", LookIn:=xlValues)
+    If Not findResult Is Nothing Then 加班时间行 = findResult.row
+    Set findResult = 工号区域.Find("餐补", LookIn:=xlValues)
+    If Not findResult Is Nothing Then 餐补行 = findResult.row
+    ' 初始化变量
+    每天基础工时 = 8
+    工作日数 = 0
+    工作日工时总和 = 0
+    倒休时长 = 0
+    二倍工时 = 0
+    三倍工时 = 0
+    一点五倍工时 = 0
+    餐补数 = 0
+    
+    ' 新增变量
+    
+    整天 = 0
+    半天 = 0
+    缺勤天 = 0
+    ' 遍历日期类型的列，进行计算
+    For i = 日期行 + 1 To 数据有效列
+        Dim 日期类型 As String
+        日期类型 = ws.Cells(日期类型行, i).Value
+        Dim 当前作业时间 As Double, 当前加班时间 As Double
+        当前作业时间 = ws.Cells(作业时间行, i).Value
+        当前加班时间 = ws.Cells(加班时间行, i).Value
+
+        If 日期类型 = "工作日" Or 日期类型 = "调班日" Then
+            ' 工作日计算
+            工作日数 = 工作日数 + 1
+            工作日工时总和 = 工作日工时总和 + 当前作业时间
+            
+            ' 计算倒休时长
+            If 当前作业时间 < 每天基础工时 Then
+                倒休时长 = 倒休时长 + (每天基础工时 - 当前作业时间)
+     
+            End If
+            
+            ' 计算1.5倍工时
+            一点五倍工时 = 一点五倍工时 + 当前加班时间
+        ElseIf 日期类型 = "周末" Or 日期类型 = "调休日" Then
+            ' 周末或调休日计算
+            二倍工时 = 二倍工时 + 当前作业时间 + 当前加班时间
+        ElseIf 日期类型 = "法定节假日" Then
+            ' 法定节假日计算
+            三倍工时 = 三倍工时 + 当前作业时间 + 当前加班时间
+        End If
+        
+        ' 计算餐补
+        If ws.Cells(餐补行, i).Value <> "" Then
+            餐补数 = 餐补数 + ws.Cells(餐补行, i).Value
+        End If
+        ' 判断是否上了整天
+        If Len(ws.Cells(作业时间行, i).Value) > 0 Then
+            If ws.Cells(作业时间行, i).Value >= 每天基础工时 Then
+                整天 = 整天 + 1
+            Else
+                半天 = 半天 + 1
+            End If
+        Else
+            If ws.Cells(作业时间行, i).Value = 0 Then
+                缺勤天 = 缺勤天 + 1
+            End If
+        End If
+    Next i
+ 
+    ' 调整2倍工时和基础工时
+    实际倒休 = 二倍工时 - 倒休时长
+        
+        If 实际倒休 <= 0 Then
+    倒休时长 = 倒休时长 + 实际倒休
+
+    End If
+    二倍工时 = 二倍工时 - 倒休时长
+
+    If 二倍工时 < 0 Then 二倍工时 = 0
+    '
+    工作日工时总和 = 工作日工时总和 + 倒休时长
+    
+
+    ' 定义结果合计数组
+    
+    结果合计数组 = Array( _
+        标题_检验("工号"), 工号, _
+        标题_检验("姓名"), ws.Cells(工号行, 姓名列).Value, _
+        "日期行", 日期行, _
+        "数据有效列", 数据有效列, _
+        "工号行", 工号行, _
+        "作业时间行", 作业时间行, _
+        "加班时间行", 加班时间行, _
+        "餐补行", 餐补行, _
+        标题_检验("包括调休工时"), 倒休时长, _
+        标题_检验("基本工时"), 工作日工时总和, _
+        标题_检验("1.5倍工时"), 一点五倍工时, _
+        标题_检验("2倍工时"), 二倍工时, _
+        标题_检验("3倍工时"), 三倍工时, _
+        标题_检验("餐补次数"), 餐补数, _
+        标题_检验("整天"), 整天, _
+        标题_检验("半天"), 半天, _
+        标题_检验("缺勤"), 缺勤天 _
+        )
+    
+    ' 检查数组长度是否为偶数
+    If UBound(结果合计数组) Mod 2 = 0 Then
+        MsgBox "结果合计数组的长度不是偶数。"
+        Exit Function
+    End If
+    
+    ' 定义和初始化键和值的数组
+    
+    Dim 数组长度 As Integer
+    数组长度 = (UBound(结果合计数组) + 1) / 2  '这个数组是从0开始,所以+1
+    
+    
+    ReDim 结果(1 To 2, 1 To 数组长度) As Variant
+    For i = 1 To 数组长度
+        
+        结果(1, i) = 结果合计数组((i - 1) * 2)
+        结果(2, i) = 结果合计数组((i - 1) * 2 + 1)
+    Next i
+    ' 构建消息框内容
+    Dim 消息内容 As String
+    For i = 1 To 数组长度
+        消息内容 = 消息内容 & 结果(1, i) & ": " & 结果(2, i) & vbNewLine
+    Next i
+    
+    ' 显示消息框
+    'MsgBox 消息内容, vbInformation, "员工考勤结果"
+    
+    ' 返回结果数组
+    本月工资核定表_员工考勤 = 结果
+End Function
+
+
+Sub test_考勤()
+jg = 本月工资核定表_员工考勤("A0005")
+Stop
+End Sub
+' 测试过程
+Function 本月工资核定表_获取本月满勤天() As Variant
+    Dim ws As Worksheet
+    Dim findResult As Variant
+    Dim 日期类型行 As Long, 数据有效列 As Long
+    Dim 本月工作日天 As Integer, 本月工作日小时 As Double
+    Dim 标准工时天 As Double, 标准工时小时 As Double
+    Dim 结果(1 To 2, 1 To 2) As Variant ' 修正了结果数组的定义
+
+    ' 设置工作表
+    Set ws = ThisWorkbook.Sheets("考勤表")
+
+    ' 初始化变量
+    标准工时天 = 21.5
+    标准工时小时 = 标准工时天 * 8
+    本月工作日天 = 0
+    本月工作日小时 = 0
+
+    ' 找到日期类型行和数据有效列
+    findResult = 公共函数_查找位置("考勤表", "日期类型")
+    If findResult(1) = 0 Then
+        MsgBox "在 '考勤表' 中未找到 '日期类型'。", vbExclamation
+        Exit Function
+    End If
+    日期类型行 = findResult(2)(1)
+    数据有效列 = ws.Cells(日期类型行, ws.Columns.Count).End(xlToLeft).Column
+
+    ' 遍历日期类型的列，计算工作日天数
+    For i = 日期类型行 + 1 To 数据有效列
+        If ws.Cells(日期类型行, i).Value = "工作日" Or ws.Cells(日期类型行, i).Value = "调班日" Then
+            本月工作日天 = 本月工作日天 + 1
+        End If
+    Next i
+
+    ' 计算本月工作日小时数
+    本月工作日小时 = 本月工作日天 * 8
+
+    ' 设置结果数组
+    结果(1, 1) = 标准工时天
+    结果(1, 2) = 标准工时小时
+    结果(2, 1) = 本月工作日天
+    结果(2, 2) = 本月工作日小时
+
+    ' 返回结果
+    本月工资核定表_获取本月满勤天 = 结果
+End Function
+
+
+Sub 本月工资核定表_整合执行_个税计算前(yyyymm As String)
+    Dim rq As String
+    Dim 基本工资 As Double: 基本工资 = 0
+    Dim 基本补贴 As Double: 基本补贴 = 0
+    Dim 绩效奖金 As Double: 绩效奖金 = 0
+    Dim 职位津贴 As Double: 职位津贴 = 0
+    Dim 餐补单价 As Double: 餐补单价 = 0
+    Dim 基本工时 As Double: 基本工时 = 0
+    Dim 倍数1_5工时 As Double: 倍数1_5工时 = 0
+    Dim 倍数2工时 As Double: 倍数2工时 = 0
+    Dim 倍数3工时 As Double: 倍数3工时 = 0
+    Dim 餐补次数 As Double: 餐补次数 = 0
+    ' 获取工号对应的计薪方式
+    Dim 计薪方式列号 As Integer
+    Dim 计薪方式 As String
+    Dim 人员薪资信息位置 As Variant
+    
+    ' 设置所需的年月标识符
+    rq = yyyymm  'yyyymm日期
+    
+    ' 声明变量
+    Dim ws As Worksheet
+    Dim 临时表格名 As String
+    Dim 临时工号 As String
+    Dim 临时导出工作表 As String
+    
+    
+    ' 定义工资核定表及其对应的社会保险和住房公积金表
+    表格数组 = Array("本月工资核定表", "本月工资核定表-不入账")
+    导出工作表数组 = Array("本月社会保险", "本月住房公积金", "人员薪资信息")
+    
+    
+    ' 定义入账和不入账员工类型
+    
+    入账员工类型 = Array("正式工", "其他-管理", "返聘工")
+    不入账员工类型 = Array("临时工", "兼职")
+    
+    
+    ' 获取人员薪资信息工作表
+    Dim ws人员薪资信息 As Worksheet
+    Set ws人员薪资信息 = ThisWorkbook.Sheets("人员薪资信息")
+    Dim 人员类型列号 As Integer
+    人员类型列号位置 = 公共函数_查找位置("人员薪资信息", 标题_检验("人员类型"))
+    人员类型列号 = 人员类型列号位置(2)(2)
+    人员类型行号 = 人员类型列号位置(2)(1)
+    ' 检查人员类型是否在预定义数组中
+    Dim row As Long
+    For row = 人员类型行号 + 1 To ws人员薪资信息.Cells(ws人员薪资信息.Rows.Count, 人员类型列号).End(xlUp).row
+        Dim 当前人员类型 As String
+        当前人员类型 = ws人员薪资信息.Cells(row, 人员类型列号).Value
+        If Not IsInArray(当前人员类型, 入账员工类型) And Not IsInArray(当前人员类型, 不入账员工类型) Then
+            MsgBox "在第 " & row & " 行找到未知人员类型: " & 当前人员类型, vbExclamation
+            ws人员薪资信息.Cells(row, 人员类型列号).Interior.Color = vbYellow
+            Exit Sub
+        End If
+    Next row
+    ' 在开始处定义字典
+    Dim 标题位置字典 As Object
+    Set 标题位置字典 = CreateObject("Scripting.Dictionary")
+    
+    ' 遍历工资核定表
+    For i = LBound(表格数组) To UBound(表格数组)
+        临时表格名 = 表格数组(i)
+        Call 本月工资_基本格式写入(临时表格名, yyyymm)
+        Set ws = ThisWorkbook.Sheets(临时表格名)
+        
+        ' 使用Range.Find方法查找“工号”的位置
+        Dim 工号单元格 As Range
+        Set 工号单元格 = ws.Cells.Find(What:=标题_检验("工号"), LookIn:=xlValues, LookAt:=xlWhole)
+        
+        ' 检查是否找到“工号”
+        If Not 工号单元格 Is Nothing Then
+            Dim 起始行 As Long, 结束行 As Long
+            起始行 = 工号单元格.MergeArea.row
+            结束行 = 起始行 + 工号单元格.MergeArea.Rows.Count - 1
+            
+            ' 遍历合并单元格的所有行
+            Dim 行号 As Long, 列号 As Long
+            For 行号 = 起始行 To 结束行
+                For 列号 = 1 To ws.Cells(行号, ws.Columns.Count).End(xlToLeft).Column
+                    Dim 当前单元格 As Range
+                    Set 当前单元格 = ws.Cells(行号, 列号)
+                    If Len(当前单元格.Value) > 0 Then
+                        ' 记录非空单元格的标题和列号
+                        标题位置字典(当前单元格.Value) = 列号
+                    End If
+                Next 列号
+            Next 行号
+        End If
+        
+        
+        ' 获取需要的列号
+        Dim 列号工资调整, 列号应发薪资合计, 列号基本工时工资, 列号1_5倍工资, 列号2倍工资, 列号3倍工资, 列号基本补贴工资, 列号绩效奖金工资, 列号职位津贴工资, 列号餐补工资 As Integer
+        列号工资调整 = 标题位置字典(标题_检验("工资调整"))
+        列号应发薪资合计 = 标题位置字典(标题_检验("应发薪资合计"))
+        列号基本工时工资 = 标题位置字典(标题_检验("基本工时工资"))
+        列号1_5倍工资 = 标题位置字典(标题_检验("1.5倍工资"))
+        列号2倍工资 = 标题位置字典(标题_检验("2倍工资"))
+        列号3倍工资 = 标题位置字典(标题_检验("3倍工资"))
+        列号基本补贴工资 = 标题位置字典(标题_检验("基本补贴工资"))
+        列号绩效奖金工资 = 标题位置字典(标题_检验("绩效奖金工资"))
+        列号职位津贴工资 = 标题位置字典(标题_检验("职位津贴工资"))
+        列号餐补工资 = 标题位置字典(标题_检验("餐补工资"))
+        
+        
+        'Call 本月工资_基本格式写入(临时表格名,yyyymm)
+        If 表格数组(i) = "本月工资核定表" Then
+            结果 = 公共函数_复制相同标题_限定条件("人员薪资信息", 标题_检验("工号"), 标题_检验("人员类型"), 入账员工类型, "本月工资核定表", 标题_检验("工号"))
+            
+        ElseIf 表格数组(i) = "本月工资核定表-不入账" Then
+            结果 = 公共函数_复制相同标题_限定条件("人员薪资信息", 标题_检验("工号"), 标题_检验("人员类型"), 不入账员工类型, "本月工资核定表-不入账", 标题_检验("工号"))
+            
+        Else
+            MsgBox "未知工作表" & 临时表格名
+        End If
+        
+        ' 获取表格范围和工号位置
+        表格_范围 = 公共函数_表格范围(临时表格名)
+        表格_工号位置 = 公共函数_查找位置(临时表格名, 标题_检验("工号"))
+        表格_标题位置 = 公共函数_查找位置(临时表格名, 标题_检验("基本工资"))
+        
+        ' 遍历工号并复制相关数据
+        For n = 表格_标题位置(2)(1) + 1 To 表格_范围(2)(1)
+            
+            临时工号 = ws.Cells(n, 表格_工号位置(2)(2)).Value
+            
+            Dim 人员薪资信息行 As Long
+            人员薪资信息行 = 公共函数_查找位置("人员薪资信息", 临时工号)(2)(1)
+            
+            For m = LBound(导出工作表数组) To UBound(导出工作表数组)
+                临时导出工作表 = 导出工作表数组(m)
+                
+                结果 = 公共函数_根据工号和标题复制(临时工号, 临时表格名, 临时导出工作表)
+                
+            Next m
+            
+            ' 获取员工考勤结果
+            Dim 考勤结果 As Variant
+            考勤结果 = 本月工资核定表_员工考勤(临时工号)
+            
+            If IsArray(考勤结果) Then  '如果返回了数组,没有返回数组说明没找到工号
+                
+                ' 遍历考勤结果并写入工作表
+                For j = 1 To UBound(考勤结果, 2)
+                    Dim 标题 As String
+                    Dim 结果值 As Variant
+                    标题 = 考勤结果(1, j)
+                    结果值 = 考勤结果(2, j)
+                    
+                    ' 查找标题对应的列位置
+                    Dim 标题位置 As Variant
+                    标题位置 = 公共函数_查找位置_最下位置(临时表格名, 标题)
+                    
+                    ' 将结果写入对应位置
+                    If 标题位置(1) = 1 Then
+                        ws.Cells(n, 标题位置(2)(2)).Value = 结果值
+                    End If
+                    
+                Next j
+                ' 获取工资计算所需的参数
+                
+                基本工资 = CDbl(ws.Cells(n, 标题位置字典(标题_检验("基本工资"))).Value)
+                基本补贴 = ws.Cells(n, 标题位置字典(标题_检验("基本补贴"))).Value
+                绩效奖金 = ws.Cells(n, 标题位置字典(标题_检验("绩效奖金"))).Value
+                职位津贴 = ws.Cells(n, 标题位置字典(标题_检验("职位津贴"))).Value
+                餐补单价 = ws.Cells(n, 标题位置字典(标题_检验("餐补单价"))).Value
+                基本工时 = ws.Cells(n, 标题位置字典(标题_检验("基本工时"))).Value
+                倍数1_5工时 = ws.Cells(n, 标题位置字典(标题_检验("1.5倍工时"))).Value
+                倍数2工时 = ws.Cells(n, 标题位置字典(标题_检验("2倍工时"))).Value
+                倍数3工时 = ws.Cells(n, 标题位置字典(标题_检验("3倍工时"))).Value
+                餐补次数 = ws.Cells(n, 标题位置字典(标题_检验("餐补次数"))).Value
+                ' 调用工资计算函数
+                工资计算结果 = 本月工资核定_工资计算(rq, 临时工号, 基本工资, 基本补贴, 绩效奖金, 职位津贴, 餐补单价, 基本工时, 倍数1_5工时, 倍数2工时, 倍数3工时, 餐补次数)
+                
+                ' 遍历工资计算结果并写入
+                For k = 1 To UBound(工资计算结果, 2)
+                    Dim 计算结果标题 As String
+                    Dim 计算结果值 As Variant
+                    计算结果标题 = 工资计算结果(1, k)
+                    计算结果值 = 工资计算结果(2, k)
+                    
+                    If 标题位置字典.Exists(计算结果标题) Then
+                        ws.Cells(n, 标题位置字典(计算结果标题)).Value = 计算结果值
+                    End If
+                Next k
+            End If
+
+            人员薪资信息位置 = 公共函数_查找位置("人员薪资信息", 标题_检验("计薪方式"))
+            If 人员薪资信息位置(1) = 1 Then
+                计薪方式列号 = 人员薪资信息位置(2)(2)
+                计薪方式 = ThisWorkbook.Sheets("人员薪资信息").Cells(人员薪资信息行, 计薪方式列号).Value
+                
+            End If
+            ' 如果计薪方式是"税后管理工资"，将相关列的值设为0
+            
+            If 计薪方式 = 标题_检验("税后管理工资") Then
+                
+                Dim 相关标题 As Variant
+                相关标题 = Array(标题_检验("1.5倍工资"), 标题_检验("2倍工资"), 标题_检验("3倍工资"), _
+                    标题_检验("基本补贴工资"), 标题_检验("绩效奖金工资"), 标题_检验("职位津贴工资"), _
+                    标题_检验("餐补工资"))
+                Dim 标题名称 As Variant
+                For Each 标题名称 In 相关标题
+                    If 标题位置字典.Exists(标题名称) Then
+                        ws.Cells(n, 标题位置字典(标题名称)).Value = 0
+                    End If
+                Next 标题名称
+            End If
+
+            ' 在逻辑最后，计算并写入应发薪资合计
+            Dim 应发薪资合计 As Double
+            Dim 应发薪资调整前 As Double
+            
+            
+            应发薪资合计 = ws.Cells(n, 列号工资调整).Value + ws.Cells(n, 列号基本工时工资).Value + ws.Cells(n, 列号1_5倍工资).Value + _
+                ws.Cells(n, 列号2倍工资).Value + ws.Cells(n, 列号3倍工资).Value + ws.Cells(n, 列号基本补贴工资).Value + _
+                ws.Cells(n, 列号绩效奖金工资).Value + ws.Cells(n, 列号职位津贴工资).Value + ws.Cells(n, 列号餐补工资).Value
+            ws.Cells(n, 列号应发薪资合计).Value = 应发薪资合计
+
+        Next n
+        
+    Next i
+    
+    
+    
+End Sub
+
+
+
+Function 本月工资核定_工资计算(yyyymm As String, 工号 As String, 基本工资 As Double, 基本补贴 As Double, 绩效奖金 As Double, 职位津贴 As Double, 餐补单价 As Double, 基本工时 As Double, 倍数1_5工时 As Double, 倍数2工时 As Double, 倍数3工时 As Double, 餐补次数 As Double) As Variant
+    ' 声明变量
+    Dim 满天工时 As Double
+    Dim 固定平均月工作日 As Double
+    Dim 固定平均月工作时常 As Double
+    Dim 固定平均月时薪 As Double
+    Dim 动态月工作日 As Double
+    Dim 动态月工作时长 As Double
+    Dim 动态月平均时薪 As Double
+    Dim 基本工时工资 As Double
+    Dim 基本缺勤时长 As Double
+    Dim 倍数1_5工资 As Double
+    Dim 倍数2工资 As Double
+    Dim 倍数3工资 As Double
+    Dim 基本补贴工资 As Double
+    Dim 绩效奖金工资 As Double
+    Dim 职位津贴工资 As Double
+    Dim 餐补工资 As Double
+    Dim 结果(1 To 2, 1 To 9) As Variant
+    
+    ' 初始化变量
+    满天工时 = 8
+    固定平均月工作日 = 21.5
+    固定平均月工作时常 = 固定平均月工作日 * 满天工时
+    固定平均月时薪 = 基本工资 / 固定平均月工作日 / 满天工时
+    
+    
+    
+    ' 使用“日期管理_本月工时”函数获取动态月工作日
+    test = 日期管理_本月工时(yyyymm)
+    动态月工作日 = 日期管理_本月工时(yyyymm)(1) + 日期管理_本月工时(yyyymm)(2)
+
+    动态月工作时长 = 动态月工作日 * 满天工时
+    动态月平均时薪 = 基本工资 / 动态月工作日 / 满天工时
+    基本缺勤时长 = 动态月工作时长 - 基本工时
+    
+    基本工时工资 = Application.WorksheetFunction.Round(基本工时 * 动态月平均时薪, 2)
+    倍数1_5工资 = Application.WorksheetFunction.Round(固定平均月时薪 * 倍数1_5工时 * 1.5, 2)
+    倍数2工资 = Application.WorksheetFunction.Round(固定平均月时薪 * 倍数2工时 * 2, 2)
+    倍数3工资 = Application.WorksheetFunction.Round(固定平均月时薪 * 倍数3工时 * 3, 2)
+    基本补贴工资 = Application.WorksheetFunction.Round(基本补贴 - 基本补贴 / 动态月工作时长 * 基本缺勤时长, 2)
+ 
+    绩效奖金工资 = Application.WorksheetFunction.Round(绩效奖金 - 绩效奖金 / 固定平均月工作时常 * 基本缺勤时长, 2)
+    '绩效奖金工资 = Application.WorksheetFunction.Round(绩效奖金 - 绩效奖金 / 动态月工作时长 * 基本缺勤时长, 2)
+    职位津贴工资 = Application.WorksheetFunction.Round(职位津贴 - 职位津贴 / 动态月工作时长 * 基本缺勤时长, 2)
+    餐补工资 = Application.WorksheetFunction.Round(餐补单价 * 餐补次数, 2)
+ 
+    ' 准备返回结果
+    结果(1, 1) = 标题_检验("工号")
+    结果(2, 1) = 工号
+    结果(1, 2) = 标题_检验("基本工时工资")
+    结果(2, 2) = 基本工时工资
+    结果(1, 3) = 标题_检验("1.5倍工资")
+    结果(2, 3) = 倍数1_5工资
+    结果(1, 4) = 标题_检验("2倍工资")
+    结果(2, 4) = 倍数2工资
+    结果(1, 5) = 标题_检验("3倍工资")
+    结果(2, 5) = 倍数3工资
+    结果(1, 6) = 标题_检验("基本补贴工资")
+    结果(2, 6) = 基本补贴工资
+    结果(1, 7) = 标题_检验("绩效奖金工资")
+    结果(2, 7) = 绩效奖金工资
+    结果(1, 8) = 标题_检验("职位津贴工资")
+    结果(2, 8) = 职位津贴工资
+    结果(1, 9) = 标题_检验("餐补工资")
+    结果(2, 9) = 餐补工资
+    
+    ' 返回结果数组
+    本月工资核定_工资计算 = 结果
+End Function
+
+Sub 本月工资核定表_整合执行_个税计算后()
+    ' 定义工资核定表及其对应的社会保险和住房公积金表
+    Dim 表格数组 As Variant
+    表格数组 = Array("本月工资核定表", "本月工资核定表-不入账")
+    
+    Dim i As Integer
+    For i = LBound(表格数组) To UBound(表格数组)
+        Dim 临时表格名 As String
+        临时表格名 = 表格数组(i)
+
+        Dim ws As Worksheet
+        Set ws = ThisWorkbook.Sheets(临时表格名)
+        
+        ' 获取标题行的最下行数
+        Dim 数据开始行 As Long
+        Dim 标题行位置 As Variant
+        标题行位置 = 公共函数_查找位置_最下位置(临时表格名, "序号")
+        If 标题行位置(1) = 0 Then Exit Sub
+        数据开始行 = 标题行位置(2)(1) + 1
+
+        ' 获取表格范围
+        Dim 表格范围 As Variant
+        表格范围 = 公共函数_表格范围(临时表格名)
+  
+        If 表格范围(1) = 0 Or 表格范围(2)(1) < 数据开始行 Then Exit Sub
+        
+        ' 查找所需列的位置
+        Dim 公司成本合计位置, 住房公积金c位置, 社保合计c位置, 住房公积金p位置, 社保合计p位置, 代缴个税位置, 实发薪资合计位置, 现金发放工资位置 As Long
+        公司成本合计位置 = 公共函数_查找位置(临时表格名, "公司成本合计")(2)(2)
+        住房公积金c位置 = 公共函数_查找位置(临时表格名, "住房公积金c")(2)(2)
+        社保合计c位置 = 公共函数_查找位置(临时表格名, "社保合计c")(2)(2)
+        住房公积金p位置 = 公共函数_查找位置(临时表格名, "住房公积金p")(2)(2)
+        社保合计p位置 = 公共函数_查找位置(临时表格名, "社保合计p")(2)(2)
+        代缴个税位置 = 公共函数_查找位置(临时表格名, "代缴个税")(2)(2)
+        实发薪资合计位置 = 公共函数_查找位置(临时表格名, "实发薪资合计")(2)(2)
+        现金发放工资位置 = 公共函数_查找位置(临时表格名, "现金发放工资")(2)(2)
+        个人成本合计位置 = 公共函数_查找位置(临时表格名, "个人成本合计")(2)(2)
+        应发薪资位置 = 公共函数_查找位置(临时表格名, "应发薪资合计")(2)(2)
+        序号位置 = 公共函数_查找位置(临时表格名, "序号")(2)(2)
+        ' 声明变量，获取各个标题的列位置
+        Dim 基本工时工资位置, 倍15工资位置, 倍2工资位置, 倍3工资位置, _
+            基本补贴工资位置, 绩效奖金工资位置, 职位津贴工资位置, 餐补工资位置, 工资调整位置 As Long
+        
+        ' 使用公共函数_查找位置获取每个标题的位置
+        基本工时工资位置 = 公共函数_查找位置(临时表格名, "基本工时工资")(2)(2)
+        倍15工资位置 = 公共函数_查找位置(临时表格名, "1.5倍工资")(2)(2)
+        倍2工资位置 = 公共函数_查找位置(临时表格名, "2倍工资")(2)(2)
+        倍3工资位置 = 公共函数_查找位置(临时表格名, "3倍工资")(2)(2)
+        基本补贴工资位置 = 公共函数_查找位置(临时表格名, "基本补贴工资")(2)(2)
+        绩效奖金工资位置 = 公共函数_查找位置(临时表格名, "绩效奖金工资")(2)(2)
+        职位津贴工资位置 = 公共函数_查找位置(临时表格名, "职位津贴工资")(2)(2)
+        餐补工资位置 = 公共函数_查找位置(临时表格名, "餐补工资")(2)(2)
+        工资调整位置 = 公共函数_查找位置(临时表格名, "工资调整")(2)(2)
+        
+        ' 获取个人所得税工作表的工号和当月应缴纳所得税的位置
+        Dim 工号位置, 当月应缴纳所得税位置 As Variant
+        Set ws税 = ThisWorkbook.Sheets("本月个人所得税")
+        工资工号位置 = 公共函数_查找位置(临时表格名, "工号")
+        当月应缴纳所得税位置 = 公共函数_查找位置("本月个人所得税", "当月应缴纳所得税")
+        x = 1
+        ' 遍历工资核定表的数据行
+        Dim 行 As Long
+        For 行 = 数据开始行 To 表格范围(2)(1)
+            
+            ' 计算公司成本合计
+            ws.Cells(行, 公司成本合计位置).Value = ws.Cells(行, 住房公积金c位置).Value + ws.Cells(行, 社保合计c位置).Value
+            
+            ' 获取个税表中对应工号的当月应缴纳所得税
+            Dim 工号 As String
+            工号 = ws.Cells(行, 工资工号位置(2)(2)).Value
+            工号_个税位置 = 公共函数_查找位置("本月个人所得税", 工号)
+            应发薪资合计_个税位置 = 公共函数_查找位置("本月个人所得税", "应发薪资合计")
+            实发薪资合计_个税位置 = 公共函数_查找位置("本月个人所得税", "实发薪资合计")
+            Dim 个税行 As Long
+            If 工号_个税位置(1) = 1 Then
+                个税行 = 工号_个税位置(2)(1)
+                ws.Cells(行, 代缴个税位置).Value = ws税.Cells(个税行, 当月应缴纳所得税位置(2)(2)).Value
+                ' 计算实发薪资
+                ws.Cells(行, 实发薪资合计位置).Value = ws税.Cells(个税行, 实发薪资合计_个税位置(2)(2)).Value
+                ' 计算应发薪资
+                ws.Cells(行, 应发薪资位置).Value = ws税.Cells(个税行, 应发薪资合计_个税位置(2)(2)).Value
+            Else
+                
+            End If
+            
+            
+            ' 计算个人成本合计
+            ws.Cells(行, 个人成本合计位置).Value = ws.Cells(行, 住房公积金p位置).Value + ws.Cells(行, 社保合计p位置).Value + ws.Cells(行, 代缴个税位置).Value
+            ' 计算现金发放工资
+            ws.Cells(行, 实发薪资合计位置).Value = ws.Cells(行, 应发薪资位置).Value - ws.Cells(行, 个人成本合计位置).Value
+            ws.Cells(行, 现金发放工资位置).Value = WorksheetFunction.RoundUp(ws.Cells(行, 应发薪资位置).Value - ws.Cells(行, 个人成本合计位置).Value, 0)
+            ws.Cells(行, 序号位置).Value = x
+            x = x + 1
+            
+            
+        Next 行
+        
+        本月工资核定_格式二次整理 (临时表格名)
+    Next i
+End Sub
+
+Sub 本月工资核定_格式二次整理(表格名 As String)
+    Dim ws As Worksheet
+    Dim findResult As Variant
+    Dim findResultBottom As Variant
+    Dim 最大行 As Long, 最大列 As Long
+    Dim 数据开始行 As Long
+    Dim 表格范围结果 As Variant
+    Dim i As Long
+
+    ' 确保工作表存在
+    Set ws = ThisWorkbook.Sheets(表格名)
+    If ws Is Nothing Then
+        MsgBox "指定的工作表不存在。", vbExclamation
+        Exit Sub
+    End If
+
+    ' 使用查找位置找到“工号”所在的列和行
+    findResult = 公共函数_查找位置(表格名, "工号")
+    ' 假设的查找位置_最下位置函数，需要实现
+    findResultBottom = 公共函数_查找位置_最下位置(表格名, "工号")
+
+    ' 确定数据开始行
+    数据开始行 = findResultBottom(2)(1) + 1
+
+    ' 获取工作表的最大列数和最大行数
+    表格范围结果 = 公共函数_表格范围(表格名)
+    最大列 = 表格范围结果(2)(2)
+    最大行 = 表格范围结果(2)(1)
+
+    ' 合并单元格并写入"合计"
+    ws.Range(ws.Cells(最大行 + 1, 1), ws.Cells(最大行 + 1, 3)).Merge
+    ws.Cells(最大行 + 1, 1).Value = "合计"
+
+    ' 从第四列开始进行合计
+    For i = 4 To 最大列
+        ws.Cells(最大行 + 1, i).Formula = "=SUM(" & ws.Cells(数据开始行, i).Address & ":" & ws.Cells(最大行, i).Address & ")"
+    Next i
+    ' —— 时间口径一行写入（第3行第1列）；未初始化则报错 ——
+    If 满天工时 <= 0 Or 固定计薪天 <= 0 Then
+        Err.Raise vbObjectError + 52001, , "未初始化计薪口径：请先设置全局变量 满天工时、固定计薪天"
+    End If
+
+    Dim 满勤 As Variant, 动态天 As Double, 动态小时 As Double, 固定小时 As Double
+    满勤 = 本月工资核定表_获取本月满勤天()   ' 返回：第2行(1)=动态天；第2行(2)=动态小时
+    动态天 = CDbl(满勤(2, 1))
+    动态小时 = CDbl(满勤(2, 2))
+    固定小时 = 固定计薪天 * 满天工时
+
+    Dim 口径文本 As String
+    口径文本 = "时间口径：满天工时=" & 满天工时 & "h；" & _
+           "动态工作日=" & 动态天 & "天×" & 满天工时 & "h=" & 动态小时 & "h（参与：基本工时工资、基本补贴工资、职位津贴工资）；" & _
+           "固定计薪=" & 固定计薪天 & "天×" & 满天工时 & "h=" & 固定小时 & "h（参与：1.5/2/3倍加班工资、绩效奖金工资）；" & _
+           "餐补=单价×次数；工资调整直接计入。"
+
+    ws.Cells(3, 1).Value = 口径文本
+    With ws.Cells(3, 1)
+        .Value = 口径文本
+        .WrapText = False           ' 不换行
+        .ShrinkToFit = False        ' 不要缩小填充
+        .HorizontalAlignment = xlLeft
+    End With
+    
+    ' 更新最大行
+    最大行 = ws.Cells(ws.Rows.Count, 1).End(xlUp).row
+
+    ' 设置标题行的最上端从第一列开始到最大列的边框
+    With ws.Range(ws.Cells(findResult(2)(1), 1), ws.Cells(最大行, 最大列)).Borders
+        .LineStyle = xlContinuous
+        .Color = vbBlack
+        .Weight = xlThin
+    End With
+
+    ' 设置内外边框线
+    With ws.Range(ws.Cells(findResult(2)(1), 1), ws.Cells(最大行, 最大列))
+        .Borders(xlInsideVertical).LineStyle = xlContinuous
+        .Borders(xlInsideHorizontal).LineStyle = xlContinuous
+        .Borders(xlEdgeTop).LineStyle = xlContinuous
+        .Borders(xlEdgeBottom).LineStyle = xlContinuous
+        .Borders(xlEdgeLeft).LineStyle = xlContinuous
+        .Borders(xlEdgeRight).LineStyle = xlContinuous
+    End With
+End Sub
+
+
+
+
+============================================================
+MODULE: Sheet9.cls | STREAM: VBA/Sheet9
+============================================================
+
+Attribute VB_Name = "Sheet9"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+
+
+============================================================
+MODULE: 人员薪资信息.bas | STREAM: VBA/人员薪资信息
+============================================================
+
+Attribute VB_Name = "人员薪资信息"
+Sub 人员薪资信息_创建表格(inputMonth As String)
+    Dim ws As Worksheet
+    Dim titles As Variant
+    Dim i As Integer
+    Dim yearPart As Integer, monthPart As Integer
+    Dim validDate As Date
+    Dim 标题行 As Integer
+    
+    标题行 = 2 ' 设置标题所在的行数
+    
+    ' 验证并解析 inputMonth
+    On Error Resume Next
+    validDate = DateValue("1/" & Right(inputMonth, 2) & "/" & Left(inputMonth, 4))
+    If Err.Number <> 0 Then
+        MsgBox "inputMonth 输入错误。请确保输入格式为 'YYYYMM'。", vbExclamation
+        Exit Sub
+    End If
+    On Error GoTo 0
+    yearPart = Year(validDate)
+    monthPart = Month(validDate)
+    
+    ' 检查或创建工作表
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("人员薪资信息")
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        ws.Name = "人员薪资信息"
+    Else
+        ws.Cells.Clear ' 清空现有工作表
+    End If
+    On Error GoTo 0
+    
+    ' 设置单元格A1的日期值
+    ws.Cells(1, 1).Value = DateSerial(yearPart, monthPart, 1)
+    ' 设置单元格A1的格式
+    ws.Cells(1, 1).NumberFormat = "yyyy""年""mm""月人员薪资信息"""
+    
+    ' 设置标题行
+    titles = Array(标题_检验("工号"), 标题_检验("姓名"), 标题_检验("身份证号"), 标题_检验("计薪方式"), 标题_检验("人员类型"), 标题_检验("实发薪资合计"), 标题_检验("当月个税免征额"), 标题_检验("餐补单价"), 标题_检验("基本工资"), 标题_检验("基本补贴"), 标题_检验("绩效奖金"), 标题_检验("职位津贴"), 标题_检验("工资调整"), 标题_检验("社险基数"), 标题_检验("公积金基数"), 标题_检验("个税专项附加扣除核定"))
+    
+    
+    ' 在标题行写入标题
+    For i = LBound(titles) To UBound(titles)
+        ws.Cells(标题行, i + 1).Value = titles(i)
+    Next i
+    
+    ' 合并标题行的单元格
+    ws.Range(ws.Cells(1, 1), ws.Cells(1, UBound(titles) + 1)).Merge
+    ' 查找“身份证号”所在的列，并设置该列的格式为文本
+    Dim 身份证号列 As Variant
+    findResult = 公共函数_查找位置("人员薪资信息", "身份证号")
+    If findResult(1) = 1 Then
+        身份证号列 = findResult(2)(2)
+        ws.Columns(身份证号列).NumberFormat = "@"
+    End If
+    
+End Sub
+
+
+
+Sub 人员薪资信息_整合执行(yyyymm As String)
+
+    
+    ' 创建人员薪资信息表格
+    人员薪资信息_创建表格 (yyyymm)
+    
+    ' 复制本月在职信息到人员薪资信息表格
+    公共函数_复制相同标题 "本月在职信息", "工号", "人员薪资信息", "工号"
+    
+    ' 查找人员薪资信息工号位置和表格范围
+    Dim 工号位置 As Variant
+    工号位置 = 公共函数_查找位置("人员薪资信息", "工号")
+    
+    Dim 表格范围 As Variant
+    表格范围 = 公共函数_表格范围("人员薪资信息")
+    
+    ' 查找计薪方式和实发薪资合计的位置
+    Dim 计薪方式位置 As Variant
+    Dim 实发薪资合计位置 As Variant
+    计薪方式位置 = 公共函数_查找位置("人员薪资信息", "计薪方式")
+    实发薪资合计位置 = 公共函数_查找位置("人员薪资信息", "实发薪资合计")
+
+    ' 遍历所有工号
+    Dim i As Long
+    For i = 工号位置(2)(1) + 1 To 表格范围(2)(1)
+        Dim 当前工号 As String
+        当前工号 = ThisWorkbook.Sheets("人员薪资信息").Cells(i, 工号位置(2)(2)).Value
+ 
+        ' 使用公共函数_复制工号数据_限定条件函数将符合rq的历史数据写入"本月在职信息"
+
+        临时结果 = 公共函数_复制工号数据_限定条件(当前工号, "人员薪资信息", "历史数据", "历史记录年月", yyyymm)
+   
+        
+        ' 获取当前行的计薪方式
+        Dim 当前计薪方式 As String
+        当前计薪方式 = ThisWorkbook.Sheets("人员薪资信息").Cells(i, 计薪方式位置(2)(2)).Value
+        
+        ' 检查计薪方式，若为“税前动态工资”，则清空实发薪资合计
+        If 当前计薪方式 = "税前动态工资" Then
+            ThisWorkbook.Sheets("人员薪资信息").Cells(i, 实发薪资合计位置(2)(2)).Value = ""
+        End If
+    Next i
+End Sub
+Sub 人员薪资信息_测试()
+Call 人员薪资信息_整合执行("202402")
+End Sub
+
+
+
+============================================================
+MODULE: 整合执行.bas | STREAM: VBA/整合执行
+============================================================
+
+Attribute VB_Name = "整合执行"
+Sub 第一步()
+    ' 清空所有数据
+    Dim i As Long
+    Dim 当前年月 As String
+    Dim 表格名数组 As Variant
+    Dim 结果 As Integer
+    表格名数组 = Array("考勤表", "本月工资核定表", "本月工资核定表-不入账", "本月社会保险", "本月住房公积金", "本月个人所得税")
+    Dim 临时表格名 As String
+    ' 停止屏幕刷新
+    
+    
+    
+    ' 先导入整理在职信息，一切的基础
+    当前年月 = 公共函数_日期调整(历史数据_查找最新日期, 1)   '设定当前写的日期
+
+    Dim 用户选择 As Integer
+    用户选择 = MsgBox("本次写入日期为 " & 当前年月 & "，是否执行？", vbYesNo + vbQuestion, "确认执行")
+    If 用户选择 = vbNo Then Exit Sub
+    
+    Application.ScreenUpdating = False
+    ' 遍历数组，对每个工作表名调用清空函数
+    For i = LBound(表格名数组) To UBound(表格名数组)
+        临时表格名 = 表格名数组(i)
+        Call 公共函数_清空表格(临时表格名)
+    Next i
+    '结果 = 本月人员_在职打并开导入整合(当前年月)
+    
+    
+    ' 调用改写后的考勤_导入数据函数，并获取结果
+    
+    结果 = 考勤_更新考勤表(当前年月)
+    ' 根据导入结果决定是否继续
+    
+    '导入成功，继续执行后续操作
+    
+    '人员薪资信息_整合执行 (公共函数_日期调整(历史数据_查找最新日期, 0)) '将在职信息和历史数据写入本月薪资中,需要手写一部分
+    '人员薪资信息_整合执行 (当前年月) '将在职信息和历史数据写入本月薪资中,需要手写一部分
+    ' 恢复屏幕刷新
+    Application.ScreenUpdating = True
+End Sub
+
+
+
+Sub 第二步()
+    Dim 当前年月 As String
+    Dim 个税开始年月 As String
+    
+    
+    当前年月 = 公共函数_日期调整(历史数据_查找最新日期, 1)   '设定当前写的日期
+    
+    Dim 用户选择 As Integer
+    用户选择 = MsgBox("本次写入日期为 " & 当前年月 & "，是否执行？", vbYesNo + vbQuestion, "确认执行")
+    If 用户选择 = vbNo Then Exit Sub
+    
+    ' 停止屏幕刷新
+    Application.ScreenUpdating = False
+    
+    
+    临时结果 = 社会保险_整合执行(公共函数_日期调整(历史数据_查找最新日期, 2))
+    临时结果 = 住房公积金_整合执行(公共函数_日期调整(历史数据_查找最新日期, 2))
+    
+
+    Application.ScreenUpdating = True
+End Sub
+
+
+Sub 第三步()
+    Dim 当前年月 As String
+    Dim 个税开始年月 As String
+    
+    
+    当前年月 = 公共函数_日期调整(历史数据_查找最新日期, 1)   '设定当前写的日期
+    
+    Dim 用户选择 As Integer
+    用户选择 = MsgBox("本次写入日期为 " & 当前年月 & "，是否执行？", vbYesNo + vbQuestion, "确认执行")
+    If 用户选择 = vbNo Then Exit Sub
+    
+    
+    ' 停止屏幕刷新
+    Application.ScreenUpdating = False
+    个税开始年月 = 个人所得税_周期开始年月(当前年月)
+    
+    
+    Call 本月工资核定表_整合执行_个税计算前(当前年月) '计算应发工资
+    
+    Call 个人所得税_整合执行(个税开始年月, 当前年月)   '根据应发工资计算所得税
+    
+    Call 本月工资核定表_整合执行_个税计算后            '根据所得税,完善写完工资表
+    '对比在职人员和人员薪资
+    Call 历史数据_写入(当前年月)
+    ' 恢复屏幕刷新
+    Call 工资条整合运算
+    
+    Application.ScreenUpdating = True
+End Sub
+
+
+
+
+============================================================
+MODULE: Sheet11.cls | STREAM: VBA/Sheet11
+============================================================
+
+Attribute VB_Name = "Sheet11"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+
+
+============================================================
+MODULE: Sheet12.cls | STREAM: VBA/Sheet12
+============================================================
+
+Attribute VB_Name = "Sheet12"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+
+
+============================================================
+MODULE: 历史数据.bas | STREAM: VBA/历史数据
+============================================================
+
+Attribute VB_Name = "历史数据"
+Sub 历史数据_写入(yyyymm As String)
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets("历史数据")
+    Dim 当前工号 As String
+    Dim 当前行号 As Integer
+    历史表格_历史年月记录位置 = 公共函数_查找位置("历史数据", "历史记录年月")
+    历史表格_工号位置 = 公共函数_查找位置("历史数据", "工号")
+    历史表格_表格范围_写入前 = 公共函数_表格范围("历史数据")
+    
+    临时结果 = 公共函数_复制相同标题("人员薪资信息", "工号", "历史数据", "工号")
+    
+    历史表格_表格范围_写入后 = 公共函数_表格范围("历史数据")
+ 
+    For i = 历史表格_表格范围_写入前(2)(1) + 1 To 历史表格_表格范围_写入后(2)(1)
+        当前工号 = ws.Cells(i, 历史表格_工号位置(2)(2)).Value
+        当前行号 = i
+  
+        临时结果 = 历史数据_根据工号和标题复制(当前工号, "历史数据", 当前行号, "本月个人所得税")
+ 
+        临时结果 = 历史数据_根据工号和标题复制(当前工号, "历史数据", 当前行号, "本月在职信息")
+        ws.Cells(i, 历史表格_历史年月记录位置(2)(2)).Value = yyyymm
+    Next i
+    
+    
+End Sub
+
+Sub 历史数据_检查删除指定月份(yyyymm As String)
+    Dim ws As Worksheet
+    Dim findResult As Variant
+    Dim i As Long
+    Dim lastRow As Long
+    Dim 历史记录年月Col As Long
+    
+    ' 设置工作表
+    Set ws = ThisWorkbook.Sheets("历史数据")
+    
+    ' 查找历史记录年月的列号
+    findResult = 公共函数_查找位置("历史数据", "历史记录年月")
+    If findResult(1) = 0 Then
+        MsgBox "在 '历史数据' 工作表中未找到 '历史记录年月'。", vbExclamation
+        Exit Sub
+    End If
+    历史记录年月Col = findResult(2)(2)
+    
+    ' 获取工作表的最后一行
+    lastrange = 公共函数_表格范围("历史数据")
+    
+    lastRow = lastrange(2)(1)
+    
+    ' 从最后一行向上遍历，删除包含指定历史记录年月的行
+    
+    For i = lastRow To 2 Step -1 ' 从最后一行向上遍历
+        dqrq = ws.Cells(i, 历史记录年月Col).Value
+
+        If CStr(dqrq) = CStr(yyyymm) Then
+            ws.Rows(i).Delete
+
+        End If
+    Next i
+    
+    
+    MsgBox "已删除所有包含 " & yyyymm & " 的行。", vbInformation
+End Sub
+
+
+Sub 历史数据()
+    历史数据_写入 ("202401")
+End Sub
+
+Function 历史数据_辅助函数_合并重复工号() As Integer
+    Dim tempSheet As Worksheet
+    Dim findResult As Variant
+    Dim lastRow As Long, i As Long, j As Long
+    Dim 工号Col As Long
+    Dim 允许覆盖数组 As Variant
+    Dim cellValue As Variant
+    Dim dict As Object
+
+    ' 设置允许覆盖的标题
+    允许覆盖数组 = Array(标题_检验("工号"), 标题_检验("姓名"), 标题_检验("序号"), 标题_检验("身份证号"), 标题_检验("手机号"), 标题_检验("人员类型"), 历史记录年月)
+    
+    ' 初始化字典用于检查重复
+    Set dict = CreateObject("Scripting.Dictionary")
+
+    ' 设置临时工作表
+    Set tempSheet = ThisWorkbook.Sheets("临时工作表")
+
+    ' 查找标题_检验("工号")列
+    findResult = 公共函数_查找位置("临时工作表", 标题_检验("工号"))
+    If findResult(1) = 0 Then
+        MsgBox "在 '临时工作表' 中未找到 '工号'。", vbExclamation
+        历史数据_辅助函数_合并重复工号 = 0
+        Exit Function
+    End If
+    工号Col = findResult(2)(2)
+
+    ' 获取工作表的最后一行
+    lastRow = tempSheet.Cells(tempSheet.Rows.Count, 工号Col).End(xlUp).row
+
+    ' 遍历工作表查找重复的工号
+    For i = 2 To lastRow
+        cellValue = tempSheet.Cells(i, 工号Col).Value
+        If Not IsEmpty(cellValue) Then
+            If dict.Exists(cellValue) Then
+                ' 检查是否需要合并
+                For j = 1 To tempSheet.Columns.Count
+                    If tempSheet.Cells(i, j).Value <> "" And tempSheet.Cells(dict(cellValue), j).Value <> "" Then
+                        If Not IsInArray(tempSheet.Cells(1, j).Value, 允许覆盖数组) Then
+                            MsgBox "在合并工号 '" & cellValue & "' 时发现不允许覆盖的标题: " & tempSheet.Cells(1, j).Value, vbExclamation
+                            历史数据_辅助函数_合并重复工号 = 0
+                            Exit Function
+                        End If
+                    End If
+                    ' 合并数据
+                    If tempSheet.Cells(i, j).Value <> "" Then
+                        tempSheet.Cells(dict(cellValue), j).Value = tempSheet.Cells(i, j).Value
+                    End If
+                Next j
+                ' 删除重复行
+                tempSheet.Rows(i).Delete
+                i = i - 1 ' 因为删除了一行，所以减少索引
+                lastRow = lastRow - 1 ' 更新最后一行的索引
+            Else
+                ' 记录工号的行号
+                dict.Add cellValue, i
+            End If
+        End If
+    Next i
+
+    ' 执行成功
+    历史数据_辅助函数_合并重复工号 = 1
+End Function
+
+Function 历史数据_查找最新日期() As String
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets("历史数据")
+    
+    ' 查找历史记录年月的列位置
+    Dim findResult As Variant
+    findResult = 公共函数_查找位置("历史数据", "历史记录年月")
+    If findResult(1) = 0 Then
+        MsgBox "在历史数据工作表中未找到历史记录年月列。", vbCritical
+        历史数据_查找最新日期 = ""
+        Exit Function
+    End If
+    Dim 历史记录年月列 As Long
+    历史记录年月列 = findResult(2)(2)
+
+    ' 获取标题行下一行开始的数据范围
+    Dim 数据开始行 As Long
+    数据开始行 = findResult(2)(1) + 1
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, 历史记录年月列).End(xlUp).row
+    
+    ' 将数据列的值读入数组
+    Dim dataArray As Variant
+    dataArray = ws.Range(ws.Cells(数据开始行, 历史记录年月列), ws.Cells(lastRow, 历史记录年月列)).Value
+    
+    ' 遍历数组以找到最大的日期值
+    Dim 最新日期 As String
+    最新日期 = ""
+    Dim i As Long
+    For i = LBound(dataArray, 1) To UBound(dataArray, 1)
+        If dataArray(i, 1) > 最新日期 Then
+            最新日期 = dataArray(i, 1)
+        End If
+    Next i
+    
+    历史数据_查找最新日期 = 最新日期
+End Function
+
+Sub 测试查找最新日期()
+    Dim 最新日期 As String
+    最新日期 = 历史数据_查找最新日期()
+    MsgBox "历史数据中的最新日期是：" & 最新日期, vbInformation
+End Sub
+Function 历史数据_根据工号和标题复制(工号 As String, 导入工作表 As String, 导入行行号 As Integer, 导出工作表 As String) As Integer
+    Dim sourceWs As Worksheet, targetWs As Worksheet
+    Dim sourceTitleRow As Long, targetTitleRow As Long
+    Dim sourceRow As Long, targetRow As Long, colNum As Long
+    Dim dict As Object, title As String
+    Dim findResult As Variant
+    
+    ' 创建一个字典对象
+    Set dict = CreateObject("Scripting.Dictionary")
+    
+    ' 获取工作表对象
+    Set sourceWs = ThisWorkbook.Sheets(导出工作表)
+    Set targetWs = ThisWorkbook.Sheets(导入工作表)
+    
+    ' 获取源和目标工作表的标题行位置
+    sourceTitleRow = 公共函数_查找位置_最下位置(导出工作表, 标题_检验("工号"))(2)(1)
+    targetTitleRow = 公共函数_查找位置_最下位置(导入工作表, 标题_检验("工号"))(2)(1)
+    
+    ' 在源工作表中查找工号
+    findResult = 公共函数_查找位置(导出工作表, 工号)
+    If findResult(1) = 1 Then
+        sourceRow = findResult(2)(1)
+    Else
+        历史数据_根据工号和标题复制 = 0
+        Exit Function
+    End If
+    
+    ' 在目标工作表中查找或添加工号
+    findResult = 公共函数_查找位置(导入工作表, 工号)
+    If findResult(1) = 1 Then
+        targetRow = findResult(2)(1)
+    Else
+        targetRow = targetWs.Cells(targetWs.Rows.Count, 1).End(xlUp).row + 1
+        targetWs.Cells(targetRow, 1).Value = 工号
+    End If
+    
+    ' 构建标题字典
+    For colNum = 1 To sourceWs.Cells(sourceTitleRow, Columns.Count).End(xlToLeft).Column
+        title = sourceWs.Cells(sourceTitleRow, colNum).Value
+        If Not dict.Exists(title) Then
+            dict.Add title, colNum
+        End If
+    Next colNum
+ 
+    ' 复制匹配标题的数据
+    For colNum = 1 To targetWs.Cells(targetTitleRow, Columns.Count).End(xlToLeft).Column
+        title = targetWs.Cells(targetTitleRow, colNum).Value
+        If dict.Exists(title) Then
+
+            targetWs.Cells(导入行行号, colNum).Value = sourceWs.Cells(sourceRow, dict(title)).Value
+        End If
+    Next colNum
+    
+    ' 返回成功标识
+    历史数据_根据工号和标题复制 = 1
+End Function
+
+
+
+
+============================================================
+MODULE: 社会保险.bas | STREAM: VBA/社会保险
+============================================================
+
+Attribute VB_Name = "社会保险"
+Function 社会保险_员工保险计算(工号参数 As String, 缴纳保险年月 As String) As Variant
+    Dim ws薪资 As Worksheet, ws参数 As Worksheet
+    Dim findResult As Variant
+    Dim 工号行 As Long, 社险基数列 As Long
+    Dim 社险基数 As Double, 缴纳月份 As Integer
+    Dim 个人社保险种() As String, 公司社保险种() As String
+    Dim 个人社保比例() As Double, 公司社保比例() As Double
+    Dim 个人大额月份() As Integer, 个人大额金额() As Double
+    Dim 个人缴纳金额() As Double, 公司缴纳金额() As Double
+    
+    Dim i As Integer, 险种数 As Integer
+    
+    ' 设置工作表
+    Set ws薪资 = ThisWorkbook.Sheets("人员薪资信息")
+    Set ws参数 = ThisWorkbook.Sheets("基本参数")
+    
+    ' 查找工号参数位置
+    findResult = 公共函数_查找位置("人员薪资信息", 工号参数)
+    If findResult(1) = 0 Then
+        MsgBox "未找到工号 '" & 工号参数 & "'。", vbExclamation
+        Exit Function
+    End If
+    工号行 = findResult(2)(1)
+    
+    ' 查找社险基数位置
+    findResult = 公共函数_查找位置("人员薪资信息", 标题_检验("社险基数"))
+    If findResult(1) = 0 Then
+        MsgBox "未找到 '社险基数'。", vbExclamation
+        Exit Function
+    End If
+    社险基数列 = findResult(2)(2)
+    
+    ' 获取社险基数
+    社险基数 = ws薪资.Cells(工号行, 社险基数列).Value
+    缴纳月份 = Mid(缴纳保险年月, 5, 2)
+    
+    ' 获取个人社保险种和比例
+    findResult = 公共函数_查找位置("基本参数", "个人社会保险险种")
+    Dim 个人险种数 As Integer
+    个人险种数 = ws参数.Cells(findResult(2)(1), ws参数.Columns.Count).End(xlToLeft).Column - findResult(2)(2)
+    ReDim 个人社保险种(个人险种数)
+    ReDim 个人社保比例(个人险种数)
+    For i = 1 To 个人险种数
+        个人社保险种(i) = ws参数.Cells(findResult(2)(1), findResult(2)(2) + i).Value
+        个人社保比例(i) = ws参数.Cells(findResult(2)(1) + 1, findResult(2)(2) + i).Value
+    Next i
+    
+    ' 获取公司社保险种和比例
+    findResult = 公共函数_查找位置("基本参数", "公司社会保险险种")
+    Dim 公司险种数 As Integer
+    公司险种数 = ws参数.Cells(findResult(2)(1), ws参数.Columns.Count).End(xlToLeft).Column - findResult(2)(2)
+    
+    ReDim 公司社保险种(公司险种数)
+    ReDim 公司社保比例(公司险种数)
+    For i = 1 To 公司险种数
+        公司社保险种(i) = ws参数.Cells(findResult(2)(1), findResult(2)(2) + i).Value
+        公司社保比例(i) = ws参数.Cells(findResult(2)(1) + 1, findResult(2)(2) + i).Value
+    Next i
+    
+    
+    ' 获取“个人社会保险大额月份”的位置
+    Dim findResult月份 As Variant
+    findResult月份 = 公共函数_查找位置("基本参数", "个人社会保险大额月份")
+    If findResult月份(1) = 0 Then
+        MsgBox "在 '基本参数' 中未找到 '个人社会保险大额月份'。", vbExclamation
+        Exit Function
+    End If
+    
+    ' 获取“个人社会保险大额金额”的位置
+    Dim findResult金额 As Variant
+    findResult金额 = 公共函数_查找位置("基本参数", "个人社会保险大额金额")
+    If findResult金额(1) = 0 Then
+        MsgBox "在 '基本参数' 中未找到 '个人社会保险大额金额'。", vbExclamation
+        Exit Function
+    End If
+    
+    ' 定位到缴纳保险年月对应的列
+    Dim 缴纳月份列 As Long
+    
+    
+    Set findResult = ws参数.Cells(findResult月份(2)(1), findResult月份(2)(2)).EntireRow.Find(缴纳月份, LookIn:=xlValues)
+    If Not findResult Is Nothing Then
+        缴纳月份列 = findResult.Column
+    Else
+        MsgBox "在 '基本参数' 中未找到 '" & 缴纳月份 & "' 月的大额医疗保险金额。", vbExclamation
+        Exit Function
+    End If
+    
+    ' 获取个人大额保险金额
+    Dim 个人大额缴纳金额 As Double
+    个人大额缴纳金额 = ws参数.Cells(findResult金额(2)(1), 缴纳月份列).Value
+    
+    ' 动态设置数组大小
+    Dim 个人缴纳详情() As Variant
+    Dim 公司缴纳详情() As Variant
+    
+    ReDim 个人缴纳详情(1 To 2, 1 To 个人险种数)
+    ReDim 公司缴纳详情(1 To 2, 1 To 公司险种数)
+    ReDim 个人大额医疗缴纳详情(1 To 2, 1 To 1)
+    For i = 1 To 个人险种数
+        个人缴纳详情(1, i) = 个人社保险种(i)
+        ' 使用 Excel 的 Round 函数来四舍五入
+        个人缴纳详情(2, i) = Application.WorksheetFunction.Round(社险基数 * 个人社保比例(i), 2)
+    Next i
+    
+    For i = 1 To 公司险种数
+        公司缴纳详情(1, i) = 公司社保险种(i)
+        ' 使用 Excel 的 Round 函数来四舍五入
+        公司缴纳详情(2, i) = Application.WorksheetFunction.Round(社险基数 * 公司社保比例(i), 2)
+    Next i
+    
+    个人大额医疗缴纳详情(1, 1) = "大额医疗p"
+    ' 使用 Excel 的 Round 函数来四舍五入
+    个人大额医疗缴纳详情(2, 1) = Application.WorksheetFunction.Round(个人大额缴纳金额, 2)
+    
+    ' 设置结果数组
+    Dim 结果(1 To 3) As Variant
+    结果(1) = 个人缴纳详情
+    结果(2) = 个人大额医疗缴纳详情
+    结果(3) = 公司缴纳详情
+    
+    '重置合计
+    ' 初始化合计标志和合计值
+    Dim 个人合计标志 As String
+    Dim 公司合计标志 As String
+    个人合计标志 = "p"
+    公司合计标志 = "c"
+    Dim 个人合计 As Double
+    Dim 公司合计 As Double
+    Dim 个人公司合计 As Double
+    
+    个人合计 = 0
+    公司合计 = 0
+    个人公司合计 = 0
+    
+    ' 遍历每组结果进行合计计算
+    Dim 结果索引 As Integer
+    Dim 项目索引 As Long
+    
+    ' 第一次遍历，计算个人合计和公司合计
+    For 结果索引 = LBound(结果) To UBound(结果)
+        ' 遍历当前结果的项目
+        For 项目索引 = LBound(结果(结果索引), 2) To UBound(结果(结果索引), 2)
+            
+            If InStr(结果(结果索引)(1, 项目索引), 个人合计标志) > 0 Then
+                个人合计 = 个人合计 + 结果(结果索引)(2, 项目索引)
+            End If
+            
+            If InStr(结果(结果索引)(1, 项目索引), 公司合计标志) > 0 Then
+                公司合计 = 公司合计 + 结果(结果索引)(2, 项目索引)
+            End If
+            
+        Next 项目索引
+    Next 结果索引
+    
+    
+    ' 再次遍历三组结果进行更新
+    For 结果索引 = LBound(结果) To UBound(结果)
+        
+        ' 遍历当前结果的所有项目
+        For 项目索引 = LBound(结果(结果索引), 2) To UBound(结果(结果索引), 2) '2代表维度数
+            
+            ' 当项目名为特定标志时更新其值
+            If 结果(结果索引)(1, 项目索引) = 标题_检验("社保合计p") Then
+                结果(结果索引)(2, 项目索引) = 个人合计
+            ElseIf 结果(结果索引)(1, 项目索引) = 标题_检验("社保合计c") Then
+                结果(结果索引)(2, 项目索引) = 公司合计
+            ElseIf 结果(结果索引)(1, 项目索引) = "社保合计s" Then
+                结果(结果索引)(2, 项目索引) = 个人合计 + 公司合计
+            End If
+        Next 项目索引
+        
+    Next 结果索引
+    
+    
+    
+    ' 显示结果信息
+    Dim 输出信息 As String
+    输出信息 = "员工工号: " & 工号参数 & vbCrLf & _
+        "缴纳保险年月: " & 缴纳保险年月 & vbCrLf & _
+        "个人社会保险缴纳详情: " & vbCrLf
+    
+    For i = 1 To 个人险种数
+        输出信息 = 输出信息 & 结果(1)(1, i) & ": " & Format(结果(1)(2, i), "0.00") & "元" & vbCrLf
+    Next i
+    
+    输出信息 = 输出信息 & 结果(2)(1, 1) & ":" & Format(结果(2)(1, 1), "0.00") & "元" & vbCrLf
+    
+    输出信息 = 输出信息 & "公司社会保险缴纳详情: " & vbCrLf
+    For i = 1 To 公司险种数
+        输出信息 = 输出信息 & 结果(3)(1, i) & ": " & Format(结果(3)(2, i), "0.00") & "元" & vbCrLf
+    Next i
+    
+    ' MsgBox 输出信息, vbInformation, "社会保险缴纳详情"
+    
+    ' 返回结果
+    社会保险_员工保险计算 = 结果
+End Function
+
+Function 社会保险_整合执行(yyyymm As String)
+
+    Call 社会保险_表格创建
+    Call 社会保险_遍历人员名单并填写社保(yyyymm)
+
+End Function
+Sub 社会保险_表格创建()
+    Dim ws As Worksheet
+    Dim ws参数 As Worksheet
+    Dim findResult As Variant
+    
+    Dim 个人社保标题数组() As String
+    Dim 公司社保标题数组() As String
+    Dim 总标题数组() As String
+    Dim i As Integer
+    Dim 标题行 As Integer
+    
+    ' 检查或创建名为 "本月社会保险" 的工作表
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("本月社会保险")
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        ws.Name = "本月社会保险"
+    Else
+        ws.Cells.Clear
+    End If
+    On Error GoTo 0
+    Dim 基本信息数组() As Variant
+    Dim 临时数组 As Variant
+    
+    ' 使用 Array 函数创建临时数组
+    临时数组 = Array(标题_检验("工号"), 标题_检验("姓名"), 标题_检验("身份证号"), 标题_检验("人员类型"), 标题_检验("社险基数"))
+    
+    ' 重新维ension 基本信息数组，使其从 1 开始
+    ReDim 基本信息数组(1 To UBound(临时数组) + 1)
+    
+    ' 将临时数组的值赋给基本信息数组
+    
+    For i = LBound(临时数组) To UBound(临时数组)
+        基本信息数组(i + 1) = 临时数组(i)
+    Next i
+    ' 获取基本参数工作表
+    Set ws参数 = ThisWorkbook.Sheets("基本参数")
+    
+    ' 获取个人社保标题
+    findResult = 公共函数_查找位置("基本参数", "个人社会保险险种")
+    ReDim 个人社保标题数组(1 To ws参数.Cells(findResult(2)(1), ws参数.Columns.Count).End(xlToLeft).Column - findResult(2)(2) + 0) ' +0用于大额医疗和个人合计
+    For i = 1 To UBound(个人社保标题数组) - 0
+        个人社保标题数组(i) = ws参数.Cells(findResult(2)(1), findResult(2)(2) + i).Value
+    Next i
+    
+    
+    ' 获取公司社保标题
+    findResult = 公共函数_查找位置("基本参数", "公司社会保险险种")
+    ReDim 公司社保标题数组(1 To ws参数.Cells(findResult(2)(1), ws参数.Columns.Count).End(xlToLeft).Column - findResult(2)(2) + 0)  ' +0 用于公司合计
+    For i = 1 To UBound(公司社保标题数组) - 0
+        公司社保标题数组(i) = ws参数.Cells(findResult(2)(1), findResult(2)(2) + i).Value
+    Next i
+    
+    ' 合并所有标题数组
+    ReDim 总标题数组(1 To UBound(基本信息数组) + UBound(个人社保标题数组) + UBound(公司社保标题数组) + 0) ' 包含所有标题
+    i = 1
+    For Each Item In 基本信息数组
+        总标题数组(i) = Item
+        i = i + 1
+    Next Item
+    For Each Item In 个人社保标题数组
+        总标题数组(i) = Item
+        i = i + 1
+    Next Item
+    For Each Item In 公司社保标题数组
+        总标题数组(i) = Item
+        i = i + 1
+    Next Item
+    '总标题数组(i) = "总合计"
+    
+    ' 写入标题行
+    标题行 = 2
+    For i = 1 To UBound(总标题数组)
+        ws.Cells(标题行, i).Value = 总标题数组(i)
+    Next i
+    ' 查找“身份证号”所在的列，并设置该列的格式为文本
+    Dim 身份证号列 As Variant
+    findResult = 公共函数_查找位置("本月社会保险", "身份证号")
+    If findResult(1) = 1 Then
+        身份证号列 = findResult(2)(2)
+        ws.Columns(身份证号列).EntireColumn.NumberFormat = "@"
+    End If
+End Sub
+Sub 社会保险_遍历人员名单并填写社保(ByVal yyyymm As String)
+    Dim ws社保 As Worksheet
+    Dim findResult As Variant
+    Dim 工号行 As Long, 工号列 As Long
+    Dim 社保结果 As Variant
+    Dim i As Long, j As Long
+    
+    ' 检查并获取 "本月社会保险" 工作表
+    On Error Resume Next
+    Set ws社保 = ThisWorkbook.Sheets("本月社会保险")
+    On Error GoTo 0
+    If ws社保 Is Nothing Then
+        MsgBox "未找到 '本月社会保险' 工作表。", vbExclamation
+        Exit Sub
+    End If
+    
+    ' 复制 "本月薪资信息" 工作表中的工号到 "本月社会保险" 工作表
+    临时结果 = 公共函数_复制相同标题_限定条件("本月在职信息", 标题_检验("工号"), "是否社险", Array("是"), "本月社会保险", 标题_检验("工号"))
+    
+    ' 将 startyyyymm 转换为 Date 类型
+    startDate = DateSerial(Left(yyyymm, 4), Right(yyyymm, 2), 1)
+    
+    ' 格式化日期为 "yyyy年mm月1日"
+    formattedDate = Format(startDate, "yyyy""年""mm""月""1日")
+    ws社保.Cells(1, 1) = formattedDate
+    Call 公共函数_标题写入("本月社会保险", "社会保险")
+    ' 获取工号列和行位置
+    findResult = 公共函数_查找位置("本月社会保险", 标题_检验("工号"))
+    If findResult(1) = 0 Then
+        MsgBox "在 '本月社会保险' 中未找到 '工号'。", vbExclamation
+        Exit Sub
+    End If
+    工号行 = findResult(2)(1)
+    工号列 = findResult(2)(2)
+    
+    ' 遍历工号行的每一个值
+    Dim lastRow As Long
+    lastRow = ws社保.Cells(ws社保.Rows.Count, 工号列).End(xlUp).row
+    For i = 工号行 + 1 To lastRow
+        Dim 当前工号 As String
+        当前工号 = ws社保.Cells(i, 工号列).Value
+        临时结果 = 公共函数_根据工号和标题复制(当前工号, "本月社会保险", "人员薪资信息")
+        ' 计算社保
+        社保结果 = 社会保险_员工保险计算(当前工号, yyyymm)
+        
+        For j = LBound(社保结果) To UBound(社保结果)
+            Dim 子数组 As Variant
+            子数组 = 社保结果(j)  ' 获取当前子数组
+            
+            Dim 标题 As String
+            Dim 当前列 As Long
+            ' 遍历子数组
+            For k = LBound(子数组, 2) To UBound(子数组, 2)
+                标题 = 子数组(1, k)
+                findResult = 公共函数_查找位置("本月社会保险", 标题)
+                If findResult(1) = 1 Then
+                    当前列 = findResult(2)(2)
+                    ws社保.Cells(i, 当前列).Value = 子数组(2, k)
+                End If
+            Next k
+        Next j
+    Next i
+    
+    'MsgBox "社会保险数据填写完成。", vbInformation
+End Sub
+
+
+
+
+============================================================
+MODULE: Sheet4.cls | STREAM: VBA/Sheet4
+============================================================
+
+Attribute VB_Name = "Sheet4"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+
+
+============================================================
+MODULE: 住房公积金.bas | STREAM: VBA/住房公积金
+============================================================
+
+Attribute VB_Name = "住房公积金"
+Function 住房公积金_员工公积金计算(工号参数 As String, 缴纳公积金年月 As String) As Variant
+    Dim ws薪资 As Worksheet, ws参数 As Worksheet
+    Dim findResult As Variant
+    Dim 工号行 As Long
+    Dim 公积金基数 As Double, 缴纳月份 As Integer
+    Dim 公积金缴费种类() As String
+    Dim 公积金缴费比例() As Double, 公司公积金比例() As Double
+    Dim 个人缴纳金额() As Double, 公司缴纳金额() As Double
+    
+    Dim i As Integer, 公积金种类数 As Integer
+    
+    ' 设置工作表
+    Set ws薪资 = ThisWorkbook.Sheets("人员薪资信息")
+    Set ws参数 = ThisWorkbook.Sheets("基本参数")
+    
+    ' 查找工号参数位置
+    findResult = 公共函数_查找位置("人员薪资信息", 工号参数)
+    If findResult(1) = 0 Then
+        MsgBox "未找到工号 '" & 工号参数 & "'。", vbExclamation
+        Exit Function
+    End If
+    工号行 = findResult(2)(1)
+    
+    ' 查找公积金基数位置
+    findResult = 公共函数_查找位置("人员薪资信息", 标题_检验("公积金基数"))
+    If findResult(1) = 0 Then
+        MsgBox "未找到 '公积金基数'。", vbExclamation
+        Exit Function
+    End If
+    公积金基数列 = findResult(2)(2)
+    
+    ' 获取公积金基数
+    公积金基数 = ws薪资.Cells(工号行, 公积金基数列).Value
+    缴纳月份 = Mid(缴纳公积金年月, 5, 2)
+    
+    ' 获取公积金缴费种类和比例
+    findResult = 公共函数_查找位置("基本参数", "住房公积金分类")
+    Dim 公积金种类 As Integer
+    公积金种类 = ws参数.Cells(findResult(2)(1), ws参数.Columns.Count).End(xlToLeft).Column - findResult(2)(2)
+    ReDim 公积金缴费种类(公积金种类)
+    ReDim 公积金缴费比例(公积金种类)
+    For i = 1 To 公积金种类
+        公积金缴费种类(i) = ws参数.Cells(findResult(2)(1), findResult(2)(2) + i).Value
+        公积金缴费比例(i) = ws参数.Cells(findResult(2)(1) + 1, findResult(2)(2) + i).Value
+    Next i
+    
+    
+    
+    ' 动态设置数组大小
+    Dim 公积金缴纳详情() As Variant
+    
+    
+    ReDim 公积金缴纳详情(1 To 2, 1 To 公积金种类)
+    
+    
+    For i = 1 To 公积金种类
+        公积金缴纳详情(1, i) = 公积金缴费种类(i)
+        ' 使用 Excel 的 Round 函数来四舍五入
+        公积金缴纳详情(2, i) = Application.WorksheetFunction.Round(公积金基数 * 公积金缴费比例(i), 2)
+        
+    Next i
+    
+    
+    
+    ' 设置结果数组
+    Dim 结果(1 To 1) As Variant
+    结果(1) = 公积金缴纳详情
+    
+    
+    '重置合计
+    ' 初始化合计标志和合计值
+    Dim 个人合计标志 As String
+    Dim 公司合计标志 As String
+    个人合计标志 = "p"
+    公司合计标志 = "c"
+    Dim 个人合计 As Double
+    Dim 公司合计 As Double
+    Dim 个人公司合计 As Double
+    
+    个人合计 = 0
+    公司合计 = 0
+    个人公司合计 = 0
+    
+    ' 遍历每组结果进行合计计算
+    Dim 结果索引 As Integer
+    Dim 项目索引 As Long
+    
+    ' 第一次遍历，计算个人合计和公司合计
+    For 结果索引 = LBound(结果) To UBound(结果)
+        ' 遍历当前结果的项目
+        For 项目索引 = LBound(结果(结果索引), 2) To UBound(结果(结果索引), 2)
+            
+            If InStr(结果(结果索引)(1, 项目索引), 个人合计标志) > 0 Then
+                个人合计 = 个人合计 + 结果(结果索引)(2, 项目索引)
+            End If
+            
+            If InStr(结果(结果索引)(1, 项目索引), 公司合计标志) > 0 Then
+                公司合计 = 公司合计 + 结果(结果索引)(2, 项目索引)
+            End If
+            
+        Next 项目索引
+    Next 结果索引
+    
+    
+    ' 再次遍历三组结果进行更新
+    For 结果索引 = LBound(结果) To UBound(结果)
+        
+        ' 遍历当前结果的所有项目
+        For 项目索引 = LBound(结果(结果索引), 2) To UBound(结果(结果索引), 2) '2代表维度数
+            
+            ' 当项目名为特定标志时更新其值
+            If 结果(结果索引)(1, 项目索引) = "住房公积金s" Then
+                结果(结果索引)(2, 项目索引) = 个人合计
+            ElseIf 结果(结果索引)(1, 项目索引) = 标题_检验("住房公积金c") Then
+                结果(结果索引)(2, 项目索引) = 公司合计
+            ElseIf 结果(结果索引)(1, 项目索引) = "住房公积金合计" Then
+                结果(结果索引)(2, 项目索引) = 个人合计 + 公司合计
+            End If
+        Next 项目索引
+        
+    Next 结果索引
+    
+    
+    
+    
+    
+    ' 返回结果
+    住房公积金_员工公积金计算 = 结果
+End Function
+
+Function 住房公积金_整合执行(yyyymm As String)
+
+    Call 住房公积金_表格创建
+    Call 住房公积金_遍历人员名单并填写公积金(yyyymm)
+
+End Function
+Sub 住房公积金_表格创建()
+    Dim ws As Worksheet
+    Dim ws参数 As Worksheet
+    Dim findResult As Variant
+    
+    Dim 公积金标题数组() As String
+    Dim 公司公积金标题数组() As String
+    Dim 总标题数组() As String
+    Dim i As Integer
+    Dim 标题行 As Integer
+    
+    ' 检查或创建名为 "本月住房公积金" 的工作表
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("本月住房公积金")
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        ws.Name = "本月住房公积金"
+    Else
+        ws.Cells.Clear
+    End If
+    On Error GoTo 0
+    Dim 基本信息数组() As Variant
+    Dim 临时数组 As Variant
+    
+    ' 使用 Array 函数创建临时数组
+    临时数组 = Array(标题_检验("工号"), 标题_检验("姓名"), 标题_检验("身份证号"), 标题_检验("人员类型"), 标题_检验("公积金基数"))
+    
+    ' 重新维ension 基本信息数组，使其从 1 开始
+    ReDim 基本信息数组(1 To UBound(临时数组) + 1)
+    
+    ' 将临时数组的值赋给基本信息数组
+    
+    For i = LBound(临时数组) To UBound(临时数组)
+        基本信息数组(i + 1) = 临时数组(i)
+    Next i
+    ' 获取基本参数工作表
+    Set ws参数 = ThisWorkbook.Sheets("基本参数")
+    
+    ' 获取公积金标题
+    findResult = 公共函数_查找位置("基本参数", "住房公积金分类")
+    ReDim 公积金标题数组(1 To ws参数.Cells(findResult(2)(1), ws参数.Columns.Count).End(xlToLeft).Column - findResult(2)(2) + 0) ' +0用于大额医疗和个人合计
+    For i = 1 To UBound(公积金标题数组) - 0
+        公积金标题数组(i) = ws参数.Cells(findResult(2)(1), findResult(2)(2) + i).Value
+    Next i
+    
+    
+    
+    
+    ' 合并所有标题数组
+    ReDim 总标题数组(1 To UBound(基本信息数组) + UBound(公积金标题数组)) ' 包含所有标题
+    i = 1
+    For Each Item In 基本信息数组
+        总标题数组(i) = Item
+        i = i + 1
+    Next Item
+    For Each Item In 公积金标题数组
+        总标题数组(i) = Item
+        i = i + 1
+    Next Item
+    
+    '总标题数组(i) = "总合计"
+    
+    ' 写入标题行
+    标题行 = 2
+    For i = 1 To UBound(总标题数组)
+        ws.Cells(标题行, i).Value = 总标题数组(i)
+    Next i
+    Dim 身份证号列 As Variant
+    findResult = 公共函数_查找位置("本月住房公积金", "身份证号")
+    If findResult(1) = 1 Then
+        身份证号列 = findResult(2)(2)
+ws.Columns(身份证号列).EntireColumn.NumberFormat = "@"
+
+    End If
+End Sub
+
+
+Sub 住房公积金_遍历人员名单并填写公积金(ByVal yyyymm As String)
+    Dim ws公积金 As Worksheet
+    Dim findResult As Variant
+    Dim 工号行 As Long, 工号列 As Long
+    Dim 公积金结果 As Variant
+    Dim i As Long, j As Long
+    
+    ' 检查并获取 "本月住房公积金" 工作表
+    On Error Resume Next
+    Set ws公积金 = ThisWorkbook.Sheets("本月住房公积金")
+    On Error GoTo 0
+    If ws公积金 Is Nothing Then
+        MsgBox "未找到 '本月住房公积金' 工作表。", vbExclamation
+        Exit Sub
+    End If
+    
+    临时结果 = 公共函数_复制相同标题_限定条件("本月在职信息", 标题_检验("工号"), "是否公积金", Array("是"), "本月住房公积金", 标题_检验("工号"))
+    
+    
+    ' 将 startyyyymm 转换为 Date 类型
+    startDate = DateSerial(Left(yyyymm, 4), Right(yyyymm, 2), 1)
+    
+    ' 格式化日期为 "yyyy年mm月1日"
+    formattedDate = Format(startDate, "yyyy""年""mm""月""1日")
+    ws公积金.Cells(1, 1) = formattedDate
+    
+    ' 获取工号列和行位置
+    findResult = 公共函数_查找位置("本月住房公积金", 标题_检验("工号"))
+    If findResult(1) = 0 Then
+        MsgBox "在 '本月住房公积金' 中未找到 '工号'。", vbExclamation
+        Exit Sub
+    End If
+    工号行 = findResult(2)(1)
+    工号列 = findResult(2)(2)
+    
+    ' 遍历工号行的每一个值
+    Dim lastRow As Long
+    lastRow = ws公积金.Cells(ws公积金.Rows.Count, 工号列).End(xlUp).row
+    For i = 工号行 + 1 To lastRow
+        Dim 当前工号 As String
+        当前工号 = ws公积金.Cells(i, 工号列).Value
+        临时结果 = 公共函数_根据工号和标题复制(当前工号, "本月住房公积金", "人员薪资信息")
+        
+        ' 计算公积金
+        公积金结果 = 住房公积金_员工公积金计算(当前工号, yyyymm)
+        
+        For j = LBound(公积金结果) To UBound(公积金结果)
+            Dim 子数组 As Variant
+            子数组 = 公积金结果(j)  ' 获取当前子数组
+            
+            Dim 标题 As String
+            Dim 当前列 As Long
+            ' 遍历子数组
+            For k = LBound(子数组, 2) To UBound(子数组, 2)
+                标题 = 子数组(1, k)
+                findResult = 公共函数_查找位置("本月住房公积金", 标题)
+                If findResult(1) = 1 Then
+                    当前列 = findResult(2)(2)
+                    ws公积金.Cells(i, 当前列).Value = 子数组(2, k)
+                End If
+            Next k
+        Next j
+    Next i
+    
+    '  MsgBox "住房公积金数据填写完成。", vbInformation
+End Sub
+
+
+
+
+
+
+============================================================
+MODULE: Sheet6.cls | STREAM: VBA/Sheet6
+============================================================
+
+Attribute VB_Name = "Sheet6"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+
+
+============================================================
+MODULE: Sheet13.cls | STREAM: VBA/Sheet13
+============================================================
+
+Attribute VB_Name = "Sheet13"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+
+
+============================================================
+MODULE: 个人所得税.bas | STREAM: VBA/个人所得税
+============================================================
+
+Attribute VB_Name = "个人所得税"
+Function 个人所得税_辅助函数_获取税率表() As Variant
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets("基本参数")
+    
+    ' 查找个税相关列的位置
+    Dim 个人所得税级数位置, 起点位置, 终点位置, 税率位置, 速算扣除数位置 As Variant
+    
+    个人所得税级数位置 = 公共函数_查找位置("基本参数", "个人所得税级数")
+    起点位置 = 公共函数_查找位置("基本参数", "个税起征起点")
+    终点位置 = 公共函数_查找位置("基本参数", "个税起征终点")
+    税率位置 = 公共函数_查找位置("基本参数", "税率")
+    速算扣除数位置 = 公共函数_查找位置("基本参数", "速算扣除数")
+    
+    ' 确定税率表的行数
+    Dim 行数 As Long
+    For 行数 = 个人所得税级数位置(2)(1) To ws.Rows.Count
+        If Len(ws.Cells(行数, 个人所得税级数位置(2)(2)).Value) = 0 Then
+            行数 = 行数 - 1
+            Exit For
+        End If
+    Next 行数
+    
+    ' 根据行数创建数组
+    Dim 税率数组() As Variant
+    ReDim 税率数组(1 To 行数 - 个人所得税级数位置(2)(1), 1 To 5)
+    
+    ' 填充数组
+    Dim j As Integer
+    For j = 1 To UBound(税率数组, 1)
+        税率数组(j, 1) = ws.Cells(个人所得税级数位置(2)(1) + j, 个人所得税级数位置(2)(2)).Value
+        税率数组(j, 2) = ws.Cells(个人所得税级数位置(2)(1) + j, 起点位置(2)(2)).Value
+        税率数组(j, 3) = ws.Cells(个人所得税级数位置(2)(1) + j, 终点位置(2)(2)).Value
+        税率数组(j, 4) = ws.Cells(个人所得税级数位置(2)(1) + j, 税率位置(2)(2)).Value
+        税率数组(j, 5) = ws.Cells(个人所得税级数位置(2)(1) + j, 速算扣除数位置(2)(2)).Value
+    Next j
+    
+    ' 返回税率数组
+    个人所得税_辅助函数_获取税率表 = 税率数组
+    
+End Function
+
+
+
+Function 个人所得税_辅助函数_反推计算应缴所得税(当月税后薪酬 As Double, 当月个税免征额 As Double, 当月专项扣除 As Double, 当月附加扣除 As Double, 以往税前薪酬 As Double, 以往个税免征额 As Double, 以往专项扣除 As Double, 以往附加扣除 As Double, 以往已缴纳税额 As Double) As Double
+    Dim 税率表 As Variant
+    税率表 = 个人所得税_辅助函数_获取税率表()
+    
+    Dim 当月应缴所得税 As Double
+    Dim i As Integer
+    Dim 累计应纳税所得额, 反推税前薪酬, 目前应纳税所得税 As Double
+    
+    ' 计算累计应纳税所得额
+    累计应纳税所得额 = 以往税前薪酬 - 以往个税免征额 - 以往专项扣除 - 以往附加扣除
+
+    ' 根据当前累计所得额和税率表，反推当月应缴所得税
+    For i = LBound(税率表) To UBound(税率表)
+        Dim 税率 As Double
+        Dim 速算扣除数 As Double
+        税率 = 税率表(i, 4)
+        速算扣除数 = 税率表(i, 5)
+        
+        目前应纳税所得税 = WorksheetFunction.Round(((以往税前薪酬 + 当月税后薪酬 - 以往已缴纳税额 - 以往个税免征额 - 以往专项扣除 - 以往附加扣除 - 当月个税免征额 - 当月附加扣除) * 税率 - 速算扣除数) / (1 - 税率), 2)
+
+        ' 如果计算出的应纳税所得额小于0，则设置为0
+        
+        
+        ' 验算当前所得额是否在当前税率区间内
+        当月工资扣除所得税 = 0
+        If 目前应纳税所得税 < 0 Then
+            当月工资扣除所得税 = 0
+        Else
+            当月工资扣除所得税 = 目前应纳税所得税 - 以往已缴纳税额
+        End If
+        
+        反推税前薪酬 = 当月税后薪酬 + 当月专项扣除 + 当月工资扣除所得税
+        
+        正推应缴纳所得税 = 个人所得税_辅助函数_正推计算应缴所得税(反推税前薪酬, 当月个税免征额, 当月专项扣除, 当月附加扣除, 以往税前薪酬, 以往个税免征额, 以往专项扣除, 以往附加扣除)
+
+        
+        If Round(正推应缴纳所得税, 2) = Round(目前应纳税所得税, 2) Then
+            
+            Exit For
+        End If
+     
+        个人所得税_辅助函数_反推计算应缴所得税 = 9999999
+    Next i
+    
+    个人所得税_辅助函数_反推计算应缴所得税 = 目前应纳税所得税
+End Function
+
+
+
+Function 个人所得税_辅助函数_正推计算应缴所得税(税前薪酬 As Variant, 个税免征额 As Double, 当月专项扣除 As Double, 当月附加扣除 As Double, 以往税前薪酬 As Double, 以往个税免征额 As Double, 以往专项扣除 As Double, 以往附加扣除 As Double) As Double
+    Dim 税率表 As Variant
+    税率表 = 个人所得税_辅助函数_获取税率表()
+    If 税前薪酬 = 4968.2 Then
+        Stop
+    End If
+    Dim 目前应纳税所得额, 以往应纳税所得额, 当月和以往应缴税所得额, 应缴所得税 As Double
+    Dim i As Integer
+    
+    以往应纳税所得额 = 以往税前薪酬 - 以往个税免征额 - 以往专项扣除 - 以往附加扣除
+    目前应纳税所得额 = 税前薪酬 - 个税免征额 - 当月专项扣除 - 当月附加扣除
+    当月和以往应缴税所得额 = 目前应纳税所得额 + 以往应纳税所得额
+    
+    ' 如果应纳税所得额小于等于0，则应缴税额为0
+    If 目前应纳税所得额 <= 0 Then
+        个人所得税_辅助函数_正推计算应缴所得税 = 0
+        Exit Function
+    End If
+
+    ' 遍历税率表，寻找匹配的税率级别
+    For i = LBound(税率表) To UBound(税率表)
+        Dim 税率, 速算扣除数 As Double
+        税率 = 税率表(i, 4) ' 税率表中的税率是以百分比形式给出的
+        税率起征值 = 税率表(i, 2)
+        速算扣除数 = 税率表(i, 5)
+        
+        ' 判断当前以往应纳税所得额是否在当前税率区间内
+        If 当月和以往应缴税所得额 > 税率表(i, 2) Then
+            
+            If i = UBound(税率表) Or 当月和以往应缴税所得额 <= 税率表(i + 1, 2) Then ' 最后一个区间没有终点限制
+                
+                应缴所得税 = WorksheetFunction.Round(当月和以往应缴税所得额 * 税率, 2) - 速算扣除数
+                
+                Exit For
+            End If
+        End If
+    Next i
+    If 应缴所得税 < 0 Then
+        Stop
+    End If
+    个人所得税_辅助函数_正推计算应缴所得税 = 应缴所得税
+End Function
+
+Sub 个人所得税_表格创建(startyyyymm As String)
+    Dim ws As Worksheet
+    Dim ws参数 As Worksheet
+    Dim findResult As Variant
+    Dim formattedDate As String
+    Dim 总标题数组() As String
+    Dim i As Integer
+    Dim 标题行 As Integer
+    
+    ' 将 startyyyymm 转换为 Date 类型
+    startDate = DateSerial(Left(startyyyymm, 4), Right(startyyyymm, 2), 1)
+    
+    ' 格式化日期为 "yyyy年mm月1日"
+    formattedDate = Format(startDate, "yyyy""年""mm""月""1日")
+    
+    ' 将格式化后的日期写入 A1 单元格
+   
+    ' 检查或创建名为 "本月个人所得税" 的工作表
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("本月个人所得税")
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        ws.Name = "本月个人所得税"
+    Else
+        ws.Cells.Clear
+    End If
+    On Error GoTo 0
+    标题行 = 5
+     ws.Cells(1, 1).Value = formattedDate
+    ' 定义标题数组
+    Dim 基本信息数组() As Variant
+    Dim 个人所得税标题数组() As Variant
+    
+    ' 使用 Array 函数创建数组
+    基本信息数组 = Array(标题_检验("工号"), 标题_检验("姓名"), 标题_检验("身份证号"), 标题_检验("手机号"), 标题_检验("计薪方式"))
+    
+    个人所得税标题数组 = Array(标题_检验("应发薪资合计"), 标题_检验("当月个税免征额"), 标题_检验("社保合计p"), 标题_检验("住房公积金p"), 标题_检验("当月专项扣除"), 标题_检验("个税专项附加扣除核定"), _
+        标题_检验("以往税前薪酬"), 标题_检验("以往个税免征额"), 标题_检验("以往专项扣除"), 标题_检验("以往附加扣除"), 标题_检验("以往缴纳所得税"), 标题_检验("周期内应缴纳所得税"), 标题_检验("当月应缴纳所得税"), 标题_检验("实发薪资合计"))
+    
+    ' 合并所有标题数组
+    ReDim 总标题数组(1 To UBound(基本信息数组) + 1 + UBound(个人所得税标题数组) + 1)
+    
+    i = 1
+    For Each Item In 基本信息数组
+        总标题数组(i) = Item
+        i = i + 1
+    Next Item
+    For Each Item In 个人所得税标题数组
+        总标题数组(i) = Item
+        i = i + 1
+    Next Item
+    ' 写入标题行
+    For i = 1 To UBound(总标题数组)
+        ws.Cells(标题行, i).Value = 总标题数组(i)
+    Next i
+    ' 查找“身份证号”所在的列，并设置该列的格式为文本
+    Dim 身份证号列 As Variant
+    findResult = 公共函数_查找位置("本月个人所得税", "身份证号")
+    If findResult(1) = 1 Then
+        身份证号列 = findResult(2)(2)
+        ws.Columns(身份证号列).NumberFormat = "@"
+    End If
+    
+    Call 公共函数_标题写入("本月个人所得税", "个人所得税-吉众")
+End Sub
+Sub 个人所得税_整合执行(startyyyymm As String, endyyyymm As String)
+
+    
+    Dim ws As Worksheet
+    Dim 工号列号 As Long
+    Dim 数据开始行 As Long
+    Dim 最后数据行 As Long
+    Dim i As Long
+    ' 初始化参数值为0
+    Dim 当月税后薪酬 As Double: 当月税后薪酬 = 0
+    Dim 当月税前薪酬 As Double: 当月税前薪酬 = 0
+    Dim 当月个税免征额 As Double: 当月个税免征额 = 0
+    Dim 当月专项扣除 As Double: 当月专项扣除 = 0
+    Dim 当月附加扣除 As Double: 当月附加扣除 = 0
+    Dim 以往税前薪酬 As Double: 以往税前薪酬 = 0
+    Dim 以往个税免征额 As Double: 以往个税免征额 = 0
+    Dim 以往专项扣除 As Double: 以往专项扣除 = 0
+    Dim 以往附加扣除 As Double: 以往附加扣除 = 0
+    Dim 以往已缴纳税额 As Double: 以往已缴纳税额 = 0
+    
+    ' 创建个人所得税表格
+    Call 个人所得税_表格创建(startyyyymm)
+    ' 使用公共函数查找位置
+    当月税后薪酬列号 = 公共函数_查找位置("本月个人所得税", "实发薪资合计")(2)(2)
+    当月税前薪酬列号 = 公共函数_查找位置("本月个人所得税", "应发薪资合计")(2)(2)
+    当月个税免征额列号 = 公共函数_查找位置("本月个人所得税", "当月个税免征额")(2)(2)
+    当月专项扣除列号 = 公共函数_查找位置("本月个人所得税", "当月专项扣除")(2)(2)
+    当月附加扣除列号 = 公共函数_查找位置("本月个人所得税", "个税专项附加扣除核定")(2)(2)
+    以往税前薪酬列号 = 公共函数_查找位置("本月个人所得税", "以往税前薪酬")(2)(2)
+    以往个税免征额列号 = 公共函数_查找位置("本月个人所得税", "以往个税免征额")(2)(2)
+    以往专项扣除列号 = 公共函数_查找位置("本月个人所得税", "以往专项扣除")(2)(2)
+    以往附加扣除列号 = 公共函数_查找位置("本月个人所得税", "以往附加扣除")(2)(2)
+    以往已缴纳税额列号 = 公共函数_查找位置("本月个人所得税", "以往缴纳所得税")(2)(2)
+    周期内应缴纳所得税列号 = 公共函数_查找位置("本月个人所得税", "周期内应缴纳所得税")(2)(2)
+    当月应缴纳所得税 = 公共函数_查找位置("本月个人所得税", "当月应缴纳所得税")(2)(2)
+    
+    ' 复制相同标题的数据到个人所得税表格
+    结果 = 公共函数_复制相同标题("本月工资核定表", 标题_检验("工号"), "本月个人所得税", 标题_检验("工号"))
+    
+    ' 获取个人所得税工作表
+    Set ws = ThisWorkbook.Sheets("本月个人所得税")
+    
+    ' 查找工号位置和表格数据范围
+    工号位置 = 公共函数_查找位置("本月个人所得税", 标题_检验("工号"))
+    社保成本合计位置 = 公共函数_查找位置("本月个人所得税", 标题_检验("社保合计p"))
+    公积金成本合计位置 = 公共函数_查找位置("本月个人所得税", 标题_检验("住房公积金p"))
+    专项扣除位置 = 公共函数_查找位置("本月个人所得税", 标题_检验("当月专项扣除"))
+    
+    工号列号 = 工号位置(2)(2)
+    工号行号 = 工号位置(2)(1)
+    
+    周期开始行 = 工号位置(2)(1) - 2
+    周期结束行 = 工号位置(2)(1) - 1
+    
+    ws.Cells(周期开始行, 1).Value = "周期开始年月"
+    ws.Cells(周期结束行, 1).Value = "当前个税年月"
+    ws.Cells(周期开始行, 2).Value = startyyyymm
+    
+    ws.Cells(周期结束行, 2).Value = endyyyymm
+    
+    表格范围 = 公共函数_表格范围("本月个人所得税")
+    最后数据行 = 表格范围(2)(1)
+
+    Call 个人所得税_导入历史数据(startyyyymm, endyyyymm)
+
+    ' 遍历工号列的每一行
+    For i = 工号行号 + 1 To 最后数据行
+        Dim 当前工号 As String
+        当前工号 = ws.Cells(i, 工号列号).Value
+
+        ' 复制数据
+        结果 = 公共函数_根据工号和标题复制(当前工号, "本月个人所得税", "本月在职信息")
+        结果 = 公共函数_根据工号和标题复制(当前工号, "本月个人所得税", "人员薪资信息")
+        
+        ' 计算专项扣除（社保 + 公积金）
+        ws.Cells(i, 专项扣除位置(2)(2)).Value = ws.Cells(i, 社保成本合计位置(2)(2)).Value + ws.Cells(i, 公积金成本合计位置(2)(2)).Value
+        
+        
+        ' 根据实发薪资合计的值选择计算方法
+        Dim 当月应缴所得税 As Double
+        
+        当月税后薪酬 = ws.Cells(i, 当月税后薪酬列号).Value
+        当月税前薪酬 = ws.Cells(i, 当月税前薪酬列号).Value
+        当月个税免征额 = ws.Cells(i, 当月个税免征额列号).Value
+        当月附加扣除 = ws.Cells(i, 当月附加扣除列号).Value
+        当月专项扣除 = ws.Cells(i, 当月专项扣除列号).Value
+        
+        以往税前薪酬 = ws.Cells(i, 以往税前薪酬列号).Value
+        以往个税免征额 = ws.Cells(i, 以往个税免征额列号).Value
+        以往专项扣除 = ws.Cells(i, 以往专项扣除列号).Value
+        以往附加扣除 = ws.Cells(i, 以往附加扣除列号).Value
+        以往已缴纳税额 = ws.Cells(i, 以往已缴纳税额列号).Value
+        
+  
+        
+        If 当月税后薪酬 > 0 Then
+            周期内应缴纳所得税 = 个人所得税_辅助函数_反推计算应缴所得税(当月税后薪酬, 当月个税免征额, 当月专项扣除, 当月附加扣除, 以往税前薪酬, 以往个税免征额, 以往专项扣除, 以往附加扣除, 以往已缴纳税额)
+            ws.Cells(i, 周期内应缴纳所得税列号).Value = 周期内应缴纳所得税
+            应缴纳所得税 = 周期内应缴纳所得税 - 以往已缴纳税额
+  
+            If 应缴纳所得税 <= 0 Then 应缴纳所得税 = 0
+            ws.Cells(i, 当月应缴纳所得税).Value = 应缴纳所得税
+            ws.Cells(i, 当月税前薪酬列号).Value = 当月税后薪酬 + 当月专项扣除 + 应缴纳所得税
+            
+        Else
+            周期内应缴纳所得税 = 个人所得税_辅助函数_正推计算应缴所得税(当月税前薪酬, 当月个税免征额, 当月专项扣除, 当月附加扣除, 以往税前薪酬, 以往个税免征额, 以往专项扣除, 以往附加扣除)
+            ws.Cells(i, 周期内应缴纳所得税列号).Value = 周期内应缴纳所得税
+            应缴纳所得税 = 周期内应缴纳所得税 - 以往已缴纳税额
+            If 应缴纳所得税 <= 0 Then 应缴纳所得税 = 0
+            ws.Cells(i, 当月应缴纳所得税).Value = 应缴纳所得税
+            
+            ws.Cells(i, 当月税后薪酬列号).Value = 当月税前薪酬 - 当月专项扣除 - 应缴纳所得税
+        End If
+        
+        
+        
+        
+        
+        
+    Next i
+    
+    ' 导入历史数据
+    
+    
+
+End Sub
+
+
+Function 公共函数_读取历史数据工号合计参数(工号 As String, title As String, startyyyymm As String, endyyyymm As String) As Double
+    On Error GoTo ErrorHandler ' 错误处理
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets("历史数据")
+        
+    ' 获取列号
+    Dim titleCol As Long, yyyymmCol As Long, 工号Col As Long
+    Dim findResult As Variant
+    findResult = 公共函数_查找位置("历史数据", 标题_检验(title))
+    If findResult(1) = 0 Then GoTo ErrorHandler
+    titleCol = findResult(2)(2)
+    
+    findResult = 公共函数_查找位置("历史数据", 标题_检验("历史记录年月"))
+    If findResult(1) = 0 Then GoTo ErrorHandler
+    yyyymmCol = findResult(2)(2)
+    
+    findResult = 公共函数_查找位置("历史数据", 标题_检验("工号"))
+    If findResult(1) = 0 Then GoTo ErrorHandler
+    工号Col = findResult(2)(2)
+    
+    ' 读取数据范围到数组
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, 工号Col).End(xlUp).row
+    Dim dataRange As Range
+    Set dataRange = ws.Range(ws.Cells(2, 1), ws.Cells(lastRow, ws.Columns.Count))
+    Dim dataArray As Variant
+    dataArray = dataRange.Value
+    
+    ' 遍历数组，累加符合条件的值
+    Dim sum As Double: sum = 0
+    Dim i As Long
+    For i = LBound(dataArray, 1) To UBound(dataArray, 1)
+        If dataArray(i, 工号Col) = 工号 And dataArray(i, yyyymmCol) >= startyyyymm And dataArray(i, yyyymmCol) <= endyyyymm Then
+            sum = sum + dataArray(i, titleCol)
+        End If
+    Next i
+    
+    ' 返回合计值
+    公共函数_读取历史数据工号合计参数 = sum
+    Exit Function
+    
+ErrorHandler:
+    公共函数_读取历史数据工号合计参数 = -1 ' 出错时返回-1
+End Function
+
+Sub 个人所得税_导入历史数据(startyyyymm As String, endyyyymm As String)
+    Dim ws税 As Worksheet
+    Set ws税 = ThisWorkbook.Sheets("本月个人所得税")
+    
+    ' 获取所需列号
+    Dim 工号列号 As Long
+    Dim 以往税前薪酬列号 As Long, 以往个税免征额列号 As Long, 以往专项扣除列号 As Long
+    Dim 以往附加扣除列号 As Long, 以往缴纳所得税列号 As Long
+    工号位置 = 公共函数_查找位置("本月个人所得税", "工号")
+    工号列号 = 工号位置(2)(2)
+    工号行号 = 工号位置(2)(1)
+    以往税前薪酬列号 = 公共函数_查找位置("本月个人所得税", "以往税前薪酬")(2)(2)
+    以往个税免征额列号 = 公共函数_查找位置("本月个人所得税", "以往个税免征额")(2)(2)
+    以往专项扣除列号 = 公共函数_查找位置("本月个人所得税", "以往专项扣除")(2)(2)
+    以往附加扣除列号 = 公共函数_查找位置("本月个人所得税", "以往附加扣除")(2)(2)
+    以往缴纳所得税列号 = 公共函数_查找位置("本月个人所得税", "以往缴纳所得税")(2)(2)
+    
+    ' 确定数据行范围
+    Dim 数据开始行 As Long, 数据结束行 As Long
+    数据开始行 = 工号行号 + 1 ' 假设标题行紧接着工号列
+    数据结束行 = ws税.Cells(ws税.Rows.Count, 工号列号).End(xlUp).row
+    
+    ' 遍历每个工号并填充历史数据
+    Dim i As Long
+    For i = 数据开始行 To 数据结束行
+        Dim 当前工号 As String
+        当前工号 = ws税.Cells(i, 工号列号).Value
+  
+        ws税.Cells(i, 以往税前薪酬列号).Value = 公共函数_读取历史数据工号合计参数(当前工号, 标题_检验("应发薪资合计"), startyyyymm, endyyyymm)
+        ws税.Cells(i, 以往个税免征额列号).Value = 公共函数_读取历史数据工号合计参数(当前工号, 标题_检验("当月个税免征额"), startyyyymm, endyyyymm)
+        ws税.Cells(i, 以往专项扣除列号).Value = 公共函数_读取历史数据工号合计参数(当前工号, 标题_检验("当月专项扣除"), startyyyymm, endyyyymm)
+        ws税.Cells(i, 以往附加扣除列号).Value = 公共函数_读取历史数据工号合计参数(当前工号, 标题_检验("个税专项附加扣除核定"), startyyyymm, endyyyymm)
+        ws税.Cells(i, 以往缴纳所得税列号).Value = 公共函数_读取历史数据工号合计参数(当前工号, 标题_检验("当月应缴纳所得税"), startyyyymm, endyyyymm)
+    Next i
+End Sub
+
+Function 个人所得税_周期开始年月(yyyymm As String)
+    Dim 当前年 As Integer
+    Dim 当前月 As Integer
+    Dim 周期开始年 As Integer
+    Dim 周期开始年月 As String
+    
+    ' 解析输入的年月
+    当前年 = Val(Left(yyyymm, 4))
+    当前月 = Val(Right(yyyymm, 2))
+    
+    ' 确定周期开始年
+    ' 如果当前月份小于12月，则周期开始年是去年，否则就是今年
+    If 当前月 < 12 Then
+        周期开始年 = 当前年 - 1
+    Else
+        周期开始年 = 当前年
+    End If
+    
+    ' 构建周期开始年月字符串
+    周期开始年月 = Format$(周期开始年, "0000") & "12"
+    
+    ' 输出结果
+    个人所得税_周期开始年月 = 周期开始年月
+End Function
+
+Sub 测试个人所得税周期开始年月()
+    ' 测试不同的年月以验证逻辑
+    Call 个人所得税_周期开始年月("202311") ' 预期输出: 202212
+    Call 个人所得税_周期开始年月("202312") ' 预期输出: 202312
+    Call 个人所得税_周期开始年月("202401") ' 预期输出: 202312
+    Call 个人所得税_周期开始年月("202411") ' 预期输出: 202312
+    Call 个人所得税_周期开始年月("202412") ' 预期输出: 202412
+End Sub
+Sub 本月个人所得税_格式二次整理()
+    Dim ws As Worksheet
+    Dim findResult As Variant
+    Dim findResultBottom As Variant
+    Dim 最大行 As Long, 最大列 As Long
+    Dim 数据开始行 As Long
+    Dim 表格范围结果 As Variant
+    Dim i As Long
+    Dim 表格名 As String
+    表格名 = "本月个人所得税"
+    ' 确保工作表存在
+    Set ws = ThisWorkbook.Sheets(表格名)
+    If ws Is Nothing Then
+        MsgBox "指定的工作表不存在。", vbExclamation
+        Exit Sub
+    End If
+    
+    ' 使用查找位置找到“工号”所在的列和行
+    findResult = 公共函数_查找位置(表格名, "工号")
+    ' 假设的查找位置_最下位置函数，需要实现
+    findResultBottom = 公共函数_查找位置_最下位置(表格名, "工号")
+    
+    ' 确定数据开始行
+    数据开始行 = findResultBottom(2)(1) + 1
+    
+    ' 获取工作表的最大列数和最大行数
+    表格范围结果 = 公共函数_表格范围(表格名)
+    最大列 = 表格范围结果(2)(2)
+    最大行 = 表格范围结果(2)(1)
+    
+    ' 合并单元格并写入"合计"
+    ws.Range(ws.Cells(最大行 + 1, 1), ws.Cells(最大行 + 1, 3)).Merge
+    ws.Cells(最大行 + 1, 1).Value = "合计"
+    
+    ' 从第四列开始进行合计
+    For i = 4 To 最大列
+        ws.Cells(最大行 + 1, i).Formula = "=SUM(" & ws.Cells(数据开始行, i).Address & ":" & ws.Cells(最大行, i).Address & ")"
+    Next i
+    
+    ' 更新最大行
+    最大行 = ws.Cells(ws.Rows.Count, 1).End(xlUp).row
+    
+    ' 设置标题行的最上端从第一列开始到最大列的边框
+    With ws.Range(ws.Cells(findResult(2)(1), 1), ws.Cells(最大行, 最大列)).Borders
+        .LineStyle = xlContinuous
+        .Color = vbBlack
+        .Weight = xlThin
+    End With
+     '设置标题行的行高为30
+    ws.Rows(1).RowHeight = 30
+    ' 设置内外边框线
+    With ws.Range(ws.Cells(findResult(2)(1), 1), ws.Cells(最大行, 最大列))
+        .Borders(xlInsideVertical).LineStyle = xlContinuous
+        .Borders(xlInsideHorizontal).LineStyle = xlContinuous
+        .Borders(xlEdgeTop).LineStyle = xlContinuous
+        .Borders(xlEdgeBottom).LineStyle = xlContinuous
+        .Borders(xlEdgeLeft).LineStyle = xlContinuous
+        .Borders(xlEdgeRight).LineStyle = xlContinuous
+    End With
+End Sub
+
+Sub 测试数据()
+    Dim 当月税后薪酬 As Double
+    Dim 当月个税免征额 As Double
+    Dim 当月专项扣除 As Double
+    Dim 当月附加扣除 As Double
+    Dim 以往税前薪酬 As Double
+    Dim 以往个税免征额 As Double
+    Dim 以往专项扣除 As Double
+    Dim 以往附加扣除 As Double
+    Dim 以往已缴纳税额 As Double
+    Dim 应缴所得税 As Double
+
+    ' 苏锡成2024年6月数据
+    当月税后薪酬 = 10000 ' 目标税后薪酬
+    当月个税免征额 = 5000 ' 个税免征额
+    当月专项扣除 = 1119.86 ' 专项扣除
+    当月附加扣除 = 0 ' 附加扣除
+    以往税前薪酬 = 67652 ' 以往税前薪酬
+    以往个税免征额 = 30000 ' 以往个税免征额
+    以往专项扣除 = 6724.16 ' 以往专项扣除
+    以往附加扣除 = 0 ' 以往附加扣除
+    以往已缴纳税额 = 0 ' 以往已缴纳税额
+
+    ' 计算应缴所得税
+    应缴所得税 = 个人所得税_辅助函数_反推计算应缴所得税(当月税后薪酬, 当月个税免征额, 当月专项扣除, 当月附加扣除, 以往税前薪酬, 以往个税免征额, 以往专项扣除, 以往附加扣除, 以往已缴纳税额)
+
+    ' 显示结果
+    MsgBox "应缴所得税: " & 应缴所得税
+End Sub
+Sub 创建测试()
+
+    Call 个人所得税_整合执行("202412", "202510")
+End Sub
+' 按工号调试个税计算过程：读取当前《本月个人所得税》里的数据 + 历史数据 + 重新计算
+Sub 调试_显示个税过程_按工号(ByVal 目标工号 As String)
+    Dim ws As Worksheet
+    Dim res As Variant
+    Dim 工号列号 As Long, 工号行号 As Long, 最后行 As Long
+    Dim i As Long, 目标行 As Long, found As Boolean
+
+    Set ws = ThisWorkbook.Sheets("本月个人所得税")
+
+    ' 找到“工号”所在的列和行
+    res = 公共函数_查找位置("本月个人所得税", "工号")
+    工号行号 = res(2)(1)
+    工号列号 = res(2)(2)
+
+    最后行 = ws.Cells(ws.Rows.Count, 工号列号).End(xlUp).row
+
+    ' 找到目标工号所在行
+    For i = 工号行号 + 1 To 最后行
+        If ws.Cells(i, 工号列号).Value = 目标工号 Then
+            目标行 = i
+            found = True
+            Exit For
+        End If
+    Next i
+
+    If Not found Then
+        MsgBox "未在【本月个人所得税】表中找到工号：" & 目标工号, vbExclamation
+        Exit Sub
+    End If
+
+    ' 从表头上方两行，读出本次计算使用的“周期开始年月 / 当前个税年月”
+    Dim 周期开始年月 As String, 当前个税年月 As String
+    周期开始年月 = ws.Cells(工号行号 - 2, 2).Value
+    当前个税年月 = ws.Cells(工号行号 - 1, 2).Value
+
+    ' ===== 获取各列列号 =====
+    Dim 当月税后薪酬列号 As Long, 当月税前薪酬列号 As Long
+    Dim 当月个税免征额列号 As Long, 当月专项扣除列号 As Long, 当月附加扣除列号 As Long
+    Dim 以往税前薪酬列号 As Long, 以往个税免征额列号 As Long
+    Dim 以往专项扣除列号 As Long, 以往附加扣除列号 As Long, 以往已缴纳税额列号 As Long
+    Dim 周期内应缴纳所得税列号 As Long, 当月应缴纳所得税列号 As Long
+
+    当月税后薪酬列号 = 公共函数_查找位置("本月个人所得税", "实发薪资合计")(2)(2)
+    当月税前薪酬列号 = 公共函数_查找位置("本月个人所得税", "应发薪资合计")(2)(2)
+    当月个税免征额列号 = 公共函数_查找位置("本月个人所得税", "当月个税免征额")(2)(2)
+    当月专项扣除列号 = 公共函数_查找位置("本月个人所得税", "当月专项扣除")(2)(2)
+    当月附加扣除列号 = 公共函数_查找位置("本月个人所得税", "个税专项附加扣除核定")(2)(2)
+
+    以往税前薪酬列号 = 公共函数_查找位置("本月个人所得税", "以往税前薪酬")(2)(2)
+    以往个税免征额列号 = 公共函数_查找位置("本月个人所得税", "以往个税免征额")(2)(2)
+    以往专项扣除列号 = 公共函数_查找位置("本月个人所得税", "以往专项扣除")(2)(2)
+    以往附加扣除列号 = 公共函数_查找位置("本月个人所得税", "以往附加扣除")(2)(2)
+    以往已缴纳税额列号 = 公共函数_查找位置("本月个人所得税", "以往缴纳所得税")(2)(2)
+
+    周期内应缴纳所得税列号 = 公共函数_查找位置("本月个人所得税", "周期内应缴纳所得税")(2)(2)
+    当月应缴纳所得税列号 = 公共函数_查找位置("本月个人所得税", "当月应缴纳所得税")(2)(2)
+
+    ' ===== 读出表里当前行的所有关键数 =====
+    Dim 当月税后薪酬 As Double, 当月税前薪酬 As Double
+    Dim 当月个税免征额 As Double, 当月专项扣除 As Double, 当月附加扣除 As Double
+    Dim 以往税前薪酬 As Double, 以往个税免征额 As Double
+    Dim 以往专项扣除 As Double, 以往附加扣除 As Double, 以往已缴纳税额 As Double
+    Dim 表中周期内应缴税 As Double, 表中当月应缴税 As Double
+
+    当月税后薪酬 = ws.Cells(目标行, 当月税后薪酬列号).Value
+    当月税前薪酬 = ws.Cells(目标行, 当月税前薪酬列号).Value
+    当月个税免征额 = ws.Cells(目标行, 当月个税免征额列号).Value
+    当月专项扣除 = ws.Cells(目标行, 当月专项扣除列号).Value
+    当月附加扣除 = ws.Cells(目标行, 当月附加扣除列号).Value
+
+    以往税前薪酬 = ws.Cells(目标行, 以往税前薪酬列号).Value
+    以往个税免征额 = ws.Cells(目标行, 以往个税免征额列号).Value
+    以往专项扣除 = ws.Cells(目标行, 以往专项扣除列号).Value
+    以往附加扣除 = ws.Cells(目标行, 以往附加扣除列号).Value
+    以往已缴纳税额 = ws.Cells(目标行, 以往已缴纳税额列号).Value
+
+    表中周期内应缴税 = ws.Cells(目标行, 周期内应缴纳所得税列号).Value
+    表中当月应缴税 = ws.Cells(目标行, 当月应缴纳所得税列号).Value
+
+    ' ===== 按“历史数据”表再合计一遍，看是否和表中“以往xxx”一致 =====
+    Dim 合计税前 As Double, 合计免征 As Double, 合计专项 As Double
+    Dim 合计附加 As Double, 合计税额 As Double
+
+    合计税前 = 公共函数_读取历史数据工号合计参数(目标工号, 标题_检验("应发薪资合计"), 周期开始年月, 当前个税年月)
+    合计免征 = 公共函数_读取历史数据工号合计参数(目标工号, 标题_检验("当月个税免征额"), 周期开始年月, 当前个税年月)
+    合计专项 = 公共函数_读取历史数据工号合计参数(目标工号, 标题_检验("当月专项扣除"), 周期开始年月, 当前个税年月)
+    合计附加 = 公共函数_读取历史数据工号合计参数(目标工号, 标题_检验("个税专项附加扣除核定"), 周期开始年月, 当前个税年月)
+    合计税额 = 公共函数_读取历史数据工号合计参数(目标工号, 标题_检验("当月应缴纳所得税"), 周期开始年月, 当前个税年月)
+
+    ' ===== 中间量：应纳税所得额 =====
+    Dim 以往应纳税所得额 As Double, 本月应纳税所得额 As Double, 累计应纳税所得额 As Double
+
+    以往应纳税所得额 = 以往税前薪酬 - 以往个税免征额 - 以往专项扣除 - 以往附加扣除
+    本月应纳税所得额 = 当月税前薪酬 - 当月个税免征额 - 当月专项扣除 - 当月附加扣除
+    累计应纳税所得额 = 以往应纳税所得额 + 本月应纳税所得额
+
+    ' ===== 按照主流程同样逻辑再算一次“周期内应缴税 / 当月应缴税” =====
+    Dim 周期内应缴税_calc As Double, 当月应缴税_calc As Double
+
+    If 当月税后薪酬 > 0 Then
+        ' 和主流程一致：有税后薪酬时走“反推”函数
+        周期内应缴税_calc = 个人所得税_辅助函数_反推计算应缴所得税( _
+                          当月税后薪酬, 当月个税免征额, 当月专项扣除, 当月附加扣除, _
+                          以往税前薪酬, 以往个税免征额, 以往专项扣除, 以往附加扣除, 以往已缴纳税额 _
+                          )
+    Else
+        ' 税后=0或空时走正推
+        周期内应缴税_calc = 个人所得税_辅助函数_正推计算应缴所得税( _
+                          当月税前薪酬, 当月个税免征额, 当月专项扣除, 当月附加扣除, _
+                          以往税前薪酬, 以往个税免征额, 以往专项扣除, 以往附加扣除 _
+                          )
+    End If
+
+    当月应缴税_calc = 周期内应缴税_calc - 以往已缴纳税额
+
+    ' ===== 组织输出，方便你和手算一项一项对 =====
+    Dim msg As String
+    msg = ""
+    msg = msg & "工号: " & 目标工号 & vbCrLf
+    msg = msg & "周期: " & 周期开始年月 & " ~ " & 当前个税年月 & vbCrLf & vbCrLf
+
+    msg = msg & "【历史合计（表中列）】" & vbCrLf
+    msg = msg & "以往税前薪酬: " & Format(以往税前薪酬, "0.00") & vbCrLf
+    msg = msg & "以往个税免征额: " & Format(以往个税免征额, "0.00") & vbCrLf
+    msg = msg & "以往专项扣除: " & Format(以往专项扣除, "0.00") & vbCrLf
+    msg = msg & "以往附加扣除: " & Format(以往附加扣除, "0.00") & vbCrLf
+    msg = msg & "以往已缴纳税额: " & Format(以往已缴纳税额, "0.00") & vbCrLf & vbCrLf
+
+    msg = msg & "【历史合计（重新从《历史数据》汇总）】" & vbCrLf
+    msg = msg & "税前合计: " & Format(合计税前, "0.00") & vbCrLf
+    msg = msg & "免征额合计: " & Format(合计免征, "0.00") & vbCrLf
+    msg = msg & "专项扣除合计: " & Format(合计专项, "0.00") & vbCrLf
+    msg = msg & "附加扣除合计: " & Format(合计附加, "0.00") & vbCrLf
+    msg = msg & "应缴个税合计: " & Format(合计税额, "0.00") & vbCrLf & vbCrLf
+
+    msg = msg & "【本月参数（当前行）】" & vbCrLf
+    msg = msg & "当月税前薪酬: " & Format(当月税前薪酬, "0.00") & vbCrLf
+    msg = msg & "当月税后薪酬: " & Format(当月税后薪酬, "0.00") & vbCrLf
+    msg = msg & "当月个税免征额: " & Format(当月个税免征额, "0.00") & vbCrLf
+    msg = msg & "当月专项扣除: " & Format(当月专项扣除, "0.00") & vbCrLf
+    msg = msg & "当月附加扣除: " & Format(当月附加扣除, "0.00") & vbCrLf & vbCrLf
+
+    msg = msg & "【中间量】" & vbCrLf
+    msg = msg & "以往应纳税所得额 = 以往税前 - 以往免征 - 以往专项 - 以往附加" & vbCrLf
+    msg = msg & "  = " & Format(以往税前薪酬, "0.00") & " - " & Format(以往个税免征额, "0.00") & _
+          " - " & Format(以往专项扣除, "0.00") & " - " & Format(以往附加扣除, "0.00") & _
+          " = " & Format(以往应纳税所得额, "0.00") & vbCrLf
+    msg = msg & "本月应纳税所得额 = 当月税前 - 当月免征 - 当月专项 - 当月附加" & vbCrLf
+    msg = msg & "  = " & Format(当月税前薪酬, "0.00") & " - " & Format(当月个税免征额, "0.00") & _
+          " - " & Format(当月专项扣除, "0.00") & " - " & Format(当月附加扣除, "0.00") & _
+          " = " & Format(本月应纳税所得额, "0.00") & vbCrLf
+    msg = msg & "累计应纳税所得额 = 以往 + 本月 = " & Format(累计应纳税所得额, "0.00") & vbCrLf & vbCrLf
+
+    msg = msg & "【结果对比】" & vbCrLf
+    msg = msg & "表中“周期内应缴纳所得税” = " & Format(表中周期内应缴税, "0.00") & vbCrLf
+    msg = msg & "代码重算 周期内应缴税     = " & Format(周期内应缴税_calc, "0.00") & vbCrLf
+    msg = msg & "差异(周期) = " & Format(周期内应缴税_calc - 表中周期内应缴税, "0.00") & vbCrLf & vbCrLf
+
+    msg = msg & "表中“当月应缴纳所得税” = " & Format(表中当月应缴税, "0.00") & vbCrLf
+    msg = msg & "代码重算 当月应缴纳所得税 = " & Format(当月应缴税_calc, "0.00") & vbCrLf
+    msg = msg & "差异(当月) = " & Format(当月应缴税_calc - 表中当月应缴税, "0.00")
+
+    MsgBox msg, vbInformation, "个税调试 - " & 目标工号
+End Sub
+' 入口：直接调这个就会弹出 A0006 的个税计算过程
+Sub 调试_A0006()
+    调试_显示个税过程_按工号 "A0006"
+End Sub
+
+
+
+
+
+============================================================
+MODULE: Sheet8.cls | STREAM: VBA/Sheet8
+============================================================
+
+Attribute VB_Name = "Sheet8"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+
+
+============================================================
+MODULE: 导入文件窗口.frm | STREAM: VBA/导入文件窗口
+============================================================
+
+Attribute VB_Name = "导入文件窗口"
+Attribute VB_Base = "0{052514F4-8D9F-462E-B63F-7799B52F0395}{2D646B1E-43FA-46DF-89CA-AB75E6A92BB7}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = False
+
+
+Private Sub CommandButton1_Click()
+    Dim 文件路径 As String
+    Dim fd As FileDialog
+    Dim 初始目录 As String
+
+    ' 创建文件选择对话框
+    Set fd = Application.FileDialog(msoFileDialogFilePicker)
+
+    ' 检查Label13的值是否有效，设置初始目录
+    If Len(Me.Label13.Caption) > 0 And Dir(Me.Label13.Caption) <> "" Then
+        ' 如果Label13有有效路径，则使用它作为初始目录
+        初始目录 = Me.Label13.Caption
+    Else
+        ' 如果Label13无效，使用默认路径（如：我的文档）
+        初始目录 = Environ("USERPROFILE") & "\Documents\"
+    End If
+
+    With fd
+        .title = "请选择文件" ' 对话框标题
+        .Filters.Clear ' 清除现有的文件过滤条件
+        .Filters.Add "Excel 文件", "*.xlsx; *.xls; *.xlsm" ' 设置文件过滤条件，仅显示 Excel 文件
+        .AllowMultiSelect = False ' 禁止多选
+        .InitialFileName = 初始目录 ' 设置初始目录
+
+        If .Show = -1 Then ' 如果用户选择了文件
+            文件路径 = .SelectedItems(1) ' 获取选中的文件路径
+
+            ' 调用公共函数更新在职信息的地址
+            公共函数_修改对应地址 "在职信息", 文件路径
+
+            ' 更新文件导入窗口
+            公共函数_导入文件窗口更新
+        Else
+            ' 如果用户取消了选择
+            MsgBox "您没有选择任何文件。", vbExclamation, "取消操作"
+        End If
+    End With
+
+End Sub
+
+
+Private Sub CommandButton10_Click()
+    历史数据_检查删除指定月份 (TextBox1.Value)
+    Call CommandButton9_Click
+End Sub
+
+Private Sub CommandButton2_Click()
+    Dim 文件路径 As String
+    Dim fd As FileDialog
+    Dim 初始目录 As String
+
+    ' 创建文件选择对话框
+    Set fd = Application.FileDialog(msoFileDialogFilePicker)
+
+    ' 检查Label13的值是否有效，设置初始目录
+    If Len(Me.Label23.Caption) > 0 And Dir(Me.Label23.Caption) <> "" Then
+        ' 如果Label13有有效路径，则使用它作为初始目录
+        初始目录 = Me.Label23.Caption
+    Else
+        ' 如果Label23无效，使用默认路径（如：我的文档）
+        初始目录 = Environ("USERPROFILE") & "\Documents\"
+    End If
+
+    With fd
+        .title = "请选择文件" ' 对话框标题
+        .Filters.Clear ' 清除现有的文件过滤条件
+        .Filters.Add "Excel 文件", "*.xlsx; *.xls; *.xlsm" ' 设置文件过滤条件，仅显示 Excel 文件
+        .AllowMultiSelect = False ' 禁止多选
+        .InitialFileName = 初始目录 ' 设置初始目录
+
+        If .Show = -1 Then ' 如果用户选择了文件
+            文件路径 = .SelectedItems(1) ' 获取选中的文件路径
+
+            ' 调用公共函数更新在职信息的地址
+            公共函数_修改对应地址 "在职信息-其他", 文件路径
+
+            ' 更新文件导入窗口
+            公共函数_导入文件窗口更新
+        Else
+            ' 如果用户取消了选择
+            MsgBox "您没有选择任何文件。", vbExclamation, "取消操作"
+        End If
+    End With
+End Sub
+
+
+Private Sub CommandButton3_Click()
+    Dim 文件路径 As String
+    Dim fd As FileDialog
+    Dim 初始目录 As String
+    
+    ' 创建文件选择对话框
+    Set fd = Application.FileDialog(msoFileDialogFilePicker)
+    
+    ' 检查Label13的值是否有效，设置初始目录
+    If Len(Me.Label33.Caption) > 0 And Dir(Me.Label33.Caption) <> "" Then
+        ' 如果Label33有有效路径，则使用它作为初始目录
+        初始目录 = Me.Label33.Caption
+    Else
+        ' 如果Label33无效，使用默认路径（如：我的文档）
+        初始目录 = Environ("USERPROFILE") & "\Documents\"
+    End If
+    
+    With fd
+        .title = "请选择文件" ' 对话框标题
+        .Filters.Clear ' 清除现有的文件过滤条件
+        .Filters.Add "Excel 文件", "*.xlsx; *.xls; *.xlsm" ' 设置文件过滤条件，仅显示 Excel 文件
+        .AllowMultiSelect = False ' 禁止多选
+        .InitialFileName = 初始目录 ' 设置初始目录
+        
+        If .Show = -1 Then ' 如果用户选择了文件
+            文件路径 = .SelectedItems(1) ' 获取选中的文件路径
+            
+            ' 调用公共函数更新在职信息的地址
+            公共函数_修改对应地址 "考勤表", 文件路径
+            
+            ' 更新文件导入窗口
+            公共函数_导入文件窗口更新
+        Else
+            ' 如果用户取消了选择
+            MsgBox "您没有选择任何文件。", vbExclamation, "取消操作"
+        End If
+    End With
+    
+    
+End Sub
+
+Private Sub CommandButton4_Click()
+    Call 第一步
+End Sub
+
+Private Sub CommandButton5_Click()
+ Call 第二步
+End Sub
+
+Private Sub CommandButton6_Click()
+    Call 第三步
+End Sub
+
+Private Sub CommandButton7_Click()
+'下月
+TextBox1.Value = 公共函数_日期调整(TextBox1.Value, 1)
+
+End Sub
+
+Private Sub CommandButton8_Click()
+'上月
+TextBox1.Value = 公共函数_日期调整(TextBox1.Value, -1)
+
+End Sub
+
+Private Sub CommandButton9_Click()
+    '最新
+    ' 将上面的代码放在这里
+    '一开始就执行这个代码
+    Dim dateString As String
+    Dim dateInt As Long
+    
+    dateString = 历史数据_查找最新日期() ' 假设这是您的自定义函数
+    
+    ' 将字符串转换为整数
+    On Error Resume Next ' 错误处理，避免转换错误导致的中断
+    dateInt = CLng(dateString)
+    If Err.Number = 0 Then
+        TextBox1.Value = dateInt
+        Label34.Caption = dateInt ' Label 控件使用 Caption 属性而不是 Value
+        
+    Else
+        TextBox1.Value = "转换错误" ' 或任何适合的错误处理
+    End If
+    On Error GoTo 0 ' 关闭错误处理
+End Sub
+
+Private Sub UserForm_Activate()
+    ' 将上面的代码放在这里
+    '一开始就执行这个代码
+    Dim dateString As String
+    Dim dateInt As Long
+    
+    dateString = 历史数据_查找最新日期() ' 假设这是您的自定义函数
+    
+    ' 将字符串转换为整数
+    On Error Resume Next ' 错误处理，避免转换错误导致的中断
+    dateInt = CLng(dateString)
+    If Err.Number = 0 Then
+        TextBox1.Value = dateInt
+        Label34.Caption = dateInt ' Label 控件使用 Caption 属性而不是 Value
+
+    Else
+        TextBox1.Value = "转换错误" ' 或任何适合的错误处理
+    End If
+    On Error GoTo 0 ' 关闭错误处理
+End Sub
+
+
+
+
+============================================================
+MODULE: Sheet10.cls | STREAM: VBA/Sheet10
+============================================================
+
+Attribute VB_Name = "Sheet10"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+
+
+============================================================
+MODULE: Sheet14.cls | STREAM: VBA/Sheet14
+============================================================
+
+Attribute VB_Name = "Sheet14"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+
+
+============================================================
+MODULE: 工资条.bas | STREAM: VBA/工资条
+============================================================
+
+Attribute VB_Name = "工资条"
+Sub 工资条第一步_创建清空表格()
+    ' 定义工作表变量
+    Dim wsA4 As Worksheet
+    Dim wsEnvelope As Worksheet
+    Dim wsNameA4 As String
+    Dim wsNameEnvelope As String
+
+    ' 初始化工作表名
+    wsNameA4 = "工资条-A4"
+    wsNameEnvelope = "工资条-信封"
+
+    ' 检查工作表是否存在并清空内容
+    On Error Resume Next
+    Set wsA4 = ThisWorkbook.Sheets(wsNameA4)
+    Set wsEnvelope = ThisWorkbook.Sheets(wsNameEnvelope)
+    On Error GoTo 0
+
+    ' 如果工作表存在，则清空内容
+    If Not wsA4 Is Nothing Then
+        Call 公共函数_清空表格(wsNameA4)
+    Else
+        ' 如果工作表不存在，则创建工作表
+        Set wsA4 = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        wsA4.Name = wsNameA4
+    End If
+
+    If Not wsEnvelope Is Nothing Then
+        Call 公共函数_清空表格(wsNameEnvelope)
+    Else
+        ' 如果工作表不存在，则创建工作表
+        Set wsEnvelope = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        wsEnvelope.Name = wsNameEnvelope
+    End If
+
+    ' 提示操作完成
+ '   MsgBox "工资条-A4 和 工资条-信封 表格已创建或清空。", vbInformation, "操作完成"
+End Sub
+
+Function 工资条第二步_写入标题和内容() As Variant
+    ' 定义返回结果变量
+    Dim result(1 To 2) As Variant
+    
+    ' 定义工作表变量
+    Dim wsA4 As Worksheet
+    Dim wsMonthly As Worksheet
+    Dim wsNonEntry As Worksheet
+    Dim titleArray As Variant
+    Dim i As Long
+    
+    ' 初始化工作表名
+    Dim wsNameA4 As String
+    Dim wsNameMonthly As String
+    Dim wsNameNonEntry As String
+    wsNameA4 = "工资条-A4"
+    wsNameMonthly = "本月工资核定表"
+    wsNameNonEntry = "本月工资核定表-不入账"
+
+    ' 初始化标题数组
+    titleArray = Array("序号", "工号", "姓名", "基本工资", "基本补贴", "绩效奖金", "职位津贴", "1.5倍工资", "2倍工资", "3倍工资", "工资调整", "餐补工资", "应发薪资合计", "社保合计p", "住房公积金p", "代缴个税", "现金发放工资", "收款签字", "现金百元", "现金五十元", "现金十元", "现金五元", "现金一元", "现金合计")
+
+    ' 尝试获取工资条-A4工作表
+    On Error Resume Next
+    Set wsA4 = ThisWorkbook.Sheets(wsNameA4)
+    On Error GoTo 0
+
+    If wsA4 Is Nothing Then
+        result(1) = 0
+        result(2) = "没有找到名为 '" & wsNameA4 & "' 的工作表。"
+        工资条第二步_写入标题和内容 = result
+        Exit Function
+    End If
+
+    ' 检查本月工资核定表和本月工资核定表-不入账工作表是否存在
+    On Error Resume Next
+    Set wsMonthly = ThisWorkbook.Sheets(wsNameMonthly)
+    Set wsNonEntry = ThisWorkbook.Sheets(wsNameNonEntry)
+    On Error GoTo 0
+
+    If wsMonthly Is Nothing Then
+        result(1) = 0
+        result(2) = "没找到本月工资核定表"
+        工资条第二步_写入标题和内容 = result
+        Exit Function
+    End If
+
+    If wsNonEntry Is Nothing Then
+        result(1) = 0
+        result(2) = "没找到本月工资核定表-不入账"
+        工资条第二步_写入标题和内容 = result
+        Exit Function
+    End If
+
+    ' 将工资条-A4的A1值设为本月工资核定表的A1值
+    wsA4.Cells(1, 1).Value = wsMonthly.Cells(1, 1).Value
+
+    ' 写入标题到工资条-A4
+    For i = LBound(titleArray) To UBound(titleArray)
+        wsA4.Cells(2, i + 1).Value = titleArray(i)
+    Next i
+
+    ' 使用公共函数复制相同标题的内容
+    If Not 公共函数_复制相同标题(wsNameMonthly, "工号", wsNameA4, "工号") Then
+        result(1) = 0
+        result(2) = "从本月工资核定表复制内容失败"
+        工资条第二步_写入标题和内容 = result
+        Exit Function
+    End If
+
+    If Not 公共函数_复制相同标题(wsNameNonEntry, "工号", wsNameA4, "工号") Then
+        result(1) = 0
+        result(2) = "从本月工资核定表-不入账复制内容失败"
+        工资条第二步_写入标题和内容 = result
+        Exit Function
+    End If
+
+    ' 返回成功结果
+    result(1) = 1
+    result(2) = "写入标题和内容成功"
+    工资条第二步_写入标题和内容 = result
+End Function
+
+Function 工资条第三步_数据计算() As Variant
+    ' 定义返回结果变量
+    Dim result(1 To 2) As Variant
+    
+    ' 定义工作表和数组变量
+    Dim wsParams As Worksheet
+    Dim wsA4 As Worksheet
+    Dim noCashWageArray() As String
+    Dim startRow As Long, endRow As Long
+    Dim colDict As Object
+    Dim rng As Range
+    Dim i As Long, j As Long
+    Dim cashWage As Double
+    Dim hundreds As Long, fifties As Long, tens As Long, fives As Long, ones As Long
+    Dim lastRow As Long
+
+    ' 初始化工作表名
+    Dim wsNameParams As String
+    Dim wsNameA4 As String
+    wsNameParams = "基本参数"
+    wsNameA4 = "工资条-A4"
+
+    ' 初始化标题数组
+    Dim titleArray As Variant
+    titleArray = Array("序号", "工号", "姓名", "基本工资", "基本补贴", "绩效奖金", "职位津贴", "1.5倍工资", "2倍工资", "3倍工资", "工资调整", "餐补工资", "应发薪资合计", "社保合计p", "住房公积金p", "代缴个税", "现金发放工资", "收款签字", "现金百元", "现金五十元", "现金十元", "现金五元", "现金一元", "现金合计")
+
+    ' 获取工作表对象
+    On Error Resume Next
+    Set wsParams = ThisWorkbook.Sheets(wsNameParams)
+    Set wsA4 = ThisWorkbook.Sheets(wsNameA4)
+    On Error GoTo 0
+
+    ' 检查工作表是否存在
+    If wsParams Is Nothing Then
+        result(1) = 0
+        result(2) = "没有找到名为 '" & wsNameParams & "' 的工作表。"
+        工资条第三步_数据计算 = result
+        Exit Function
+    End If
+
+    If wsA4 Is Nothing Then
+        result(1) = 0
+        result(2) = "没有找到名为 '" & wsNameA4 & "' 的工作表。"
+        工资条第三步_数据计算 = result
+        Exit Function
+    End If
+
+    ' 找到基本参数工作表中委托发放工资人员的位置
+    Set rng = wsParams.Rows.Find(What:="委托发放工资人员", LookIn:=xlValues, LookAt:=xlWhole)
+    If rng Is Nothing Then
+        result(1) = 0
+        result(2) = "没有找到委托发放工资人员位置。"
+        工资条第三步_数据计算 = result
+        Exit Function
+    End If
+
+    ' 获取不计算现金工资工号数组
+    startRow = rng.row + 1
+    i = 0
+    Do While wsParams.Cells(startRow + i, rng.Column).Value <> ""
+        ReDim Preserve noCashWageArray(i)
+        noCashWageArray(i) = wsParams.Cells(startRow + i, rng.Column).Value
+        i = i + 1
+    Loop
+
+    ' 找到工资条-A4的工号列和行
+    Set rng = wsA4.Rows.Find(What:="工号", LookIn:=xlValues, LookAt:=xlWhole)
+    If rng Is Nothing Then
+        result(1) = 0
+        result(2) = "没有找到工资条-A4中的工号列。"
+        工资条第三步_数据计算 = result
+        Exit Function
+    End If
+
+    ' 初始化列字典
+    Set colDict = CreateObject("Scripting.Dictionary")
+    For i = LBound(titleArray) To UBound(titleArray)
+        Set rng = wsA4.Rows.Find(What:=titleArray(i), LookIn:=xlValues, LookAt:=xlWhole)
+        If Not rng Is Nothing Then
+            colDict(titleArray(i)) = rng.Column
+        Else
+            result(1) = 0
+            result(2) = "没有找到工资条-A4中的标题列：" & titleArray(i)
+            工资条第三步_数据计算 = result
+            Exit Function
+        End If
+    Next i
+
+    ' 找到最后一行
+    lastRow = wsA4.Cells(wsA4.Rows.Count, colDict("工号")).End(xlUp).row
+
+    ' 遍历工资条-A4的工号列，从标题行的下一行开始
+    For i = rng.row + 1 To lastRow
+        If Not IsInArray(wsA4.Cells(i, colDict("工号")).Value, noCashWageArray) Then
+            ' 获取现金发放工资值
+            cashWage = wsA4.Cells(i, colDict("现金发放工资")).Value
+
+            ' 计算现金分配
+            hundreds = Int(cashWage / 100)
+            cashWage = cashWage Mod 100
+
+            fifties = Int(cashWage / 50)
+            cashWage = cashWage Mod 50
+
+            tens = Int(cashWage / 10)
+            cashWage = cashWage Mod 10
+
+            fives = Int(cashWage / 5)
+            cashWage = cashWage Mod 5
+
+            ones = cashWage
+
+            ' 填写现金分配值
+            wsA4.Cells(i, colDict("现金百元")).Value = hundreds
+            wsA4.Cells(i, colDict("现金五十元")).Value = fifties
+            wsA4.Cells(i, colDict("现金十元")).Value = tens
+            wsA4.Cells(i, colDict("现金五元")).Value = fives
+            wsA4.Cells(i, colDict("现金一元")).Value = ones
+            wsA4.Cells(i, colDict("现金合计")).Value = hundreds * 100 + fifties * 50 + tens * 10 + fives * 5 + ones
+        End If
+    Next i
+
+    ' 在最后一行的下一行写入合计
+    lastRow = lastRow + 1
+    wsA4.Cells(lastRow, 1).Value = "合计"
+    For j = 2 To colDict.Count
+        wsA4.Cells(lastRow, j).Formula = "=SUM(" & wsA4.Cells(rng.row + 1, j).Address & ":" & wsA4.Cells(lastRow - 1, j).Address & ")"
+    Next j
+
+    ' 返回成功结果
+    result(1) = 1
+    result(2) = "数据计算成功"
+    工资条第三步_数据计算 = result
+End Function
+
+Sub 工资条第五步_格式整理_A4()
+    ' 定义工作表变量
+    Dim wsA4 As Worksheet
+    Dim lastRow As Long
+    Dim lastCol As Long
+    Dim titleRow As Long
+    Dim colDict As Object
+    Dim cell As Range
+    Dim currentDate As String
+    Dim tempResult As Variant
+    
+    ' 初始化工作表名
+    Dim wsNameA4 As String
+    wsNameA4 = "工资条-A4"
+    
+    ' 获取工作表对象
+    On Error Resume Next
+    Set wsA4 = ThisWorkbook.Sheets(wsNameA4)
+    On Error GoTo 0
+    
+    ' 检查工作表是否存在
+    If wsA4 Is Nothing Then
+        MsgBox "没有找到名为 '" & wsNameA4 & "' 的工作表。", vbExclamation, "错误"
+        Exit Sub
+    End If
+    
+    ' 初始化列字典
+    Set colDict = CreateObject("Scripting.Dictionary")
+    Dim titleArray As Variant
+    titleArray = Array("序号", "工号", "姓名", "基本工资", "基本补贴", "绩效奖金", "职位津贴", "1.5倍工资", "2倍工资", "3倍工资", "工资调整", "餐补工资", "应发薪资合计", "社保合计p", "住房公积金p", "代缴个税", "现金发放工资", "收款签字", "现金百元", "现金五十元", "现金十元", "现金五元", "现金一元", "现金合计")
+    
+    ' 找到工资条-A4的标题行和列
+    For i = LBound(titleArray) To UBound(titleArray)
+        Set cell = wsA4.Rows.Find(What:=titleArray(i), LookIn:=xlValues, LookAt:=xlWhole)
+        If Not cell Is Nothing Then
+            colDict(titleArray(i)) = cell.Column
+            If i = 0 Then titleRow = cell.row ' 设置标题行
+        Else
+            MsgBox "没有找到工资条-A4中的标题列：" & titleArray(i), vbExclamation, "错误"
+            Exit Sub
+        End If
+    Next i
+    
+    ' 替换文本
+    wsA4.Cells(titleRow, colDict("社保合计p")).Value = "代缴社保"
+    wsA4.Cells(titleRow, colDict("住房公积金p")).Value = "代缴公积金"
+    
+    ' 获取最后一行和收款签字列
+    lastRow = wsA4.Cells(wsA4.Rows.Count, colDict("工号")).End(xlUp).row
+    lastCol = colDict("收款签字")
+    
+    ' 设置打印区域从第三行开始，不包括最后一行（合计行）
+    With wsA4.pageSetup
+        .PrintArea = wsA4.Range(wsA4.Cells(3, 1), wsA4.Cells(lastRow - 1, lastCol)).Address
+        .Orientation = xlLandscape ' 设置为横向打印
+        .PaperSize = xlPaperA4 ' 设置为A4纸张
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .PrintTitleRows = "$1:$2" ' 设置顶端标题行为第1到第2行
+    End With
+    
+    ' 获取工资条-A4的A1单元格的值作为当前日期格式
+    currentDate = wsA4.Cells(1, 1).Value
+    currentDate = Format(currentDate, "yyyy年mm月工资确认、签收单")
+    ' 合并第一行A1单元格到收款签字所在列，并设置格式
+    With wsA4.Range(wsA4.Cells(1, 1), wsA4.Cells(1, lastCol))
+        .Merge
+        .Value = currentDate
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .Font.Size = 14
+        .Font.Bold = True
+    End With
+    
+    ' 设置列宽
+    For i = 1 To lastCol
+        wsA4.Columns(i).ColumnWidth = 9
+    Next i
+    wsA4.Columns(colDict("序号")).ColumnWidth = 4
+    wsA4.Columns(colDict("工号")).ColumnWidth = 6
+    wsA4.Columns(colDict("姓名")).ColumnWidth = 10
+    wsA4.Columns(colDict("收款签字")).ColumnWidth = 15
+    
+    ' 设置每行分页符
+    For i = titleRow + 2 To lastRow - 1 ' 从数据行开始设置分页符，不包括最后一行
+        If wsA4.Rows(i).PageBreak <> xlPageBreakNone Then
+            wsA4.Rows(i).PageBreak = xlPageBreakNone ' 清除已有的分页符
+        End If
+        wsA4.HPageBreaks.Add Before:=wsA4.Rows(i)
+    Next i
+    
+    ' 设置缩小以填充并应用内外边框
+    With wsA4.Range(wsA4.Cells(titleRow, 1), wsA4.Cells(lastRow, lastCol))
+        .Cells.ShrinkToFit = True
+        .Borders.LineStyle = xlContinuous
+        .Font.Size = 11
+    End With
+    wsA4.Range(wsA4.Cells(1, 1), wsA4.Cells(lastRow, lastCol)).Cells.ShrinkToFit = True
+    
+    ' 设置全部行高为28
+    wsA4.Rows("1:" & lastRow).RowHeight = 30
+    
+    ' 提示操作完成
+    ' MsgBox "格式整理完成", vbInformation, "完成"
+End Sub
+Sub 工资条第四步_信封内容写入()
+    ' 定义工作表变量
+    Dim wsA4 As Worksheet
+    Dim wsEnvelope As Worksheet
+    Dim wsNameA4 As String
+    Dim wsNameEnvelope As String
+    Dim titleArray As Variant
+    Dim result As Boolean
+    Dim lastRow As Long
+    
+    ' 初始化工作表名
+    wsNameA4 = "工资条-A4"
+    wsNameEnvelope = "工资条-信封"
+    
+    ' 初始化标题数组
+    titleArray = Array("序号", "工号", "姓名", "应发薪资合计", "代缴社保", "代缴公积金", "代缴个税", "现金发放工资")
+    
+    ' 获取工作表对象
+    On Error Resume Next
+    Set wsA4 = ThisWorkbook.Sheets(wsNameA4)
+    Set wsEnvelope = ThisWorkbook.Sheets(wsNameEnvelope)
+    On Error GoTo 0
+    
+    ' 检查工作表是否存在
+    If wsA4 Is Nothing Then
+        MsgBox "没有找到名为 '" & wsNameA4 & "' 的工作表。", vbExclamation, "错误"
+        Exit Sub
+    End If
+    If wsEnvelope Is Nothing Then
+        MsgBox "没有找到名为 '" & wsNameEnvelope & "' 的工作表。", vbExclamation, "错误"
+        Exit Sub
+    End If
+    
+    ' 清空信封表内容
+    wsEnvelope.Cells.Clear
+
+    ' 写入标题行
+    For i = LBound(titleArray) To UBound(titleArray)
+        wsEnvelope.Cells(1, i + 1).Value = titleArray(i)
+    Next i
+
+    ' 找到工资条-A4的最后一行，不包括合计行
+    lastRow = wsA4.Cells(wsA4.Rows.Count, 1).End(xlUp).row - 1
+
+    ' 使用公共函数复制相同标题的内容，不包括最后一行（合计行）
+    result = 公共函数_复制相同标题(wsNameA4, "工号", wsNameEnvelope, "工号")
+
+    If Not result Then
+        MsgBox "复制内容到工资条-信封失败", vbExclamation, "错误"
+    End If
+    ' 调用公共函数填写序号
+    
+    ' 提示操作完成
+  '  MsgBox "工资条-信封内容写入完成", vbInformation, "完成"
+End Sub
+
+Sub 工资条第六步_信封格式整理()
+    ' 定义工作表变量
+    Dim wsEnvelope As Worksheet
+    Dim lastRow As Long
+    Dim lastCol As Long
+    Dim titleRow As Long
+    Dim colDict As Object
+    Dim cell As Range
+    Dim tempResult As Variant
+
+    ' 初始化工作表名
+    Dim wsNameEnvelope As String
+    wsNameEnvelope = "工资条-信封"
+
+    ' 获取工作表对象
+    On Error Resume Next
+    Set wsEnvelope = ThisWorkbook.Sheets(wsNameEnvelope)
+    On Error GoTo 0
+
+    ' 检查工作表是否存在
+    If wsEnvelope Is Nothing Then
+        MsgBox "没有找到名为 '" & wsNameEnvelope & "' 的工作表。", vbExclamation, "错误"
+        Exit Sub
+    End If
+
+    ' 初始化列字典
+    Set colDict = CreateObject("Scripting.Dictionary")
+    Dim titleArray As Variant
+    titleArray = Array("序号", "工号", "姓名", "应发薪资合计", "代缴社保", "代缴公积金", "代缴个税", "现金发放工资")
+
+    ' 找到工资条-信封的标题行和列
+    For i = LBound(titleArray) To UBound(titleArray)
+        Set cell = wsEnvelope.Rows.Find(What:=titleArray(i), LookIn:=xlValues, LookAt:=xlWhole)
+        If Not cell Is Nothing Then
+            colDict(titleArray(i)) = cell.Column
+            If i = 0 Then titleRow = cell.row ' 设置标题行
+        Else
+            MsgBox "没有找到工资条-信封中的标题列：" & titleArray(i), vbExclamation, "错误"
+            Exit Sub
+        End If
+    Next i
+
+    ' 获取最后一行和最后一列
+    lastRow = wsEnvelope.Cells(wsEnvelope.Rows.Count, colDict("工号")).End(xlUp).row
+    lastCol = colDict("现金发放工资")
+
+    ' 检查最后一行是否是合计行
+    If wsEnvelope.Cells(lastRow, 1).Value = "合计" Then
+        lastRow = lastRow - 1
+    End If
+
+    ' 设置打印区域从标题行的下一行开始，不包括最后一行（合计行）
+    With wsEnvelope.pageSetup
+        .PrintArea = wsEnvelope.Range(wsEnvelope.Cells(titleRow + 1, 1), wsEnvelope.Cells(lastRow, lastCol)).Address
+        .Orientation = xlLandscape ' 设置为横向打印
+        .PaperSize = xlPaperA4 ' 设置为A4纸张
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .PrintTitleRows = "$" & titleRow & ":$" & titleRow ' 设置顶端标题行为标题行
+        .LeftMargin = Application.CentimetersToPoints(0)
+        .RightMargin = Application.CentimetersToPoints(0)
+        .TopMargin = Application.CentimetersToPoints(0)
+        .BottomMargin = Application.CentimetersToPoints(0)
+        .HeaderMargin = Application.CentimetersToPoints(0)
+        .FooterMargin = Application.CentimetersToPoints(0)
+        .CenterHorizontally = True
+        .CenterVertically = True
+    End With
+
+    ' 设置列宽
+    For i = 1 To lastCol
+        wsEnvelope.Columns(i).ColumnWidth = 4
+    Next i
+
+    ' 清除已有的分页符
+    wsEnvelope.ResetAllPageBreaks
+
+    ' 设置每行分页符
+    For i = titleRow + 2 To lastRow ' 从数据行开始设置分页符，不包括最后一行
+        wsEnvelope.HPageBreaks.Add Before:=wsEnvelope.Rows(i)
+    Next i
+
+    ' 设置缩小以填充并应用内外边框
+    With wsEnvelope.Range(wsEnvelope.Cells(titleRow, 1), wsEnvelope.Cells(lastRow, lastCol))
+        .Cells.ShrinkToFit = True
+        .Borders.LineStyle = xlContinuous
+        .Font.Size = 8
+    End With
+
+    ' 设置全部行高为20
+    wsEnvelope.Rows("1:" & lastRow).RowHeight = 20
+
+    ' 设置DL信封尺寸
+    With wsEnvelope.pageSetup
+        .PaperSize = xlPaperEnvelopeDL ' 设置为DL信封
+    End With
+
+    ' 调用公共函数填写序号
+    tempResult = 公共函数_填写序号(wsNameEnvelope)
+    If tempResult(1) = 0 Then
+        MsgBox tempResult(2), vbExclamation, "错误"
+        Exit Sub
+    End If
+
+    ' 提示操作完成
+ '   MsgBox "信封格式整理完成", vbInformation, "完成"
+End Sub
+
+
+
+
+
+Sub 工资条整合运算()
+    ' 第一步：创建清空表格
+    Call 工资条第一步_创建清空表格
+    
+    ' 第二步：写入标题和内容
+    Dim result As Variant
+    result = 工资条第二步_写入标题和内容
+    If result(1) = 0 Then
+        MsgBox result(2), vbExclamation, "错误"
+        Exit Sub
+    End If
+    
+    ' 第三步：数据计算
+    result = 工资条第三步_数据计算
+    If result(1) = 0 Then
+        MsgBox result(2), vbExclamation, "错误"
+        Exit Sub
+    End If
+    ' 第五步：格式整理_A4
+    Call 工资条第五步_格式整理_A4
+    ' 第四步：信封内容写入
+    Call 工资条第四步_信封内容写入
+    
+    
+    
+    ' 第六步：信封格式整理
+    Call 工资条第六步_信封格式整理
+    
+    ' 提示操作完成
+ '   MsgBox "工资条整合运算完成", vbInformation, "完成"
+End Sub
+
+
+

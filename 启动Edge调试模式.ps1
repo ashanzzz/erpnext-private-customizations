@@ -1,0 +1,1 @@
+Start-Process -FilePath "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" -ArgumentList '--remote-debugging-port=9222', '--user-data-dir="C:\edge_debug_profile"', 'http://192.168.8.11:6888/desk/my-business'

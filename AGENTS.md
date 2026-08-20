@@ -1,8 +1,71 @@
-# ERPNext 16 AI Development Rules
+# ERPNext 16 全局开发哲学与用户核心中心思想总纲 (Supreme Core Mental Model & Global Philosophy)
 
-本项目的 ERPNext 开发目标版本为 ERPNext 16 / Frappe Framework 16。
+> **⚠️ 核心最高原则**：本项目的所有开发、重构、UI 设计与前后端架构，必须无条件深度贯彻本总纲。
+> **💡 动态核心思想**：**所有铁律必须完全动态自适应，绝不死板硬编码！** 人数、金额、人员结构、分类比例、账期月份与凭证数据，必须根据实际业务发生与上传文件**动态计算、动态核验、动态呈现**！文档中出现的数字（如 26人、25人、19人等）仅为当前账期实例，系统必须在任意人数、任意企业、任意月份下具备完全自适应的动态处理能力！
 
-## 开始开发前必须读取
+---
+
+## 🌟 用户的四大核心中心思想支柱 (The 4 Pillars of Core Philosophy)
+
+### 🏛️ 第一支柱：动态业务权责边界纯净化与财务凭证严肃性 (Dynamic Financial Integrity & Boundary Purity)
+1. **业务权责边界绝对纯净化与动态过滤**：
+   - 每个模块、表格严格只承载其权责范围内的纯净数据，绝不概念混淆或强塞异构数据；
+   - **车间外部实发表 (Tab 2 · 24列)**：严格只动态包含当期在车间实际出勤与发薪的员工集合（以车间实发表为准，如 $N_{workshop}$ 人），非车间人员（如外籍高管、非车间出勤者）即便在母表在册，也由系统自动动态识别并隔离过滤，绝不强塞进车间实发表；
+   - **全员母表底册 (Tab 1)**：完整承载全公司当期全部在册员工（$N_{total}$ 人）；
+   - **法定个税申报 (Tab 5) 与月度薪酬综合结算 (Tab 6)**：完整动态汇算全公司全部在册员工（$N_{total}$ 人），保障企业法定纳税与综合用工支出的一致合规。
+2. **指标权责严格归位与动态自适应分类**：
+   - **员工底册**：动态展示当前在册总规模（$N_{total}$ 人）与**动态计薪方式分类**（`系统计薪 {N_sys}人 ｜ 外部实发计薪 {N_ext}人` 或 `外部计薪 待导入`），动态分析入职/离职/转返聘/专项扣除异动，严禁在此堆砌五险一金；
+   - **社保申报**：归位动态展示当月参保人数与公司/个人承担（`{N_ss} 人参保 · 申报总盘 ¥ {Amount_ss}`，`公司 ¥{Comp_ss} ｜ 个人 ¥{Pers_ss}`）；
+   - **公积金凭证**：归位动态展示当月参缴人数与公司/个人承担（`{N_hf} 人参缴 · 凭证总额 ¥ {Amount_hf}`，`公司 ¥{Comp_hf} ｜ 个人 ¥{Pers_hf}`）；
+   - **综合核定**：一目了然动态呈现关键决策数字（动态税前应发、动态税后实发、动态企业综合总用工成本）。
+3. **原始凭证神圣不可篡改与交付纯净源文件**：
+   - **原始凭证无损归档**：车间发来的原始实发表（.xlsx/.xls）、税务局社保申报表（PDF）、公积金凭证（ZIP/PDF）上传后必须**原汁原味保存原始二进制文件流**，绝不可用系统二次加工表格覆盖；
+   - **自动解压与交付纯净源文件**：用户上传 ZIP 压缩包时，系统必须在后台**自动解压**并仅提取内部真正的 PDF 凭证，下载时直接交付解压且规范命名的纯净 PDF，严禁让用户下载杂乱的多层压缩包；
+   - **统一规范中文命名法则**：存入系统的凭证必须统一命名为 `{期间月份}_{企业名称}_{凭证类型}_原始凭证.{ext}`；
+4. **铁的财务纪律与前置动态强拦截机制**：
+   - 前置任务（底册核实、车间实发导入、社保申报核验、公积金凭证核验）未全部齐备前，**绝对禁止最终核定封账**；
+   - 点击核定时必须根据当前月份实际任务就绪状态进行**实时动态校验**，缺失条件时弹出清单式警示弹窗，明确指出未完成项；
+   - 封账后全局进入纯只读保护，杜绝数据被篡改；反审核必须登记原因并可审计追溯。
+
+---
+
+### 🎨 第二支柱：体系化设计语言、高信息密度与人机工程美学 (Systematic Consistency & Ergonomics)
+1. **体系化、科学合理与全局统一**：
+   - 痛恨“东拼西凑”、“修东补西”、“粗制滥造”的临时代码与杂乱 UI；
+   - 崇尚**全盘统一的设计语言**：卡片等宽排版、统一高度、字体字号阶梯一致、下载小胶囊统一命名与右上角位置、表头 5 大逻辑色彩分组、Tab 导航零位移；
+2. **务实、高效、核心决策数据一目了然**：
+   - 拒绝多余的空话、冗余交互与层层嵌套跳转（如车间实发直接在卡片上点击上传，不强迫跳转页面下方）；
+   - 界面上必须一目了然地动态呈现管理层与财务最关心的**核心财务决策数据**：
+     - 税前应发总额、税后实发总盘；
+     - 社保与公积金公司承担与个人代扣的清晰三段式拆分；
+     - **企业综合总用工支出成本**（税前应发 + 公司社保 + 公司公积金）；
+   - “所见即所得”，操作流畅，反馈明确。
+3. **彻底根除反人类交互 (Zero Bad UX)**：
+   - **动态视口锁定大宽表高度**：通过 `adjust_active_table_height()` 将表格横向滚动条**永久常驻贴合在当前屏幕视口底沿**，外层网页禁止出现垂直滚动条，彻底消灭“下拉到底找滑轮、拖到右边再拉回顶上看姓名”的糟糕体验；
+   - **表头吸顶与左侧冻结**：表头多层分层吸顶，左侧前三列（序号、工号、姓名）强制冻结并自带投影；
+   - **Tab 导航防抖零位移**：全 Tab 统一保持 600 字重，预留底边框，激活时仅切变颜色，严禁使用 `transform: translateY()` 造成抖动跳跃。
+
+---
+
+### ⚙️ 第三支柱：清晰架构、原生优先与环境安全 (Clean Architecture & Core Integrity)
+1. **业务完整性放在服务器端**：正常文档写入优先使用 `doc.save()` 或 `doc.insert()`，禁止为省事滥用 `db.set_value` 破坏标准生命周期；
+2. **不修改 Core，自定义 App 扩展**：禁止修改 `apps/frappe` 与 `apps/erpnext`，所有业务逻辑与页面沉淀于 `ashan_cn_procurement`；
+3. **严格遵守环境变量读取规范**：遵循 `.agents/rules/load_env.md`，禁止硬编码密码、Token 或连接串，脚本必须支持读取 `.env`；
+4. **Frappe v16 现代标准**：排序显式声明 `order_by`，RPC 修改状态强制 POST，Query Builder 后端优先。
+
+---
+
+### 🚀 第四支柱：交付铁律：Playwright 自动化实机验收闭环 (Zero-Guessing Automated Verification Standard)
+1. **绝对禁止仅凭模型记忆猜测**：所有功能、接口与 UI 修改必须经过实机代码验证；
+2. **热同步与迁移闭环**：任何改动必须执行本地到 Docker 容器热同步与迁移（`scripts/sync_and_migrate.py`）；
+3. **Playwright 实机验证与全景截图**：必须编写并运行 Playwright 自动化测试脚本，实际访问 Desk 界面、测试点击与弹窗交互、排查浏览器 Console 报错与网络请求、截取完整全景图进行视觉与逻辑自检；
+4. **100% 无报错后汇报**：确认 100% 运行无误、无任何报错后才向用户汇报交付。
+
+---
+
+## 📚 必备开发规则与规范索引
+
+开发前必须按需读取以下细分规范：
 
 0. `PROJECT_MAP.md` (项目核心映射、App 命名与远程仓库规范)
 1. `.agents/rules/dev_workflow.md` (本地修改 -> 直传容器 -> AI 浏览器验收 -> 用户确认后再推送 GitHub)
@@ -11,176 +74,8 @@
 4. 需要选 API 时读取 `docs/ai/ERPNext16_API_MAP.md`
 5. 涉及页面和 UI 时读取 `docs/ai/ERPNext16_UI_GUIDE.md`
 6. 涉及业务模块架构、设计哲学与 UI 风格记忆时读取 `docs/ai/ASHAN_APP_MODULES_AND_DESIGN_GUIDE.md`
-
-
-## 版本原则
-
-不要把 Frappe 13、14、15 的示例默认当成 v16 可用代码。
-
-进行重要修改前，先确认实际运行版本：
-
-```bash
-bench version
-bench --site <site> list-apps
-```
-
-v16 的 `bench version` 默认输出格式与旧版本不同。不要写依赖旧文本格式的脆弱解析器。
-
-若 API、生命周期、权限、路由或 ERPNext 业务行为存在不确定性，按以下顺序确认：
-
-1. 当前项目源码
-2. 当前 Bench / Site 配置
-3. Frappe `version-16` 源码
-4. ERPNext `version-16` 源码
-5. Frappe / ERPNext 官方文档
-6. 官方 v16 Migration Notes
-
-禁止仅凭模型记忆猜测。
-
-## Core 修改
-
-默认禁止直接修改：
-
-```text
-apps/frappe/
-apps/erpnext/
-```
-
-默认使用 custom app 扩展。
-
-优先机制：
-
-- 自定义 DocType
-- Custom Field / Property Setter
-- `extend_doctype_class`
-- `doc_events`
-- `doctype_js`
-- `doctype_list_js`
-- whitelisted method
-- REST API
-- Desk Page
-- Report
-- fixtures
-- patch
-
-只有用户明确要求维护 fork 时，才考虑修改 core。
-
-## 后端原则
-
-业务完整性必须放在服务器端。
-
-正常文档写入优先：
-
-```python
-doc = frappe.get_doc(...)
-doc.save()
-```
-
-或：
-
-```python
-doc = frappe.new_doc(...)
-doc.insert()
-```
-
-不要因为代码更短就使用：
-
-```python
-frappe.db.set_value(...)
-doc.db_set(...)
-doc.db_update(...)
-raw SQL
-ignore_permissions=True
-```
-
-如果确实需要绕过标准生命周期，必须在代码或交付说明中写明原因。
-
-## 权限
-
-用户可见列表默认使用：
-
-```python
-frappe.get_list(...)
-```
-
-不要随意改成：
-
-```python
-frappe.get_all(...)
-```
-
-`get_list` 会应用当前会话用户的记录权限。`get_all` 不应被视为等价替代。
-
-whitelisted method 仍然必须检查相应权限。
-
-不要用 `ignore_permissions=True` 修复权限错误。
-
-## v16 必须记住
-
-- Python 与 Node 的最低要求在 v16 提高。
-- 默认排序从 `modified` 转向 `creation`。业务依赖顺序时显式写 `order_by`。
-- `get_list` / `get_all` 在 v16 使用 Query Builder 后端。
-- 某些 `run=False` 场景返回 Query Builder 对象，不要假设是 SQL 字符串。
-- 需要 SQL 文本时使用相应 Query Builder 的 `.get_sql()`。
-- `has_permission` hook 允许访问时要显式返回 `True`。
-- `frappe.flags.in_test` 已弃用，使用 `frappe.in_test`。
-- Document hooks 不得自行 `frappe.db.commit()`。
-- 修改状态的 RPC 使用 POST。
-- v16+ 扩展标准 DocType 优先考虑 `extend_doctype_class`。
-- Desk 导航发生变化，不要把旧 `/app/...` 路由写死。
-- Reports、Dashboard Charts、Pages 的 JS 在 v16 使用 IIFE 方式执行，不要依赖隐式全局变量。
-- Single DocType 的 `db.get_value` 会返回更符合字段类型的原生值，不要只按旧字符串值判断。
-
-## 前端原则
-
-优先使用最简单、最原生的方案：
-
-```text
-原生 Form / List / Report
-↓
-Form Script / doctype_js / Dialog
-↓
-Desk Page
-↓
-Vue in Desk Page
-↓
-Frappe UI / 独立复杂前端
-```
-
-不要为了“现代化”把一个按钮需求升级成完整 SPA。
-
-客户端校验用于改善操作体验，不替代服务器端校验。
-
-## 财务与库存高风险对象
-
-以下对象涉及修改时，先查看 ERPNext v16 对应 controller：
-
-- Purchase Invoice
-- Sales Invoice
-- Purchase Receipt
-- Delivery Note
-- Payment Entry
-- Journal Entry
-- Stock Entry
-- GL Entry
-- Stock Ledger Entry
-- submitted document
-- cancel / amend / repost / reconciliation
-
-禁止直接写 GL Entry 或 Stock Ledger Entry 来模拟标准业务流程。
-
-禁止为了省事直接 `db.set_value` 修改应由标准 controller 管理的关键财务或库存状态。
-
-## 交付前必须说明
-
-- 修改了哪些文件
-- 涉及哪些 DocType
-- 增加或修改了哪些 hooks
-- API 是否新增或改变
-- 权限影响
-- 是否需要 `bench migrate`
-- 是否需要 `bench build`
-- 是否需要 `clear-cache`
-- 测试结果
-- 财务或库存副作用
-- 已知限制
+7. 涉及登录、Desk 路由、首页、`.gitignore`、提交或 GitHub 推送时读取 `docs/ai/AI_HANDOVER_LOGIN_AND_GIT_SAFETY.md`
+8. 涉及月份选择器、日期范围选择器、期间切换与未核定防跳月拦截时读取 `.agents/rules/ui_month_and_date_picker_standard.md`
+9. 涉及人事薪酬中枢、7大Tab体系、5大逻辑分组表头、68列法定大宽表、全员历史穿透与动态Excel导出时读取 `.agents/rules/ui_and_business_standards.md`
+10. 涉及各类凭证（车间实发Excel、社保申报PDF、公积金凭证ZIP/PDF等）上传、自动解压、规范命名与下载时读取 `.agents/rules/proof_file_naming_and_storage_standards.md`
+11. 涉及UI卡片、网格排版、按钮状态、色彩体系、Tab防抖与表格CSS复用时读取 `.agents/rules/ui_design_system_and_component_library.md`

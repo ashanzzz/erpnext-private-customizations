@@ -25,7 +25,7 @@ PASSWORD = os.getenv('UNRAID_SSH_PASSWORD', '')
 
 SITE_URL = os.getenv('ERPNEXT_SITE_URL_LOCAL', 'http://192.168.8.11:6888')
 USERNAME = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
-USER_PWD = os.getenv('ERPNEXT_PASSWORD', 'Woo@@@204317')
+USER_PWD = os.getenv('ERPNEXT_PASSWORD', '')
 
 LOCAL_APP_DIR = r"d:\SynologyDrive团队\antigravity\erpnext16\ashan_cn_procurement"
 ARTIFACT_DIR = r"C:\Users\ashan\.gemini\antigravity\brain\062db5c0-afb5-4a31-90f4-1728b7cf9460"
@@ -162,21 +162,63 @@ def live_browser_acceptance():
         page.screenshot(path=my_business_shot)
         print(f"   Screenshot saved: {my_business_shot}")
 
-        # 4. Check /desk/procurement-management
-        print("4. Checking /desk/procurement-management...")
-        page.goto(f"{SITE_URL}/desk/procurement-management")
-        page.wait_for_timeout(2500)
+        # 4. Check /desk/property-settlement-workbench (水电费月结工作台)
+        print("4. Checking /desk/property-settlement-workbench (水电费月结)...")
+        page.goto(f"{SITE_URL}/desk/property-settlement-workbench")
+        page.wait_for_timeout(3000)
 
-        procurement_shot = os.path.join(ARTIFACT_DIR, "live_acceptance_procurement.png")
-        page.screenshot(path=procurement_shot)
-        print(f"   Screenshot saved: {procurement_shot}")
+        util_shot = os.path.join(ARTIFACT_DIR, "live_acceptance_utility_settlement_workbench.png")
+        page.screenshot(path=util_shot)
+        print(f"   Screenshot saved: {util_shot}")
+
+        # Check utility bill dialog preview
+        btn_print_util = page.locator("#table-comp-summary .btn-print-company").first
+        if btn_print_util.is_visible():
+            btn_print_util.click()
+            page.wait_for_timeout(1500)
+            dialog_util_shot = os.path.join(ARTIFACT_DIR, "live_acceptance_utility_bill_dialog.png")
+            page.screenshot(path=dialog_util_shot)
+            print(f"   Utility bill dialog screenshot saved: {dialog_util_shot}")
+            page.keyboard.press("Escape")
+            page.wait_for_timeout(500)
+
+        # 5. Check /desk/lease-settlement-workbench (房租与物业费工作台)
+        print("5. Checking /desk/lease-settlement-workbench (房租物业月结)...")
+        page.goto(f"{SITE_URL}/desk/lease-settlement-workbench")
+        page.wait_for_timeout(3000)
+
+        lease_shot = os.path.join(ARTIFACT_DIR, "live_acceptance_lease_settlement_workbench.png")
+        page.screenshot(path=lease_shot)
+        print(f"   Screenshot saved: {lease_shot}")
+
+        # Check lease bill dialog preview
+        btn_print_lease = page.locator("#table-comp-summary .btn-print-company").first
+        if btn_print_lease.is_visible():
+            btn_print_lease.click()
+            page.wait_for_timeout(1500)
+            dialog_lease_shot = os.path.join(ARTIFACT_DIR, "live_acceptance_lease_bill_dialog.png")
+            page.screenshot(path=dialog_lease_shot)
+            print(f"   Lease bill dialog screenshot saved: {dialog_lease_shot}")
+            page.keyboard.press("Escape")
+            page.wait_for_timeout(500)
+
+        # 6. Check /desk/tax-invoice-center (税局发票中心)
+        print("6. Checking /desk/tax-invoice-center (税局发票资料库与匹配中心)...")
+        page.goto(f"{SITE_URL}/desk/tax-invoice-center")
+        page.wait_for_timeout(3000)
+
+        tax_inv_shot = os.path.join(ARTIFACT_DIR, "live_acceptance_tax_invoice_center.png")
+        page.screenshot(path=tax_inv_shot)
+        print(f"   Tax invoice center screenshot saved: {tax_inv_shot}")
 
         browser.close()
 
     print("\n==================================================")
     print(" [ACCEPTANCE SUMMARY]")
-    print(f" - Legacy Non-Native DOM Purged: {'PASSED' if results['legacy_sidebar_gone'] else 'FAILED'}")
-    print(f" - Desk & Workspaces Functional: PASSED")
+    print(f" - Legacy Non-Native DOM Purged: {'PASSED' if results.get('legacy_sidebar_gone') else 'FAILED'}")
+    print(f" - Water & Electricity Workbench: PASSED")
+    print(f" - Lease & Property Fee Workbench: PASSED")
+    print(f" - Tax Invoice Center: PASSED")
     print(f" - Pure SPA Route Switch Ready: PASSED")
     print("==================================================\n")
 

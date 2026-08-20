@@ -15,7 +15,7 @@ load_env_file()
 SITE_URL = 'http://192.168.8.11:6888'
 REMOTE_URL = 'https://erpnext.335356119.xyz'
 USERNAME = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
-PASSWORD = os.getenv('ERPNEXT_PASSWORD', 'Woo@@@204317')
+PASSWORD = os.getenv('ERPNEXT_PASSWORD', '')
 
 def test_site(url, name):
     with sync_playwright() as p:

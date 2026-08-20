@@ -1,0 +1,52 @@
+import os
+import json
+import time
+from playwright.sync_api import sync_playwright
+
+def load_env_file(env_path='.env'):
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    k, v = line.split('=', 1)
+                    os.environ.setdefault(k.strip(), v.strip())
+
+load_env_file()
+
+SITE_URL = os.getenv('ERPNEXT_SITE_URL', 'http://192.168.8.11:6888')
+USERNAME = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
+USER_PWD = os.getenv('ERPNEXT_PASSWORD', '')
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page(viewport={"width": 1440, "height": 950})
+
+    # 登录
+    page.goto(f"{SITE_URL}/login")
+    page.wait_for_selector("#login_email", state="visible")
+    page.fill("#login_email", USERNAME)
+    page.fill("#login_password", USER_PWD)
+    page.click("button[type='submit']")
+
+    page.wait_for_url("**/desk**", timeout=20000)
+    time.sleep(2)
+
+    # 前往 Property Lease 列表
+    page.goto(f"{SITE_URL}/desk/property-lease")
+    page.wait_for_selector(".list-row", state="visible", timeout=15000)
+    time.sleep(1)
+
+    list_shot = r"C:\Users\ashan\.gemini\antigravity\brain\062db5c0-afb5-4a31-90f4-1728b7cf9460\live_acceptance_property_lease_list_v2.png"
+    page.screenshot(path=list_shot)
+    print(f"Saved List Shot: {list_shot}")
+
+    # 点击进入 3338平米 租约详情
+    page.click(".list-row:first-of-type")
+    time.sleep(3)
+
+    form_shot = r"C:\Users\ashan\.gemini\antigravity\brain\062db5c0-afb5-4a31-90f4-1728b7cf9460\live_acceptance_property_lease_form_v2.png"
+    page.screenshot(path=form_shot)
+    print(f"Saved Form Shot: {form_shot}")
+
+    browser.close()

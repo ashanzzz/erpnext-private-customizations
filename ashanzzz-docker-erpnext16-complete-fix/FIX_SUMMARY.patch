@@ -1,0 +1,46 @@
+diff --git a/.github/workflows/erpnext16-single-container-aio.yml b/.github/workflows/erpnext16-single-container-aio.yml
+--- a/.github/workflows/erpnext16-single-container-aio.yml
++++ b/.github/workflows/erpnext16-single-container-aio.yml
+@@
+-          ASHAN_REPO_REF: master
++          ASHAN_REPO_REF: main
+@@
+-      - name: Decide whether build is needed
+-        id: decide
+-        ...
++      # Complete replacement workflow always builds on a real push,
++      # workflow_dispatch, or monthly schedule. See replacement file.
+@@
+           labels: |
+             org.opencontainers.image.revision=${{ github.sha }}
+             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+             org.opencontainers.image.version=${{ steps.syncver.outputs.version }}-aio
++            com.ashan.erpnext.custom-app.revision=${{ steps.ashan.outputs.sha }}
++            com.ashan.erpnext.custom-app.ref=main
+
+diff --git a/erpnext16/scripts/fetch-ashan-custom-app.sh b/erpnext16/scripts/fetch-ashan-custom-app.sh
+--- a/erpnext16/scripts/fetch-ashan-custom-app.sh
++++ b/erpnext16/scripts/fetch-ashan-custom-app.sh
+@@
+-: "${ASHAN_REPO_REF:=master}"
++: "${ASHAN_REPO_REF:=main}"
+
+diff --git a/erpnext16/single-aio/Containerfile b/erpnext16/single-aio/Containerfile
+--- a/erpnext16/single-aio/Containerfile
++++ b/erpnext16/single-aio/Containerfile
+@@
+-    /home/frappe/frappe-bench/env/bin/python -m pip install --no-deps -e apps/ashan_cn_procurement && \
+-    printf '\nashan_cn_procurement\n' >> sites/apps.txt && \
+-    bench build --app ashan_cn_procurement; \
++    env/bin/python -m pip install --no-deps -e apps/ashan_cn_procurement && \
++    env/bin/python -c "import ashan_cn_procurement" && \
++    if ! grep -qxF "ashan_cn_procurement" sites/apps.txt; then \
++      printf '%s\n' "ashan_cn_procurement" >> sites/apps.txt; \
++    fi && \
++    APP_PUBLIC="/home/frappe/frappe-bench/apps/ashan_cn_procurement/ashan_cn_procurement/public"; \
++    ASSET_LINK="/home/frappe/frappe-bench/sites/assets/ashan_cn_procurement"; \
++    if [ -d "${APP_PUBLIC}" ]; then \
++      mkdir -p sites/assets && \
++      if [ -e "${ASSET_LINK}" ] || [ -L "${ASSET_LINK}" ]; then rm -rf "${ASSET_LINK}"; fi && \
++      ln -s "${APP_PUBLIC}" "${ASSET_LINK}" && test -L "${ASSET_LINK}"; \
++    fi; \
