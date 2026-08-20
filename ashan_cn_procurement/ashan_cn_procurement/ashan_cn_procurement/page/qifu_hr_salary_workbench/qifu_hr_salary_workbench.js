@@ -446,7 +446,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             <!-- 5 大核心任务统一规范卡片栅格 (高信息密度与科学排版) -->
             <div class="qifu-workflow-steps" style="display:grid; grid-template-columns: repeat(5, 1fr); gap:10px;">
                 
-                <!-- 卡片 1: 👥 员工档案底册 -->
+                <!-- 卡片 1: 👥 权威母表底册 -->
                 <div class="workflow-step-card" id="wf-step-1" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; display:flex; flex-direction:column; justify-content:space-between; min-height:130px; box-shadow:0 1px 2px rgba(0,0,0,0.02); transition:all 0.15s ease;">
                     <div>
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
@@ -454,13 +454,13 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                             <span id="wf-step1-tag" style="font-size:10px; font-weight:600; color:#059669; background:#dcfce7; border:1px solid #bbf7d0; padding:0 5px; border-radius:8px;">权威底册</span>
                         </div>
                         <div style="font-size:12.5px; font-weight:700; color:#0f172a; display:flex; align-items:center; gap:5px;">
-                            <span id="wf-step1-icon">🟢</span> 母表档案核实
+                            <span id="wf-step1-icon">🟡</span> 母表档案核实
                         </div>
                         <div style="font-size:12px; font-weight:700; color:#1e293b; margin-top:3px;" id="wf-step1-main">
-                            在册 26 人 · 本月无异动
+                            数据加载中...
                         </div>
                         <div style="font-size:10.5px; color:#64748b; margin-top:2px; line-height:1.3;" id="wf-step1-sub">
-                            系统计薪 1人 ｜ 外部计薪 25人
+                            正在读取在册档案底册
                         </div>
                     </div>
                     <div style="margin-top:8px;">
@@ -476,14 +476,14 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                             <span id="wf-step2-file-badge" class="wf-file-pill btn-wf-download-file" data-type="excel" style="display:none; font-size:10.5px; font-weight:600; color:#2563eb; background:#eff6ff; border:1px solid #bfdbfe; padding:1px 6px; border-radius:10px; cursor:pointer;" title="点击下载上传的车间原始外部工资表原件 (.xlsx/.xls)">📥 凭证文件</span>
                         </div>
                         <div style="font-size:12.5px; font-weight:700; color:#0f172a; display:flex; align-items:center; gap:5px;">
-                            <span id="wf-step2-icon">🟢</span> 外部实发导入
+                            <span id="wf-step2-icon">🟡</span> 外部实发导入
                             <span style="font-size:10.5px; color:#64748b; background:#f1f5f9; padding:1px 5px; border-radius:4px; margin-left:auto; font-weight:normal; cursor:help;" title="💡 上传说明：点击按钮直接选择本机 .xlsx 实发表，系统自动生成 24 列实操台账">ℹ️ 说明</span>
                         </div>
                         <div style="font-size:12px; font-weight:700; color:#1e293b; margin-top:3px;" id="wf-step2-main">
-                            已导入 25 人 · ¥ 137,073.00
+                            数据加载中...
                         </div>
                         <div style="font-size:10.5px; color:#64748b; margin-top:2px; line-height:1.3;" id="wf-step2-sub">
-                            车间实发 25人 ｜ 非车间(母表) 1人
+                            正在检查车间实操台账
                         </div>
                     </div>
                     <div style="margin-top:8px;">
@@ -503,10 +503,10 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                             <span style="font-size:10.5px; color:#64748b; background:#f1f5f9; padding:1px 5px; border-radius:4px; margin-left:auto; font-weight:normal; cursor:help;" title="💡 上传说明：直接选择本机社保 PDF 凭证，系统自动核验总额与参保人数">ℹ️ 说明</span>
                         </div>
                         <div style="font-size:12px; font-weight:700; color:#1e293b; margin-top:3px;" id="wf-step3-main">
-                            19 人参保 · 申报总盘 ¥ 36,119.92
+                            数据加载中...
                         </div>
                         <div style="font-size:10.5px; color:#64748b; margin-top:2px; line-height:1.3;" id="wf-step3-sub">
-                            公司 ¥26,821.54 ｜ 个人 ¥10,640.38
+                            正在同步社保申报状态
                         </div>
                     </div>
                     <div style="margin-top:8px;">
@@ -526,10 +526,10 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                             <span style="font-size:10.5px; color:#64748b; background:#f1f5f9; padding:1px 5px; border-radius:4px; margin-left:auto; font-weight:normal; cursor:help;" title="💡 上传说明：直接选择本机公积金 ZIP/PDF，后台自动解压提纯归档 PDF">ℹ️ 说明</span>
                         </div>
                         <div style="font-size:12px; font-weight:700; color:#1e293b; margin-top:3px;" id="wf-step4-main">
-                            19 人参缴 · 凭证总额 ¥ 2,000.00
+                            数据加载中...
                         </div>
                         <div style="font-size:10.5px; color:#64748b; margin-top:2px; line-height:1.3;" id="wf-step4-sub">
-                            公司 ¥1,000.00 ｜ 个人 ¥1,000.00
+                            正在同步公积金凭证状态
                         </div>
                     </div>
                     <div style="margin-top:8px;">
@@ -542,20 +542,20 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     <div>
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                             <span style="font-size:11px; font-weight:700; color:#64748b;">第 5 步 · 综合核定</span>
-                            <span id="wf-step5-lock-badge" style="font-size:10.5px; font-weight:600; color:#059669; background:#dcfce7; border:1px solid #bbf7d0; padding:1px 6px; border-radius:10px;">可核定</span>
+                            <span id="wf-step5-lock-badge" style="font-size:10.5px; font-weight:600; color:#64748b; background:#f1f5f9; border:1px solid #e2e8f0; padding:1px 6px; border-radius:10px;">加载中</span>
                         </div>
                         <div style="font-size:12.5px; font-weight:700; color:#0f172a; display:flex; align-items:center; gap:5px;">
-                            <span id="wf-step5-icon">🟢</span> 薪酬核定与封账
+                            <span id="wf-step5-icon">🟡</span> 薪酬核定与封账
                         </div>
                         <div style="font-size:11.5px; font-weight:700; color:#1e293b; margin-top:3px;" id="wf-step5-main">
-                            税前: ¥151,179.35 ｜ 实发: ¥137,073.00
+                            数据加载中...
                         </div>
-                        <div style="font-size:10.5px; color:#15803d; font-weight:600; margin-top:2px; line-height:1.3;" id="wf-step5-sub">
-                            企业总用工成本: ¥181,088.89
+                        <div style="font-size:10.5px; color:#64748b; font-weight:600; margin-top:2px; line-height:1.3;" id="wf-step5-sub">
+                            正在汇总企业综合用工成本
                         </div>
                     </div>
                     <div style="margin-top:8px;">
-                        <button class="btn btn-primary btn-xs" id="btn-wf-lock-action" style="width:100%; font-size:11px; font-weight:700; padding:3px 6px; background:#059669; border-color:#059669;">🔒 立即执行最终核定</button>
+                        <button class="btn btn-default btn-xs" id="btn-wf-lock-action" style="width:100%; font-size:11px; font-weight:700; padding:3px 6px; background:#f8fafc; color:#64748b; border-color:#cbd5e1;">🔒 执行最终核定封账</button>
                     </div>
                 </div>
 
