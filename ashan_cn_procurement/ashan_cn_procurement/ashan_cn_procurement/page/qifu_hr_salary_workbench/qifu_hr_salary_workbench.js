@@ -3034,18 +3034,18 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         }
 
         const target_month = cur_m || $("#qifu-month-select").val() || current_month;
-        frappe.freeze(`🔍 正在智能解析【${filename}】并执行税后实发倒推税前与个税核算...`);
 
         frappe.call({
             method: 'ashan_cn_procurement.services.payroll_settlement_service.upload_and_import_qifu_salary',
             type: 'POST',
+            freeze: true,
+            freeze_message: `🔍 正在智能解析【${filename}】并执行税后实发倒推税前与个税核算...`,
             args: {
                 file_data: base64_str,
                 filename: filename,
                 period_month: target_month
             },
             callback: function(r) {
-                frappe.unfreeze();
                 if (r.message && r.message.success) {
                     frappe.msgprint({
                         title: '🎉 车间实发表导入成功',
@@ -3077,7 +3077,6 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 }
             },
             error: function(r) {
-                frappe.unfreeze();
                 let error_msg = '服务器处理车间实发表时发生异常！';
                 if (r && r._server_messages) {
                     try {
@@ -3166,6 +3165,8 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 frappe.call({
                     method: 'ashan_cn_procurement.services.payroll_settlement_service.upload_and_verify_social_security_file',
                     type: 'POST',
+                    freeze: true,
+                    freeze_message: `🔍 正在智能解析【${filename}】社保凭证并比对金额...`,
                     args: {
                         company: COMPANY,
                         period_month: cur_m,
@@ -3173,7 +3174,6 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         file_base64: base64_str
                     },
                     callback: function(r) {
-                        frappe.unfreeze();
                         if (r.message && r.message.success) {
                             frappe.msgprint({
                                 title: '✅ 社保凭证解析完成',
@@ -3198,11 +3198,19 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         }
                     },
                     error: function(r) {
-                        frappe.unfreeze();
+                        let error_msg = '服务器处理社保凭证时发生错误！';
+                        if (r && r._server_messages) {
+                            try {
+                                const msgs = JSON.parse(r._server_messages);
+                                error_msg = msgs.map(m => {
+                                    try { return JSON.parse(m).message; } catch(e) { return m; }
+                                }).join('<br>');
+                            } catch(e) {}
+                        }
                         frappe.msgprint({
                             title: '❌ 请求异常',
                             indicator: 'red',
-                            message: '服务器处理社保凭证时发生错误，请检查浏览器 Console 或联系管理员！'
+                            message: error_msg
                         });
                     }
                 });
@@ -3227,6 +3235,8 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 frappe.call({
                     method: 'ashan_cn_procurement.services.payroll_settlement_service.upload_and_verify_housing_fund_file',
                     type: 'POST',
+                    freeze: true,
+                    freeze_message: `🔍 正在智能解析【${filename}】公积金凭证并比对金额...`,
                     args: {
                         company: COMPANY,
                         period_month: cur_m,
@@ -3234,7 +3244,6 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         file_base64: base64_str
                     },
                     callback: function(r) {
-                        frappe.unfreeze();
                         if (r.message && r.message.success) {
                             frappe.msgprint({
                                 title: '✅ 公积金凭证解析完成',
@@ -3259,11 +3268,19 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         }
                     },
                     error: function(r) {
-                        frappe.unfreeze();
+                        let error_msg = '服务器处理公积金凭证时发生错误！';
+                        if (r && r._server_messages) {
+                            try {
+                                const msgs = JSON.parse(r._server_messages);
+                                error_msg = msgs.map(m => {
+                                    try { return JSON.parse(m).message; } catch(e) { return m; }
+                                }).join('<br>');
+                            } catch(e) {}
+                        }
                         frappe.msgprint({
                             title: '❌ 请求异常',
                             indicator: 'red',
-                            message: '服务器处理公积金凭证时发生错误，请检查浏览器 Console 或联系管理员！'
+                            message: error_msg
                         });
                     }
                 });
