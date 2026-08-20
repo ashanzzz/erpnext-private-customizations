@@ -74,7 +74,7 @@
       "fieldname": "employee_type",
       "fieldtype": "Select",
       "label": "人员类型",
-      "options": "正式工\n返聘工\n外籍工\n临时工\n实习生",
+      "options": "正式工\n返聘工\n外籍工\n临时工\n实习生\n本月离职",
       "default": "正式工",
       "in_list_view": 1
     },
@@ -82,9 +82,25 @@
       "fieldname": "employment_status",
       "fieldtype": "Select",
       "label": "在职状态",
-      "options": "在职\n离职\n休假",
+      "options": "在职\n离职\n本月离职\n休假",
       "default": "在职",
       "in_list_view": 1
+    },
+    {
+      "fieldname": "date_of_joining",
+      "fieldtype": "Date",
+      "label": "入职日期"
+    },
+    {
+      "fieldname": "relieving_date",
+      "fieldtype": "Date",
+      "label": "离职日期",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "resignation_reason",
+      "fieldtype": "Data",
+      "label": "离职原因"
     },
     {
       "fieldname": "salary_mode",

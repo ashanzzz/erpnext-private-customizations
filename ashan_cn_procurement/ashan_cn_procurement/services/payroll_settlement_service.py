@@ -1738,8 +1738,8 @@ def get_accounting_payroll_sheet(company="天津祺富机械加工有限公司",
 def get_social_insurance_sheet(company="天津祺富机械加工有限公司", period_month="2026-07"):
 	items = frappe.get_all(
 		"Ashan Employee Salary Profile",
-		filters={"company": company, "employment_status": "在职"},
-		fields=["employee_no", "employee_name", "id_card", "employee_type", "social_security_base"],
+		filters={"company": company},
+		fields=["employee_no", "employee_name", "id_card", "employee_type", "employment_status", "relieving_date", "social_security_base"],
 		order_by="employee_no asc"
 	)
 	ss_setting = get_insurance_setting(company, period_month.split("-")[0] if "-" in period_month else 2026)
@@ -1749,11 +1749,14 @@ def get_social_insurance_sheet(company="天津祺富机械加工有限公司", p
 	for it in items:
 		ss_base = flt(it.get("social_security_base"))
 		emp_type = it.get("employee_type") or "正式工"
-		is_retired = (emp_type == "退休返聘" or emp_type == "返聘工")
+		emp_status = it.get("employment_status") or "在职"
+		rel_d = str(it.get("relieving_date") or "")
+		is_retired = (emp_type in ["退休返聘", "返聘工"])
 		is_other = (emp_type in ["临时工", "外籍工", "实习生", "劳务派遣"])
+		is_resigned = (emp_status == "离职" or (rel_d and rel_d <= f"{period_month}-31"))
 
-		# 纯净权责边界：不缴纳社保人员（退休返聘、临时工、外籍工、实习生或基数<=0）自动过滤排除
-		if is_retired or is_other or ss_base <= 0:
+		# 纯净权责边界：不缴纳社保人员（退休返聘、临时工、外籍工、实习生、本月离职减员或基数<=0）自动过滤排除
+		if is_retired or is_other or is_resigned or ss_base <= 0:
 			continue
 
 		comp_pension = round(ss_base * (flt(ss_setting.get("ss_company_pension", 16.0)) / 100.0), 2)
@@ -1831,8 +1834,8 @@ def get_social_insurance_sheet(company="天津祺富机械加工有限公司", p
 def get_housing_fund_sheet(company="天津祺富机械加工有限公司", period_month="2026-07"):
 	items = frappe.get_all(
 		"Ashan Employee Salary Profile",
-		filters={"company": company, "employment_status": "在职"},
-		fields=["employee_no", "employee_name", "id_card", "employee_type", "housing_fund_base"],
+		filters={"company": company},
+		fields=["employee_no", "employee_name", "id_card", "employee_type", "employment_status", "relieving_date", "housing_fund_base"],
 		order_by="employee_no asc"
 	)
 	ss_setting = get_insurance_setting(company, period_month.split("-")[0] if "-" in period_month else 2026)
@@ -1845,10 +1848,13 @@ def get_housing_fund_sheet(company="天津祺富机械加工有限公司", perio
 	for it in items:
 		hf_base = flt(it.get("housing_fund_base"))
 		emp_type = it.get("employee_type") or "正式工"
+		emp_status = it.get("employment_status") or "在职"
+		rel_d = str(it.get("relieving_date") or "")
 		emp_name = it.get("employee_name") or ""
+		is_resigned = (emp_status == "离职" or (rel_d and rel_d <= f"{period_month}-31"))
 
-		# 纯净权责边界：不缴纳公积金人员（退休返聘、临时工、外籍工、实习生或基数<=0）自动过滤排除
-		if emp_type in ["退休返聘", "返聘工", "临时工", "外籍工", "实习生"] or hf_base <= 0:
+		# 纯净权责边界：不缴纳公积金人员（退休返聘、临时工、外籍工、实习生、本月离职减员或基数<=0）自动过滤排除
+		if emp_type in ["退休返聘", "返聘工", "临时工", "外籍工", "实习生"] or is_resigned or hf_base <= 0:
 			continue
 
 		if "孟祥山" in emp_name:
@@ -3514,24 +3520,20 @@ def get_monthly_workflow_status(company, period_month):
 	sys_calc_count = sum(1 for e in emp_profiles if (flt(e.get("fixed_salary")) > 0 and e.get("employee_no") == "A0006"))
 	ext_calc_count = emp_count - sys_calc_count
 	
-	# 社保参保人数与公积金参缴人数
-	ss_insured_count = sum(1 for e in emp_profiles if flt(e.get("social_security_base")) > 0)
-	hf_insured_count = sum(1 for e in emp_profiles if flt(e.get("housing_fund_base")) > 0)
-	
-	profile_change_text = "人员及配置无异动"
-
-	# 2. 社保与公积金系统核算总额
+	# 2. 社保与公积金系统核算总额与参保人数
 	ss_data = get_social_insurance_sheet(company, period_month)
 	ss_totals = ss_data.get("totals", {})
 	ss_sys_comp = flt(ss_totals.get("comp_total", 0.0))
 	ss_sys_pers = flt(ss_totals.get("pers_total", 0.0))
 	ss_sys_total = flt(ss_totals.get("grand_total", 0.0))
+	ss_insured_count = len(ss_data.get("rows", []))
 	
 	hf_data = get_housing_fund_sheet(company, period_month)
 	hf_totals = hf_data.get("totals", {})
 	hf_sys_comp = flt(hf_totals.get("comp_amount", 0.0))
 	hf_sys_pers = flt(hf_totals.get("pers_amount", 0.0))
 	hf_sys_total = flt(hf_totals.get("total_amount", 0.0))
+	hf_insured_count = len(hf_data.get("rows", []))
 
 	# 3. 结算主表状态与附件
 	doc_name = f"{company}-{period_month}"

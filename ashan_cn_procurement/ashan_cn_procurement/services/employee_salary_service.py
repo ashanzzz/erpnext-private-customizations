@@ -181,8 +181,8 @@ def get_employee_profiles(company="天津祺富机械加工有限公司", search
 		fields=[
 			"name", "employee_no", "employee_name", "company", "id_card", "mobile",
 			"gender", "birth_date", "current_age", "retirement_age", "retirement_date",
-			"employee_type", "employment_status", "salary_mode",
-			"department", "job_title", "base_salary", "post_allowance", "performance_base",
+			"employee_type", "employment_status", "date_of_joining", "relieving_date", "resignation_reason",
+			"salary_mode", "department", "job_title", "base_salary", "post_allowance", "performance_base",
 			"meal_allowance", "traffic_allowance", "communication_allowance", "other_allowance",
 			"fixed_salary", "commercial_insurance", "is_insured",
 			"social_security_base", "housing_fund_base",
@@ -233,6 +233,13 @@ def get_employee_profiles(company="天津祺富机械加工有限公司", search
 		if not r.get("gender"):
 			r["gender"] = calc_ret["gender"]
 
+		# 离职状态与本月离职判定
+		rel_d = str(r.get("relieving_date") or "")
+		is_resigned_this_month = False
+		if r.get("employment_status") in ["离职", "本月离职"] or (rel_d and rel_d.startswith(target_pm)):
+			is_resigned_this_month = True
+		r["is_resigned_this_month"] = is_resigned_this_month
+
 		total_deduction = (
 			flt(r.get("deduction_child_education")) +
 			flt(r.get("deduction_continuing_education")) +
@@ -254,9 +261,10 @@ def get_employee_profiles(company="天津祺富机械加工有限公司", search
 
 	# KPI 统计卡片指标
 	total_count = len(records)
-	regular_count = len([r for r in records if r.get("employee_type") == "正式工"])
-	rehire_count = len([r for r in records if r.get("employee_type") == "返聘工"])
-	other_type_count = total_count - regular_count - rehire_count
+	resigned_count = len([r for r in records if r.get("is_resigned_this_month")])
+	regular_count = len([r for r in records if (r.get("employee_type") == "正式工" and not r.get("is_resigned_this_month"))])
+	rehire_count = len([r for r in records if (r.get("employee_type") in ["返聘工", "退休返聘"] and not r.get("is_resigned_this_month"))])
+	other_type_count = total_count - regular_count - rehire_count - resigned_count
 
 	# 基础薪资总盘（祺富算固定工资，吉众算基本工资+津贴）
 	if "祺富" in company:
@@ -271,6 +279,7 @@ def get_employee_profiles(company="天津祺富机械加工有限公司", search
 			"total_count": total_count,
 			"regular_count": regular_count,
 			"rehire_count": rehire_count,
+			"resigned_count": resigned_count,
 			"other_type_count": other_type_count,
 			"total_base_payroll": total_base_payroll
 		}
@@ -279,9 +288,109 @@ def get_employee_profiles(company="天津祺富机械加工有限公司", search
 
 @frappe.whitelist()
 def get_qifu_employees(company="天津祺富机械加工有限公司", period_month=None):
-	"""获取祺富在职员工档案母表列表 (支持动态按月份基准计算年龄与退休)"""
+	"""获取祺富在职及当月离职员工档案母表列表 (支持动态按月份基准计算年龄与退休)"""
 	res = get_employee_profiles(company=company, period_month=period_month)
 	return res.get("records", [])
+
+
+@frappe.whitelist()
+def set_employee_resignation(employee_no, relieving_date=None, resignation_reason=None, company="天津祺富机械加工有限公司", period_month="2026-07"):
+	"""
+	办理单名员工离职：
+	1. 离职日期默认为当前核算月份最后一天 (如 2026-07-31)
+	2. employment_status 设为 离职，employee_type 可显示本月离职
+	3. 自动触发次月社保公积金减员
+	"""
+	doc_name = frappe.db.get_value("Ashan Employee Salary Profile", {"company": company, "employee_no": employee_no}, "name")
+	if not doc_name:
+		frappe.throw(f"未找到工号为 {employee_no} 的员工档案")
+
+	if not relieving_date:
+		import calendar
+		y, m = map(int, period_month.split("-"))
+		last_day = calendar.monthrange(y, m)[1]
+		relieving_date = f"{y:04d}-{m:02d}-{last_day:02d}"
+
+	doc = frappe.get_doc("Ashan Employee Salary Profile", doc_name)
+	doc.employment_status = "离职"
+	doc.relieving_date = relieving_date
+	doc.resignation_reason = resignation_reason or "正常离职"
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+
+	return {
+		"success": True,
+		"employee_no": employee_no,
+		"employee_name": doc.employee_name,
+		"relieving_date": relieving_date,
+		"message": f"✅ 已成功为【{doc.employee_name} ({employee_no})】办理离职（离职日期：{relieving_date}）！次月社保与公积金已自动减员。"
+	}
+
+
+@frappe.whitelist()
+def batch_set_employee_resignation(employee_nos, relieving_date=None, resignation_reason=None, company="天津祺富机械加工有限公司", period_month="2026-07"):
+	"""
+	批量办理员工离职：
+	可多选人员，填入离职日期（默认当月最后一天），一键全部办理离职并实现次月社保公积金自动减员
+	"""
+	if isinstance(employee_nos, str):
+		try:
+			employee_nos = json.loads(employee_nos)
+		except Exception:
+			employee_nos = [x.strip() for x in employee_nos.split(",") if x.strip()]
+
+	if not employee_nos:
+		frappe.throw("请至少选择一位员工办理离职")
+
+	if not relieving_date:
+		import calendar
+		y, m = map(int, period_month.split("-"))
+		last_day = calendar.monthrange(y, m)[1]
+		relieving_date = f"{y:04d}-{m:02d}-{last_day:02d}"
+
+	updated_list = []
+	for emp_no in employee_nos:
+		doc_name = frappe.db.get_value("Ashan Employee Salary Profile", {"company": company, "employee_no": emp_no}, "name")
+		if doc_name:
+			doc = frappe.get_doc("Ashan Employee Salary Profile", doc_name)
+			doc.employment_status = "离职"
+			doc.relieving_date = relieving_date
+			doc.resignation_reason = resignation_reason or "正常离职"
+			doc.save(ignore_permissions=True)
+			updated_list.append(f"{doc.employee_name} ({emp_no})")
+
+	frappe.db.commit()
+	return {
+		"success": True,
+		"count": len(updated_list),
+		"relieving_date": relieving_date,
+		"updated_employees": updated_list,
+		"message": f"✅ 成功为 {len(updated_list)} 位员工办理离职（离职日期：{relieving_date}）！次月社保与公积金已自动减员。"
+	}
+
+
+@frappe.whitelist()
+def cancel_employee_resignation(employee_no, company="天津祺富机械加工有限公司"):
+	"""
+	撤销员工离职，恢复在职
+	"""
+	doc_name = frappe.db.get_value("Ashan Employee Salary Profile", {"company": company, "employee_no": employee_no}, "name")
+	if not doc_name:
+		frappe.throw(f"未找到工号为 {employee_no} 的员工档案")
+
+	doc = frappe.get_doc("Ashan Employee Salary Profile", doc_name)
+	doc.employment_status = "在职"
+	doc.relieving_date = None
+	doc.resignation_reason = None
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+
+	return {
+		"success": True,
+		"employee_no": employee_no,
+		"employee_name": doc.employee_name,
+		"message": f"✅ 已成功恢复员工【{doc.employee_name} ({employee_no})】为正常在职状态！"
+	}
 
 
 @frappe.whitelist()
@@ -334,8 +443,8 @@ def update_single_employee(employee_name, data):
 	allowed_fields = [
 		"id_card", "gender", "birth_date", "current_age", "retirement_age", "retirement_date",
 		"original_retirement_age", "delayed_retirement_age",
-		"employee_type", "employment_status", "salary_mode",
-		"department", "job_title", "base_salary", "post_allowance", "performance_base",
+		"employee_type", "employment_status", "date_of_joining", "relieving_date", "resignation_reason",
+		"salary_mode", "department", "job_title", "base_salary", "post_allowance", "performance_base",
 		"meal_allowance", "traffic_allowance", "communication_allowance", "other_allowance",
 		"fixed_salary", "commercial_insurance", "is_insured",
 		"social_security_base", "housing_fund_base",

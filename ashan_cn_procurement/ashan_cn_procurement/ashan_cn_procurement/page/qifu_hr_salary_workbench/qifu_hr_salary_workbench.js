@@ -590,12 +590,17 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 </div>
                 <div class="qifu-kpi-card" style="border-left: 4px solid #f59e0b;">
                     <div style="font-size:13px; font-weight:700; color:#92400e;">👴 退休返聘人员</div>
-                    <div style="font-size:22px; font-weight:800; color:#d97706; margin-top:4px;" id="tab1-emp-rehire">5 人</div>
+                    <div style="font-size:22px; font-weight:800; color:#d97706; margin-top:4px;" id="tab1-emp-rehire">0 人</div>
                     <div style="font-size:12px; color:#64748b;">免缴社保/仅发薪资与补贴</div>
+                </div>
+                <div class="qifu-kpi-card" style="border-left: 4px solid #ef4444;">
+                    <div style="font-size:13px; font-weight:700; color:#b91c1c;">🚪 本月离职人员</div>
+                    <div style="font-size:22px; font-weight:800; color:#dc2626; margin-top:4px;" id="tab1-emp-resigned">0 人</div>
+                    <div style="font-size:12px; color:#64748b;">正常发薪个税/次月社保公积金减员</div>
                 </div>
                 <div class="qifu-kpi-card" style="border-left: 4px solid #6366f1;">
                     <div style="font-size:13px; font-weight:700; color:#3730a3;">🏷️ 其他用工 (临时/外籍/劳务)</div>
-                    <div style="font-size:22px; font-weight:800; color:#4f46e5; margin-top:4px;" id="tab1-emp-other">2 人</div>
+                    <div style="font-size:22px; font-weight:800; color:#4f46e5; margin-top:4px;" id="tab1-emp-other">7 人</div>
                     <div style="font-size:12px; color:#64748b;">非正式用工或劳务派遣</div>
                 </div>
             </div>
@@ -603,11 +608,14 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             <!-- 工具栏 -->
             <div class="qifu-toolbar">
                 <div class="qifu-toolbar-left">
-                    <input type="text" class="form-control" id="qifu-emp-search" placeholder="🔍 搜索工号、姓名、证件号、岗位..." style="width:260px; display:inline-block;">
+                    <input type="text" class="form-control" id="qifu-emp-search" placeholder="🔍 搜索工号、姓名、证件号、岗位..." style="width:230px; display:inline-block;">
+                    <button class="btn btn-default btn-sm" id="btn-batch-resign" style="color: #dc2626; border-color: #f87171; font-weight: 600;">
+                        🚪 批量办理离职
+                    </button>
                     <button class="btn btn-default btn-sm" id="btn-qifu-hf-min" style="color: #059669; border-color: #059669; font-weight: 600;">
                         ⚡ 一键全员公积金 (最低基数)
                     </button>
-                    <button class="btn btn-default btn-sm" id="btn-qifu-hf-zero" style="color: #dc2626; border-color: #dc2626; font-weight: 600;">
+                    <button class="btn btn-default btn-sm" id="btn-qifu-hf-zero" style="color: #64748b; border-color: #cbd5e1; font-weight: 600;">
                         🚫 一键取消全员公积金 (设为0)
                     </button>
                 </div>
@@ -618,12 +626,13 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 </div>
             </div>
 
-            <!-- 母表数据列表 (精确按用户指定11列标准呈现) -->
+            <!-- 母表数据列表 (精确按用户指定11列标准呈现，新增勾选与离职操作) -->
             <div class="qifu-table-box">
                 <table class="qifu-table" id="table-qifu-emp">
                     <thead>
                         <tr>
-                            <th style="width:45px;">序号</th>
+                            <th style="width:36px; text-align:center;"><input type="checkbox" id="check-all-tab1-employees" title="全选/反选"></th>
+                            <th style="width:40px; text-align:center;">序号</th>
                             <th>工号</th>
                             <th>姓名</th>
                             <th>证件号码</th>
@@ -634,7 +643,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                             <th>社保基数</th>
                             <th>公积金基数</th>
                             <th>专项扣除</th>
-                            <th>操作</th>
+                            <th style="width:130px; text-align:center;">操作</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-qifu-emp"></tbody>
@@ -1134,6 +1143,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     function load_qifu_employees() {
         frappe.call({
             method: 'ashan_cn_procurement.services.employee_salary_service.get_qifu_employees',
+            args: { company: COMPANY, period_month: current_month },
             callback: function(r) {
                 if (r.message) {
                     render_employees_view(r.message);
@@ -1144,37 +1154,49 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
     function render_employees_view(list) {
         let total = list.length;
-        let insured = list.filter(e => (e.employee_type || '正式工') === '正式工').length;
-        let rehire = list.filter(e => (e.employee_type || '') === '退休返聘').length;
-        let other = total - insured - rehire;
+        let resigned = list.filter(e => e.is_resigned_this_month || e.employment_status === '离职').length;
+        let insured = list.filter(e => (e.employee_type || '正式工') === '正式工' && !e.is_resigned_this_month && e.employment_status !== '离职').length;
+        let rehire = list.filter(e => ((e.employee_type || '') === '退休返聘' || (e.employee_type || '') === '返聘工') && !e.is_resigned_this_month && e.employment_status !== '离职').length;
+        let other = total - insured - rehire - resigned;
 
         $("#tab1-emp-total").text(total + ' 人');
         $("#tab1-emp-insured").text(insured + ' 人');
         $("#tab1-emp-rehire").text(rehire + ' 人');
+        $("#tab1-emp-resigned").text(resigned + ' 人');
         $("#tab1-emp-other").text(other + ' 人');
+
+        // 重置表头全选框
+        $("#check-all-tab1-employees").prop("checked", false);
 
         let html = '';
         if (list.length === 0) {
-            html = '<tr><td colspan="12" style="text-align:center; padding:30px; color:#94a3b8;">暂无员工档案，请点击上方【➕ 新增祺富员工档案】</td></tr>';
+            html = '<tr><td colspan="13" style="text-align:center; padding:30px; color:#94a3b8;">暂无员工档案，请点击上方【➕ 新增祺富员工档案】</td></tr>';
         } else {
             list.forEach((emp, idx) => {
-                const isInsured = emp.is_insured || (emp.social_security_base > 0);
-                const isHf = emp.housing_fund_base > 0;
+                const isResigned = emp.is_resigned_this_month || emp.employment_status === '离职';
+                const isInsured = !isResigned && (emp.is_insured || (emp.social_security_base > 0));
+                const isHf = !isResigned && (emp.housing_fund_base > 0);
                 html += `
-                <tr>
-                    <td style="color:#94a3b8;">${idx + 1}</td>
-                    <td><strong>${emp.employee_no || '-'}</strong></td>
-                    <td><strong style="color:#1e3a8a;">${emp.employee_name}</strong></td>
-                    <td style="font-family:monospace;">${emp.id_card || '-'}</td>
+                <tr style="${isResigned ? 'background:#fff1f2;' : ''}">
+                    <td style="text-align:center;"><input type="checkbox" class="tab1-emp-check" data-emp-no="${emp.employee_no}" data-emp-name="${emp.employee_name}"></td>
+                    <td style="color:#94a3b8; text-align:center;">${idx + 1}</td>
+                    <td style="text-align:center;"><strong>${emp.employee_no || '-'}</strong></td>
+                    <td>
+                        <strong style="color:${isResigned ? '#991b1b' : '#1e3a8a'};">${emp.employee_name}</strong>
+                    </td>
+                    <td style="font-family:monospace; text-align:center;">${emp.id_card || '-'}</td>
                     <td>${emp.job_title || '操作工'}</td>
-                    <td><span class="qifu-status-badge ${emp.employee_type === '正式工' ? 'qifu-status-locked' : 'qifu-status-draft'}">${emp.employee_type || '正式工'}</span></td>
-                    <td>${emp.salary_mode || '固定一口价'}</td>
+                    <td style="text-align:center;">
+                        ${isResigned ? `<span class="qifu-status-badge" style="background:#fee2e2; color:#b91c1c; font-weight:700; border:1px solid #fca5a5;" title="离职日期: ${emp.relieving_date || '当月'}">🚪 本月离职</span>` : `<span class="qifu-status-badge ${emp.employee_type === '正式工' ? 'qifu-status-locked' : 'qifu-status-draft'}">${emp.employee_type || '正式工'}</span>`}
+                    </td>
+                    <td style="text-align:center;">${emp.salary_mode || '固定一口价'}</td>
                     <td class="qifu-money-cell" style="font-weight:600;">${fmtMoney(emp.fixed_salary)}</td>
                     <td class="qifu-money-cell" style="color:${isInsured ? '#2563eb' : '#94a3b8'}; font-weight:600;">${fmtMoney(emp.social_security_base)}</td>
                     <td class="qifu-money-cell" style="color:${isHf ? '#059669' : '#94a3b8'}; font-weight:600;">${fmtMoney(emp.housing_fund_base)}</td>
                     <td class="qifu-money-cell">${fmtMoney(emp.total_deduction || emp.special_deductions_total)}</td>
-                    <td>
-                        <button class="btn btn-default btn-xs btn-edit-emp" data-id="${emp.name}" style="color:#2563eb;">✏️ 修改</button>
+                    <td style="text-align:center; white-space:nowrap;">
+                        <button class="btn btn-default btn-xs btn-edit-emp" data-id="${emp.name}" style="color:#2563eb; margin-right:4px;">✏️ 修改</button>
+                        ${isResigned ? `<button class="btn btn-default btn-xs btn-unresign-emp" data-emp-no="${emp.employee_no}" data-emp-name="${emp.employee_name}" style="color:#059669; border-color:#86efac;" title="撤销离职，恢复在职">🔄 恢复</button>` : `<button class="btn btn-default btn-xs btn-resign-emp" data-emp-no="${emp.employee_no}" data-emp-name="${emp.employee_name}" style="color:#dc2626; border-color:#fca5a5;" title="办理离职，次月社保公积金自动减员">🚪 离职</button>`}
                     </td>
                 </tr>
                 `;
@@ -2225,6 +2247,154 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                             load_housing_fund_tab();
                             load_tax_settlement_tab();
                             load_payroll_settlement();
+                        }
+                    }
+                });
+            }
+        });
+        d.show();
+    }
+
+    function get_last_day_of_month(ym) {
+        if (!ym || !ym.includes('-')) return '';
+        const parts = ym.split('-');
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10);
+        const d = new Date(y, m, 0).getDate();
+        return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+
+    // 办理单人离职弹窗
+    function open_resign_dialog(emp_no, emp_name) {
+        const default_date = get_last_day_of_month(current_month);
+        const d = new frappe.ui.Dialog({
+            title: `🚪 办理员工离职 · ${emp_name}`,
+            size: 'small',
+            fields: [
+                { fieldtype: 'Data', fieldname: 'employee_no', label: '工号', default: emp_no, read_only: 1 },
+                { fieldtype: 'Data', fieldname: 'employee_name', label: '员工姓名', default: emp_name, read_only: 1 },
+                {
+                    fieldtype: 'Date',
+                    fieldname: 'relieving_date',
+                    label: '离职日期',
+                    reqd: 1,
+                    default: default_date,
+                    description: `默认当月最后一天 (${default_date})`
+                },
+                {
+                    fieldtype: 'Select',
+                    fieldname: 'resignation_reason',
+                    label: '离职原因',
+                    options: ['正常离职', '合同到期', '个人原因', '协商解除', '退休', '其他'],
+                    default: '正常离职'
+                },
+                {
+                    fieldtype: 'HTML',
+                    fieldname: 'rule_tip',
+                    options: `
+                    <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:8px 10px; font-size:12px; line-height:1.5; color:#1e40af; margin-top:8px;">
+                        💡 <strong>财务减员联动规则</strong>：<br>
+                        员工在【<strong>${current_month}</strong>】离职后，系统仍会核算其当月在职薪酬与个税；对应次月的社保与公积金将<strong>自动停止缴纳（自动减员）</strong>。
+                    </div>
+                    `
+                }
+            ],
+            primary_action_label: '确认办理离职',
+            primary_action(vals) {
+                frappe.call({
+                    method: 'ashan_cn_procurement.services.employee_salary_service.set_employee_resignation',
+                    args: {
+                        employee_no: vals.employee_no,
+                        relieving_date: vals.relieving_date,
+                        resignation_reason: vals.resignation_reason,
+                        company: COMPANY,
+                        period_month: current_month
+                    },
+                    callback: function(r) {
+                        if (r.message && r.message.success) {
+                            frappe.show_alert({ message: r.message.message, indicator: 'green' });
+                            d.hide();
+                            load_monthly_workflow_hub();
+                            load_qifu_employees();
+                            load_social_insurance_tab();
+                            load_housing_fund_tab();
+                        }
+                    }
+                });
+            }
+        });
+        d.show();
+    }
+
+    // 批量办理员工离职弹窗
+    function open_batch_resign_dialog(selected_emps) {
+        if (!selected_emps || selected_emps.length === 0) {
+            frappe.msgprint({ title: '提示', indicator: 'orange', message: '请先在员工列表中勾选需要办理离职的人员！' });
+            return;
+        }
+        const default_date = get_last_day_of_month(current_month);
+        const emp_names_str = selected_emps.map(e => `${e.name} (${e.no})`).join('、');
+        const emp_nos = selected_emps.map(e => e.no);
+
+        const d = new frappe.ui.Dialog({
+            title: `🚪 批量办理员工离职 (共 ${selected_emps.length} 人)`,
+            size: 'small',
+            fields: [
+                {
+                    fieldtype: 'HTML',
+                    fieldname: 'selected_list',
+                    options: `
+                    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px; font-size:12px; line-height:1.6; max-height:120px; overflow-y:auto; margin-bottom:10px;">
+                        <strong>已选员工 (${selected_emps.length} 人)</strong>：<br>
+                        <span style="color:#2563eb;">${emp_names_str}</span>
+                    </div>
+                    `
+                },
+                {
+                    fieldtype: 'Date',
+                    fieldname: 'relieving_date',
+                    label: '统一离职日期',
+                    reqd: 1,
+                    default: default_date,
+                    description: `默认当月最后一天 (${default_date})`
+                },
+                {
+                    fieldtype: 'Select',
+                    fieldname: 'resignation_reason',
+                    label: '离职原因',
+                    options: ['正常离职', '合同到期', '个人原因', '协商解除', '退休', '其他'],
+                    default: '正常离职'
+                },
+                {
+                    fieldtype: 'HTML',
+                    fieldname: 'rule_tip',
+                    options: `
+                    <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:8px 10px; font-size:12px; line-height:1.5; color:#1e40af; margin-top:8px;">
+                        💡 <strong>财务减员联动规则</strong>：<br>
+                        批量离职成功后，上述 ${selected_emps.length} 位员工下月对应的社保与公积金将<strong>一键自动减员</strong>！
+                    </div>
+                    `
+                }
+            ],
+            primary_action_label: `确认批量离职 (${selected_emps.length}人)`,
+            primary_action(vals) {
+                frappe.call({
+                    method: 'ashan_cn_procurement.services.employee_salary_service.batch_set_employee_resignation',
+                    args: {
+                        employee_nos: JSON.stringify(emp_nos),
+                        relieving_date: vals.relieving_date,
+                        resignation_reason: vals.resignation_reason,
+                        company: COMPANY,
+                        period_month: current_month
+                    },
+                    callback: function(r) {
+                        if (r.message && r.message.success) {
+                            frappe.msgprint({ title: '✅ 批量离职成功', indicator: 'green', message: r.message.message });
+                            d.hide();
+                            load_monthly_workflow_hub();
+                            load_qifu_employees();
+                            load_social_insurance_tab();
+                            load_housing_fund_tab();
                         }
                     }
                 });
@@ -3473,6 +3643,58 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             }
         });
     });
+
+    // 单人离职
+    $container.on("click", ".btn-resign-emp", function() {
+        const emp_no = $(this).attr("data-emp-no");
+        const emp_name = $(this).attr("data-emp-name");
+        open_resign_dialog(emp_no, emp_name);
+    });
+
+    // 撤销离职，恢复在职
+    $container.on("click", ".btn-unresign-emp", function() {
+        const emp_no = $(this).attr("data-emp-no");
+        const emp_name = $(this).attr("data-emp-name");
+        frappe.confirm(
+            `<strong>【🔄 恢复员工在职状态】</strong><br><br>
+            员工：<strong>${emp_name} (${emp_no})</strong><br><br>
+            确认撤销离职记录，恢复为正常在职员工吗？`,
+            function() {
+                frappe.call({
+                    method: 'ashan_cn_procurement.services.employee_salary_service.cancel_employee_resignation',
+                    args: { employee_no: emp_no, company: COMPANY },
+                    callback: function(r) {
+                        if (r.message && r.message.success) {
+                            frappe.show_alert({ message: r.message.message, indicator: 'green' });
+                            load_monthly_workflow_hub();
+                            load_qifu_employees();
+                            load_social_insurance_tab();
+                            load_housing_fund_tab();
+                        }
+                    }
+                });
+            }
+        );
+    });
+
+    // 全选/反选员工
+    $container.on("change", "#check-all-tab1-employees", function() {
+        const isChecked = $(this).prop("checked");
+        $(".tab1-emp-check").prop("checked", isChecked);
+    });
+
+    // 批量办理离职
+    $container.on("click", "#btn-batch-resign", function() {
+        let selected = [];
+        $(".tab1-emp-check:checked").each(function() {
+            selected.push({
+                no: $(this).attr("data-emp-no"),
+                name: $(this).attr("data-emp-name")
+            });
+        });
+        open_batch_resign_dialog(selected);
+    });
+
     $container.on("input", "#qifu-emp-search", function() {
         const q = $(this).val().toLowerCase().trim();
         $("#tbody-qifu-emp tr").each(function() {
