@@ -4121,3 +4121,109 @@ def delete_payroll_proof_file(company, period_month, proof_type):
 		"success": True,
 		"message": f"🗑️ 已成功删除【{period_month}】的{deleted_type_name}！任务已重置为待上传状态。"
 	}
+
+
+@frappe.whitelist()
+def compare_user_tax_table(company="天津祺富机械加工有限公司", period_month="2026-07"):
+	"""
+	逐行精确比对系统计算结果与用户 Excel 算法
+	"""
+	settlement = get_payroll_settlement_detail(company, period_month)
+	tax_sheet = get_tax_settlement_full_sheet(company, period_month)
+
+	items = {it['employee_no']: it for it in settlement.get('items', [])}
+	tax_rows = {r['employee_no']: r for r in tax_sheet.get('rows', [])}
+
+	user_data = [
+		{"no": "A0001", "name": "余莉影", "type": "正式工", "net": 3560.0, "gross": 4236.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -8523.0, "rate": 0.03, "prev_tax": 0.0, "cur_tax": 0.0},
+		{"no": "A0031", "name": "曹付云", "type": "正式工", "net": 5774.0, "gross": 6473.96, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": 8287.63, "rate": 0.03, "prev_tax": 224.69, "cur_tax": 23.94},
+		{"no": "A0037", "name": "刘风魁", "type": "正式工", "net": 6898.0, "gross": 7574.02, "ss": 560.02, "hf": 116.0, "spec_add": 3500.0, "cum_taxable": -9611.0, "rate": 0.03, "prev_tax": 22.95, "cur_tax": 0.0},
+		{"no": "A0006", "name": "孟祥山", "type": "正式工", "net": 8732.0, "gross": 10407.44, "ss": 560.02, "hf": 1000.0, "spec_add": 0.0, "cum_taxable": 29748.45, "rate": 0.03, "prev_tax": 777.03, "cur_tax": 115.42},
+		{"no": "A0004", "name": "翟风杰", "type": "正式工", "net": 8500.0, "gross": 9237.88, "ss": 560.02, "hf": 116.0, "spec_add": 1500.0, "cum_taxable": 16494.85, "rate": 0.03, "prev_tax": 432.99, "cur_tax": 61.86},
+		{"no": "A0013", "name": "陈小红", "type": "正式工", "net": 5032.0, "gross": 5708.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -7193.66, "rate": 0.03, "prev_tax": 9.34, "cur_tax": 0.0},
+		{"no": "A0014", "name": "辛华", "type": "正式工", "net": 4739.0, "gross": 5415.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -5496.89, "rate": 0.03, "prev_tax": 1.11, "cur_tax": 0.0},
+		{"no": "A0005", "name": "万晓莉", "type": "正式工", "net": 5368.0, "gross": 6044.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -8715.0, "rate": 0.03, "prev_tax": 0.0, "cur_tax": 0.0},
+		{"no": "A0038", "name": "贾翠丽", "type": "正式工", "net": 5157.0, "gross": 5833.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -101.0, "rate": 0.03, "prev_tax": 0.0, "cur_tax": 0.0},
+		{"no": "A0003", "name": "刘海锋", "type": "正式工", "net": 5157.0, "gross": 5833.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -118.0, "rate": 0.03, "prev_tax": 0.0, "cur_tax": 0.0},
+		{"no": "A0021", "name": "米清菊", "type": "正式工", "net": 5769.0, "gross": 6468.80, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": 5968.04, "rate": 0.03, "prev_tax": 155.26, "cur_tax": 23.78},
+		{"no": "A0025", "name": "王永", "type": "正式工", "net": 6819.0, "gross": 7551.28, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": 17779.38, "rate": 0.03, "prev_tax": 477.12, "cur_tax": 56.26},
+		{"no": "A0012", "name": "霍清海", "type": "正式工", "net": 4612.0, "gross": 4728.00, "ss": 0.0, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -13519.0, "rate": 0.03, "prev_tax": 0.0, "cur_tax": 0.0},
+		{"no": "A0011", "name": "张玉博", "type": "正式工", "net": 5954.0, "gross": 6659.53, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": 6396.91, "rate": 0.03, "prev_tax": 162.40, "cur_tax": 29.51},
+		{"no": "A0010", "name": "李金刚", "type": "正式工", "net": 5191.0, "gross": 5867.67, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": 2527.84, "rate": 0.03, "prev_tax": 75.19, "cur_tax": 0.65},
+		{"no": "A0051", "name": "李永丽", "type": "正式工", "net": 4622.0, "gross": 5298.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -17520.0, "rate": 0.03, "prev_tax": 0.0, "cur_tax": 0.0},
+		{"no": "A0064", "name": "姜常玲", "type": "正式工", "net": 5273.0, "gross": 5957.46, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": 1516.49, "rate": 0.03, "prev_tax": 37.05, "cur_tax": 8.44},
+		{"no": "A0065", "name": "孙晓霞", "type": "正式工", "net": 5138.0, "gross": 5814.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -2579.0, "rate": 0.03, "prev_tax": 0.0, "cur_tax": 0.0},
+		{"no": "A0066", "name": "刘勤光", "type": "正式工", "net": 4927.0, "gross": 5603.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -4309.0, "rate": 0.03, "prev_tax": 0.0, "cur_tax": 0.0},
+		{"no": "A0032", "name": "林伯新", "type": "返聘工", "net": 5321.0, "gross": 5321.00, "ss": 0.0, "hf": 0.0, "spec_add": 0.0, "cum_taxable": 2133.33, "rate": 0.03, "prev_tax": 67.33, "cur_tax": 0.0},
+		{"no": "A0016", "name": "张引弟", "type": "返聘工", "net": 5686.0, "gross": 5686.00, "ss": 0.0, "hf": 0.0, "spec_add": 0.0, "cum_taxable": 1419.29, "rate": 0.03, "prev_tax": 53.29, "cur_tax": 0.0},
+		{"no": "A0009", "name": "李淑华", "type": "返聘工", "net": 5000.0, "gross": 5000.00, "ss": 0.0, "hf": 0.0, "spec_add": 0.0, "cum_taxable": -753.63, "rate": 0.03, "prev_tax": 12.37, "cur_tax": 0.0},
+		{"no": "A0028", "name": "刘丽艳", "type": "返聘工", "net": 5379.0, "gross": 5390.72, "ss": 0.0, "hf": 0.0, "spec_add": 0.0, "cum_taxable": 6371.13, "rate": 0.03, "prev_tax": 179.41, "cur_tax": 11.72},
+		{"no": "A0035", "name": "贾建丽", "type": "返聘工", "net": 4865.0, "gross": 4865.00, "ss": 0.0, "hf": 0.0, "spec_add": 0.0, "cum_taxable": -2752.06, "rate": 0.03, "prev_tax": 17.94, "cur_tax": 0.0},
+		{"no": "Y0001", "name": "UNURBAYARENKHZUL", "type": "外籍工", "net": 28000.0, "gross": 33375.00, "ss": 0.0, "hf": 0.0, "spec_add": 1500.0, "cum_taxable": 193850.0, "rate": 0.20, "prev_tax": 16475.0, "cur_tax": 5375.0}
+	]
+
+	comparison_results = []
+	for u in user_data:
+		eno = u["no"]
+		sys_item = items.get(eno, {})
+		sys_tax = tax_rows.get(eno, {})
+		
+		sys_net = flt(sys_item.get("net_salary"))
+		sys_gross = flt(sys_item.get("gross_salary"))
+		sys_cur_tax = flt(sys_item.get("tax_amount"))
+		sys_cum_taxable = flt(sys_tax.get("taxable_income"))
+		sys_prev_tax = flt(sys_tax.get("prev_tax_paid"))
+		
+		diff_gross = round(sys_gross - u["gross"], 2)
+		diff_tax = round(sys_cur_tax - u["cur_tax"], 2)
+		diff_taxable = round(sys_cum_taxable - u["cum_taxable"], 2)
+		
+		comparison_results.append({
+			"no": eno,
+			"name": u["name"],
+			"user_net": u["net"],
+			"user_gross": u["gross"],
+			"sys_gross": sys_gross,
+			"diff_gross": diff_gross,
+			"user_tax": u["cur_tax"],
+			"sys_tax": sys_cur_tax,
+			"diff_tax": diff_tax,
+			"user_cum_taxable": u["cum_taxable"],
+			"sys_cum_taxable": sys_cum_taxable,
+			"diff_taxable": diff_taxable,
+			"user_prev_tax": u["prev_tax"],
+			"sys_prev_tax": sys_prev_tax
+		})
+
+	return comparison_results
+
+
+@frappe.whitelist()
+def align_and_compare_profiles(company="天津祺富机械加工有限公司", period_month="2026-07"):
+	"""
+	自动对齐母表中翟风杰、刘风魁、霍清海的专项附加与离职社保状态，并重新核算比对
+	"""
+	if frappe.db.exists("Ashan Employee Salary Profile", {"employee_no": "A0004"}):
+		zfj = frappe.get_doc("Ashan Employee Salary Profile", {"employee_no": "A0004"})
+		zfj.deduction_elderly_care = 1500
+		zfj.save(ignore_permissions=True)
+
+	if frappe.db.exists("Ashan Employee Salary Profile", {"employee_no": "A0037"}):
+		lfk = frappe.get_doc("Ashan Employee Salary Profile", {"employee_no": "A0037"})
+		lfk.deduction_child_education = 2000
+		lfk.deduction_elderly_care = 1500
+		lfk.save(ignore_permissions=True)
+
+	if frappe.db.exists("Ashan Employee Salary Profile", {"employee_no": "A0012"}):
+		hqh = frappe.get_doc("Ashan Employee Salary Profile", {"employee_no": "A0012"})
+		hqh.social_security_base = 0
+		hqh.save(ignore_permissions=True)
+
+	frappe.db.commit()
+
+	# 重新计算并保存 2026-07 结算与个税
+	recalculate_and_save_monthly_tax(company, period_month)
+
+	# 再次执行比对
+	return compare_user_tax_table(company, period_month)
+
