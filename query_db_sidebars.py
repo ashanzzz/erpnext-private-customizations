@@ -20,7 +20,7 @@ ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 ssh.connect(HOST, port=PORT, username=USER, password=PASSWORD, timeout=10)
 
-cmd = "docker exec -i 1Panel-mariadb mysql -uerpnext16 -pbAtk7Gn2BbzbypHS erpnext16 -e \"SELECT name, title, app FROM \`tabWorkspace Sidebar\`\""
+cmd = "docker exec -i 1Panel-mariadb mysql -uerpnext16 -p"$MYSQL_PASSWORD" erpnext16 -e \"SELECT name, title, app FROM \`tabWorkspace Sidebar\`\""
 stdin, stdout, stderr = ssh.exec_command(cmd)
 print("ALL WORKSPACE SIDEBARS IN MARIADB:\n", stdout.read().decode('utf-8'))
 ssh.close()

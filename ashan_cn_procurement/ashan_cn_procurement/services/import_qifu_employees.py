@@ -81,10 +81,19 @@ def import_qifu_employees_from_seed():
 	setup_qifu_insurance_settings()
 	company = "天津祺富机械加工有限公司"
 
-	json_path = os.path.join(os.path.dirname(__file__), "qifu_employee_seed.json")
-	if not os.path.exists(json_path):
-		print("Seed JSON not found:", json_path)
-		return 0
+	# 真实员工数据属于私密数据，不应提交到 Git。优先读取显式环境变量，其次读取站点 private/files。
+	json_path = os.environ.get("QIFU_EMPLOYEE_SEED_PATH", "").strip()
+	if not json_path:
+		try:
+			json_path = frappe.get_site_path("private", "files", "qifu_employee_seed.json")
+		except Exception:
+			json_path = ""
+	if not json_path or not os.path.exists(json_path):
+		local_legacy = os.path.join(os.path.dirname(__file__), "qifu_employee_seed.json")
+		if os.path.exists(local_legacy):
+			json_path = local_legacy
+	if not json_path or not os.path.exists(json_path):
+		frappe.throw("未找到祺富员工私密种子数据。请将 qifu_employee_seed.json 放入站点 private/files，或设置环境变量 QIFU_EMPLOYEE_SEED_PATH。")
 
 	with open(json_path, "r", encoding="utf-8") as f:
 		records = json.load(f)

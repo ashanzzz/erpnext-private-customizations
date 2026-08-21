@@ -263,7 +263,7 @@ def get_employee_profiles(company="天津祺富机械加工有限公司", search
 	total_count = len(records)
 	resigned_count = len([r for r in records if r.get("is_resigned_this_month")])
 	regular_count = len([r for r in records if (r.get("employee_type") == "正式工" and not r.get("is_resigned_this_month"))])
-	rehire_count = len([r for r in records if (r.get("employee_type") in ["返聘工", "退休返聘"] and not r.get("is_resigned_this_month"))])
+	rehire_count = len([r for r in records if (r.get("employee_type") in ["返聘工", "退休返聘", "其他-返聘工"] and not r.get("is_resigned_this_month"))])
 	other_type_count = total_count - regular_count - rehire_count - resigned_count
 
 	# 基础薪资总盘（祺富算固定工资，吉众算基本工资+津贴）
@@ -665,6 +665,7 @@ def get_insurance_setting(company="天津祺富机械加工有限公司", year=2
 		doc.ss_min_base = 5013.0 if "祺富" in company else 5124.0
 		doc.hf_min_base = 2320.0
 		doc.tax_threshold = 5000.0
+		doc.tax_cycle_start_month = 12
 		doc.save(ignore_permissions=True)
 		frappe.db.commit()
 	else:
@@ -722,8 +723,67 @@ def save_insurance_setting(company, year, data):
 
 	return {
 		"success": True,
-		"message": f"🎉【{company}】{year} 年度社保公积金配置保存成功！合计比例与薪酬测算已即时联动生效。",
+		"message": f"🎉【{company}】{year} 年度社保公积金配置保存成功！",
 		"doc": get_insurance_setting(company, year)
 	}
 
 
+
+
+@frappe.whitelist()
+def get_tax_setting(company="天津祺富机械加工有限公司", year=2026, period_month=None):
+    """读取个税参数。7级累计预扣税率为法定参数，仅展示、不允许从前端随意修改。"""
+    year = cint(year) or 2026
+    setting = get_insurance_setting(company, year)
+    threshold = flt(setting.get("tax_threshold")) or 5000.0
+    cycle_start_month = cint(setting.get("tax_cycle_start_month")) or 12
+    if cycle_start_month < 1 or cycle_start_month > 12:
+        cycle_start_month = 12
+
+    brackets = [
+        {"level": 1, "lower": 0, "upper": 36000, "rate": 3, "quick_deduction": 0},
+        {"level": 2, "lower": 36000, "upper": 144000, "rate": 10, "quick_deduction": 2520},
+        {"level": 3, "lower": 144000, "upper": 300000, "rate": 20, "quick_deduction": 16920},
+        {"level": 4, "lower": 300000, "upper": 420000, "rate": 25, "quick_deduction": 31920},
+        {"level": 5, "lower": 420000, "upper": 660000, "rate": 30, "quick_deduction": 52920},
+        {"level": 6, "lower": 660000, "upper": 960000, "rate": 35, "quick_deduction": 85920},
+        {"level": 7, "lower": 960000, "upper": None, "rate": 45, "quick_deduction": 181920},
+    ]
+    return {
+        "company": company,
+        "effective_year": year,
+        "tax_threshold": threshold,
+        "tax_cycle_start_month": cycle_start_month,
+        "tax_brackets": brackets,
+        "period_month": period_month or f"{year}-01",
+    }
+
+
+@frappe.whitelist()
+def save_tax_setting(company, year, tax_threshold, tax_cycle_start_month):
+    """仅保存个税参数，不触碰社保、公积金费率。"""
+    year = cint(year) or 2026
+    tax_threshold = flt(tax_threshold)
+    tax_cycle_start_month = cint(tax_cycle_start_month)
+    if tax_threshold <= 0:
+        frappe.throw("个税基本减除费用必须大于 0 元/月。")
+    if tax_cycle_start_month < 1 or tax_cycle_start_month > 12:
+        frappe.throw("个税申报周期起始月份必须为 1-12。")
+
+    setting_name = f"{company}-{year}"
+    if frappe.db.exists("Ashan Insurance Setting", setting_name):
+        doc = frappe.get_doc("Ashan Insurance Setting", setting_name)
+    else:
+        # 统一通过默认配置初始化，避免新建记录缺少社保/公积金必填项
+        get_insurance_setting(company, year)
+        doc = frappe.get_doc("Ashan Insurance Setting", setting_name)
+
+    doc.tax_threshold = tax_threshold
+    doc.tax_cycle_start_month = tax_cycle_start_month
+    doc.save(ignore_permissions=True)
+    frappe.db.commit()
+    return {
+        "success": True,
+        "message": f"【{company}】{year} 年个税参数已保存。重新核定未冻结月份后生效。",
+        "setting": get_tax_setting(company, year),
+    }

@@ -17,7 +17,7 @@ load_env_file()
 
 SITE_URL = "http://192.168.8.11:6888"
 ERPNEXT_USER = os.getenv('ERPNEXT_USER', 'Administrator')
-ERPNEXT_PASS = os.getenv('ERPNEXT_PASSWORD', 'admin')
+ERPNEXT_PASS = os.getenv('ERPNEXT_PASSWORD', '')
 
 async def run():
     async with async_playwright() as p:

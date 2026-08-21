@@ -969,7 +969,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 <div class="qifu-kpi-card" style="border-left: 4px solid #f59e0b;">
                     <div style="font-size:13px; font-weight:700; color:#92400e;">📉 扣除与减除费用总盘</div>
                     <div style="font-size:22px; font-weight:800; color:#d97706; margin-top:4px;" id="tax-kpi-ded">¥ 0.00</div>
-                    <div style="font-size:12px; color:#64748b;">5000起征 + 险金 + 专项附加扣除</div>
+                    <div style="font-size:12px; color:#64748b;">基本减除费用 + 险金 + 专项附加扣除</div>
                 </div>
                 <div class="qifu-kpi-card" style="border-left: 4px solid #059669;">
                     <div style="font-size:13px; font-weight:700; color:#065f46;">👥 纳税人数与申报期</div>
@@ -983,14 +983,14 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 <div class="qifu-toolbar-left">
                     <div class="btn-group btn-group-sm" role="group" style="margin-right:6px;">
                         <button type="button" class="btn btn-default btn-tax-view-mode active" data-mode="full_68" style="font-weight:700; font-size:12px; background:#2563eb; color:#fff; border-color:#2563eb;">
-                            📑 68列全量法定大宽表
+                            📑 VBA 68列完整核算台账
                         </button>
                         <button type="button" class="btn btn-default btn-tax-view-mode" data-mode="simple" style="font-weight:700; font-size:12px; background:#fff; color:#334155; border-color:#cbd5e1;">
                             ✨ 财税精简版 (15列)
                         </button>
                     </div>
                     <button class="btn btn-default btn-sm" id="btn-qifu-edit-tax-setting" style="color:#b45309; border-color:#fde68a; background:#fef3c7; font-weight:600;">
-                        ⚙️ 个税起征点、申报周期与 7 级税率表
+                        ⚙️ 个税参数设置
                     </button>
                     <button class="btn btn-default btn-sm" id="btn-tab5-recalc-tax" style="color:#2563eb; border-color:#93c5fd; font-weight:600;">
                         ⚡ 重新核定当月个税
@@ -1006,9 +1006,12 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 </div>
             </div>
 
-            <!-- 15 列标准个人所得税明细大表 (顶部同步滑条与自适应超宽视口) -->
+            <!-- 个税明细：顶部同步横向滚动条 + 自适应冻结视口 -->
+            <div id="tab5-top-scrollbar" class="qifu-top-scrollbar-wrapper" style="overflow-x:auto; overflow-y:hidden; height:14px; margin-bottom:4px;">
+                <div class="qifu-top-scrollbar-dummy" style="height:1px; width:1600px;"></div>
+            </div>
             <div class="qifu-table-box" id="tab5-table-box">
-                <table class="qifu-table table-bordered" id="table-tab5-tax-sheet" style="font-size:11.5px; margin-bottom:0; min-width:1600px;">
+                <table class="qifu-table table-bordered" id="table-tab5-tax-sheet" style="font-size:11.5px; margin-bottom:0; min-width:6200px;">
                     <thead>
                         <tr style="background:#f8fafc;">
                             <th class="qifu-col-sticky-1">序号</th>
@@ -1198,7 +1201,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         let total = list.length;
         let resigned = list.filter(e => e.is_resigned_this_month || e.employment_status === '离职').length;
         let insured = list.filter(e => (e.employee_type || '正式工') === '正式工' && !e.is_resigned_this_month && e.employment_status !== '离职').length;
-        let rehire = list.filter(e => ((e.employee_type || '') === '退休返聘' || (e.employee_type || '') === '返聘工') && !e.is_resigned_this_month && e.employment_status !== '离职').length;
+        let rehire = list.filter(e => ['退休返聘','返聘工','其他-返聘工'].includes(e.employee_type || '') && !e.is_resigned_this_month && e.employment_status !== '离职').length;
         let other = total - insured - rehire - resigned;
 
         $("#tab1-emp-total").text(total + ' 人');
@@ -1231,7 +1234,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     <td style="text-align:center; min-width:95px;">
                         ${isResigned ? `<span class="qifu-status-badge" style="background:#fee2e2; color:#b91c1c; font-weight:700; border:1px solid #fca5a5;" title="离职日期: ${emp.relieving_date || '当月'}">🚪 本月离职</span>` : `<span class="qifu-status-badge ${emp.employee_type === '正式工' ? 'qifu-status-locked' : 'qifu-status-draft'}">${emp.employee_type || '正式工'}</span>`}
                     </td>
-                    <td style="text-align:center; min-width:100px;">${emp.salary_mode || '固定一口价'}</td>
+                    <td style="text-align:center; min-width:100px;">${emp.salary_mode || '税后'}</td>
                     <td class="qifu-money-cell" style="font-weight:600; min-width:110px;">${fmtMoney(emp.fixed_salary)}</td>
                     <td class="qifu-money-cell" style="color:${isInsured ? '#2563eb' : '#94a3b8'}; font-weight:600; min-width:100px;">${fmtMoney(emp.social_security_base)}</td>
                     <td class="qifu-money-cell" style="color:${isHf ? '#059669' : '#94a3b8'}; font-weight:600; min-width:100px;">${fmtMoney(emp.housing_fund_base)}</td>
@@ -1460,8 +1463,9 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         });
     }
 
-    // 5. 加载 Tab 5: 个人所得税核定与申报台账 · 支持【✨ 财税精简版 (15列)】与【📑 68列全量法定大宽表】
+    // 5. 加载 Tab 5: 个人所得税核定与申报台账 · 支持【✨ 财税精简版 (15列)】与【📑 VBA 68列完整核算台账】
     function render_tax_simple_table(data, cur_m) {
+        $("#table-tab5-tax-sheet").css("min-width", "1900px");
         const rows = data.rows || [];
         const tot = data.totals || {};
 
@@ -1474,7 +1478,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             <th>用工性质</th>
             <th>发薪账期</th>
             <th style="background:#dbeafe; color:#1e40af;">本期税前收入</th>
-            <th>基本减除(5000×N)</th>
+            <th>累计基本减除费用</th>
             <th style="background:#fef3c7; color:#b45309;">本期社保扣除</th>
             <th style="background:#fef3c7; color:#b45309;">本期公积金扣除</th>
             <th style="background:#e0f2fe; color:#0369a1;">本期专项附加扣除</th>
@@ -1541,7 +1545,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             <td colspan="3" class="qifu-col-sticky-foot">合计 (${rows.length}人)</td>
             <td colspan="3" style="background:#f8fafc;"></td>
             <td class="qifu-money-cell" style="color:#2563eb; font-weight:700;">${fmtMoney(tot.gross_salary)}</td>
-            <td class="qifu-money-cell">-</td>
+            <td class="qifu-money-cell" style="font-weight:700;">${fmtMoney(tot.thresh_all || 0)}</td>
             <td class="qifu-money-cell" style="color:#d97706; font-weight:700;">${fmtMoney(tot_ss_val)}</td>
             <td class="qifu-money-cell" style="color:#d97706; font-weight:700;">${fmtMoney(tot_hf_val)}</td>
             <td class="qifu-money-cell" style="color:#0891b2; font-weight:700;">${fmtMoney(tot_spec_add_val)}</td>
@@ -1558,181 +1562,138 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         $("#tbody-tab5-tax-sheet").html(trs);
         $("#tfoot-tab5-tax-sheet").html(tfoot_html);
         adjust_active_table_height();
+        sync_dual_scrollbars($("#tab5-top-scrollbar"), $("#tab5-table-box"));
     }
 
     function render_tax_full_68_table(data, cur_m) {
+        $("#table-tab5-tax-sheet").css("min-width", "6200px");
         const rows = data.rows || [];
         const tot = data.totals || {};
+        const cols = [
+            // 员工基本信息 9
+            {k:'seq', l:'序号', g:'员工基本信息', t:'text'},
+            {k:'employee_no', l:'工号', g:'员工基本信息', t:'text'},
+            {k:'employee_name', l:'姓名', g:'员工基本信息', t:'name'},
+            {k:'id_card', l:'证件号码', g:'员工基本信息', t:'text'},
+            {k:'gender', l:'性别', g:'员工基本信息', t:'text'},
+            {k:'period_month_str', l:'本期所属期', g:'员工基本信息', t:'text'},
+            {k:'employee_type', l:'员工类型', g:'员工基本信息', t:'text'},
+            {k:'target_salary', l:'目标工资', g:'员工基本信息', t:'money'},
+            {k:'salary_mode', l:'工资类型', g:'员工基本信息', t:'text'},
+            // 工资扣除本月 5
+            {k:'gross_salary', l:'税前工资', g:'工资扣除(本月)', t:'money'},
+            {k:'thresh_cur', l:'起征点扣除', g:'工资扣除(本月)', t:'money'},
+            {k:'hf_person', l:'公积金', g:'工资扣除(本月)', t:'money'},
+            {k:'ss_person', l:'社保', g:'工资扣除(本月)', t:'money'},
+            {k:'deduct_cur_tot', l:'工资扣除合计', g:'工资扣除(本月)', t:'money'},
+            // 专项扣除本月 6
+            {k:'ss_pension', l:'基本养老', g:'专项扣除(本月)', t:'money'},
+            {k:'ss_med', l:'基本医疗', g:'专项扣除(本月)', t:'money'},
+            {k:'ss_large_med', l:'大额医疗', g:'专项扣除(本月)', t:'money'},
+            {k:'ss_unemp', l:'失业保险', g:'专项扣除(本月)', t:'money'},
+            {k:'hf_spec', l:'住房公积金', g:'专项扣除(本月)', t:'money'},
+            {k:'spec_tot_cur', l:'专项扣除合计', g:'专项扣除(本月)', t:'money'},
+            // 专项附加本月 8
+            {k:'spec_add_child', l:'子女教育', g:'专项附加扣除(本月)', t:'money'},
+            {k:'spec_add_edu', l:'继续教育', g:'专项附加扣除(本月)', t:'money'},
+            {k:'spec_add_med', l:'大病医疗', g:'专项附加扣除(本月)', t:'money'},
+            {k:'spec_add_loan', l:'住房贷款利息', g:'专项附加扣除(本月)', t:'money'},
+            {k:'spec_add_rent', l:'住房租金', g:'专项附加扣除(本月)', t:'money'},
+            {k:'spec_add_elder', l:'赡养老人', g:'专项附加扣除(本月)', t:'money'},
+            {k:'spec_add_baby', l:'3岁以下婴幼儿照护', g:'专项附加扣除(本月)', t:'money'},
+            {k:'spec_add_tot_cur', l:'专项附加扣除合计', g:'专项附加扣除(本月)', t:'money'},
+            // 往期 16
+            {k:'gross_prior', l:'税前工资', g:'个税累计(往期)', t:'money'},
+            {k:'thresh_prior', l:'起征点扣除', g:'个税累计(往期)', t:'money'},
+            {k:'ss_pension_prior', l:'基本养老', g:'专项扣除(往期)', t:'money'},
+            {k:'ss_med_prior', l:'基本医疗', g:'专项扣除(往期)', t:'money'},
+            {k:'ss_large_med_prior', l:'大额医疗', g:'专项扣除(往期)', t:'money'},
+            {k:'ss_unemp_prior', l:'失业保险', g:'专项扣除(往期)', t:'money'},
+            {k:'hf_spec_prior', l:'住房公积金', g:'专项扣除(往期)', t:'money'},
+            {k:'spec_tot_prior', l:'专项扣除合计', g:'专项扣除(往期)', t:'money'},
+            {k:'spec_add_child_prior', l:'子女教育', g:'专项附加扣除(往期)', t:'money'},
+            {k:'spec_add_edu_prior', l:'继续教育', g:'专项附加扣除(往期)', t:'money'},
+            {k:'spec_add_med_prior', l:'大病医疗', g:'专项附加扣除(往期)', t:'money'},
+            {k:'spec_add_loan_prior', l:'住房贷款利息', g:'专项附加扣除(往期)', t:'money'},
+            {k:'spec_add_rent_prior', l:'住房租金', g:'专项附加扣除(往期)', t:'money'},
+            {k:'spec_add_elder_prior', l:'赡养老人', g:'专项附加扣除(往期)', t:'money'},
+            {k:'spec_add_baby_prior', l:'3岁以下婴幼儿照护', g:'专项附加扣除(往期)', t:'money'},
+            {k:'spec_add_tot_prior', l:'专项附加扣除合计', g:'专项附加扣除(往期)', t:'money'},
+            // 全部 16
+            {k:'gross_all', l:'个税_税前工资', g:'个税累计(全部)', t:'money'},
+            {k:'thresh_all', l:'起征点扣除', g:'个税累计(全部)', t:'money'},
+            {k:'ss_pension_all', l:'基本养老', g:'专项扣除(全部)', t:'money'},
+            {k:'ss_med_all', l:'基本医疗', g:'专项扣除(全部)', t:'money'},
+            {k:'ss_large_med_all', l:'大额医疗', g:'专项扣除(全部)', t:'money'},
+            {k:'ss_unemp_all', l:'失业保险', g:'专项扣除(全部)', t:'money'},
+            {k:'hf_spec_all', l:'住房公积金', g:'专项扣除(全部)', t:'money'},
+            {k:'spec_tot_all', l:'专项扣除合计', g:'专项扣除(全部)', t:'money'},
+            {k:'spec_add_child_all', l:'子女教育', g:'专项附加扣除(全部)', t:'money'},
+            {k:'spec_add_edu_all', l:'继续教育', g:'专项附加扣除(全部)', t:'money'},
+            {k:'spec_add_med_all', l:'大病医疗', g:'专项附加扣除(全部)', t:'money'},
+            {k:'spec_add_loan_all', l:'住房贷款利息', g:'专项附加扣除(全部)', t:'money'},
+            {k:'spec_add_rent_all', l:'住房租金', g:'专项附加扣除(全部)', t:'money'},
+            {k:'spec_add_elder_all', l:'赡养老人', g:'专项附加扣除(全部)', t:'money'},
+            {k:'spec_add_baby_all', l:'3岁以下婴幼儿照护', g:'专项附加扣除(全部)', t:'money'},
+            {k:'spec_add_tot_all', l:'专项附加扣除合计', g:'专项附加扣除(全部)', t:'money'},
+            // 税款 8
+            {k:'taxable_all', l:'应纳税所得额', g:'税款计算', t:'money'},
+            {k:'tax_rate', l:'税率', g:'税款计算', t:'percent'},
+            {k:'quick_deduct', l:'速算扣除数', g:'税款计算', t:'money'},
+            {k:'tax_calculated', l:'应纳税额', g:'税款计算', t:'money'},
+            {k:'tax_relief', l:'减免税额', g:'税款计算', t:'money'},
+            {k:'tax_paid_prior', l:'已缴税额', g:'税款计算', t:'money'},
+            {k:'tax_current', l:'应补/退税额', g:'税款计算', t:'money'},
+            {k:'net_salary', l:'税后工资', g:'税款计算', t:'money'}
+        ];
 
-        let thead_html = `
-        <tr style="background:#f8fafc; text-align:center; font-size:11px;">
-            <!-- 1. 员工基本信息 (前3列左侧冻结) -->
-            <th class="qifu-col-sticky-1" style="vertical-align:middle; font-weight:700;">序号</th>
-            <th class="qifu-col-sticky-2" style="vertical-align:middle; font-weight:700;">工号</th>
-            <th class="qifu-col-sticky-3" style="vertical-align:middle; font-weight:700;">姓名</th>
-            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">员工信息</div><div>证件号码</div></th>
-            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">员工信息</div><div>性别</div></th>
-            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">员工信息</div><div>所属期</div></th>
-            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">员工信息</div><div>员工类型</div></th>
-            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">员工信息</div><div>目标工资</div></th>
-            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">员工信息</div><div>工资类型</div></th>
+        const groupStyle = {
+            '员工基本信息':'#f5f3ff', '工资扣除(本月)':'#fffbeb', '专项扣除(本月)':'#f0fdf4',
+            '专项附加扣除(本月)':'#f0f9ff', '个税累计(往期)':'#faf5ff', '专项扣除(往期)':'#faf5ff',
+            '专项附加扣除(往期)':'#faf5ff', '个税累计(全部)':'#fff7ed', '专项扣除(全部)':'#fff7ed',
+            '专项附加扣除(全部)':'#fff7ed', '税款计算':'#fef2f2'
+        };
+        const stickyClass = idx => idx === 0 ? 'qifu-col-sticky-1' : (idx === 1 ? 'qifu-col-sticky-2' : (idx === 2 ? 'qifu-col-sticky-3' : ''));
+        const head = `<tr>${cols.map((c,i) => `<th class="${stickyClass(i)}" style="background:${groupStyle[c.g] || '#f8fafc'}; text-align:center; vertical-align:middle; min-width:${i===2?110:(i===3?150:92)}px;">
+            <div style="font-size:9px; color:#64748b; font-weight:600; white-space:nowrap;">${c.g}</div><div style="font-weight:700; white-space:nowrap;">${c.l}</div>
+        </th>`).join('')}</tr>`;
 
-            <!-- 2. 工资扣除 (本月) -->
-            <th style="background:#fffbeb;"><div style="font-size:9.5px; color:#b45309; font-weight:600;">工资扣除</div><div style="color:#1e40af; font-weight:700;">税前工资</div></th>
-            <th style="background:#fffbeb;"><div style="font-size:9.5px; color:#b45309; font-weight:600;">工资扣除</div><div>起征点扣除</div></th>
-            <th style="background:#fffbeb;"><div style="font-size:9.5px; color:#b45309; font-weight:600;">工资扣除</div><div>公积金</div></th>
-            <th style="background:#fffbeb;"><div style="font-size:9.5px; color:#b45309; font-weight:600;">工资扣除</div><div>社保</div></th>
-            <th style="background:#fef3c7;"><div style="font-size:9.5px; color:#92400e; font-weight:700;">工资扣除</div><div style="color:#92400e; font-weight:700;">扣除合计</div></th>
+        const renderValue = (c, r, i) => {
+            const v = r[c.k];
+            if (c.t === 'name') return `<a href="javascript:void(0);" class="btn-drill-emp-history" data-emp="${r.employee_no}" style="color:#2563eb; font-weight:700;">${v || '-'}</a>`;
+            if (c.t === 'money') return fmtMoney(v || 0);
+            if (c.t === 'percent') return `${Number(v || 0).toFixed(2).replace(/\.00$/,'')}%`;
+            return (v === null || v === undefined || v === '') ? '-' : v;
+        };
 
-            <!-- 3. 专项扣除 (本月五险一金) -->
-            <th style="background:#f0fdf4;"><div style="font-size:9.5px; color:#15803d; font-weight:600;">专项扣除</div><div>基本养老</div></th>
-            <th style="background:#f0fdf4;"><div style="font-size:9.5px; color:#15803d; font-weight:600;">专项扣除</div><div>基本医疗</div></th>
-            <th style="background:#f0fdf4;"><div style="font-size:9.5px; color:#15803d; font-weight:600;">专项扣除</div><div>大额医疗</div></th>
-            <th style="background:#f0fdf4;"><div style="font-size:9.5px; color:#15803d; font-weight:600;">专项扣除</div><div>失业保险</div></th>
-            <th style="background:#f0fdf4;"><div style="font-size:9.5px; color:#15803d; font-weight:600;">专项扣除</div><div>住房公积金</div></th>
-            <th style="background:#dcfce7;"><div style="font-size:9.5px; color:#166534; font-weight:700;">专项扣除</div><div style="color:#166534; font-weight:700;">专项合计</div></th>
-
-            <!-- 4. 专项附加扣除 (本月7项) -->
-            <th style="background:#f0f9ff;"><div style="font-size:9.5px; color:#0369a1; font-weight:600;">专项附加</div><div>子女教育</div></th>
-            <th style="background:#f0f9ff;"><div style="font-size:9.5px; color:#0369a1; font-weight:600;">专项附加</div><div>继续教育</div></th>
-            <th style="background:#f0f9ff;"><div style="font-size:9.5px; color:#0369a1; font-weight:600;">专项附加</div><div>大病医疗</div></th>
-            <th style="background:#f0f9ff;"><div style="font-size:9.5px; color:#0369a1; font-weight:600;">专项附加</div><div>房贷利息</div></th>
-            <th style="background:#f0f9ff;"><div style="font-size:9.5px; color:#0369a1; font-weight:600;">专项附加</div><div>住房租金</div></th>
-            <th style="background:#f0f9ff;"><div style="font-size:9.5px; color:#0369a1; font-weight:600;">专项附加</div><div>赡养老人</div></th>
-            <th style="background:#f0f9ff;"><div style="font-size:9.5px; color:#0369a1; font-weight:600;">专项附加</div><div>婴幼儿照护</div></th>
-            <th style="background:#e0f2fe;"><div style="font-size:9.5px; color:#0369a1; font-weight:700;">专项附加</div><div style="color:#0369a1; font-weight:700;">附加合计</div></th>
-
-            <!-- 5. 往期累计 (申报周期) -->
-            <th style="background:#faf5ff;"><div style="font-size:9.5px; color:#7e22ce; font-weight:600;">往期累计</div><div>税前工资</div></th>
-            <th style="background:#faf5ff;"><div style="font-size:9.5px; color:#7e22ce; font-weight:600;">往期累计</div><div>起征点</div></th>
-            <th style="background:#faf5ff;"><div style="font-size:9.5px; color:#7e22ce; font-weight:600;">往期累计</div><div>专项扣除</div></th>
-            <th style="background:#faf5ff;"><div style="font-size:9.5px; color:#7e22ce; font-weight:600;">往期累计</div><div>专项附加</div></th>
-
-            <!-- 6. 全部累计 (往期+本月) -->
-            <th style="background:#fff7ed;"><div style="font-size:9.5px; color:#c2410c; font-weight:600;">全部累计</div><div>税前工资</div></th>
-            <th style="background:#fff7ed;"><div style="font-size:9.5px; color:#c2410c; font-weight:600;">全部累计</div><div>起征点</div></th>
-            <th style="background:#fff7ed;"><div style="font-size:9.5px; color:#c2410c; font-weight:600;">全部累计</div><div>专项扣除</div></th>
-            <th style="background:#fff7ed;"><div style="font-size:9.5px; color:#c2410c; font-weight:600;">全部累计</div><div>专项附加</div></th>
-
-            <!-- 7. 税款计算与实发 -->
-            <th style="background:#fff7ed;"><div style="font-size:9.5px; color:#9a3412; font-weight:700;">税款实发</div><div style="color:#9a3412; font-weight:800;">累计应税所得</div></th>
-            <th style="background:#fef2f2;"><div style="font-size:9.5px; color:#dc2626; font-weight:600;">税款实发</div><div>预扣率</div></th>
-            <th style="background:#fef2f2;"><div style="font-size:9.5px; color:#dc2626; font-weight:600;">税款实发</div><div>速算扣除数</div></th>
-            <th style="background:#fef2f2;"><div style="font-size:9.5px; color:#dc2626; font-weight:600;">税款实发</div><div>累计应纳税额</div></th>
-            <th style="background:#fef2f2;"><div style="font-size:9.5px; color:#dc2626; font-weight:600;">税款实发</div><div>减免税额</div></th>
-            <th style="background:#fef2f2;"><div style="font-size:9.5px; color:#dc2626; font-weight:600;">税款实发</div><div>往期已缴税额</div></th>
-            <th style="background:#fee2e2;"><div style="font-size:9.5px; color:#b91c1c; font-weight:800;">税款实发</div><div style="color:#dc2626; font-weight:800;">应补/退税额</div></th>
-            <th style="background:#dcfce7;"><div style="font-size:9.5px; color:#15803d; font-weight:800;">税款实发</div><div style="color:#166534; font-weight:800;">税后工资</div></th>
-        </tr>
-        `;
-
-        let trs = '';
-        if (rows.length === 0) {
-            trs = `<tr><td colspan="44" style="text-align:center; padding:30px; color:#94a3b8;">当前账期【${cur_m}】暂无 68 列法定个税数据。</td></tr>`;
+        let body = '';
+        if (!rows.length) {
+            body = `<tr><td colspan="68" style="text-align:center; padding:30px; color:#94a3b8;">当前账期【${cur_m}】暂无个税台账数据。</td></tr>`;
         } else {
-            rows.forEach(r => {
-                trs += `
-                <tr style="font-size:11px;">
-                    <td class="qifu-col-sticky-1" style="text-align:center; color:#94a3b8;">${r.seq}</td>
-                    <td class="qifu-col-sticky-2" style="text-align:center;"><strong>${r.employee_no}</strong></td>
-                    <td class="qifu-col-sticky-3">
-                        <a href="javascript:void(0);" class="btn-drill-emp-history" data-emp="${r.employee_no}" style="color:#2563eb; font-weight:700;">
-                            ${r.employee_name}
-                        </a>
-                    </td>
-                    <td style="text-align:center; font-family:monospace; font-size:10px;">${r.id_card || '-'}</td>
-                    <td style="text-align:center;">${r.gender || '-'}</td>
-                    <td style="text-align:center;">${r.period_month_str}</td>
-                    <td style="text-align:center;">${r.employee_type}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.target_salary)}</td>
-                    <td style="text-align:center;">${r.salary_mode}</td>
-
-                    <!-- 2. 工资扣除 (本月) -->
-                    <td class="qifu-money-cell" style="color:#2563eb; font-weight:600;">${fmtMoney(r.gross_salary)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.thresh_cur)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.hf_person)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.ss_person)}</td>
-                    <td class="qifu-money-cell" style="color:#b45309; font-weight:600;">${fmtMoney(r.deduct_cur_tot)}</td>
-
-                    <!-- 3. 专项扣除 (本月) -->
-                    <td class="qifu-money-cell">${fmtMoney(r.ss_pension)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.ss_med)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.ss_large_med)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.ss_unemp)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.hf_spec)}</td>
-                    <td class="qifu-money-cell" style="color:#166534; font-weight:600;">${fmtMoney(r.spec_tot_cur)}</td>
-
-                    <!-- 4. 专项附加扣除 (本月) -->
-                    <td class="qifu-money-cell">${fmtMoney(r.spec_add_child)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.spec_add_edu)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.spec_add_med)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.spec_add_loan)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.spec_add_rent)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.spec_add_elder)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.spec_add_baby)}</td>
-                    <td class="qifu-money-cell" style="color:#0369a1; font-weight:600;">${fmtMoney(r.spec_add_tot_cur)}</td>
-
-                    <!-- 5. 往期累计 -->
-                    <td class="qifu-money-cell">${fmtMoney(r.gross_prior)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.thresh_prior)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.spec_tot_prior)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.spec_add_tot_prior)}</td>
-
-                    <!-- 6. 全部累计 -->
-                    <td class="qifu-money-cell" style="font-weight:600;">${fmtMoney(r.gross_all)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.thresh_all)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.spec_tot_all)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.spec_add_tot_all)}</td>
-
-                    <!-- 7. 税款计算 -->
-                    <td class="qifu-money-cell" style="color:#9a3412; font-weight:700; background:#fff7ed;">${fmtMoney(r.taxable_all)}</td>
-                    <td style="text-align:center; font-weight:700;">${r.tax_rate}%</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.quick_deduct)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.tax_calculated)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.tax_relief)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(r.tax_paid_prior)}</td>
-                    <td class="qifu-money-cell" style="color:${r.tax_current > 0 ? '#dc2626' : '#166534'}; font-weight:800; font-size:12px; background:${r.tax_current > 0 ? '#fef2f2' : 'transparent'};">
-                        ${fmtMoney(r.tax_current)}
-                    </td>
-                    <td class="qifu-money-cell" style="color:#166534; font-weight:800; font-size:12px;">${fmtMoney(r.net_salary)}</td>
-                </tr>
-                `;
-            });
+            body = rows.map(r => `<tr>${cols.map((c,i) => {
+                const moneyCls = c.t === 'money' ? 'qifu-money-cell' : '';
+                let extra = '';
+                if (c.k === 'tax_current') extra = `color:${Number(r.tax_current||0)>0?'#dc2626':'#166534'}; font-weight:800;`;
+                if (c.k === 'net_salary') extra = 'color:#166534; font-weight:800;';
+                if (c.k === 'taxable_all') extra = 'color:#9a3412; font-weight:700;';
+                return `<td class="${stickyClass(i)} ${moneyCls}" style="${extra}">${renderValue(c,r,i)}</td>`;
+            }).join('')}</tr>`).join('');
         }
 
-        let tfoot_html = `
-        <tr style="font-size:11px; font-weight:700;">
-            <td colspan="3" class="qifu-col-sticky-foot">合计 (${rows.length}人)</td>
-            <td colspan="6" style="background:#f8fafc;"></td>
-            <td class="qifu-money-cell" style="color:#2563eb;">${fmtMoney(tot.gross_salary)}</td>
-            <td class="qifu-money-cell">${fmtMoney(tot.thresh_cur)}</td>
-            <td class="qifu-money-cell">${fmtMoney(tot.hf_cur)}</td>
-            <td class="qifu-money-cell">${fmtMoney(tot.ss_cur)}</td>
-            <td class="qifu-money-cell" style="color:#b45309;">${fmtMoney(tot.deduct_cur)}</td>
-            <td colspan="6" class="qifu-money-cell" style="color:#166534;">${fmtMoney(tot.spec_tot_cur)}</td>
-            <td colspan="8" class="qifu-money-cell" style="color:#0369a1;">${fmtMoney(tot.spec_add_tot_cur)}</td>
-            <td class="qifu-money-cell">${fmtMoney(tot.gross_prior)}</td>
-            <td class="qifu-money-cell">${fmtMoney(tot.thresh_prior)}</td>
-            <td class="qifu-money-cell">${fmtMoney(tot.spec_tot_prior)}</td>
-            <td class="qifu-money-cell">${fmtMoney(tot.spec_add_tot_prior)}</td>
-            <td class="qifu-money-cell">${fmtMoney(tot.gross_all)}</td>
-            <td class="qifu-money-cell">${fmtMoney(tot.thresh_all)}</td>
-            <td class="qifu-money-cell">${fmtMoney(tot.spec_tot_all)}</td>
-            <td class="qifu-money-cell">${fmtMoney(tot.spec_add_tot_all)}</td>
-            <td class="qifu-money-cell" style="color:#9a3412;">${fmtMoney(tot.taxable_all)}</td>
-            <td>-</td><td>-</td>
-            <td class="qifu-money-cell">${fmtMoney(tot.tax_calculated)}</td>
-            <td>-</td>
-            <td class="qifu-money-cell">${fmtMoney(tot.tax_paid_prior)}</td>
-            <td class="qifu-money-cell" style="color:#dc2626; font-size:12px;">${fmtMoney(tot.tax_current)}</td>
-            <td class="qifu-money-cell" style="color:#166534; font-size:12px;">${fmtMoney(tot.net_salary)}</td>
-        </tr>
-        `;
+        const totalValue = c => {
+            if (c.k === 'seq') return '合计';
+            if (c.k === 'employee_no') return `共 ${rows.length} 人`;
+            if (['employee_name','id_card','gender','period_month_str','employee_type','salary_mode','tax_rate','quick_deduct'].includes(c.k)) return '';
+            if (c.t === 'money') return fmtMoney(tot[c.k] || 0);
+            return '';
+        };
+        const foot = `<tr>${cols.map((c,i) => `<td class="${stickyClass(i)} ${c.t==='money'?'qifu-money-cell':''}" style="font-weight:700; background:#f8fafc;">${totalValue(c)}</td>`).join('')}</tr>`;
 
-        $("#table-tab5-tax-sheet thead").html(thead_html);
-        $("#tbody-tab5-tax-sheet").html(trs);
-        $("#tfoot-tab5-tax-sheet").html(tfoot_html);
+        $("#table-tab5-tax-sheet thead").html(head);
+        $("#tbody-tab5-tax-sheet").html(body);
+        $("#tfoot-tab5-tax-sheet").html(foot);
         adjust_active_table_height();
+        sync_dual_scrollbars($("#tab5-top-scrollbar"), $("#tab5-table-box"));
     }
 
     function load_tax_settlement_tab() {
@@ -1747,7 +1708,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     const tot = data.totals || {};
                     $("#tax-kpi-total").text(fmtMoney(tot.tax_amount || tot.current_tax || 0));
                     $("#tax-kpi-gross").text(fmtMoney(tot.gross_salary));
-                    $("#tax-kpi-ded").text(fmtMoney((tot.tax_threshold || 5000) + (tot.ss_person_total || 0) + (tot.hf_person_total || 0) + (tot.special_deductions_total || 0)));
+                    $("#tax-kpi-ded").text(fmtMoney((tot.thresh_cur || 0) + (tot.spec_tot_cur || 0) + (tot.spec_add_tot_cur || 0)));
                     $("#tax-kpi-count").text(`${data.rows ? data.rows.length : 0} 人`);
                     $("#tax-kpi-period").text(`所属发薪账期: ${cur_m}`);
                     render_tax_simple_table(data, cur_m);
@@ -1763,7 +1724,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     const tot = data.totals || {};
                     $("#tax-kpi-total").text(fmtMoney(tot.tax_current));
                     $("#tax-kpi-gross").text(fmtMoney(tot.gross_salary));
-                    $("#tax-kpi-ded").text(fmtMoney(tot.deduct_cur));
+                    $("#tax-kpi-ded").text(fmtMoney((tot.thresh_cur || 0) + (tot.spec_tot_cur || 0) + (tot.spec_add_tot_cur || 0)));
                     $("#tax-kpi-count").text(`${data.rows ? data.rows.length : 0} 人`);
                     $("#tax-kpi-period").text(`所属发薪账期: ${cur_m} (第 ${data.month_idx || 1} 个月)`);
                     render_tax_full_68_table(data, cur_m);
@@ -1868,15 +1829,15 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     function open_insurance_edit_dialog() {
         frappe.call({
             method: 'ashan_cn_procurement.services.employee_salary_service.get_insurance_setting',
-            args: { company: COMPANY },
+            args: { company: COMPANY, year: (current_month.split("-")[0] || 2026) },
             callback: function(r) {
                 if (!r.message) return;
-                const ins = r.message.setting || {};
+                const ins = r.message.setting || r.message || {};
                 cached_insurance_setting = ins;
                 const year = current_month.split("-")[0] || 2026;
 
                 const d = new frappe.ui.Dialog({
-                    title: `⚙️ 修改【${COMPANY}】${year} 年度社保公积金与个税配置`,
+                    title: `⚙️ 修改【${COMPANY}】${year} 年度社保公积金配置`,
                     size: 'large',
                     fields: [
                         { fieldtype: 'Section Break', label: '🏢 单位社保缴费比例 (%)' },
@@ -1894,14 +1855,13 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         { fieldname: 'big_medical_amount_special', fieldtype: 'Currency', label: '大额医疗特殊月份金额 (元/月)', default: ins.big_medical_amount_special || 21.0, reqd: 1 },
                         { fieldname: 'big_medical_special_months', fieldtype: 'Data', label: '特殊金额生效月份 (如: 3,12)', default: ins.big_medical_special_months || '3,12', reqd: 1 },
 
-                        { fieldtype: 'Section Break', label: '🏠 住房公积金与基数起征点' },
+                        { fieldtype: 'Section Break', label: '🏠 住房公积金与缴费基数' },
                         { fieldname: 'hf_company_rate', fieldtype: 'Percent', label: '单位公积金比例 (%)', default: ins.hf_company_rate || 5.0, reqd: 1 },
                         { fieldname: 'hf_person_rate', fieldtype: 'Percent', label: '个人公积金比例 (%)', default: ins.hf_person_rate || 5.0, reqd: 1 },
                         { fieldname: 'ss_min_base', fieldtype: 'Currency', label: '社保最低缴费基数 (元)', default: ins.ss_min_base || 5013.0, reqd: 1 },
-                        { fieldname: 'hf_min_base', fieldtype: 'Currency', label: '公积金最低缴费基数 (元)', default: ins.hf_min_base || 2320.0, reqd: 1 },
-                        { fieldname: 'tax_threshold', fieldtype: 'Currency', label: '个税起征点 (元/月)', default: ins.tax_threshold || 5000.0, reqd: 1 }
+                        { fieldname: 'hf_min_base', fieldtype: 'Currency', label: '公积金最低缴费基数 (元)', default: ins.hf_min_base || 2320.0, reqd: 1 }
                     ],
-                    primary_action_label: '💾 保存配置并即时生效',
+                    primary_action_label: '💾 保存社保公积金配置',
                     primary_action(values) {
                         frappe.call({
                             method: 'ashan_cn_procurement.services.employee_salary_service.save_insurance_setting',
@@ -1924,6 +1884,85 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     }
                 });
                 d.show();
+            }
+        });
+    }
+
+    // 个税参数设置：与社保/公积金配置彻底分离，法定7级税率仅展示
+    function open_tax_setting_dialog() {
+        const cur_m = $("#qifu-month-select").val() || current_month;
+        const year = parseInt((cur_m || current_month).split("-")[0], 10) || 2026;
+        frappe.call({
+            method: 'ashan_cn_procurement.services.employee_salary_service.get_tax_setting',
+            args: { company: COMPANY, year: year, period_month: cur_m },
+            callback: function(r) {
+                if (!r.message) return;
+                const cfg = r.message;
+                const brackets = cfg.tax_brackets || [];
+                const bracketRows = brackets.map(b => {
+                    const rangeText = b.upper === null
+                        ? `超过 ${Number(b.lower || 0).toLocaleString()} 元`
+                        : `${Number(b.lower || 0).toLocaleString()} - ${Number(b.upper || 0).toLocaleString()} 元`;
+                    return `<tr>
+                        <td style="text-align:center;">${b.level}</td>
+                        <td>${rangeText}</td>
+                        <td style="text-align:center; font-weight:700;">${b.rate}%</td>
+                        <td class="qifu-money-cell">${fmtMoney(b.quick_deduction)}</td>
+                    </tr>`;
+                }).join('');
+
+                const d = new frappe.ui.Dialog({
+                    title: `⚙️ 个税参数设置 · ${year} 年`,
+                    size: 'large',
+                    fields: [
+                        { fieldtype: 'Section Break', label: '基础参数' },
+                        { fieldname: 'tax_threshold', fieldtype: 'Currency', label: '基本减除费用（元/月）', default: cfg.tax_threshold || 5000, reqd: 1,
+                          description: '用于累计预扣预缴反推。修改后仅在未冻结月份重新核定时生效。' },
+                        { fieldname: 'tax_cycle_start_month', fieldtype: 'Int', label: '申报累计周期起始月', default: cfg.tax_cycle_start_month || 12, reqd: 1,
+                          description: '现行祺富工资所属期口径默认 12：即上年12月至本年11月。' },
+                        { fieldtype: 'Section Break', label: '7级累计预扣税率表（法定只读）' },
+                        { fieldname: 'tax_bracket_preview', fieldtype: 'HTML' }
+                    ],
+                    primary_action_label: '💾 保存个税参数',
+                    primary_action(values) {
+                        const cycleMonth = parseInt(values.tax_cycle_start_month, 10);
+                        if (!cycleMonth || cycleMonth < 1 || cycleMonth > 12) {
+                            frappe.msgprint('申报累计周期起始月必须为 1-12。');
+                            return;
+                        }
+                        frappe.call({
+                            method: 'ashan_cn_procurement.services.employee_salary_service.save_tax_setting',
+                            args: {
+                                company: COMPANY,
+                                year: year,
+                                tax_threshold: values.tax_threshold,
+                                tax_cycle_start_month: cycleMonth
+                            },
+                            callback: function(res) {
+                                if (res.message && res.message.success) {
+                                    frappe.show_alert({ message: res.message.message, indicator: 'green' });
+                                    d.hide();
+                                    load_tax_settlement_tab();
+                                }
+                            }
+                        });
+                    }
+                });
+                d.show();
+                const $html = d.fields_dict.tax_bracket_preview.$wrapper;
+                $html.html(`
+                    <div style="font-size:12px; color:#64748b; margin-bottom:8px;">
+                        税率与速算扣除数属于法定参数，系统固定用于计算，不与社保费率混在同一设置中。
+                    </div>
+                    <div style="max-height:280px; overflow:auto; border:1px solid #e2e8f0; border-radius:6px;">
+                        <table class="table table-bordered" style="margin:0; font-size:12px;">
+                            <thead style="position:sticky; top:0; background:#f8fafc; z-index:1;">
+                                <tr><th style="width:60px;">级数</th><th>累计应纳税所得额</th><th style="width:90px;">预扣率</th><th style="width:130px;">速算扣除数</th></tr>
+                            </thead>
+                            <tbody>${bracketRows}</tbody>
+                        </table>
+                    </div>
+                `);
             }
         });
     }
@@ -2257,11 +2296,11 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 { fieldtype: 'Data', fieldname: 'employee_name', label: '员工姓名', reqd: 1, default: emp_data ? emp_data.employee_name : '' },
                 { fieldtype: 'Column Break' },
                 { fieldtype: 'Data', fieldname: 'id_card', label: '身份证号码', default: emp_data ? emp_data.id_card : '' },
-                { fieldtype: 'Select', fieldname: 'employee_type', label: '用工性质', options: ['正式工', '退休返聘', '临时工', '外籍工', '劳务派遣'], default: emp_data ? emp_data.employee_type : '正式工' },
+                { fieldtype: 'Select', fieldname: 'employee_type', label: '用工性质', options: ['正式工', '返聘工', '退休返聘', '其他-返聘工', '外籍工', '临时工', '实习生', '劳务派遣', '本月离职'], default: emp_data ? emp_data.employee_type : '正式工' },
                 { fieldtype: 'Data', fieldname: 'job_title', label: '岗位职务', default: emp_data ? emp_data.job_title : '操作工' },
 
                 { fieldtype: 'Section Break', label: '薪资与津贴设定' },
-                { fieldtype: 'Select', fieldname: 'salary_mode', label: '计薪方式', options: ['固定一口价', '出勤+加班+达标率(车间实发)', '固定月薪+补贴'], default: emp_data ? emp_data.salary_mode : '固定一口价' },
+                { fieldtype: 'Select', fieldname: 'salary_mode', label: '计薪方式', options: ['税后', '税前', '税前动态工资', '税后管理工资'], default: emp_data ? emp_data.salary_mode : '税后' },
                 { fieldtype: 'Currency', fieldname: 'fixed_salary', label: '固定/车间薪资基准 (元)', default: emp_data ? emp_data.fixed_salary : 0 },
                 { fieldtype: 'Column Break' },
                 { fieldtype: 'Currency', fieldname: 'post_allowance', label: '职位补贴 (元/月)', default: emp_data ? emp_data.post_allowance : 0 },
@@ -3752,7 +3791,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             `<strong>【⚡ 一键全员社保 (最低基数 5124元)】</strong><br><br>
             规则说明：<br>
             1. 将所有用工性质为【正式工】的员工社保基数一键设为最低基数 5,124.00 元；<br>
-            2. 退休返聘人员与临时工保持 0 元。<br><br>
+            2. 临时工不进入个税申报台账；返聘工、退休返聘及其他-返聘工按累计预扣口径参与个税。<br><br>
             确认执行吗？`,
             function() {
                 frappe.call({
@@ -3926,8 +3965,11 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     });
 
     // 7. 社保/公积金 Tab 导出、打印与配置修改
-    $container.on("click", "#btn-qifu-edit-ss-setting, #btn-qifu-edit-hf-setting, #btn-qifu-edit-tax-setting", function() {
+    $container.on("click", "#btn-qifu-edit-ss-setting, #btn-qifu-edit-hf-setting", function() {
         open_insurance_edit_dialog();
+    });
+    $container.on("click", "#btn-qifu-edit-tax-setting", function() {
+        open_tax_setting_dialog();
     });
     $container.on("click", "#btn-tab3-export-ss", function() { export_excel_action("insurance"); });
     $container.on("click", "#btn-tab3-print-ss", function() {
@@ -4030,8 +4072,22 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     });
 
     $container.on("click", "#btn-tab5-recalc-tax", function() {
-        load_tax_settlement_tab();
-        frappe.show_alert({ message: '✅ 个税台账已依据最新社保公积金与专项附加扣除重新核定完成！', indicator: 'green' });
+        const $btn = $(this);
+        const cur_m = $("#qifu-month-select").val() || current_month;
+        $btn.prop("disabled", true).text("⏳ 正在重新核定...");
+        frappe.call({
+            method: 'ashan_cn_procurement.services.payroll_settlement_service.recalculate_and_save_monthly_tax',
+            args: { company: COMPANY, period_month: cur_m },
+            callback: function(r) {
+                if (r.message && r.message.success) {
+                    frappe.show_alert({ message: r.message.message, indicator: 'green' });
+                    load_tax_settlement_tab();
+                }
+            },
+            always: function() {
+                $btn.prop("disabled", false).text("⚡ 重新核定当月个税");
+            }
+        });
     });
     $container.on("click", "#btn-tab5-export-tax", function() { export_excel_action("tax"); });
     $container.on("click", "#btn-tab5-print-tax", function() {

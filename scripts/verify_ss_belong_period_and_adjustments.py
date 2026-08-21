@@ -11,7 +11,7 @@ load_dotenv(r"d:\SynologyDrive团队\antigravity\erpnext16\.env")
 
 SITE_URL = os.getenv('ERPNEXT_SITE_URL', 'http://192.168.8.11:6888')
 USERNAME = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
-USER_PWD = os.getenv('ERPNEXT_PASSWORD', 'Woo@@@204317')
+USER_PWD = os.getenv('ERPNEXT_PASSWORD', '')
 
 session = requests.Session()
 session.post(f"{SITE_URL}/api/method/login", data={"usr": USERNAME, "pwd": USER_PWD})

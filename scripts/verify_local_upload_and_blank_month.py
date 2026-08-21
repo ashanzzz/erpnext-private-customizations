@@ -10,7 +10,7 @@ load_dotenv()
 
 SITE_URL = os.getenv('ERPNEXT_SITE_URL', 'http://192.168.8.11:6888')
 USERNAME = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
-USER_PWD = os.getenv('ERPNEXT_PASSWORD', 'Woo@@@204317')
+USER_PWD = os.getenv('ERPNEXT_PASSWORD', '')
 
 # 等待站点就绪
 for i in range(25):

@@ -36,3 +36,9 @@ node_modules/
 .DS_Store
 
 
+
+# Private payroll/personnel source data (never commit)
+ashan_cn_procurement/ashan_cn_procurement/services/qifu_employee_seed.json
+ashan_cn_procurement/ashan_cn_procurement/services/qifu_full_40_historical_data.json
+private_data/*
+!private_data/README.md

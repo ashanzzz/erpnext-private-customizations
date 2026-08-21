@@ -14,7 +14,7 @@ load_env_file()
 
 SITE_URL = "http://192.168.8.11:6888"
 USER = os.getenv('ERPNEXT_USER', 'Administrator')
-PWD = os.getenv('ERPNEXT_PASSWORD', 'admin')
+PWD = os.getenv('ERPNEXT_PASSWORD', '')
 
 session = requests.Session()
 

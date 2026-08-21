@@ -10,7 +10,7 @@ load_dotenv(r"d:\SynologyDrive团队\antigravity\erpnext16\.env")
 
 SITE_URL = os.getenv('ERPNEXT_SITE_URL', 'http://192.168.8.11:6888')
 USERNAME = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
-USER_PWD = os.getenv('ERPNEXT_PASSWORD', 'Woo@@@204317')
+USER_PWD = os.getenv('ERPNEXT_PASSWORD', '')
 EXCEL_PATH_202606 = r"d:\SynologyDrive团队\antigravity\erpnext16\temp_screenshots\祺富人事202606(3) 的副本.xlsm"
 
 with sync_playwright() as p:
