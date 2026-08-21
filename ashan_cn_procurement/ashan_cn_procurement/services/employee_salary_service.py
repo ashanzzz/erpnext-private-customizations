@@ -274,12 +274,13 @@ def get_employee_profiles(company="天津祺富机械加工有限公司", search
 		r["current_month_salary"] = cur_sal
 		r["has_salary_this_month"] = bool(cur_sal > 0.001)
 
-	# KPI 统计卡片指标
+	# KPI 统计卡片指标 (正式工, 返聘工, 临时工, 其他员工[外籍/管理等], 本月离职)
 	total_count = len(records)
 	resigned_count = len([r for r in records if r.get("is_resigned_this_month")])
 	regular_count = len([r for r in records if (r.get("employee_type") == "正式工" and not r.get("is_resigned_this_month"))])
-	rehire_count = len([r for r in records if (r.get("employee_type") in ["返聘工", "退休返聘", "其他-返聘工"] and not r.get("is_resigned_this_month"))])
-	other_type_count = total_count - regular_count - rehire_count - resigned_count
+	rehire_count = len([r for r in records if (r.get("employee_type") in ["返聘工", "退休返聘"] and not r.get("is_resigned_this_month"))])
+	temp_count = len([r for r in records if (r.get("employee_type") in ["临时工", "零工"] and not r.get("is_resigned_this_month"))])
+	other_type_count = len([r for r in records if (r.get("employee_type") not in ["正式工", "返聘工", "退休返聘", "临时工", "零工"] and not r.get("is_resigned_this_month"))])
 
 	# 基础薪资总盘（祺富算固定工资，吉众算基本工资+津贴）
 	if "祺富" in company:
@@ -293,9 +294,11 @@ def get_employee_profiles(company="天津祺富机械加工有限公司", search
 		"kpi": {
 			"total_count": total_count,
 			"regular_count": regular_count,
+			"insured_count": regular_count,
 			"rehire_count": rehire_count,
-			"resigned_count": resigned_count,
+			"temp_count": temp_count,
 			"other_type_count": other_type_count,
+			"resigned_count": resigned_count,
 			"total_base_payroll": total_base_payroll
 		}
 	}

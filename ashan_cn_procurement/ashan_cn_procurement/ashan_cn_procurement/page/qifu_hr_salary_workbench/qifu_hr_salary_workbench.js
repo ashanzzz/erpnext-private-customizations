@@ -632,31 +632,36 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         <!-- 序号 工号 姓名 证件号码 岗位职务 用工性质 计薪方式 固定/车间薪资 社保基数 公积金基数 专项扣除 操作 -->
         <!-- ========================================== -->
         <div id="qifu-tab-employees" class="qifu-tab-content">
-            <div class="qifu-kpi-grid">
+            <div class="qifu-kpi-grid" style="grid-template-columns: repeat(6, 1fr);">
                 <div class="qifu-kpi-card" style="border-left: 4px solid #3b82f6;">
                     <div style="font-size:13px; font-weight:700; color:#1e40af;">👥 在册员工总数</div>
                     <div style="font-size:22px; font-weight:800; color:#0f172a; margin-top:4px;" id="tab1-emp-total">26 人</div>
                     <div style="font-size:12px; color:#64748b;">权威薪酬母表档案底册</div>
                 </div>
-                <div class="qifu-kpi-card" style="border-left: 4px solid #10b981;">
-                    <div style="font-size:13px; font-weight:700; color:#065f46;">🛡️ 正式在保人员 (五险一金)</div>
-                    <div style="font-size:22px; font-weight:800; color:#059669; margin-top:4px;" id="tab1-emp-insured">19 人</div>
-                    <div style="font-size:12px; color:#64748b;">参保五险一金正式工</div>
+                <div class="qifu-kpi-card" style="border-left: 4px solid #2563eb;">
+                    <div style="font-size:13px; font-weight:700; color:#1e40af;">🛡️ 正式工</div>
+                    <div style="font-size:22px; font-weight:800; color:#2563eb; margin-top:4px;" id="tab1-emp-regular">18 人</div>
+                    <div style="font-size:12px; color:#64748b;">标准合同在册员工</div>
                 </div>
                 <div class="qifu-kpi-card" style="border-left: 4px solid #f59e0b;">
                     <div style="font-size:13px; font-weight:700; color:#92400e;">👴 退休返聘人员</div>
-                    <div style="font-size:22px; font-weight:800; color:#d97706; margin-top:4px;" id="tab1-emp-rehire">0 人</div>
+                    <div style="font-size:22px; font-weight:800; color:#d97706; margin-top:4px;" id="tab1-emp-rehire">5 人</div>
                     <div style="font-size:12px; color:#64748b;">免缴社保/仅发薪资与补贴</div>
+                </div>
+                <div class="qifu-kpi-card" style="border-left: 4px solid #10b981;">
+                    <div style="font-size:13px; font-weight:700; color:#065f46;">⏱️ 临时工</div>
+                    <div style="font-size:22px; font-weight:800; color:#059669; margin-top:4px;" id="tab1-emp-temp">0 人</div>
+                    <div style="font-size:12px; color:#64748b;">短期计时计件人员</div>
+                </div>
+                <div class="qifu-kpi-card" style="border-left: 4px solid #6366f1;">
+                    <div style="font-size:13px; font-weight:700; color:#3730a3;">🏷️ 其他类型员工</div>
+                    <div style="font-size:22px; font-weight:800; color:#4f46e5; margin-top:4px;" id="tab1-emp-other">2 人</div>
+                    <div style="font-size:12px; color:#64748b;">外籍/管理/特殊在册</div>
                 </div>
                 <div class="qifu-kpi-card" style="border-left: 4px solid #ef4444;">
                     <div style="font-size:13px; font-weight:700; color:#b91c1c;">🚪 本月离职人员</div>
-                    <div style="font-size:22px; font-weight:800; color:#dc2626; margin-top:4px;" id="tab1-emp-resigned">0 人</div>
-                    <div style="font-size:12px; color:#64748b;">正常发薪个税/次月社保公积金减员</div>
-                </div>
-                <div class="qifu-kpi-card" style="border-left: 4px solid #6366f1;">
-                    <div style="font-size:13px; font-weight:700; color:#3730a3;">🏷️ 其他用工 (临时/外籍/劳务)</div>
-                    <div style="font-size:22px; font-weight:800; color:#4f46e5; margin-top:4px;" id="tab1-emp-other">7 人</div>
-                    <div style="font-size:12px; color:#64748b;">非正式用工或劳务派遣</div>
+                    <div style="font-size:22px; font-weight:800; color:#dc2626; margin-top:4px;" id="tab1-emp-resigned">1 人</div>
+                    <div style="font-size:12px; color:#64748b;">正常发薪个税/次月减员</div>
                 </div>
             </div>
 
@@ -1053,9 +1058,11 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         <span id="kpi-emp-total">26</span> <span style="font-size:12px; font-weight:500; color:#64748b;">人 在册总数</span>
                     </div>
                     <div style="font-size:12px; line-height:1.7; color:#475569;">
-                        <div style="display:flex; justify-content:space-between;"><span>🛡️ 社保公积金人员 (正式工):</span><strong style="color:#2563eb;" id="kpi-emp-insured">19 人</strong></div>
+                        <div style="display:flex; justify-content:space-between;"><span>🛡️ 正式工:</span><strong style="color:#2563eb;" id="kpi-emp-insured">18 人</strong></div>
                         <div style="display:flex; justify-content:space-between;"><span>👴 退休返聘人员:</span><strong style="color:#d97706;" id="kpi-emp-rehire">5 人</strong></div>
-                        <div style="display:flex; justify-content:space-between;"><span>🏷️ 其他人员合计 (临时/外籍):</span><strong style="color:#64748b;" id="kpi-emp-other">2 人</strong></div>
+                        <div style="display:flex; justify-content:space-between;"><span>⏱️ 临时工:</span><strong style="color:#059669;" id="kpi-emp-temp">0 人</strong></div>
+                        <div style="display:flex; justify-content:space-between;"><span>🏷️ 其他类型员工:</span><strong style="color:#64748b;" id="kpi-emp-other">2 人</strong></div>
+                        <div style="display:flex; justify-content:space-between;"><span>🚪 本月离职人员:</span><strong style="color:#dc2626;" id="kpi-emp-resigned">1 人</strong></div>
                     </div>
                 </div>
 
@@ -1200,12 +1207,14 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     function render_employees_view(list) {
         let total = list.length;
         let resignedList = list.filter(e => e.is_resigned_this_month || e.employment_status === '离职');
-        let insuredList = list.filter(e => (e.employee_type || '正式工') === '正式工' && !e.is_resigned_this_month && e.employment_status !== '离职');
-        let rehireList = list.filter(e => ['退休返聘','返聘工','其他-返聘工'].includes(e.employee_type || '') && !e.is_resigned_this_month && e.employment_status !== '离职');
-        let otherList = list.filter(e => (e.employee_type || '正式工') !== '正式工' && !['退休返聘','返聘工','其他-返聘工'].includes(e.employee_type || '') && !e.is_resigned_this_month && e.employment_status !== '离职');
+        let regularList = list.filter(e => (e.employee_type || '正式工') === '正式工' && !e.is_resigned_this_month && e.employment_status !== '离职');
+        let rehireList = list.filter(e => ['退休返聘','返聘工'].includes(e.employee_type || '') && !e.is_resigned_this_month && e.employment_status !== '离职');
+        let tempList = list.filter(e => ['临时工','零工'].includes(e.employee_type || '') && !e.is_resigned_this_month && e.employment_status !== '离职');
+        let otherList = list.filter(e => !['正式工','退休返聘','返聘工','临时工','零工'].includes(e.employee_type || '') && !e.is_resigned_this_month && e.employment_status !== '离职');
 
-        let insuredZero = insuredList.filter(e => !e.has_salary_this_month && flt(e.current_month_salary) === 0 && flt(e.fixed_salary) === 0 && flt(e.base_salary) === 0).length;
+        let regularZero = regularList.filter(e => !e.has_salary_this_month && flt(e.current_month_salary) === 0 && flt(e.fixed_salary) === 0 && flt(e.base_salary) === 0).length;
         let rehireZero = rehireList.filter(e => !e.has_salary_this_month && flt(e.current_month_salary) === 0 && flt(e.fixed_salary) === 0 && flt(e.base_salary) === 0).length;
+        let tempZero = tempList.filter(e => !e.has_salary_this_month && flt(e.current_month_salary) === 0 && flt(e.fixed_salary) === 0 && flt(e.base_salary) === 0).length;
         let otherZero = otherList.filter(e => !e.has_salary_this_month && flt(e.current_month_salary) === 0 && flt(e.fixed_salary) === 0 && flt(e.base_salary) === 0).length;
 
         const fmtTab1Count = (cnt, zeroCnt) => {
@@ -1217,10 +1226,11 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         };
 
         $("#tab1-emp-total").text(total + ' 人');
-        $("#tab1-emp-insured").html(fmtTab1Count(insuredList.length, insuredZero));
+        $("#tab1-emp-regular, #tab1-emp-insured").html(fmtTab1Count(regularList.length, regularZero));
         $("#tab1-emp-rehire").html(fmtTab1Count(rehireList.length, rehireZero));
-        $("#tab1-emp-resigned").text(resignedList.length + ' 人');
+        $("#tab1-emp-temp").html(fmtTab1Count(tempList.length, tempZero));
         $("#tab1-emp-other").html(fmtTab1Count(otherList.length, otherZero));
+        $("#tab1-emp-resigned").text(resignedList.length + ' 人');
 
         // 重置表头全选框
         $("#check-all-tab1-employees").prop("checked", false);
@@ -1774,9 +1784,11 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         };
 
         $("#kpi-emp-total").text(kpi.total_profile_count || data.total_employees || 0);
-        $("#kpi-emp-insured").html(formatEmpCountWithZero(kpi.insured_count, kpi.insured_zero_count, '#2563eb'));
+        $("#kpi-emp-insured").html(formatEmpCountWithZero(kpi.regular_count || kpi.insured_count, kpi.regular_zero_count || kpi.insured_zero_count, '#2563eb'));
         $("#kpi-emp-rehire").html(formatEmpCountWithZero(kpi.rehire_count, kpi.rehire_zero_count, '#d97706'));
+        $("#kpi-emp-temp").html(formatEmpCountWithZero(kpi.temp_count, kpi.temp_zero_count, '#059669'));
         $("#kpi-emp-other").html(formatEmpCountWithZero(kpi.other_count, kpi.other_zero_count, '#64748b'));
+        $("#kpi-emp-resigned").text((kpi.resigned_count || 0) + ' 人');
 
         // 卡片 2: 社保统筹
         $("#kpi-ss-badge").text(`缴纳: ${kpi.ss_payment_month_name || ''} · 所属: ${kpi.ss_period_month_str || ''}`);

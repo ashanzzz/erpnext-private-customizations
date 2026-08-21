@@ -53,19 +53,23 @@ def get_payroll_settlement_detail(company, period_month):
 	payment_month_name = f"{payment_year}年{payment_month}月"
 	period_month_str = period_month.replace("-", "")
 
-	# 母表人员结构统计
+	# 母表人员结构统计 (正式工, 返聘工, 临时工, 其他员工[外籍/管理等], 本月离职)
 	all_profiles = frappe.get_all(
 		"Ashan Employee Salary Profile",
-		filters={"company": company, "employment_status": "在职"},
-		fields=["employee_no", "employee_name", "employee_type", "fixed_salary", "base_salary", "social_security_base", "housing_fund_base"]
+		filters={"company": company},
+		fields=["employee_no", "employee_name", "employee_type", "employment_status", "relieving_date", "fixed_salary", "base_salary", "social_security_base", "housing_fund_base"]
 	)
 	total_profile_count = len(all_profiles)
-	insured_count = 0
-	insured_zero_count = 0
+	regular_count = 0
+	regular_zero_count = 0
 	rehire_count = 0
 	rehire_zero_count = 0
+	temp_count = 0
+	temp_zero_count = 0
 	other_count = 0
 	other_zero_count = 0
+	resigned_count = 0
+	resigned_zero_count = 0
 
 	# 建立当期实发/税前/固定薪资映射
 	item_sal_map = {}
@@ -77,25 +81,39 @@ def get_payroll_settlement_detail(company, period_month):
 			item_sal_map[it.employee_no] = sal_val
 
 	for p in all_profiles:
-		etype = p.get("employee_type") or "正式工"
+		etype = (p.get("employee_type") or "正式工").strip()
 		emp_no = p.get("employee_no")
+		rel_d = str(p.get("relieving_date") or "")
+		is_resigned = (p.get("employment_status") in ["离职", "本月离职"] or (rel_d and rel_d.startswith(period_month)))
+		
 		emp_cur_sal = item_sal_map.get(emp_no, flt(p.get("fixed_salary")) or flt(p.get("base_salary")))
 		is_zero_sal = (emp_cur_sal <= 0.001)
 
-		if etype == "正式工":
-			insured_count += 1
+		if is_resigned:
+			resigned_count += 1
 			if is_zero_sal:
-				insured_zero_count += 1
-		elif etype in TAX_REHIRE_EMPLOYEE_TYPES:
+				resigned_zero_count += 1
+		elif etype == "正式工":
+			regular_count += 1
+			if is_zero_sal:
+				regular_zero_count += 1
+		elif etype in ["返聘工", "退休返聘"]:
 			rehire_count += 1
 			if is_zero_sal:
 				rehire_zero_count += 1
+		elif etype in ["临时工", "零工"]:
+			temp_count += 1
+			if is_zero_sal:
+				temp_zero_count += 1
 		else:
+			# 外籍工, 其他-管理, 其他-正式工, 其他-外籍工, 其他-返聘工, 其他等
 			other_count += 1
 			if is_zero_sal:
 				other_zero_count += 1
 
-	total_zero_count = insured_zero_count + rehire_zero_count + other_zero_count
+	total_zero_count = regular_zero_count + rehire_zero_count + temp_zero_count + other_zero_count + resigned_zero_count
+	insured_count = regular_count  # 兼容旧字段
+	insured_zero_count = regular_zero_count
 
 	# 社保与公积金统计 (使用现有的明细计算函数)
 	ss_data = get_social_insurance_sheet(company, period_month)
@@ -114,12 +132,18 @@ def get_payroll_settlement_detail(company, period_month):
 			"kpi_summary": {
 				"total_profile_count": total_profile_count,
 				"total_zero_count": total_zero_count,
-				"insured_count": insured_count,
-				"insured_zero_count": insured_zero_count,
+				"regular_count": regular_count,
+				"regular_zero_count": regular_zero_count,
+				"insured_count": regular_count,
+				"insured_zero_count": regular_zero_count,
 				"rehire_count": rehire_count,
 				"rehire_zero_count": rehire_zero_count,
+				"temp_count": temp_count,
+				"temp_zero_count": temp_zero_count,
 				"other_count": other_count,
 				"other_zero_count": other_zero_count,
+				"resigned_count": resigned_count,
+				"resigned_zero_count": resigned_zero_count,
 				"ss_payment_month_name": payment_month_name,
 				"ss_period_month_str": period_month_str,
 				"ss_grand_total": ss_totals.get("grand_total", 0.0),
@@ -156,12 +180,18 @@ def get_payroll_settlement_detail(company, period_month):
 	kpi_summary = {
 		"total_profile_count": total_profile_count,
 		"total_zero_count": total_zero_count,
-		"insured_count": insured_count,
-		"insured_zero_count": insured_zero_count,
+		"regular_count": regular_count,
+		"regular_zero_count": regular_zero_count,
+		"insured_count": regular_count,
+		"insured_zero_count": regular_zero_count,
 		"rehire_count": rehire_count,
 		"rehire_zero_count": rehire_zero_count,
+		"temp_count": temp_count,
+		"temp_zero_count": temp_zero_count,
 		"other_count": other_count,
 		"other_zero_count": other_zero_count,
+		"resigned_count": resigned_count,
+		"resigned_zero_count": resigned_zero_count,
 		"ss_payment_month_name": payment_month_name,
 		"ss_period_month_str": period_month_str,
 		"ss_grand_total": ss_totals.get("grand_total", 0.0),
