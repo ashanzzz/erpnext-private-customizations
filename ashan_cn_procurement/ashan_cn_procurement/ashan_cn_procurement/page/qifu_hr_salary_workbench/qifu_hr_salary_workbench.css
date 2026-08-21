@@ -31,16 +31,17 @@
     margin-top: 4px;
 }
 
-/* 4大业务 Tab 切换 */
+/* 7 大业务 Tab 切换：允许窄屏自然换行，避免横向挤出页面 */
 .qifu-nav-tabs {
     display: flex;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
     margin-bottom: 20px;
     border-bottom: 2px solid #e2e8f0;
     padding-bottom: 8px;
 }
 .qifu-tab-btn {
-    padding: 10px 20px;
+    padding: 9px 14px;
     font-size: 14px;
     font-weight: 600;
     color: #64748b;
@@ -477,4 +478,11 @@
     font-weight: 600;
     text-align: right !important;
     font-variant-numeric: tabular-nums;
+}
+
+
+@media (max-width: 1100px) {
+    .qifu-wb-wrapper { padding: 12px 14px; }
+    .qifu-tab-btn { font-size: 12.5px; padding: 8px 10px; }
+    .qifu-kpi-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
 }

@@ -2192,6 +2192,7 @@ def get_tax_settlement_full_sheet(company="天津祺富机械加工有限公司"
     核心原则：历史月份使用已落库快照；累计起征点按员工实际存在的月份记录累计；
     负累计应纳税所得额不截断，以便与 VBA 核对。
     """
+    check_payroll_workbench_permission("read")
     params = get_effective_tax_parameters(company, period_month)
     tax_thresh = params["tax_threshold"]
     cycle_start_m = params["tax_cycle_start_month"]
@@ -2397,6 +2398,7 @@ def get_tax_settlement_full_sheet(company="天津祺富机械加工有限公司"
 @frappe.whitelist()
 def get_all_employees_tax_history_summary(company="天津祺富机械加工有限公司", period_month="2026-07"):
     """全员累计个税历史总览；起征点以员工实际历史快照为准，避免新入职人员被多计月份。"""
+    check_payroll_workbench_permission("read")
     params = get_effective_tax_parameters(company, period_month)
     cinfo = get_tax_cycle_info(period_month, params["tax_threshold"], params["tax_cycle_start_month"])
     cycle_months = []
@@ -2474,6 +2476,7 @@ def get_all_employees_tax_history_summary(company="天津祺富机械加工有�
 @frappe.whitelist()
 def get_employee_tax_history_timeline(company="天津祺富机械加工有限公司", employee_no="A0001", period_month="2026-07"):
     """单人12个月税务轨迹；累计起征点只在存在该员工历史记录的月份增加。"""
+    check_payroll_workbench_permission("read")
     params = get_effective_tax_parameters(company, period_month)
     cinfo = get_tax_cycle_info(period_month, params["tax_threshold"], params["tax_cycle_start_month"])
     cycle_months = []
@@ -2558,6 +2561,7 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 	6. history: 历史数据表 (根据 history_mode 支持 全员15列总览 或 单人12个月穿透流水)
 	7. all: 包含上述全部 7 个工作表的完整年度薪资结算财务工作簿
 	"""
+	check_payroll_workbench_permission("read")
 	import io
 	import base64
 	from datetime import datetime, date
@@ -3194,9 +3198,9 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 	def build_history_single_sheet(ws, emp_no):
 		data_res = get_employee_tax_history_timeline(company, emp_no, period_month)
 		rows = data_res.get("rows", [])
-		totals = data_res.get("totals", {})
+		summary = data_res.get("summary", {})
 		emp_name = data_res.get("employee_name", emp_no)
-		ws.title = f"{emp_name}_12个月穿透流水"
+		ws.title = f"{emp_name}_12个月穿透流水"[:31]
 
 		ws.merge_cells("A1:N1")
 		ws["A1"] = f"{company} {emp_name} ({emp_no}) 个税年度申报周期月度穿透流水表"
@@ -3242,6 +3246,26 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 					cell.alignment = align_right
 					if isinstance(val, (int, float)):
 						cell.number_format = "#,##0.00"
+
+		tot_row = len(rows) + 4
+		ws.cell(row=tot_row, column=1, value="周期累计").font = font_total
+		ws.merge_cells(start_row=tot_row, start_column=1, end_row=tot_row, end_column=3)
+		summary_vals = {
+			4: summary.get("cum_gross_salary", 0),
+			5: round(flt(summary.get("cum_ss_person")) + flt(summary.get("cum_hf_person")), 2),
+			6: summary.get("cum_special_deductions", 0),
+			7: summary.get("cum_tax_threshold", 0),
+			11: summary.get("cum_tax_paid", 0),
+			13: summary.get("cum_net_salary", 0),
+		}
+		for col_idx in range(1, 15):
+			cell = ws.cell(row=tot_row, column=col_idx)
+			cell.font = font_total
+			cell.fill = fill_total
+			cell.border = double_bottom
+			if col_idx in summary_vals:
+				cell.value = summary_vals[col_idx]
+				cell.number_format = "#,##0.00"
 
 	# -------------------------------------------------------------
 	# 模式调度与工作簿组装

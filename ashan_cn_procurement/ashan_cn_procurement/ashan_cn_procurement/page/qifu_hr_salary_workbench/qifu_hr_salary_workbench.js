@@ -8,6 +8,8 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     const COMPANY = "天津祺富机械加工有限公司";
     let current_month = "2026-07";
     let current_tab = "employees"; // 默认第 1 个 Tab: 员工薪酬档案 (权威母表底册)
+    let current_history_mode = "all";
+    let current_history_employee = "";
     let current_tax_view_mode = "full_68"; // 默认直接进入 68 列全量法定申报大宽表
     let cached_insurance_setting = null;
 
@@ -617,7 +619,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             </div>
         </div>
 
-        <!-- 全新 6 大黄金业务 Tab 体系 -->
+        <!-- 全新 7 大薪酬业务 Tab 体系 -->
         <div class="qifu-nav-tabs">
             <button class="qifu-tab-btn active" data-tab="employees">👥 1. 员工薪酬档案 (母表底册)</button>
             <button class="qifu-tab-btn" data-tab="import">📤 2. 外部实发与发放表 (24列)</button>
@@ -625,6 +627,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             <button class="qifu-tab-btn" data-tab="housing_fund">🏛️ 4. 住房公积金台账与配置</button>
             <button class="qifu-tab-btn" data-tab="tax">⚖️ 5. 个人所得税申报台账</button>
             <button class="qifu-tab-btn" data-tab="settlement">📊 6. 月度薪酬综合结算</button>
+            <button class="qifu-tab-btn" data-tab="history">🗂️ 7. 历史数据</button>
         </div>
 
         <!-- ========================================== -->
@@ -1139,7 +1142,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 </div>
                 <div class="qifu-toolbar-right" style="display:flex; gap:8px;">
                     <button class="btn btn-primary btn-sm" id="btn-export-excel-both" style="background:#2563eb; border-color:#2563eb; font-weight:600;">
-                        📥 导出标准全量 Excel (5张Sheet)
+                        📥 导出标准全量 Excel (7张Sheet)
                     </button>
                 </div>
             </div>
@@ -1171,6 +1174,41 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     <tbody id="tbody-qifu-payroll">
                         <tr><td colspan="17" style="text-align:center; padding:30px; color:#94a3b8;">暂无当月核算数据，请点击上方【2. 外部实发导入与智能解析】上传车间实发表</td></tr>
                     </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- Tab 7: 🗂️ 历史数据 · 个税申报周期累计总览 / 单人月度穿透 -->
+        <!-- ========================================== -->
+        <div id="qifu-tab-history" class="qifu-tab-content" style="display:none;">
+            <div class="qifu-kpi-grid" style="grid-template-columns:repeat(4, minmax(180px, 1fr));">
+                <div class="qifu-kpi-card"><div class="qifu-kpi-title">申报周期</div><div class="qifu-kpi-val" id="history-kpi-cycle" style="font-size:18px;">-</div><div class="qifu-kpi-sub">按个税累计预扣周期归集</div></div>
+                <div class="qifu-kpi-card"><div class="qifu-kpi-title">纳税台账人数</div><div class="qifu-kpi-val" id="history-kpi-count">0 人</div><div class="qifu-kpi-sub">临时工/零工不进入；返聘类进入</div></div>
+                <div class="qifu-kpi-card"><div class="qifu-kpi-title">累计税前收入</div><div class="qifu-kpi-val" id="history-kpi-gross" style="font-size:20px;">¥ 0.00</div><div class="qifu-kpi-sub">截至当前所选发薪账期</div></div>
+                <div class="qifu-kpi-card"><div class="qifu-kpi-title">累计已扣个税</div><div class="qifu-kpi-val" id="history-kpi-tax" style="font-size:20px; color:#b91c1c;">¥ 0.00</div><div class="qifu-kpi-sub">历史月度记录累计</div></div>
+            </div>
+            <div class="qifu-toolbar">
+                <div class="qifu-toolbar-left">
+                    <button class="btn btn-primary btn-sm" id="btn-history-all" style="font-weight:700;">👥 全员累计总览</button>
+                    <button class="btn btn-default btn-sm" id="btn-history-back" style="display:none; font-weight:600;">← 返回全员总览</button>
+                    <span id="history-current-person" style="font-size:12px; color:#475569; font-weight:600;"></span>
+                </div>
+                <div class="qifu-toolbar-right">
+                    <button class="btn btn-default btn-sm" id="btn-history-export" style="font-weight:600; color:#2563eb; border-color:#93c5fd;">📥 导出历史数据 Excel</button>
+                </div>
+            </div>
+            <div style="background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; border-radius:8px; padding:9px 12px; font-size:12px; margin-bottom:12px;">
+                历史数据以 <strong>Ashan Monthly Payroll Settlement / Item</strong> 的已保存月度核算快照为准。点击员工姓名可穿透查看该员工整个申报周期逐月轨迹；不会用当前参数反写历史月份。
+            </div>
+            <div id="history-top-scrollbar" class="qifu-top-scrollbar-wrapper" style="overflow-x:auto; overflow-y:hidden; height:14px; margin-bottom:4px;">
+                <div class="qifu-top-scrollbar-dummy" style="height:1px; width:1780px;"></div>
+            </div>
+            <div class="qifu-table-box" id="history-table-box">
+                <table class="qifu-table" id="table-history">
+                    <thead id="thead-history"></thead>
+                    <tbody id="tbody-history"><tr><td style="padding:30px; text-align:center; color:#94a3b8;">加载历史数据...</td></tr></tbody>
+                    <tfoot id="tfoot-history"></tfoot>
                 </table>
             </div>
         </div>
@@ -2776,16 +2814,99 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         });
     }
 
-    // Excel 导出 (支持 all / distribution / accounting / insurance / housing_fund / tax)
-    function export_excel_action(sheet_type) {
+    // 7. 历史数据：全员累计总览 / 单人申报周期穿透
+    function load_history_tab(mode, employee_no) {
+        current_history_mode = mode || current_history_mode || 'all';
+        current_history_employee = employee_no || current_history_employee || '';
+        const cur_m = $("#qifu-month-select").val() || current_month;
+        if (current_history_mode === 'single' && current_history_employee) {
+            frappe.call({
+                method: 'ashan_cn_procurement.services.payroll_settlement_service.get_employee_tax_history_timeline',
+                args: { company: COMPANY, employee_no: current_history_employee, period_month: cur_m },
+                callback: function(r) { if (r.message) render_history_single(r.message); }
+            });
+        } else {
+            current_history_mode = 'all';
+            frappe.call({
+                method: 'ashan_cn_procurement.services.payroll_settlement_service.get_all_employees_tax_history_summary',
+                args: { company: COMPANY, period_month: cur_m },
+                callback: function(r) { if (r.message) render_history_all(r.message); }
+            });
+        }
+    }
+
+    function render_history_all(data) {
+        const rows = data.rows || [];
+        const tot = data.totals || {};
+        $("#history-kpi-cycle").text(data.cycle_name || '-');
+        $("#history-kpi-count").text(`${rows.length} 人`);
+        $("#history-kpi-gross").text(fmtMoney(tot.cum_gross || 0));
+        $("#history-kpi-tax").text(fmtMoney(tot.cum_tax_paid || 0));
+        $("#history-current-person").text('');
+        $("#btn-history-back").hide();
+        $("#table-history").css('min-width','1780px');
+        const cols = [
+            ['seq','序号','text'], ['employee_no','工号','text'], ['employee_name','姓名（点击穿透）','name'], ['employee_type','用工性质','text'],
+            ['salary_mode','计薪方式','text'], ['months_paid_desc','已发薪月份','text'], ['cum_gross_salary','累计税前收入','money'],
+            ['cum_tax_threshold','累计基本减除费用','money'], ['cum_ss_person','累计社保个人','money'], ['cum_hf_person','累计公积金个人','money'],
+            ['cum_special_deductions','累计专项附加扣除','money'], ['cum_taxable_income','累计应纳税所得额','money'], ['tax_rate','当前预扣率','percent'],
+            ['cum_tax_paid','累计已扣个税','money'], ['cum_net_salary','累计税后实发','money']
+        ];
+        $("#thead-history").html(`<tr>${cols.map((c,i)=>`<th class="${i===0?'qifu-col-sticky-1':(i===1?'qifu-col-sticky-2':(i===2?'qifu-col-sticky-3':''))}">${c[1]}</th>`).join('')}</tr>`);
+        if (!rows.length) {
+            $("#tbody-history").html(`<tr><td colspan="15" style="padding:30px; text-align:center; color:#94a3b8;">当前申报周期暂无历史数据。</td></tr>`);
+            $("#tfoot-history").empty();
+            return;
+        }
+        const val = (r,c) => {
+            const v=r[c[0]];
+            if(c[2]==='money') return fmtMoney(v||0);
+            if(c[2]==='percent') return `${Number(v||0).toFixed(2).replace(/\.00$/,'')}%`;
+            if(c[2]==='name') return `<a href="javascript:void(0);" class="btn-drill-emp-history" data-emp="${r.employee_no}" style="color:#2563eb; font-weight:700; text-decoration:underline;">${v||'-'} 🔍</a>`;
+            return (v===null||v===undefined||v==='')?'-':v;
+        };
+        $("#tbody-history").html(rows.map(r=>`<tr>${cols.map((c,i)=>`<td class="${i===0?'qifu-col-sticky-1':(i===1?'qifu-col-sticky-2':(i===2?'qifu-col-sticky-3':''))} ${c[2]==='money'?'qifu-money-cell':''}">${val(r,c)}</td>`).join('')}</tr>`).join(''));
+        const f = ['合计',`${rows.length} 人`,'','','','',fmtMoney(tot.cum_gross||0),fmtMoney(tot.cum_thresh||0),fmtMoney(tot.cum_ss||0),fmtMoney(tot.cum_hf||0),fmtMoney(tot.cum_special_add||0),fmtMoney(tot.cum_taxable||0),'',fmtMoney(tot.cum_tax_paid||0),fmtMoney(tot.cum_net||0)];
+        $("#tfoot-history").html(`<tr>${f.map((v,i)=>`<td class="${i===0?'qifu-col-sticky-1':(i===1?'qifu-col-sticky-2':(i===2?'qifu-col-sticky-3':''))}" style="font-weight:700; background:#f8fafc;">${v}</td>`).join('')}</tr>`);
+        adjust_active_table_height();
+        sync_dual_scrollbars($("#history-top-scrollbar"), $("#history-table-box"));
+    }
+
+    function render_history_single(data) {
+        const rows = data.rows || [];
+        const sum = data.summary || {};
+        $("#history-kpi-cycle").text(data.cycle_name || '-');
+        $("#history-kpi-count").text('1 人');
+        $("#history-kpi-gross").text(fmtMoney(sum.cum_gross_salary || 0));
+        $("#history-kpi-tax").text(fmtMoney(sum.cum_tax_paid || 0));
+        $("#history-current-person").text(`${data.employee_no || ''} · ${data.employee_name || ''} · ${data.employee_type || ''}`);
+        $("#btn-history-back").show();
+        $("#table-history").css('min-width','1550px');
+        const heads=['序号','所属期','状态','税前工资','社保个人','公积金个人','险金合计','专项附加扣除','累计基本减除费用','累计应纳税所得额','预扣率','速算扣除数','往期已扣税','本月个税','税后实发'];
+        $("#thead-history").html(`<tr>${heads.map((h,i)=>`<th class="${i===0?'qifu-col-sticky-1':(i===1?'qifu-col-sticky-2':(i===2?'qifu-col-sticky-3':''))}">${h}</th>`).join('')}</tr>`);
+        $("#tbody-history").html(rows.map(r=>`<tr style="${r.is_current?'background:#eff6ff;':''}${r.is_future?'color:#94a3b8;':''}">
+            <td class="qifu-col-sticky-1" style="text-align:center;">${r.seq}</td><td class="qifu-col-sticky-2" style="font-weight:700;">${r.period_month}</td>
+            <td class="qifu-col-sticky-3"><span class="qifu-status-badge ${r.status==='已核定锁定'?'qifu-status-locked':'qifu-status-draft'}">${r.status||'-'}</span></td>
+            <td class="qifu-money-cell">${fmtMoney(r.gross_salary)}</td><td class="qifu-money-cell">${fmtMoney(r.ss_person_total)}</td><td class="qifu-money-cell">${fmtMoney(r.hf_person_total)}</td>
+            <td class="qifu-money-cell">${fmtMoney(r.insurance_total)}</td><td class="qifu-money-cell">${fmtMoney(r.special_deductions_total)}</td><td class="qifu-money-cell">${fmtMoney(r.threshold_accumulated)}</td>
+            <td class="qifu-money-cell" style="font-weight:700; color:#9a3412;">${fmtMoney(r.taxable_accumulated)}</td><td style="text-align:center;">${Number(r.tax_rate||0).toFixed(2).replace(/\.00$/,'')}%</td>
+            <td class="qifu-money-cell">${fmtMoney(r.quick_deduction)}</td><td class="qifu-money-cell">${fmtMoney(r.tax_paid_prior)}</td><td class="qifu-money-cell" style="font-weight:800; color:${Number(r.tax_current||0)>0?'#dc2626':'#166534'};">${fmtMoney(r.tax_current)}</td>
+            <td class="qifu-money-cell" style="font-weight:700; color:#166534;">${fmtMoney(r.net_salary)}</td></tr>`).join(''));
+        $("#tfoot-history").html(`<tr><td colspan="3" style="font-weight:700; background:#f8fafc;">周期累计</td><td class="qifu-money-cell" style="font-weight:700;">${fmtMoney(sum.cum_gross_salary||0)}</td><td class="qifu-money-cell">${fmtMoney(sum.cum_ss_person||0)}</td><td class="qifu-money-cell">${fmtMoney(sum.cum_hf_person||0)}</td><td></td><td class="qifu-money-cell">${fmtMoney(sum.cum_special_deductions||0)}</td><td class="qifu-money-cell">${fmtMoney(sum.cum_tax_threshold||0)}</td><td colspan="4"></td><td class="qifu-money-cell" style="font-weight:800; color:#dc2626;">${fmtMoney(sum.cum_tax_paid||0)}</td><td class="qifu-money-cell" style="font-weight:800; color:#166534;">${fmtMoney(sum.cum_net_salary||0)}</td></tr>`);
+        adjust_active_table_height();
+        sync_dual_scrollbars($("#history-top-scrollbar"), $("#history-table-box"));
+    }
+
+    // Excel 导出 (支持 all / distribution / accounting / insurance / housing_fund / tax / history)
+    function export_excel_action(sheet_type, extra_args) {
         frappe.show_alert({ message: '⏳ 正在生成 Excel 报表，请稍候...', indicator: 'blue' });
         frappe.call({
             method: 'ashan_cn_procurement.services.payroll_settlement_service.export_qifu_payroll_excel',
-            args: {
+            args: Object.assign({
                 company: COMPANY,
                 period_month: current_month,
                 sheet_type: sheet_type
-            },
+            }, extra_args || {}),
             callback: function(r) {
                 if (r.message && r.message.success) {
                     const b64 = r.message.file_base64;
@@ -2798,11 +2919,13 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     const byteArray = new Uint8Array(byteNums);
                     const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
                     const link = document.createElement('a');
-                    link.href = URL.createObjectURL(blob);
+                    const objectUrl = URL.createObjectURL(blob);
+                    link.href = objectUrl;
                     link.download = fname;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
+                    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
                     frappe.show_alert({ message: `📥 成功导出: ${fname}`, indicator: 'green' });
                 }
             }
@@ -3134,6 +3257,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                             if (current_tab === 'import') load_salary_distribution_tab();
                             if (current_tab === 'tax') load_tax_settlement_tab();
                             if (current_tab === 'settlement') load_payroll_settlement();
+        if (current_tab === 'history') load_history_tab();
                         }
                     }
                 });
@@ -3371,6 +3495,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     if (typeof load_qifu_payroll_data === 'function') load_qifu_payroll_data();
                     if (current_tab === 'tax') load_tax_settlement_tab();
                     if (current_tab === 'settlement') load_payroll_settlement();
+        if (current_tab === 'history') load_history_tab();
                     if (on_complete) on_complete(true);
                 } else {
                     const msg = (r.message && r.message.message) || '处理 Excel 文件时发生错误，请检查文件格式！';
@@ -3718,6 +3843,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         if (tab === 'housing_fund') load_housing_fund_tab();
         if (tab === 'tax') load_tax_settlement_tab();
         if (tab === 'settlement') load_payroll_settlement();
+        if (tab === 'history') load_history_tab();
     });
 
     // 2. 月份切换
@@ -3730,6 +3856,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         if (current_tab === 'housing_fund') load_housing_fund_tab();
         if (current_tab === 'tax') load_tax_settlement_tab();
         if (current_tab === 'settlement') load_payroll_settlement();
+        if (current_tab === 'history') load_history_tab();
     });
 
     // 3. 刷新按钮
@@ -3741,6 +3868,27 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         if (current_tab === 'housing_fund') load_housing_fund_tab();
         if (current_tab === 'tax') load_tax_settlement_tab();
         if (current_tab === 'settlement') load_payroll_settlement();
+        if (current_tab === 'history') load_history_tab();
+    });
+
+    // 历史数据与个税台账穿透
+    $container.on("click", ".btn-drill-emp-history", function() {
+        const emp = $(this).attr("data-emp");
+        if (!emp) return;
+        current_history_mode = 'single';
+        current_history_employee = emp;
+        $(`.qifu-tab-btn[data-tab='history']`).trigger('click');
+    });
+    $container.on("click", "#btn-history-all, #btn-history-back", function() {
+        current_history_mode = 'all';
+        current_history_employee = '';
+        load_history_tab('all');
+    });
+    $container.on("click", "#btn-history-export", function() {
+        export_excel_action('history', {
+            history_mode: current_history_mode === 'single' ? 'single' : 'all',
+            history_emp_no: current_history_employee || ''
+        });
     });
 
     // 4. Tab 1 员工母表操作
