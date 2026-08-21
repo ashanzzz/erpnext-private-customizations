@@ -21,25 +21,30 @@ SYSTEM_MANAGEMENT_URLS = {
 }
 
 
+def _resolve_login_home_route(roles):
+    """Return one canonical Desk route for the user's business roles."""
+    roles = set(roles or [])
+
+    if "System Manager" in roles or "Administrator" in roles:
+        return "/desk/Workspaces/Home"
+    if roles.intersection({"Purchase User", "Purchase Manager"}):
+        return "/desk/Workspaces/Procurement Management"
+    if roles.intersection({"Stock User", "Stock Manager"}):
+        return "/desk/Workspaces/Stock and Inventory"
+    if roles.intersection({"Accounts User", "Accounts Manager"}):
+        return "/desk/Workspaces/Accounting and Finance"
+    if roles.intersection({"Oil Card Operator", "Oil Card Manager", "油卡操作员", "油卡管理员"}):
+        return "/desk/oil-card-ledger"
+
+    # Do not send unrelated users to the oil-card console.
+    return "/desk/Workspaces/Home"
+
+
 def set_login_redirect(*args, **kwargs):
-    """
-    Hook for on_session_creation.
-    根据用户角色动态决定登录后跳转的目标首页
-    """
+    """Hook for on_session_creation using the same role routing as Desk V2."""
     user = frappe.session.user
     roles = frappe.get_roles(user) if user else []
-    if "System Manager" in roles or "Administrator" in roles:
-        # 保持所有登录入口一致。若这里退回 /desk，某些非标准登录流程会先渲染
-        # Frappe v16 的 desktop/App 选择页，再等待前端脚本补跳到 Workspace。
-        home_route = "/desk/Workspaces/Home"
-    elif any(r in roles for r in ["Oil Card Operator", "Oil Card Manager", "油卡操作员", "油卡管理员"]):
-        home_route = "/desk/oil-card-ledger"
-    elif any(r in roles for r in ["Stock User", "Stock Manager"]):
-        home_route = "/desk/stock-entry"
-    elif any(r in roles for r in ["Purchase User", "Purchase Manager"]):
-        home_route = "/desk/purchase-order"
-    else:
-        home_route = "/desk/oil-card-ledger"
+    home_route = _resolve_login_home_route(roles)
 
     for arg in args:
         if hasattr(arg, "home_page"):
@@ -49,22 +54,11 @@ def set_login_redirect(*args, **kwargs):
     if hasattr(frappe, "local") and hasattr(frappe.local, "response"):
         frappe.local.response["home_page"] = home_route
 
-def get_website_user_home_page(user):
-    """
-    Website hook: 返回无前导 '/' 的路径（框架会自动拼接 '/'）。
-    Frappe v16 auth.py line 206:
-        home_page = get_home_page() or '/desk'
-    get_home_page() → get_home_page_via_hooks() → get_website_user_home_page()
-    返回值直接作为 response['home_page']，浏览器跳转到此路径。
 
-    对 System Manager / Administrator：直接跳到自定义首页 Workspace，
-    避免先加载 desktop 再 JS 跳转导致侧边栏无法初始化的问题。
-    """
+def get_website_user_home_page(user):
+    """Website hook matching the same role-aware Desk destination."""
     roles = frappe.get_roles(user) if user else []
-    if "System Manager" in roles or "Administrator" in roles:
-        # 直接让浏览器访问 Workspace 路由，侧边栏可正常初始化
-        return "desk/Workspaces/Home"
-    return "desk/oil-card-ledger"
+    return _resolve_login_home_route(roles).lstrip("/")
 
 
 def boot_session(bootinfo):
@@ -78,23 +72,21 @@ def boot_session(bootinfo):
     → 'desktop' 对应 tabPage 中 name='desktop' 的页面——这是 Frappe 原生大图标页。
 
     对于导航到我们自定义 Workspace 'Home'，则需要通过
-    前端 JS (ashan_cn_sidebar.js) 在 Desk 加载完成后主动调用
+    前端 JS (ashan_cn_sidebar_v2.js) 在 Desk 加载完成后主动调用
     frappe.set_route(['Workspaces', 'Home']) 实现跳转。
     """
     user = frappe.session.user
     roles = frappe.get_roles(user) if user else []
     is_system_manager = "System Manager" in roles or "Administrator" in roles
+    home_route = _resolve_login_home_route(roles)
     bootinfo.ashan_is_system_manager = is_system_manager
+    bootinfo.ashan_home_route = home_route
 
-    if is_system_manager:
-        # 'desktop' 是合法的 Frappe Page name。
-        # 注意：这里不能写 "Workspaces/Home"，因为空路由时 pageview 会把
-        # bootinfo.home_page 当成 DocType `Page` 的 name，而 Workspace 不是 Page。
-        # 首次 HTTP 落地由 hooks.py 的 website_redirects 和上面的登录 hook 负责；
-        # 此值只保留为异常情况下的合法 Page 回退，不能再作为首页跳转方案。
-        bootinfo.home_page = "desktop"
-    else:
-        bootinfo.home_page = "oil-card-ledger"
+    # bootinfo.home_page must be a real Frappe Page name, not a Workspace route.
+    # Only dedicated oil-card users use the custom Page as their fallback; all other
+    # business roles fall back to Frappe's desktop and are routed by the login hooks /
+    # Sidebar V2 to the appropriate Workspace.
+    bootinfo.home_page = "oil-card-ledger" if home_route == "/desk/oil-card-ledger" else "desktop"
 
     # 动态净化侧边栏并注入两页独立工作台项目
     for sidebar_name, sidebar in (bootinfo.get("workspace_sidebar_item") or {}).items():

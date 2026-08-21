@@ -20,6 +20,9 @@
   "is_red_invoice",
   "original_invoice_no",
   "credit_note_no",
+  "offset_invoice",
+  "offset_at",
+  "offset_note",
   "sec_parties",
   "seller_name",
   "seller_tax_id",
@@ -118,7 +121,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "业务状态",
-   "options": "待录入\n已录入\n已废弃",
+   "options": "待录入\n已录入\n已对冲\n已废弃",
    "reqd": 1
   },
   {
@@ -138,7 +141,7 @@
    "fieldname": "match_status",
    "fieldtype": "Select",
    "label": "匹配状态",
-   "options": "未匹配\n单一匹配\n多重匹配\n废弃冲突"
+   "options": "未匹配\n单一匹配\n多重匹配\n金额不符\n红冲对冲\n废弃冲突"
   },
   {
    "fieldname": "matched_at",
@@ -162,6 +165,22 @@
    "fieldname": "credit_note_no",
    "fieldtype": "Data",
    "label": "红字确认单编号"
+  },
+  {
+   "fieldname": "offset_invoice",
+   "fieldtype": "Link",
+   "label": "对冲发票",
+   "options": "Tax Invoice"
+  },
+  {
+   "fieldname": "offset_at",
+   "fieldtype": "Datetime",
+   "label": "对冲时间"
+  },
+  {
+   "fieldname": "offset_note",
+   "fieldtype": "Data",
+   "label": "对冲说明"
   },
   {
    "fieldname": "sec_parties",

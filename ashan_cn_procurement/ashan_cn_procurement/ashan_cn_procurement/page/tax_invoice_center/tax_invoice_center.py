@@ -37,6 +37,7 @@ def get_tax_invoices(filters=None, start=0, page_length=50):
 		SELECT
 			SUM(CASE WHEN business_status = '待录入' THEN 1 ELSE 0 END) AS pending_count,
 			SUM(CASE WHEN business_status = '已录入' THEN 1 ELSE 0 END) AS entered_count,
+			SUM(CASE WHEN business_status = '已对冲' THEN 1 ELSE 0 END) AS offset_count,
 			SUM(CASE WHEN business_status = '已废弃' THEN 1 ELSE 0 END) AS abandoned_count,
 			SUM(CASE WHEN parse_status = '需复核' THEN 1 ELSE 0 END) AS review_count,
 			COUNT(*) AS total_count
@@ -73,6 +74,7 @@ def get_tax_invoices(filters=None, start=0, page_length=50):
 			 OR seller_name LIKE %(st)s
 			 OR buyer_name LIKE %(st)s
 			 OR display_summary LIKE %(st)s
+			 OR offset_invoice LIKE %(st)s
 			 OR remark LIKE %(st)s)
 		""")
 		list_values["st"] = f"%{filters['search_text']}%"
@@ -88,6 +90,7 @@ def get_tax_invoices(filters=None, start=0, page_length=50):
 			display_summary, business_status, matched_purchase_invoice,
 			purchase_invoice_docstatus, match_status, matched_at,
 			is_red_invoice, original_invoice_no, credit_note_no,
+			offset_invoice, offset_at, offset_note,
 			parse_status, parser_source, parse_confidence, parse_warning,
 			invoice_pdf, pdf_removed, pdf_removed_at, pdf_remove_reason,
 			abandoned_reason, abandoned_note, abandoned_by, abandoned_at,
@@ -102,6 +105,7 @@ def get_tax_invoices(filters=None, start=0, page_length=50):
 		"kpis": {
 			"pending_count": cint(kpi_res.pending_count or 0),
 			"entered_count": cint(kpi_res.entered_count or 0),
+			"offset_count": cint(kpi_res.offset_count or 0),
 			"abandoned_count": cint(kpi_res.abandoned_count or 0),
 			"review_count": cint(kpi_res.review_count or 0),
 			"total_count": cint(kpi_res.total_count or 0)
@@ -312,3 +316,15 @@ def save_settings(settings_data):
 def run_cleanup_now():
 	"""立即执行到期附件清理"""
 	return run_cleanup_service(user=frappe.session.user)
+
+@frappe.whitelist()
+def trigger_red_invoice_reconciliation():
+	"""手动触发全量红字发票红冲对冲"""
+	from ashan_cn_procurement.services.tax_invoice_matcher import auto_reconcile_all_red_invoices
+	return auto_reconcile_all_red_invoices()
+
+@frappe.whitelist()
+def unlink_tax_invoice_offset(invoice_no):
+	"""手动解除红冲对冲"""
+	from ashan_cn_procurement.services.tax_invoice_matcher import unlink_offset_invoices
+	return unlink_offset_invoices(invoice_no)

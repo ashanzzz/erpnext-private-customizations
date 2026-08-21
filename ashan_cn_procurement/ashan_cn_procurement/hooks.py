@@ -8,17 +8,18 @@ app_license = "mit"
 # Includes in <head>
 # ------------------
 
-# include js, css files in header of desk.html
 app_include_css = [
     "/assets/ashan_cn_procurement/css/ashan_cn_procurement.css",
     "/assets/ashan_cn_procurement/css/ashan_ui_kit.css",
 ]
+
+# 全局仅加载真正的全站能力。
+# Purchase Invoice / Reimbursement Request 的脚本改为 doctype_js，
+# 避免在全 Desk 重复注册表单事件。
 app_include_js = [
     "/assets/ashan_cn_procurement/js/ashan_ui_kit.js",
     "/assets/ashan_cn_procurement/js/ashan_cn_translations.js",
-    "/assets/ashan_cn_procurement/js/ashan_cn_sidebar.js",
-    "/assets/ashan_cn_procurement/js/purchase_invoice_tax_calculator.js",
-    "/assets/ashan_cn_procurement/js/reimbursement_request.js",
+    "/assets/ashan_cn_procurement/js/ashan_cn_sidebar_v2.js",
     "/assets/ashan_cn_procurement/js/doc_details_list.js",
 ]
 
@@ -32,12 +33,7 @@ add_to_apps_screen = [
 ]
 
 # 首次登录路由保护（Frappe v16）：
-# 用户从站点根地址 `/` 登录时，官方 login.js 会优先使用 URL 中的
-# `redirect-to=/`，覆盖登录接口返回的 `home_page`。登录后回到空路由，Desk
-# 就会按 bootinfo.home_page 渲染官方 desktop/App 选择页。必须在 Website Path
-# Resolver 阶段把根地址先送到真实 Workspace，不能改回仅靠前端 set_route。
-# 注意：website_redirects 不处理已被 Desk renderer 接管的 `/desk`；该路径仍由
-# ashan_cn_sidebar.js 的路由守卫兜底。这里专门修复用户报告的“从 `/` 首次登录”。
+# 保持里程碑已验证的三层登录路由方案，不在本次导航重构中改变。
 website_redirects = [
     {
         "source": "/",
@@ -46,33 +42,30 @@ website_redirects = [
     },
 ]
 
-# Post-Login Default Page (Dashboard / Workspace)
 on_session_creation = "ashan_cn_procurement.boot.set_login_redirect"
 get_website_user_home_page = "ashan_cn_procurement.boot.get_website_user_home_page"
 extend_bootinfo = "ashan_cn_procurement.boot.boot_session"
 
-# role_home_page 是 get_website_user_home_page 未返回值时的网站层回退配置。
-# 本项目的显式 get_website_user_home_page hook 优先级更高；这里仍保持同一目标，
-# 防止未来调整 hook 时管理员重新落到空 `/desk` 路由。
 role_home_page = {
     "System Manager": "desk/Workspaces/Home",
     "Administrator": "desk/Workspaces/Home",
+    "Purchase User": "desk/Workspaces/Procurement Management",
+    "Purchase Manager": "desk/Workspaces/Procurement Management",
+    "Stock User": "desk/Workspaces/Stock and Inventory",
+    "Stock Manager": "desk/Workspaces/Stock and Inventory",
+    "Accounts User": "desk/Workspaces/Accounting and Finance",
+    "Accounts Manager": "desk/Workspaces/Accounting and Finance",
     "Oil Card Operator": "desk/oil-card-ledger",
     "Oil Card Manager": "desk/oil-card-ledger",
     "油卡操作员": "desk/oil-card-ledger",
     "油卡管理员": "desk/oil-card-ledger",
-    "Stock User": "desk/stock-entry",
-    "Stock Manager": "desk/stock-entry",
-    "Purchase User": "desk/purchase-order",
-    "Purchase Manager": "desk/purchase-order",
-    "Accounts User": "desk/reimbursement-request",
-    "Accounts Manager": "desk/reimbursement-request",
-    "All": "desk/oil-card-ledger"
+    "All": "desk/Workspaces/Home",
 }
 
 # DocType Specific Client Scripts
 doctype_js = {
     "Purchase Invoice": "public/js/purchase_invoice_tax_calculator.js",
+    "Reimbursement Request": "public/js/reimbursement_request.js",
     "Vehicle": "public/js/vehicle_custom.js",
 }
 
@@ -83,7 +76,6 @@ doctype_list_js = {
     "Purchase Invoice": "public/js/purchase_invoice_list.js",
     "Reimbursement Request": "public/js/reimbursement_request_list.js"
 }
-
 
 # Doc Events / Server Hooks
 doc_events = {
@@ -116,9 +108,7 @@ doc_events = {
     }
 }
 
-
-
-# Scheduled Tasks (Daily Expiry & Reminder Refresh & Tax Invoice Lifecycle)
+# Scheduled Tasks
 scheduler_events = {
     "daily": [
         "ashan_cn_procurement.services.special_equipment.refresh_all_special_equipment_status",
@@ -129,4 +119,6 @@ scheduler_events = {
 }
 
 # Post-Migration Hooks
+# 仍沿用当前 setup.after_migrate；该函数会读取 workspace_sidebar/home.json
+# 并同步所有业务 Sidebar。本版本把 home.json 升级为唯一完整菜单模板。
 after_migrate = "ashan_cn_procurement.setup.after_migrate"

@@ -1,0 +1,26 @@
+=== Python compileall ===
+PASS: Python compileall
+=== JSON parse all project JSON ===
+JSON files: 104
+PASS: all JSON parsed
+=== JavaScript syntax (all app JS) ===
+JS files checked: 78
+PASS: all JS parsed by node --check
+=== Hook duplicate-load checks ===
+purchase_invoice_tax_calculator.js 1
+reimbursement_request.js 1
+ashan_cn_sidebar_v2.js 1
+PASS: no duplicate global/form hook references
+=== Custom Page targets from sidebar ===
+procurement-workflow OK
+tax-invoice-center OK
+meal-settlement-workbench OK
+qifu-hr-salary-workbench OK
+jizhong-hr-salary-workbench OK
+property-settlement-workbench OK
+lease-settlement-workbench OK
+oil-card-ledger OK
+vehicle-toll-ledger OK
+environmental-management OK
+special-equipment-center OK
+PASS: all custom Page sidebar targets have source folders

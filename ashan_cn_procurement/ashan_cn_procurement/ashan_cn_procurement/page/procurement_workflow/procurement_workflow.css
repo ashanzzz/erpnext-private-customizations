@@ -1,0 +1,186 @@
+.procurement-workflow-page {
+    padding: 18px 4px 28px;
+    max-width: 1500px;
+    margin: 0 auto;
+}
+.pw-toolbar {
+    min-height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 14px;
+}
+.pw-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-color);
+}
+.pw-subtitle {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+.pw-company-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.pw-company-label {
+    color: var(--text-muted);
+    font-size: 12px;
+    white-space: nowrap;
+}
+.pw-company-options {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+.pw-company-chip {
+    height: 36px;
+    border: 1px solid var(--border-color);
+    background: var(--fg-color);
+    color: var(--text-color);
+    border-radius: 6px;
+    padding: 0 12px;
+    font-size: 12px;
+}
+.pw-company-chip.active {
+    border-color: var(--primary);
+    color: var(--primary);
+    font-weight: 600;
+    background: var(--control-bg);
+}
+.pw-notice {
+    padding: 10px 12px;
+    margin-bottom: 18px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--subtle-fg);
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+.pw-state {
+    min-height: 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+.pw-error {
+    gap: 8px;
+}
+.pw-pipeline {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 22px;
+    align-items: stretch;
+}
+.pw-stage-wrap {
+    position: relative;
+    min-width: 0;
+}
+.pw-stage-card {
+    width: 100%;
+    height: 100%;
+    min-height: 184px;
+    text-align: left;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--fg-color);
+    padding: 16px;
+    cursor: pointer;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+.pw-stage-card:hover {
+    border-color: var(--primary);
+    box-shadow: var(--shadow-sm);
+}
+.pw-stage-number {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--subtle-fg);
+    color: var(--text-muted);
+    font-weight: 700;
+    font-size: 12px;
+}
+.pw-stage-label {
+    margin-top: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-color);
+}
+.pw-stage-metric {
+    margin-top: 18px;
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+}
+.pw-stage-metric strong {
+    font-size: 26px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+.pw-stage-metric span {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+.pw-stage-amount {
+    margin-top: 8px;
+    color: var(--text-color);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.pw-stage-open {
+    margin-top: 18px;
+    color: var(--primary);
+    font-size: 12px;
+    font-weight: 600;
+}
+.pw-arrow {
+    position: absolute;
+    top: 50%;
+    right: -17px;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 18px;
+    z-index: 2;
+}
+.pw-actions {
+    margin-top: 18px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.pw-actions .btn {
+    height: 36px;
+}
+@media (max-width: 1100px) {
+    .pw-pipeline {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .pw-arrow {
+        display: none;
+    }
+}
+@media (max-width: 720px) {
+    .pw-toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+    .pw-company-options {
+        justify-content: flex-start;
+    }
+    .pw-pipeline {
+        grid-template-columns: 1fr;
+    }
+}

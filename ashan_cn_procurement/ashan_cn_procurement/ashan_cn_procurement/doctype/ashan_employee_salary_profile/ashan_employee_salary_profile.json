@@ -40,13 +40,41 @@
     {
       "fieldname": "mobile",
       "fieldtype": "Data",
-      "label": "手机号"
+      "label": "手机号",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "gender",
+      "fieldtype": "Select",
+      "label": "性别",
+      "options": "男\n女",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "birth_date",
+      "fieldtype": "Date",
+      "label": "出生日期"
+    },
+    {
+      "fieldname": "current_age",
+      "fieldtype": "Int",
+      "label": "当前年龄"
+    },
+    {
+      "fieldname": "retirement_age",
+      "fieldtype": "Float",
+      "label": "法定退休年龄"
+    },
+    {
+      "fieldname": "retirement_date",
+      "fieldtype": "Date",
+      "label": "法定退休日期"
     },
     {
       "fieldname": "employee_type",
       "fieldtype": "Select",
       "label": "人员类型",
-      "options": "正式工\n临时工\n退休返聘\n实习生",
+      "options": "正式工\n返聘工\n外籍工\n临时工\n实习生\n本月离职",
       "default": "正式工",
       "in_list_view": 1
     },
@@ -54,56 +82,95 @@
       "fieldname": "employment_status",
       "fieldtype": "Select",
       "label": "在职状态",
-      "options": "在职\n离职\n休假",
+      "options": "在职\n离职\n本月离职\n休假",
       "default": "在职",
       "in_list_view": 1
+    },
+    {
+      "fieldname": "date_of_joining",
+      "fieldtype": "Date",
+      "label": "入职日期"
+    },
+    {
+      "fieldname": "relieving_date",
+      "fieldtype": "Date",
+      "label": "离职日期",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "resignation_reason",
+      "fieldtype": "Data",
+      "label": "离职原因"
+    },
+    {
+      "fieldname": "salary_mode",
+      "fieldtype": "Select",
+      "label": "计薪方式",
+      "options": "税后\n税前\n税前动态工资\n税后管理工资",
+      "default": "税后",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "department",
+      "fieldtype": "Data",
+      "label": "部门"
+    },
+    {
+      "fieldname": "job_title",
+      "fieldtype": "Data",
+      "label": "岗位职务"
+    },
+    {
+      "fieldname": "base_salary",
+      "fieldtype": "Currency",
+      "label": "基本工资 (元)"
+    },
+    {
+      "fieldname": "post_allowance",
+      "fieldtype": "Currency",
+      "label": "岗位津贴 (元)"
+    },
+    {
+      "fieldname": "performance_base",
+      "fieldtype": "Currency",
+      "label": "绩效基数 (元)"
+    },
+    {
+      "fieldname": "meal_allowance",
+      "fieldtype": "Currency",
+      "label": "餐费补贴 (元)"
+    },
+    {
+      "fieldname": "traffic_allowance",
+      "fieldtype": "Currency",
+      "label": "交通补贴 (元)"
+    },
+    {
+      "fieldname": "communication_allowance",
+      "fieldtype": "Currency",
+      "label": "通讯补贴 (元)"
+    },
+    {
+      "fieldname": "other_allowance",
+      "fieldtype": "Currency",
+      "label": "其他补贴 (元)"
+    },
+    {
+      "fieldname": "fixed_salary",
+      "fieldtype": "Currency",
+      "label": "固定工资 (元)"
+    },
+    {
+      "fieldname": "commercial_insurance",
+      "fieldtype": "Currency",
+      "label": "商业保险 (元)"
     },
     {
       "fieldname": "is_insured",
       "fieldtype": "Check",
       "label": "是否参保",
       "default": "1"
-    },
-    {
-      "fieldname": "salary_mode",
-      "fieldtype": "Select",
-      "label": "计薪方式",
-      "options": "税前动态工资\n税后管理工资",
-      "default": "税前动态工资",
-      "reqd": 1,
-      "in_list_view": 1
-    },
-    {
-      "fieldname": "fixed_net_salary",
-      "fieldtype": "Currency",
-      "label": "约定税后实发工资 (元)"
-    },
-    {
-      "fieldname": "base_salary",
-      "fieldtype": "Currency",
-      "label": "基本工资 (元)",
-      "in_list_view": 1
-    },
-    {
-      "fieldname": "base_subsidy",
-      "fieldtype": "Currency",
-      "label": "基本补贴 (元)"
-    },
-    {
-      "fieldname": "performance_bonus_base",
-      "fieldtype": "Currency",
-      "label": "绩效奖金基准 (元)"
-    },
-    {
-      "fieldname": "position_allowance",
-      "fieldtype": "Currency",
-      "label": "职位津贴 (元)"
-    },
-    {
-      "fieldname": "meal_unit_price",
-      "fieldtype": "Currency",
-      "label": "餐补单价 (元/餐)",
-      "default": "15"
     },
     {
       "fieldname": "social_security_base",
@@ -115,19 +182,59 @@
       "fieldname": "housing_fund_base",
       "fieldtype": "Currency",
       "label": "公积金缴费基数 (元)",
-      "default": "2520"
+      "default": "2320"
     },
     {
-      "fieldname": "special_additional_deduction",
+      "fieldname": "sec_deduction",
+      "fieldtype": "Section Break",
+      "label": "个税专项附加扣除 (元/月)"
+    },
+    {
+      "fieldname": "deduction_child_education",
       "fieldtype": "Currency",
-      "label": "个税专项附加扣除 (元/月)",
+      "label": "子女教育",
       "default": "0"
     },
     {
-      "fieldname": "tax_exemption_monthly",
+      "fieldname": "deduction_continuing_education",
       "fieldtype": "Currency",
-      "label": "个税起征点 (元/月)",
-      "default": "5000"
+      "label": "继续教育",
+      "default": "0"
+    },
+    {
+      "fieldname": "deduction_serious_illness",
+      "fieldtype": "Currency",
+      "label": "大病医疗",
+      "default": "0"
+    },
+    {
+      "fieldname": "deduction_housing_loan",
+      "fieldtype": "Currency",
+      "label": "住房贷款利息",
+      "default": "0"
+    },
+    {
+      "fieldname": "deduction_housing_rent",
+      "fieldtype": "Currency",
+      "label": "住房租金",
+      "default": "0"
+    },
+    {
+      "fieldname": "deduction_elderly_care",
+      "fieldtype": "Currency",
+      "label": "赡养老人",
+      "default": "0"
+    },
+    {
+      "fieldname": "deduction_infant_care",
+      "fieldtype": "Currency",
+      "label": "3岁以下婴幼儿照护",
+      "default": "0"
+    },
+    {
+      "fieldname": "sec_bank",
+      "fieldtype": "Section Break",
+      "label": "银行卡与备注"
     },
     {
       "fieldname": "bank_name",
@@ -143,6 +250,17 @@
       "fieldname": "notes",
       "fieldtype": "Small Text",
       "label": "备注说明"
+    },
+    {
+      "fieldname": "original_retirement_age",
+      "fieldtype": "Float",
+      "label": "原法定退休年龄",
+      "default": "60"
+    },
+    {
+      "fieldname": "delayed_retirement_age",
+      "fieldtype": "Float",
+      "label": "渐进式延迟退休年龄"
     }
   ],
   "permissions": [

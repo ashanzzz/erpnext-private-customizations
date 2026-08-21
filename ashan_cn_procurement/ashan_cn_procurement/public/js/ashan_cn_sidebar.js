@@ -36,8 +36,8 @@
     // 2) 管理员访问原生 desktop / desk 路由或大图标页时，平滑直达定制总控主页 Workspaces/Home
     function handle_route_guard() {
         if (!window.frappe) return;
-        const route = frappe.get_route_str ? frappe.get_route_str() : "";
-        const routeArr = frappe.get_route ? frappe.get_route() : [];
+        const routeArr = (frappe.get_route && frappe.get_route()) || [];
+        const route = Array.isArray(routeArr) ? routeArr.join("/") : "";
         const isMgr = is_oil_card_manager_user();
 
         if (!isMgr) {
@@ -83,7 +83,12 @@
         "物业与租赁管理": "property-and-lease",
         "公司合规": "company-compliance-center",
         "企业合规中心": "company-compliance-center",
-        "公司治理": "company-compliance-center",
+        "财税与发票中心": "accounting-and-finance",
+        "财税中心": "accounting-and-finance",
+        "发票中心": "accounting-and-finance",
+        "人事薪酬与用工": "accounting-and-finance",
+        "人事薪酬": "accounting-and-finance",
+        "人事管理": "accounting-and-finance",
         "财务与报销": "accounting-and-finance",
         "财务": "accounting-and-finance",
         "我的业务 (总主页)": "home",
@@ -96,6 +101,7 @@
 
     const FUEL_SECTION_TITLES = [
         "车辆和车用油管理",
+        "🚗 车辆和车用油管理",
         "油卡使用明细",
         "车油能耗中心",
         "车辆燃油",
@@ -475,7 +481,8 @@
                 const targetWs = SECTION_WORKSPACE_MAP[title];
                 if (targetWs) {
                     try {
-                        const currentRoute = (frappe.router && frappe.router.current_route) ? (frappe.get_route_str() || "") : "";
+                        const currentRouteArr = (frappe.get_route && frappe.get_route()) || [];
+                        const currentRoute = Array.isArray(currentRouteArr) ? currentRouteArr.join('/') : '';
                         if (!currentRoute.includes(targetWs)) {
                             frappe.set_route("desk", targetWs);
                         }
@@ -545,11 +552,44 @@
                 padding-left: 24px !important;
                 font-size: 13px !important;
                 font-weight: 400 !important;
+                color: #64748b !important;
                 cursor: pointer !important;
+            }
+            .body-sidebar .sidebar-child-item .standard-sidebar-item .sidebar-item-label {
+                color: #64748b;
+                transition: color 0.15s ease, font-weight 0.15s ease;
+            }
+            /* 工作台置顶加粗高亮 (* 标记项) */
+            .body-sidebar .sidebar-child-item .standard-sidebar-item.workbench-highlight-item .item-anchor,
+            .body-sidebar .sidebar-child-item .standard-sidebar-item .item-anchor:has(.sidebar-item-label:contains('*')) {
+                font-weight: 700 !important;
+                color: #0f172a !important;
+            }
+            .body-sidebar .sidebar-child-item .standard-sidebar-item.workbench-highlight-item .sidebar-item-label,
+            .body-sidebar .sidebar-child-item .standard-sidebar-item .sidebar-item-label:contains('*') {
+                font-weight: 700 !important;
+                color: #0f172a !important;
             }
         </style>
         `;
         $("head").append(styleHtml);
+    }
+
+    function highlight_workbench_items() {
+        $(".body-sidebar .sidebar-child-item .sidebar-item-label").each(function() {
+            const text = $(this).text().trim();
+            if (text.includes("*") || text.includes("工作台") || text.includes("资料库") || text.includes("台账明细台")) {
+                $(this).closest(".standard-sidebar-item").addClass("workbench-highlight-item");
+                $(this).css({
+                    "font-weight": "700",
+                    "color": "#0f172a"
+                });
+                $(this).closest(".standard-sidebar-item").find(".item-anchor").css({
+                    "font-weight": "700",
+                    "color": "#0f172a"
+                });
+            }
+        });
     }
 
     // 5. 初始化挂载
@@ -559,6 +599,7 @@
         patch_native_section_break();
         schedule_system_management_visibility();
         handle_route_guard();
+        highlight_workbench_items();
 
         $(document).on("sidebar_setup app_ready route-change page-change", function() {
             inject_styles();
@@ -566,6 +607,7 @@
             patch_native_section_break();
             schedule_system_management_visibility();
             handle_route_guard();
+            highlight_workbench_items();
         });
     }
 
@@ -573,6 +615,9 @@
     $(document).ready(init);
     $(document).on("app_ready", function() {
         init();
-        setTimeout(handle_route_guard, 50);
+        setTimeout(() => {
+            handle_route_guard();
+            highlight_workbench_items();
+        }, 50);
     });
 })();

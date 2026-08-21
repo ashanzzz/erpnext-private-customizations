@@ -45,8 +45,8 @@ class TaxInvoiceCenter {
                     </div>
                 </div>
 
-                <!-- 4 项核心 KPI 卡片 -->
-                <div class="tax-kpi-grid">
+                <!-- 5 项核心 KPI 卡片 -->
+                <div class="tax-kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
                     <div class="tax-kpi-card card-pending" data-status="待录入">
                         <div class="kpi-left">
                             <div class="kpi-label">待录入发票</div>
@@ -61,9 +61,16 @@ class TaxInvoiceCenter {
                         </div>
                         <div class="kpi-icon">✅</div>
                     </div>
+                    <div class="tax-kpi-card card-offset" data-status="已对冲" style="border-left: 4px solid #8b5cf6;">
+                        <div class="kpi-left">
+                            <div class="kpi-label">已红冲对冲 (无需录入)</div>
+                            <div class="kpi-val" id="kpi-offset-val" style="color: #7c3aed;">-</div>
+                        </div>
+                        <div class="kpi-icon">🔄</div>
+                    </div>
                     <div class="tax-kpi-card card-abandoned" data-status="已废弃">
                         <div class="kpi-left">
-                            <div class="kpi-label">已废弃 (无需录入)</div>
+                            <div class="kpi-label">已废弃</div>
                             <div class="kpi-val" id="kpi-abandoned-val">-</div>
                         </div>
                         <div class="kpi-icon">🗑️</div>
@@ -97,6 +104,7 @@ class TaxInvoiceCenter {
                             <option value="">全部状态</option>
                             <option value="待录入">待录入</option>
                             <option value="已录入">已录入</option>
+                            <option value="已对冲">已红冲对冲 (无需录入)</option>
                             <option value="已废弃">已废弃</option>
                         </select>
                     </div>
@@ -234,6 +242,7 @@ class TaxInvoiceCenter {
     render_kpis(kpis) {
         this.$wrapper.find('#kpi-pending-val').text(kpis.pending_count || 0);
         this.$wrapper.find('#kpi-entered-val').text(kpis.entered_count || 0);
+        this.$wrapper.find('#kpi-offset-val').text(kpis.offset_count || 0);
         this.$wrapper.find('#kpi-abandoned-val').text(kpis.abandoned_count || 0);
         this.$wrapper.find('#kpi-review-val').text(kpis.review_count || 0);
     }
@@ -244,14 +253,20 @@ class TaxInvoiceCenter {
         $tbody.empty();
 
         if (!invoices.length) {
-            $tbody.html('<tr><td colspan="13" style="text-align: center; padding: 40px; color: #94a3b8;">暂无符合条件的税局发票记录</td></tr>');
+            $tbody.html('<tr><td colspan="14" style="text-align: center; padding: 40px; color: #94a3b8;">暂无符合条件的税局发票记录</td></tr>');
             return;
         }
 
         invoices.forEach(inv => {
             const isExpanded = self.expanded_invoices.has(inv.invoice_no);
             let badgeClass = 'badge-pending', badgeText = '待录入';
-            if (inv.is_red_invoice) {
+            if (inv.business_status === '已对冲') {
+                badgeClass = 'badge-offset';
+                badgeText = '🔄 已对冲';
+            } else if (inv.match_status === '金额不符') {
+                badgeClass = 'badge-mismatch';
+                badgeText = '⚠️ 金额不符';
+            } else if (inv.is_red_invoice) {
                 badgeClass = 'badge-red';
                 badgeText = '🔴 红字发票';
             } else if (inv.match_status === '废弃冲突') {
@@ -266,7 +281,12 @@ class TaxInvoiceCenter {
             }
 
             let piLink = '<span style="color: #94a3b8;">未匹配</span>';
-            if (inv.matched_purchase_invoice) {
+            if (inv.business_status === '已对冲' && inv.offset_invoice) {
+                piLink = `<span style="color: #7c3aed; font-weight: 600; font-size: 11.5px;" title="${frappe.utils.escape_html(inv.offset_note || '')}">🔄 冲销 ${frappe.utils.escape_html(inv.offset_invoice)}</span>`;
+            } else if (inv.match_status === '金额不符' && inv.matched_purchase_invoice) {
+                const statusPill = inv.purchase_invoice_docstatus === '已提交' ? '🟢' : '🟡';
+                piLink = `<a href="/desk/purchase-invoice/${encodeURIComponent(inv.matched_purchase_invoice)}" target="_blank" style="color: #ea580c; font-weight: 600;" title="发票号码匹配，但采购发票金额与税局发票金额不一致，请核对！">${statusPill} ${frappe.utils.escape_html(inv.matched_purchase_invoice)} <span style="font-size: 11px; color: #dc2626;">(金额不符)</span></a>`;
+            } else if (inv.matched_purchase_invoice) {
                 const statusPill = inv.purchase_invoice_docstatus === '已提交' ? '🟢' : '🟡';
                 piLink = `<a href="/desk/purchase-invoice/${encodeURIComponent(inv.matched_purchase_invoice)}" target="_blank" style="color: #2563eb; font-weight: 600;">${statusPill} ${frappe.utils.escape_html(inv.matched_purchase_invoice)}</a>`;
             }
@@ -481,12 +501,43 @@ class TaxInvoiceCenter {
             }
         ];
 
-        if (inv.business_status !== '已废弃') {
+        if (inv.business_status === '已对冲') {
+            menu.push({
+                label: '🔓 解除红冲对冲关联 (恢复待录入)',
+                action: () => {
+                    frappe.confirm(__('确定解除此发票的红冲对冲关联？解除后双方发票将恢复为【待录入】。'), () => {
+                        frappe.call({
+                            method: 'ashan_cn_procurement.ashan_cn_procurement.page.tax_invoice_center.tax_invoice_center.unlink_tax_invoice_offset',
+                            args: { invoice_no: inv.invoice_no },
+                            callback: (r) => {
+                                frappe.show_alert({ message: __('已解除对冲关联'), indicator: 'blue' });
+                                self.load_data();
+                            }
+                        });
+                    });
+                }
+            });
+        } else if (inv.is_red_invoice || flt(inv.payable_total) < 0) {
+            menu.push({
+                label: '🔄 检测并执行红冲自动对冲',
+                action: () => {
+                    frappe.call({
+                        method: 'ashan_cn_procurement.ashan_cn_procurement.page.tax_invoice_center.tax_invoice_center.trigger_red_invoice_reconciliation',
+                        callback: (r) => {
+                            frappe.show_alert({ message: __('红冲对冲检测完成'), indicator: 'green' });
+                            self.load_data();
+                        }
+                    });
+                }
+            });
+        }
+
+        if (inv.business_status !== '已废弃' && inv.business_status !== '已对冲') {
             menu.push({
                 label: '🗑️ 标记已废弃 (无需录入)',
                 action: () => { self.open_abandon_dialog(inv.invoice_no); }
             });
-        } else {
+        } else if (inv.business_status === '已废弃') {
             menu.push({
                 label: '↩️ 恢复为待录入',
                 action: () => {

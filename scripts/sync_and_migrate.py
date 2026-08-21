@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-HOST = os.getenv('UNRAID_SSH_HOST', '192.168.8.11')
+LAN_HOST = os.getenv('UNRAID_SSH_HOST', '192.168.8.11')
+TAILSCALE_HOST = os.getenv('UNRAID_TAILSCALE_HOST', '100.80.0.4')
 PORT = int(os.getenv('UNRAID_SSH_PORT', '22'))
 USER = os.getenv('UNRAID_SSH_USER', 'root')
 PASSWORD = os.getenv('UNRAID_SSH_PASSWORD', '')
@@ -22,9 +23,28 @@ def run_cmd(client, cmd):
         print("ERR:", err)
     return out, err
 
-client = paramiko.SSHClient()
-client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect(HOST, port=PORT, username=USER, password=PASSWORD, timeout=15)
+def connect_ssh():
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    
+    # 尝试 1: 局域网地址
+    print(f"Connecting to Unraid LAN ({LAN_HOST}:{PORT})...")
+    try:
+        client.connect(LAN_HOST, port=PORT, username=USER, password=PASSWORD, timeout=5)
+        print(f"[OK] Connected via LAN ({LAN_HOST})")
+        return client
+    except Exception as e:
+        print(f"[WARN] LAN connection to {LAN_HOST} failed ({e}). Trying Tailscale remote ({TAILSCALE_HOST})...")
+
+    # 尝试 2: Tailscale 远程地址
+    try:
+        client.connect(TAILSCALE_HOST, port=PORT, username=USER, password=PASSWORD, timeout=10)
+        print(f"[OK] Connected via Tailscale ({TAILSCALE_HOST})")
+        return client
+    except Exception as e:
+        raise ConnectionError(f"Failed to connect to both LAN ({LAN_HOST}) and Tailscale ({TAILSCALE_HOST}): {e}")
+
+client = connect_ssh()
 
 # 1. 压缩本地 ashan_cn_procurement app
 local_app_dir = r"d:\SynologyDrive团队\antigravity\erpnext16\ashan_cn_procurement"
@@ -51,10 +71,10 @@ run_cmd(client, "docker exec erpnext16 chown -R frappe:frappe /home/frappe/frapp
 print("Running bench migrate...")
 run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench --site site1.local migrate")
 
-# 5. 清理缓存并重启应用重载 Python 模块
-print("Clearing cache & restarting services...")
+# 5. 清理缓存并重启容器重载 Python 模块
+print("Clearing cache & restarting container...")
 run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench --site site1.local clear-cache")
-run_cmd(client, "docker exec erpnext16 supervisorctl restart all")
+run_cmd(client, "docker restart erpnext16")
 
 client.close()
 print("\n[OK] Sync & Migrate completed successfully!")

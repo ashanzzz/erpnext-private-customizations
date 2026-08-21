@@ -1,0 +1,14 @@
+**/.git
+**/__pycache__/
+**/*.py[cod]
+**/*.egg-info/
+
+# Ashan must be included in the AIO build context.
+custom-apps/*
+!custom-apps/ashan_cn_procurement/
+!custom-apps/ashan_cn_procurement/**
+
+docs/
+overrides/
+run.sh
+README.md

@@ -10,7 +10,11 @@ from frappe.utils import now_datetime, cint, flt
 from ashan_cn_procurement.parser.common import normalize_invoice_no, calculate_sha256
 from ashan_cn_procurement.parser.xml_parser import parse_tax_invoice_xml
 from ashan_cn_procurement.parser.pdf_parser import parse_tax_invoice_pdf
-from ashan_cn_procurement.services.tax_invoice_matcher import get_matching_purchase_invoices, update_tax_invoice_match_state
+from ashan_cn_procurement.services.tax_invoice_matcher import (
+	get_matching_purchase_invoices,
+	update_tax_invoice_match_state,
+	auto_reconcile_all_red_invoices
+)
 
 def decode_zip_entry_name(info):
 	"""
@@ -56,40 +60,68 @@ def extract_invoice_key_from_filename(filename):
 
 def identify_company(buyer_name, buyer_tax_id):
 	"""
-	根据购买方名称与税号识别所属公司
-	优先匹配 Tax Invoice Settings 中的 Company Mappings，其次匹配 tabCompany
+	根据购买方名称与税号识别所属 ERP 公司
+	1. 规则表税号精准匹配 (Tax Invoice Settings)
+	2. 规则表名称包含匹配 (Tax Invoice Settings)
+	3. 系统 Company 档案税号与全称匹配 (tabCompany)
+	4. 核心商号/品牌关键词精准识别 (吉众 -> 天津吉众机电设备有限公司, 祺富 -> 天津祺富机械加工有限公司)
+	5. 核心词根智能模糊匹配 (去除区域/有限公司等停用词)
 	"""
 	settings = frappe.get_single("Tax Invoice Settings")
 	mappings = settings.get("company_mappings") or []
 
 	# 1. 规则表精确税号匹配
 	if buyer_tax_id:
+		clean_tax_id = buyer_tax_id.strip()
 		for m in mappings:
-			if m.buyer_tax_id and m.buyer_tax_id.strip() == buyer_tax_id.strip():
+			if m.buyer_tax_id and m.buyer_tax_id.strip() == clean_tax_id:
 				return m.company
 
-	# 2. 规则表名称包含匹配
+	# 2. 规则表名称包含/匹配
 	if buyer_name:
+		clean_bname = buyer_name.strip()
 		for m in mappings:
-			if m.buyer_name and m.buyer_name.strip() in buyer_name.strip():
+			if m.buyer_name and (m.buyer_name.strip() in clean_bname or clean_bname in m.buyer_name.strip()):
 				return m.company
 
-	# 3. 系统 Company 档案税号与名称匹配
+	# 3. 系统 Company 档案税号与全称精确匹配
 	if buyer_tax_id:
-		c = frappe.db.get_value("Company", {"tax_id": buyer_tax_id}, "name")
+		c = frappe.db.get_value("Company", {"tax_id": buyer_tax_id.strip()}, "name")
 		if c:
 			return c
 
+	comps = frappe.get_all("Company", fields=["name", "company_name", "tax_id"])
+	comp_names = [c.name for c in comps]
+
 	if buyer_name:
-		c = frappe.db.get_value("Company", {"company_name": buyer_name}, "name")
-		if c:
-			return c
-		# 模糊前缀匹配
-		comps = frappe.get_all("Company", fields=["name", "company_name"])
+		clean_bname = buyer_name.strip()
 		for comp in comps:
-			c_name = comp.company_name or comp.name
-			if c_name in buyer_name or buyer_name in c_name:
+			c_name = (comp.company_name or comp.name).strip()
+			if c_name == clean_bname:
 				return comp.name
+
+		# 4. 核心商号特征词识别 (吉众 / 祺富)
+		if "吉众" in clean_bname:
+			for c_name in comp_names:
+				if "吉众" in c_name:
+					return c_name
+		if "祺富" in clean_bname:
+			for c_name in comp_names:
+				if "祺富" in c_name:
+					return c_name
+
+		# 5. 去除常见停用词后的核心子串匹配
+		stopwords = ["天津", "北京", "河北", "山东", "机械", "机电", "设备", "科技", "加工", "商贸", "贸易", "实业", "安装", "工程", "有限公司", "有限责任公司", "公司", "厂", "部"]
+		core_buyer = clean_bname
+		for sw in stopwords:
+			core_buyer = core_buyer.replace(sw, "")
+		core_buyer = core_buyer.strip()
+
+		if core_buyer and len(core_buyer) >= 2:
+			for comp in comps:
+				c_name = (comp.company_name or comp.name).strip()
+				if core_buyer in c_name:
+					return comp.name
 
 	return None
 
@@ -382,6 +414,12 @@ def process_import_batch(batch_name):
 			for inv_n in all_touched_nos:
 				pis = matched_map.get(inv_n, [])
 				update_tax_invoice_match_state(inv_n, matched_pis=pis)
+
+		# 6.2 触发红字发票与原蓝字发票自动红冲对冲
+		try:
+			auto_reconcile_all_red_invoices()
+		except Exception as e_rec:
+			frappe.log_error(f"批次红冲自动对冲异常: {str(e_rec)}", "Tax Invoice Auto Offset")
 
 		# 7. 删除临时上传文件
 		batch.current_message = "正在清理临时上传文件..."
