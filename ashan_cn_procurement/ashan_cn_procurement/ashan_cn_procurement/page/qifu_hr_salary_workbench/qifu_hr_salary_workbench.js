@@ -1199,16 +1199,28 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
     function render_employees_view(list) {
         let total = list.length;
-        let resigned = list.filter(e => e.is_resigned_this_month || e.employment_status === '离职').length;
-        let insured = list.filter(e => (e.employee_type || '正式工') === '正式工' && !e.is_resigned_this_month && e.employment_status !== '离职').length;
-        let rehire = list.filter(e => ['退休返聘','返聘工','其他-返聘工'].includes(e.employee_type || '') && !e.is_resigned_this_month && e.employment_status !== '离职').length;
-        let other = total - insured - rehire - resigned;
+        let resignedList = list.filter(e => e.is_resigned_this_month || e.employment_status === '离职');
+        let insuredList = list.filter(e => (e.employee_type || '正式工') === '正式工' && !e.is_resigned_this_month && e.employment_status !== '离职');
+        let rehireList = list.filter(e => ['退休返聘','返聘工','其他-返聘工'].includes(e.employee_type || '') && !e.is_resigned_this_month && e.employment_status !== '离职');
+        let otherList = list.filter(e => (e.employee_type || '正式工') !== '正式工' && !['退休返聘','返聘工','其他-返聘工'].includes(e.employee_type || '') && !e.is_resigned_this_month && e.employment_status !== '离职');
+
+        let insuredZero = insuredList.filter(e => flt(e.fixed_salary) === 0 && flt(e.base_salary) === 0).length;
+        let rehireZero = rehireList.filter(e => flt(e.fixed_salary) === 0 && flt(e.base_salary) === 0).length;
+        let otherZero = otherList.filter(e => flt(e.fixed_salary) === 0 && flt(e.base_salary) === 0).length;
+
+        const fmtTab1Count = (cnt, zeroCnt) => {
+            let str = cnt + ' 人';
+            if (zeroCnt > 0) {
+                str += ` <span style="font-size:11px; color:#ef4444; font-weight:600; margin-left:3px;">(其中 ${zeroCnt}人 0工资)</span>`;
+            }
+            return str;
+        };
 
         $("#tab1-emp-total").text(total + ' 人');
-        $("#tab1-emp-insured").text(insured + ' 人');
-        $("#tab1-emp-rehire").text(rehire + ' 人');
-        $("#tab1-emp-resigned").text(resigned + ' 人');
-        $("#tab1-emp-other").text(other + ' 人');
+        $("#tab1-emp-insured").html(fmtTab1Count(insuredList.length, insuredZero));
+        $("#tab1-emp-rehire").html(fmtTab1Count(rehireList.length, rehireZero));
+        $("#tab1-emp-resigned").text(resignedList.length + ' 人');
+        $("#tab1-emp-other").html(fmtTab1Count(otherList.length, otherZero));
 
         // 重置表头全选框
         $("#check-all-tab1-employees").prop("checked", false);
@@ -1753,10 +1765,18 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         const kpi = data.kpi_summary || {};
 
         // 卡片 1: 人员结构
+        const formatEmpCountWithZero = (cnt, zeroCnt, color) => {
+            let str = `<strong style="color:${color};">${cnt || 0} 人</strong>`;
+            if (zeroCnt && zeroCnt > 0) {
+                str += ` <span style="font-size:11px; color:#ef4444; font-weight:600; margin-left:4px;">(其中 ${zeroCnt}人 0工资)</span>`;
+            }
+            return str;
+        };
+
         $("#kpi-emp-total").text(kpi.total_profile_count || data.total_employees || 0);
-        $("#kpi-emp-insured").text((kpi.insured_count || 0) + ' 人');
-        $("#kpi-emp-rehire").text((kpi.rehire_count || 0) + ' 人');
-        $("#kpi-emp-other").text((kpi.other_count || 0) + ' 人');
+        $("#kpi-emp-insured").html(formatEmpCountWithZero(kpi.insured_count, kpi.insured_zero_count, '#2563eb'));
+        $("#kpi-emp-rehire").html(formatEmpCountWithZero(kpi.rehire_count, kpi.rehire_zero_count, '#d97706'));
+        $("#kpi-emp-other").html(formatEmpCountWithZero(kpi.other_count, kpi.other_zero_count, '#64748b'));
 
         // 卡片 2: 社保统筹
         $("#kpi-ss-badge").text(`缴纳: ${kpi.ss_payment_month_name || ''} · 所属: ${kpi.ss_period_month_str || ''}`);
@@ -2925,7 +2945,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 if (is_task2_done) {
                     $("#wf-step2-icon").text("🟢");
                     $("#wf-step2-main").text(`已导入 ${wf.task2_import.employee_count} 人 · ¥ ${Number(wf.task2_import.total_net).toLocaleString('zh-CN', {minimumFractionDigits:2})}`);
-                    $("#wf-step2-sub").text(`车间实发 ${wf.task2_import.employee_count}人 ｜ 非车间(母表) 1人`);
+                    $("#wf-step2-sub").text(wf.task2_import.sub_badge || `车间实发 ${wf.task2_import.employee_count}人 ｜ 非车间(母表) ${wf.task2_import.non_workshop_count || 0}人`);
                     $("#wf-step-2").css({"background":"#f0fdf4","border-color":"#bbf7d0"});
                     $("#btn-wf-upload-salary").html("🗑️ 删除已上传实发表")
                         .attr("data-state", "uploaded")

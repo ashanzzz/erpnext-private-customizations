@@ -57,20 +57,45 @@ def get_payroll_settlement_detail(company, period_month):
 	all_profiles = frappe.get_all(
 		"Ashan Employee Salary Profile",
 		filters={"company": company, "employment_status": "在职"},
-		fields=["employee_no", "employee_name", "employee_type", "social_security_base", "housing_fund_base"]
+		fields=["employee_no", "employee_name", "employee_type", "fixed_salary", "base_salary", "social_security_base", "housing_fund_base"]
 	)
 	total_profile_count = len(all_profiles)
 	insured_count = 0
+	insured_zero_count = 0
 	rehire_count = 0
+	rehire_zero_count = 0
 	other_count = 0
+	other_zero_count = 0
+
+	# 建立当期实发/税前/固定薪资映射
+	item_sal_map = {}
+	doc_name = f"{company}-{period_month}"
+	if frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
+		settlement_doc = frappe.get_doc("Ashan Monthly Payroll Settlement", doc_name)
+		for it in settlement_doc.items:
+			sal_val = max(flt(it.get("net_salary")), flt(it.get("gross_salary")), flt(it.get("fixed_salary")), flt(it.get("target_salary")))
+			item_sal_map[it.employee_no] = sal_val
+
 	for p in all_profiles:
 		etype = p.get("employee_type") or "正式工"
+		emp_no = p.get("employee_no")
+		emp_cur_sal = item_sal_map.get(emp_no, flt(p.get("fixed_salary")) or flt(p.get("base_salary")))
+		is_zero_sal = (emp_cur_sal <= 0.001)
+
 		if etype == "正式工":
 			insured_count += 1
+			if is_zero_sal:
+				insured_zero_count += 1
 		elif etype in TAX_REHIRE_EMPLOYEE_TYPES:
 			rehire_count += 1
+			if is_zero_sal:
+				rehire_zero_count += 1
 		else:
 			other_count += 1
+			if is_zero_sal:
+				other_zero_count += 1
+
+	total_zero_count = insured_zero_count + rehire_zero_count + other_zero_count
 
 	# 社保与公积金统计 (使用现有的明细计算函数)
 	ss_data = get_social_insurance_sheet(company, period_month)
@@ -78,7 +103,6 @@ def get_payroll_settlement_detail(company, period_month):
 	hf_data = get_housing_fund_sheet(company, period_month)
 	hf_totals = hf_data.get("totals", {})
 
-	doc_name = f"{company}-{period_month}"
 	if not frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
 		return {
 			"exists": False,
@@ -89,9 +113,13 @@ def get_payroll_settlement_detail(company, period_month):
 			"items": [],
 			"kpi_summary": {
 				"total_profile_count": total_profile_count,
+				"total_zero_count": total_zero_count,
 				"insured_count": insured_count,
+				"insured_zero_count": insured_zero_count,
 				"rehire_count": rehire_count,
+				"rehire_zero_count": rehire_zero_count,
 				"other_count": other_count,
+				"other_zero_count": other_zero_count,
 				"ss_payment_month_name": payment_month_name,
 				"ss_period_month_str": period_month_str,
 				"ss_grand_total": ss_totals.get("grand_total", 0.0),
@@ -127,9 +155,13 @@ def get_payroll_settlement_detail(company, period_month):
 
 	kpi_summary = {
 		"total_profile_count": total_profile_count,
+		"total_zero_count": total_zero_count,
 		"insured_count": insured_count,
+		"insured_zero_count": insured_zero_count,
 		"rehire_count": rehire_count,
+		"rehire_zero_count": rehire_zero_count,
 		"other_count": other_count,
+		"other_zero_count": other_zero_count,
 		"ss_payment_month_name": payment_month_name,
 		"ss_period_month_str": period_month_str,
 		"ss_grand_total": ss_totals.get("grand_total", 0.0),
@@ -1793,8 +1825,8 @@ def get_salary_distribution_sheet(company="天津祺富机械加工有限公司"
 	seq_num = 1
 	for it in items:
 		rem = it.get("remarks") or ""
-		# 过滤非车间出勤人员（如外籍/高管等在母表但不在车间实发表人员）
-		if "非车间出勤" in rem or (flt(it.get("net_salary")) == 0 and flt(it.get("work_hours")) == 0 and flt(it.get("attendance_days")) == 0 and not str(it.get("employee_no", "")).startswith("A")):
+		# 过滤非车间出勤人员（如外籍工/非车间在册人员即便直接输入工资，也绝不混入车间24列实发表）
+		if "非车间出勤" in rem or it.get("employee_type") == "外籍工" or (flt(it.get("work_hours")) == 0 and flt(it.get("attendance_days")) == 0 and not str(it.get("employee_no", "")).startswith("A")):
 			continue
 
 		workshop_net = flt(it.get("fixed_salary"))
@@ -3482,10 +3514,6 @@ def get_monthly_workflow_status(company, period_month):
 	)
 	emp_count = len(emp_profiles)
 	
-	# 系统计薪 vs 外部车间计薪人数
-	sys_calc_count = sum(1 for e in emp_profiles if (flt(e.get("fixed_salary")) > 0 and e.get("employee_no") == "A0006"))
-	ext_calc_count = emp_count - sys_calc_count
-
 	# 离职动态分析
 	resigned_in_period = [e for e in emp_profiles if e.get("employment_status") == "离职" or (e.get("relieving_date") and str(e.get("relieving_date")).startswith(period_month))]
 	if resigned_in_period:
@@ -3570,6 +3598,26 @@ def get_monthly_workflow_status(company, period_month):
 		and hf_status == "verified"
 	)
 
+	# 建立当期车间人员集合与未设薪人员
+	workshop_emp_set = set(r.get("employee_no") for r in dist_rows)
+	
+	sys_calc_count = 0
+	ext_calc_count = 0
+	zero_calc_count = 0
+	for e in emp_profiles:
+		eno = e.get("employee_no")
+		if eno in workshop_emp_set:
+			ext_calc_count += 1
+		elif flt(e.get("fixed_salary")) > 0:
+			sys_calc_count += 1
+		else:
+			zero_calc_count += 1
+
+	if zero_calc_count > 0:
+		task1_sub_badge = f"系统计薪 {sys_calc_count}人 ｜ 外部实发计薪 {ext_calc_count}人 ｜ 0工资 {zero_calc_count}人"
+	else:
+		task1_sub_badge = f"系统计薪 {sys_calc_count}人 ｜ 外部实发计薪 {ext_calc_count}人" if has_items else f"系统计薪 {sys_calc_count}人 ｜ 外部计薪 待导入"
+
 	return {
 		"company": company,
 		"period_month": period_month,
@@ -3581,16 +3629,19 @@ def get_monthly_workflow_status(company, period_month):
 			"active_count": emp_count,
 			"sys_calc_count": sys_calc_count,
 			"ext_calc_count": ext_calc_count,
+			"zero_calc_count": zero_calc_count,
 			"is_ext_imported": has_items,
 			"change_text": profile_change_text,
-			"sub_badge": f"系统计薪 {sys_calc_count}人 ｜ 外部实发计薪 {ext_calc_count}人" if has_items else f"系统计薪 {sys_calc_count}人 ｜ 外部计薪 待导入",
+			"sub_badge": task1_sub_badge,
 			"label": f"在册 {emp_count}人 · {profile_change_text}"
 		},
 		"task2_import": {
 			"status": import_status,
 			"employee_count": import_emp_count,
+			"non_workshop_count": max(0, emp_count - import_emp_count),
 			"total_net": import_net_total,
 			"file_url": import_file_url,
+			"sub_badge": f"车间实发 {import_emp_count}人 ｜ 非车间(母表) {max(0, emp_count - import_emp_count)}人" if has_items else f"外部计薪 {ext_calc_count}人 待导入实发表",
 			"label": f"已导入 {import_emp_count} 人 · ¥{import_net_total:,.2f}" if has_items else "待导入车间实发表"
 		},
 		"task3_ss": {
