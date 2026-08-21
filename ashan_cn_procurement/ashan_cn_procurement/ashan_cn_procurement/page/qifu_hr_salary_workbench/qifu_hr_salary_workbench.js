@@ -1204,9 +1204,9 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         let rehireList = list.filter(e => ['退休返聘','返聘工','其他-返聘工'].includes(e.employee_type || '') && !e.is_resigned_this_month && e.employment_status !== '离职');
         let otherList = list.filter(e => (e.employee_type || '正式工') !== '正式工' && !['退休返聘','返聘工','其他-返聘工'].includes(e.employee_type || '') && !e.is_resigned_this_month && e.employment_status !== '离职');
 
-        let insuredZero = insuredList.filter(e => flt(e.fixed_salary) === 0 && flt(e.base_salary) === 0).length;
-        let rehireZero = rehireList.filter(e => flt(e.fixed_salary) === 0 && flt(e.base_salary) === 0).length;
-        let otherZero = otherList.filter(e => flt(e.fixed_salary) === 0 && flt(e.base_salary) === 0).length;
+        let insuredZero = insuredList.filter(e => !e.has_salary_this_month && flt(e.current_month_salary) === 0 && flt(e.fixed_salary) === 0 && flt(e.base_salary) === 0).length;
+        let rehireZero = rehireList.filter(e => !e.has_salary_this_month && flt(e.current_month_salary) === 0 && flt(e.fixed_salary) === 0 && flt(e.base_salary) === 0).length;
+        let otherZero = otherList.filter(e => !e.has_salary_this_month && flt(e.current_month_salary) === 0 && flt(e.fixed_salary) === 0 && flt(e.base_salary) === 0).length;
 
         const fmtTab1Count = (cnt, zeroCnt) => {
             let str = cnt + ' 人';

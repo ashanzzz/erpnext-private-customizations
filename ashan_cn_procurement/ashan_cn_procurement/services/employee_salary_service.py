@@ -259,6 +259,21 @@ def get_employee_profiles(company="天津祺富机械加工有限公司", search
 		r["total_deduction"] = total_deduction
 		r["total_allowance"] = total_allowance
 
+	# 关联当月实发/应发薪资 (若已生成当月结算表或有导入数据)
+	doc_name = f"{company}-{target_pm}"
+	settle_sal_map = {}
+	if frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
+		settle_doc = frappe.get_doc("Ashan Monthly Payroll Settlement", doc_name)
+		for it in settle_doc.items:
+			sal_val = max(flt(it.get("net_salary")), flt(it.get("gross_salary")), flt(it.get("fixed_salary")), flt(it.get("target_salary")))
+			settle_sal_map[it.employee_no] = sal_val
+
+	for r in records:
+		eno = r.get("employee_no")
+		cur_sal = settle_sal_map.get(eno, flt(r.get("fixed_salary")) or flt(r.get("base_salary")))
+		r["current_month_salary"] = cur_sal
+		r["has_salary_this_month"] = bool(cur_sal > 0.001)
+
 	# KPI 统计卡片指标
 	total_count = len(records)
 	resigned_count = len([r for r in records if r.get("is_resigned_this_month")])
