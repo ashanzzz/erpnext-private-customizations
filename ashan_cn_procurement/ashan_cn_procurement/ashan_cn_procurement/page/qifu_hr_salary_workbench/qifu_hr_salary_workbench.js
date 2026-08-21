@@ -261,64 +261,122 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             background: #f8fafc !important;
         }
 
-        /* 左侧前三列 (序号、工号、姓名) 强制冻结 */
-        .qifu-table thead tr th.sticky-col-1,
-        .qifu-table thead tr th:first-child {
+        /* ==========================================
+           精准语义化左侧冻结类体系 (适用于 Tab 2-6 标准宽表与 68 列大宽表)
+           ========================================== */
+
+        /* 双层表头第1行大类分组左侧冻结 (宽度 = 46 + 72 + 90 = 208px) */
+        .qifu-table th.qifu-th-group-sticky {
             position: sticky !important;
-            left: 0 !important;
-            z-index: 25 !important;
-            background: #f8fafc;
-        }
-        .qifu-table thead tr th.sticky-col-2,
-        .qifu-table thead tr th:nth-child(2) {
-            position: sticky !important;
-            left: 42px !important;
-            z-index: 25 !important;
-            background: #f8fafc;
-        }
-        .qifu-table thead tr th.sticky-col-3,
-        .qifu-table thead tr th:nth-child(3) {
-            position: sticky !important;
-            left: 115px !important;
-            z-index: 25 !important;
-            background: #f8fafc;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.06);
+            left: 0px !important;
+            top: 0px !important;
+            z-index: 99 !important;
+            width: 208px !important;
+            min-width: 208px !important;
+            max-width: 208px !important;
+            border-right: 1px solid #cbd5e1 !important;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.06) !important;
         }
 
-        .qifu-table tbody tr td.sticky-col-1,
-        .qifu-table tbody tr td:first-child {
+        /* 双层表头第2行 或 单层表头前3列冻结 */
+        /* 1. 表头第1列: 序号 (46px) */
+        .qifu-table th.qifu-col-sticky-1 {
             position: sticky !important;
-            left: 0 !important;
-            z-index: 5 !important;
-            background: #ffffff;
-        }
-        .qifu-table tbody tr td.sticky-col-2,
-        .qifu-table tbody tr td:nth-child(2) {
-            position: sticky !important;
-            left: 42px !important;
-            z-index: 5 !important;
-            background: #ffffff;
-        }
-        .qifu-table tbody tr td.sticky-col-3,
-        .qifu-table tbody tr td:nth-child(3) {
-            position: sticky !important;
-            left: 115px !important;
-            z-index: 5 !important;
-            background: #ffffff;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.06);
+            left: 0px !important;
+            top: 27px !important;
+            z-index: 98 !important;
+            width: 46px !important;
+            min-width: 46px !important;
+            max-width: 46px !important;
+            background: #f8fafc !important;
+            text-align: center !important;
         }
 
-        .qifu-table tbody tr:hover td.sticky-col-1,
-        .qifu-table tbody tr:hover td.sticky-col-2,
-        .qifu-table tbody tr:hover td.sticky-col-3,
-        .qifu-table tbody tr:hover td:first-child,
-        .qifu-table tbody tr:hover td:nth-child(2),
-        .qifu-table tbody tr:hover td:nth-child(3) {
+        /* 2. 表头第2列: 工号 (72px) */
+        .qifu-table th.qifu-col-sticky-2 {
+            position: sticky !important;
+            left: 46px !important;
+            top: 27px !important;
+            z-index: 98 !important;
+            width: 72px !important;
+            min-width: 72px !important;
+            max-width: 72px !important;
+            background: #f8fafc !important;
+            text-align: center !important;
+        }
+
+        /* 3. 表头第3列: 姓名 (90px) */
+        .qifu-table th.qifu-col-sticky-3 {
+            position: sticky !important;
+            left: 118px !important;
+            top: 27px !important;
+            z-index: 98 !important;
+            width: 90px !important;
+            min-width: 90px !important;
+            max-width: 90px !important;
+            background: #f8fafc !important;
+            text-align: left !important;
+            border-right: 1px solid #cbd5e1 !important;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.06) !important;
+        }
+
+        /* 单层表头（Tab 2, Tab 5精简版, Tab 6）的 th 在第一行，top 为 0 */
+        .qifu-table thead tr:only-child th.qifu-col-sticky-1,
+        .qifu-table thead tr:only-child th.qifu-col-sticky-2,
+        .qifu-table thead tr:only-child th.qifu-col-sticky-3,
+        .qifu-table thead tr:first-child:last-child th.qifu-col-sticky-1,
+        .qifu-table thead tr:first-child:last-child th.qifu-col-sticky-2,
+        .qifu-table thead tr:first-child:last-child th.qifu-col-sticky-3 {
+            top: 0px !important;
+            z-index: 99 !important;
+        }
+
+        /* 数据行第1列: 序号 (46px) */
+        .qifu-table td.qifu-col-sticky-1 {
+            position: sticky !important;
+            left: 0px !important;
+            z-index: 15 !important;
+            width: 46px !important;
+            min-width: 46px !important;
+            max-width: 46px !important;
+            background: #ffffff !important;
+            text-align: center !important;
+        }
+
+        /* 数据行第2列: 工号 (72px) */
+        .qifu-table td.qifu-col-sticky-2 {
+            position: sticky !important;
+            left: 46px !important;
+            z-index: 15 !important;
+            width: 72px !important;
+            min-width: 72px !important;
+            max-width: 72px !important;
+            background: #ffffff !important;
+            text-align: center !important;
+        }
+
+        /* 数据行第3列: 姓名 (90px) */
+        .qifu-table td.qifu-col-sticky-3 {
+            position: sticky !important;
+            left: 118px !important;
+            z-index: 15 !important;
+            width: 90px !important;
+            min-width: 90px !important;
+            max-width: 90px !important;
+            background: #ffffff !important;
+            text-align: left !important;
+            border-right: 1px solid #cbd5e1 !important;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.06) !important;
+        }
+
+        /* 数据行 Hover 高亮 */
+        .qifu-table tr:hover td.qifu-col-sticky-1,
+        .qifu-table tr:hover td.qifu-col-sticky-2,
+        .qifu-table tr:hover td.qifu-col-sticky-3 {
             background: #f8fafc !important;
         }
 
-        /* 底部合计行吸底 (tfoot) */
-        .qifu-table tfoot th,
+        /* 表尾合计行吸底与左侧锁定 (宽度 = 208px) */
         .qifu-table tfoot td {
             position: sticky !important;
             bottom: 0 !important;
@@ -328,24 +386,21 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             font-weight: 700;
             box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.05);
         }
-        .qifu-table tfoot td:first-child {
+
+        .qifu-table tfoot td.qifu-col-sticky-foot {
             position: sticky !important;
-            left: 0 !important;
-            z-index: 15 !important;
+            left: 0px !important;
+            bottom: 0px !important;
+            z-index: 99 !important;
+            width: 208px !important;
+            min-width: 208px !important;
+            max-width: 208px !important;
             background: #f8fafc !important;
-        }
-        .qifu-table tfoot td:nth-child(2) {
-            position: sticky !important;
-            left: 42px !important;
-            z-index: 15 !important;
-            background: #f8fafc !important;
-        }
-        .qifu-table tfoot td:nth-child(3) {
-            position: sticky !important;
-            left: 115px !important;
-            z-index: 15 !important;
-            background: #f8fafc !important;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.06);
+            font-weight: 700 !important;
+            text-align: center !important;
+            border-right: 1px solid #cbd5e1 !important;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.06) !important;
+            color: #334155 !important;
         }
 
         .qifu-money-cell {
@@ -702,9 +757,9 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 <table class="qifu-table table-bordered" id="table-tab2-dist-sheet" style="font-size:11.5px; margin-bottom:0; min-width:1800px;">
                     <thead style="position:sticky; top:0; background:#f8fafc; z-index:1;">
                         <tr>
-                            <th style="width:36px;">序号</th>
-                            <th>工号</th>
-                            <th>姓名</th>
+                            <th class="qifu-col-sticky-1">序号</th>
+                            <th class="qifu-col-sticky-2">工号</th>
+                            <th class="qifu-col-sticky-3">姓名</th>
                             <th>作业天数</th>
                             <th>作业小时</th>
                             <th>天工资</th>
@@ -737,7 +792,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         </div>
 
         <!-- ========================================== -->
-        <!-- Tab 3: 🛡️ 3. 祺富社会保险台账与配置 (19列) -->
+        <!-- Tab 3: 🛡️ 3. 祺富社会保险台账与配置 -->
         <!-- ========================================== -->
         <div id="qifu-tab-social_insurance" class="qifu-tab-content" style="display:none;">
             <!-- 比例卡片 -->
@@ -787,36 +842,30 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 </div>
             </div>
 
-            <!-- 19 列双层表头社保明细大表 -->
+            <!-- 19 列社保明细大表 -->
             <div class="qifu-table-box">
                 <table class="qifu-table table-bordered" id="table-tab3-ss-sheet" style="font-size:11.5px; margin-bottom:0;">
                     <thead>
-                        <tr style="background:#f1f5f9; text-align:center; font-weight:700;">
-                            <th colspan="7" style="background:#e0e7ff; color:#3730a3;">员工基本信息</th>
-                            <th colspan="6" style="background:#dbeafe; color:#1e40af;">单位缴纳 (27.55%)</th>
-                            <th colspan="5" style="background:#dcfce7; color:#166534;">个人缴纳 (10.50%)</th>
-                            <th style="background:#ffedd5; color:#9a3412;">总合计</th>
-                        </tr>
-                        <tr>
-                            <th style="width:36px;">序号</th>
-                            <th>工号</th>
-                            <th>姓名</th>
-                            <th>证件号码</th>
-                            <th>本期所属期</th>
-                            <th>员工类型</th>
-                            <th>社保_基数</th>
-                            <th>单位养老</th>
-                            <th>单位失业</th>
-                            <th>单位医疗</th>
-                            <th>单位其他医疗</th>
-                            <th>单位工伤</th>
-                            <th style="background:#eff6ff;">单位缴纳合计</th>
-                            <th>个人养老</th>
-                            <th>个人失业</th>
-                            <th>个人医疗</th>
-                            <th>个人大额医疗</th>
-                            <th style="background:#f0fdf4;">个人缴纳合计</th>
-                            <th style="background:#fff7ed;">总合计</th>
+                        <tr style="background:#f8fafc; text-align:center; font-size:11px;">
+                            <th class="qifu-col-sticky-1" style="vertical-align:middle; font-weight:700;">序号</th>
+                            <th class="qifu-col-sticky-2" style="vertical-align:middle; font-weight:700;">工号</th>
+                            <th class="qifu-col-sticky-3" style="vertical-align:middle; font-weight:700;">姓名</th>
+                            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">在册属性</div><div>证件号码</div></th>
+                            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">在册属性</div><div>所属期</div></th>
+                            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">在册属性</div><div>员工类型</div></th>
+                            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">在册属性</div><div>社保基数</div></th>
+                            <th style="background:#eff6ff;"><div style="font-size:9.5px; color:#1e40af; font-weight:600;">单位(27.55%)</div><div>单位养老</div></th>
+                            <th style="background:#eff6ff;"><div style="font-size:9.5px; color:#1e40af; font-weight:600;">单位(27.55%)</div><div>单位失业</div></th>
+                            <th style="background:#eff6ff;"><div style="font-size:9.5px; color:#1e40af; font-weight:600;">单位(27.55%)</div><div>单位医疗</div></th>
+                            <th style="background:#eff6ff;"><div style="font-size:9.5px; color:#1e40af; font-weight:600;">单位(27.55%)</div><div>单位其他医疗</div></th>
+                            <th style="background:#eff6ff;"><div style="font-size:9.5px; color:#1e40af; font-weight:600;">单位(27.55%)</div><div>单位工伤</div></th>
+                            <th style="background:#dbeafe;"><div style="font-size:9.5px; color:#1e40af; font-weight:700;">单位缴纳</div><div style="color:#1e40af; font-weight:700;">单位合计</div></th>
+                            <th style="background:#f0fdf4;"><div style="font-size:9.5px; color:#166534; font-weight:600;">个人(10.50%)</div><div>个人养老</div></th>
+                            <th style="background:#f0fdf4;"><div style="font-size:9.5px; color:#166534; font-weight:600;">个人(10.50%)</div><div>个人失业</div></th>
+                            <th style="background:#f0fdf4;"><div style="font-size:9.5px; color:#166534; font-weight:600;">个人(10.50%)</div><div>个人医疗</div></th>
+                            <th style="background:#f0fdf4;"><div style="font-size:9.5px; color:#166534; font-weight:600;">个人(10.50%)</div><div>个人大额医疗</div></th>
+                            <th style="background:#dcfce7;"><div style="font-size:9.5px; color:#166534; font-weight:700;">个人缴纳</div><div style="color:#166534; font-weight:700;">个人合计</div></th>
+                            <th style="background:#ffedd5;"><div style="font-size:9.5px; color:#9a3412; font-weight:800;">月度统筹</div><div style="color:#c2410c; font-weight:800;">总合计</div></th>
                         </tr>
                     </thead>
                     <tbody id="tbody-tab3-ss-sheet"></tbody>
@@ -826,7 +875,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         </div>
 
         <!-- ========================================== -->
-        <!-- Tab 4: 🏛️ 4. 祺富住房公积金台账与配置 (12列) -->
+        <!-- Tab 4: 🏛️ 4. 祺富住房公积金台账与配置 -->
         <!-- ========================================== -->
         <div id="qifu-tab-housing_fund" class="qifu-tab-content" style="display:none;">
             <!-- 比例卡片 -->
@@ -876,29 +925,23 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 </div>
             </div>
 
-            <!-- 12 列双层表头公积金明细表 -->
+            <!-- 12 列公积金明细表 -->
             <div class="qifu-table-box">
                 <table class="qifu-table table-bordered" id="table-tab4-hf-sheet" style="font-size:11.5px; margin-bottom:0;">
                     <thead>
-                        <tr style="background:#f1f5f9; text-align:center; font-weight:700;">
-                            <th colspan="6" style="background:#ccfbf1; color:#0f766e;">员工基本信息</th>
-                            <th colspan="3" style="background:#e0f2fe; color:#0369a1;">单位缴存 (5%)</th>
-                            <th colspan="2" style="background:#dcfce7; color:#15803d;">个人缴存 (5%)</th>
-                            <th style="background:#ffedd5; color:#9a3412;">月缴存总额</th>
-                        </tr>
-                        <tr>
-                            <th style="width:36px;">序号</th>
-                            <th>工号</th>
-                            <th>姓名</th>
-                            <th>证件号码</th>
-                            <th>本期所属期</th>
-                            <th>员工类型</th>
-                            <th>公积金_基数</th>
-                            <th>单位缴存比例</th>
-                            <th style="background:#f0f9ff;">单位缴存金额</th>
-                            <th>个人缴存比例</th>
-                            <th style="background:#f0fdf4;">个人缴存金额</th>
-                            <th style="background:#fff7ed;">月缴存总额</th>
+                        <tr style="background:#f8fafc; text-align:center; font-size:11px;">
+                            <th class="qifu-col-sticky-1" style="vertical-align:middle; font-weight:700;">序号</th>
+                            <th class="qifu-col-sticky-2" style="vertical-align:middle; font-weight:700;">工号</th>
+                            <th class="qifu-col-sticky-3" style="vertical-align:middle; font-weight:700;">姓名</th>
+                            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">在册属性</div><div>证件号码</div></th>
+                            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">在册属性</div><div>所属期</div></th>
+                            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">在册属性</div><div>员工类型</div></th>
+                            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">在册属性</div><div>公积金基数</div></th>
+                            <th style="background:#e0f2fe;"><div style="font-size:9.5px; color:#0369a1; font-weight:600;">单位(5%)</div><div>单位比例</div></th>
+                            <th style="background:#e0f2fe;"><div style="font-size:9.5px; color:#0369a1; font-weight:700;">单位(5%)</div><div style="color:#0369a1; font-weight:700;">单位金额</div></th>
+                            <th style="background:#dcfce7;"><div style="font-size:9.5px; color:#15803d; font-weight:600;">个人(5%)</div><div>个人比例</div></th>
+                            <th style="background:#dcfce7;"><div style="font-size:9.5px; color:#15803d; font-weight:700;">个人(5%)</div><div style="color:#15803d; font-weight:700;">个人金额</div></th>
+                            <th style="background:#ffedd5;"><div style="font-size:9.5px; color:#9a3412; font-weight:800;">月度统筹</div><div style="color:#c2410c; font-weight:800;">月缴存总额</div></th>
                         </tr>
                     </thead>
                     <tbody id="tbody-tab4-hf-sheet"></tbody>
@@ -908,11 +951,10 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         </div>
 
         <!-- ========================================== -->
-        <!-- Tab 5: ⚖️ 5. 个人所得税核定与申报台账 (全新15列标准综合所得预扣预缴表) -->
-        <!-- 序号 工号 姓名 证件号码 用工性质 发薪月份 本期税前收入 基本减除费用(5000) 社保个人扣缴 公积金个人扣缴 专项附加扣除 应纳税所得额 适用税率 速算扣除数 本月应预扣税额 -->
+        <!-- Tab 5: ⚖️ 5. 个人所得税依法预扣与申报台账 -->
         <!-- ========================================== -->
         <div id="qifu-tab-tax" class="qifu-tab-content" style="display:none;">
-            <!-- 个税 KPI 统筹看板 -->
+            <!-- 个税 KPI 指标看板 -->
             <div class="qifu-kpi-grid">
                 <div class="qifu-kpi-card" style="border-left: 4px solid #dc2626;">
                     <div style="font-size:13px; font-weight:700; color:#991b1b;">⚖️ 本月个税代扣总额</div>
@@ -969,9 +1011,9 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 <table class="qifu-table table-bordered" id="table-tab5-tax-sheet" style="font-size:11.5px; margin-bottom:0; min-width:1600px;">
                     <thead>
                         <tr style="background:#f8fafc;">
-                            <th style="width:36px;">序号</th>
-                            <th>工号</th>
-                            <th>姓名</th>
+                            <th class="qifu-col-sticky-1">序号</th>
+                            <th class="qifu-col-sticky-2">工号</th>
+                            <th class="qifu-col-sticky-3">姓名</th>
                             <th>证件号码</th>
                             <th>用工性质</th>
                             <th>发薪月份</th>
@@ -1097,9 +1139,9 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 <table class="qifu-table" id="table-qifu-payroll">
                     <thead>
                         <tr>
-                            <th style="width:45px;">序号</th>
-                            <th>工号</th>
-                            <th>姓名</th>
+                            <th class="qifu-col-sticky-1">序号</th>
+                            <th class="qifu-col-sticky-2">工号</th>
+                            <th class="qifu-col-sticky-3">姓名</th>
                             <th>岗位职务</th>
                             <th>用工性质</th>
                             <th>出勤天/工时</th>
@@ -1221,9 +1263,9 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 rows.forEach(r => {
                     trs += `
                     <tr>
-                        <td style="text-align:center; color:#94a3b8;">${r.seq}</td>
-                        <td style="text-align:center;"><strong>${r.employee_no}</strong></td>
-                        <td><strong style="color:#1e3a8a;">${r.employee_name}</strong></td>
+                        <td class="qifu-col-sticky-1" style="text-align:center; color:#94a3b8;">${r.seq}</td>
+                        <td class="qifu-col-sticky-2" style="text-align:center;"><strong>${r.employee_no}</strong></td>
+                        <td class="qifu-col-sticky-3"><strong style="color:#1e3a8a;">${r.employee_name}</strong></td>
                         <td class="qifu-money-cell">${r.attendance_days || 0}</td>
                         <td class="qifu-money-cell">${r.work_hours || 0}</td>
                         <td class="qifu-money-cell">${fmtMoney(r.day_salary)}</td>
@@ -1253,7 +1295,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
                 let tfoot_html = `
                 <tr>
-                    <td colspan="3" style="text-align:center;">合计</td>
+                    <td colspan="3" class="qifu-col-sticky-foot">合计 (${rows.length}人)</td>
                     <td class="qifu-money-cell">${tot.attendance_days || 0}</td>
                     <td class="qifu-money-cell">${tot.work_hours || 0}</td>
                     <td>-</td><td>-</td>
@@ -1302,9 +1344,9 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     const isAdj = !!r.adj_id;
                     trs += `
                     <tr style="${isAdj ? 'background:#fffbeb;' : ''}">
-                        <td style="text-align:center; color:#94a3b8;">${r.seq}</td>
-                        <td style="text-align:center;"><strong>${r.employee_no}</strong></td>
-                        <td>
+                        <td class="qifu-col-sticky-1" style="text-align:center; color:#94a3b8;">${r.seq}</td>
+                        <td class="qifu-col-sticky-2" style="text-align:center;"><strong>${r.employee_no}</strong></td>
+                        <td class="qifu-col-sticky-3">
                             <strong style="color:#2563eb;">${r.employee_name}</strong>
                             ${isAdj ? `<span class="qifu-status-badge qifu-status-draft" style="font-size:10px; margin-left:4px;">${r.biz_type}</span> <a href="javascript:void(0)" class="btn-del-ss-adj" data-id="${r.adj_id}" style="color:#dc2626; font-size:11px; margin-left:4px;" title="删除此补缴/调整项">🗑️</a>` : ''}
                         </td>
@@ -1338,7 +1380,8 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
                 let tfoot_html = `
                 <tr>
-                    <td colspan="5" style="text-align:center; color:#334155; font-weight:700;">合计</td>
+                    <td colspan="3" class="qifu-col-sticky-foot">合计 (${rows.length}人)</td>
+                    <td colspan="2" style="background:#f8fafc;"></td>
                     <td style="text-align:center; font-weight:700; color:#1e40af;">${rows.length}人参保</td>
                     <td class="qifu-money-cell">${fmtMoney(tot.ss_base)}</td>
                     <td class="qifu-money-cell">${fmtMoney(tot.comp_pension)}</td>
@@ -1378,9 +1421,9 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 rows.forEach(r => {
                     trs += `
                     <tr>
-                        <td style="text-align:center; color:#94a3b8;">${r.seq}</td>
-                        <td style="text-align:center;"><strong>${r.employee_no}</strong></td>
-                        <td><strong style="color:#2563eb;">${r.employee_name}</strong></td>
+                        <td class="qifu-col-sticky-1" style="text-align:center; color:#94a3b8;">${r.seq}</td>
+                        <td class="qifu-col-sticky-2" style="text-align:center;"><strong>${r.employee_no}</strong></td>
+                        <td class="qifu-col-sticky-3"><strong style="color:#2563eb;">${r.employee_name}</strong></td>
                         <td style="text-align:center; font-family:monospace;">${r.id_card || '-'}</td>
                         <td style="text-align:center;">${r.period_month_str}</td>
                         <td style="text-align:center;">${r.employee_type}</td>
@@ -1401,7 +1444,8 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
                 let tfoot_html = `
                 <tr>
-                    <td colspan="5" style="text-align:center; color:#334155; font-weight:700;">合计</td>
+                    <td colspan="3" class="qifu-col-sticky-foot">合计 (${rows.length}人)</td>
+                    <td colspan="2" style="background:#f8fafc;"></td>
                     <td style="text-align:center; font-weight:700; color:#1e40af;">${rows.length}人参缴</td>
                     <td class="qifu-money-cell">${fmtMoney(tot.hf_base)}</td>
                     <td style="text-align:center;">5%</td>
@@ -1423,9 +1467,9 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
         let thead_html = `
         <tr style="background:#f1f5f9; text-align:center; font-weight:700;">
-            <th style="width:36px;">序号</th>
-            <th>工号</th>
-            <th>姓名 (点击穿透)</th>
+            <th class="qifu-col-sticky-1">序号</th>
+            <th class="qifu-col-sticky-2">工号</th>
+            <th class="qifu-col-sticky-3">姓名 (点击穿透)</th>
             <th>证件号码</th>
             <th>用工性质</th>
             <th>发薪账期</th>
@@ -1458,9 +1502,9 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
                 trs += `
                 <tr>
-                    <td style="text-align:center; color:#94a3b8;">${r.seq}</td>
-                    <td style="text-align:center;"><strong>${r.employee_no}</strong></td>
-                    <td>
+                    <td class="qifu-col-sticky-1" style="text-align:center; color:#94a3b8;">${r.seq}</td>
+                    <td class="qifu-col-sticky-2" style="text-align:center;"><strong>${r.employee_no}</strong></td>
+                    <td class="qifu-col-sticky-3">
                         <a href="javascript:void(0);" class="btn-drill-emp-history" data-emp="${r.employee_no}" style="color:#2563eb; font-weight:700; text-decoration:underline;" title="点击穿透查看 ${r.employee_name} 整个申报周期的月度发薪与个税轨迹">
                             ${r.employee_name} 🔍
                         </a>
@@ -1494,7 +1538,8 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
         let tfoot_html = `
         <tr>
-            <td colspan="6" style="text-align:center; color:#334155; font-weight:700;">合计</td>
+            <td colspan="3" class="qifu-col-sticky-foot">合计 (${rows.length}人)</td>
+            <td colspan="3" style="background:#f8fafc;"></td>
             <td class="qifu-money-cell" style="color:#2563eb; font-weight:700;">${fmtMoney(tot.gross_salary)}</td>
             <td class="qifu-money-cell">-</td>
             <td class="qifu-money-cell" style="color:#d97706; font-weight:700;">${fmtMoney(tot_ss_val)}</td>
@@ -1520,67 +1565,64 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         const tot = data.totals || {};
 
         let thead_html = `
-        <tr style="background:#f1f5f9; text-align:center; font-weight:700; font-size:11px;">
-            <th colspan="9" style="background:#e0e7ff; color:#3730a3;">一、员工基本信息</th>
-            <th colspan="5" style="background:#fef3c7; color:#92400e;">二、工资扣除 (本月)</th>
-            <th colspan="6" style="background:#dcfce7; color:#166534;">三、专项扣除 (本月五险一金)</th>
-            <th colspan="8" style="background:#e0f2fe; color:#0369a1;">四、专项附加扣除 (本月7项)</th>
-            <th colspan="4" style="background:#fae8ff; color:#86198f;">五、往期累计 (申报周期)</th>
-            <th colspan="4" style="background:#ffedd5; color:#9a3412;">六、全部累计 (往期+本月)</th>
-            <th colspan="8" style="background:#fee2e2; color:#991b1b;">七、税款核定与实发</th>
-        </tr>
-        <tr style="background:#f8fafc; font-size:10.5px; text-align:center;">
-            <!-- 1. 基本信息 -->
-            <th style="width:32px;">序号</th>
-            <th>工号</th>
-            <th>姓名</th>
-            <th>证件号码</th>
-            <th>性别</th>
-            <th>所属期</th>
-            <th>员工类型</th>
-            <th>目标工资</th>
-            <th>工资类型</th>
+        <tr style="background:#f8fafc; text-align:center; font-size:11px;">
+            <!-- 1. 员工基本信息 (前3列左侧冻结) -->
+            <th class="qifu-col-sticky-1" style="vertical-align:middle; font-weight:700;">序号</th>
+            <th class="qifu-col-sticky-2" style="vertical-align:middle; font-weight:700;">工号</th>
+            <th class="qifu-col-sticky-3" style="vertical-align:middle; font-weight:700;">姓名</th>
+            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">员工信息</div><div>证件号码</div></th>
+            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">员工信息</div><div>性别</div></th>
+            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">员工信息</div><div>所属期</div></th>
+            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">员工信息</div><div>员工类型</div></th>
+            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">员工信息</div><div>目标工资</div></th>
+            <th style="background:#f5f3ff;"><div style="font-size:9.5px; color:#4338ca; font-weight:600;">员工信息</div><div>工资类型</div></th>
+
             <!-- 2. 工资扣除 (本月) -->
-            <th>税前工资</th>
-            <th>起征点扣除</th>
-            <th>公积金</th>
-            <th>社保</th>
-            <th>扣除合计</th>
-            <!-- 3. 专项扣除 (本月) -->
-            <th>基本养老</th>
-            <th>基本医疗</th>
-            <th>大额医疗</th>
-            <th>失业保险</th>
-            <th>住房公积金</th>
-            <th>专项合计</th>
-            <!-- 4. 专项附加扣除 (本月) -->
-            <th>子女教育</th>
-            <th>继续教育</th>
-            <th>大病医疗</th>
-            <th>房贷利息</th>
-            <th>住房租金</th>
-            <th>赡养老人</th>
-            <th>婴幼儿照护</th>
-            <th>附加合计</th>
-            <!-- 5. 往期累计 -->
-            <th>税前工资(往)</th>
-            <th>起征点(往)</th>
-            <th>专项扣除(往)</th>
-            <th>专项附加(往)</th>
-            <!-- 6. 全部累计 -->
-            <th>税前工资(全)</th>
-            <th>起征点(全)</th>
-            <th>专项扣除(全)</th>
-            <th>专项附加(全)</th>
-            <!-- 7. 税款计算 -->
-            <th style="background:#fff7ed; color:#9a3412; font-weight:700;">累计应税所得额</th>
-            <th>预扣率</th>
-            <th>速算扣除数</th>
-            <th>累计应纳税额</th>
-            <th>减免税额</th>
-            <th>往期已缴税额</th>
-            <th style="background:#fef2f2; color:#dc2626; font-weight:800;">应补/退税额</th>
-            <th style="background:#dcfce7; color:#166534; font-weight:800;">税后工资</th>
+            <th style="background:#fffbeb;"><div style="font-size:9.5px; color:#b45309; font-weight:600;">工资扣除</div><div style="color:#1e40af; font-weight:700;">税前工资</div></th>
+            <th style="background:#fffbeb;"><div style="font-size:9.5px; color:#b45309; font-weight:600;">工资扣除</div><div>起征点扣除</div></th>
+            <th style="background:#fffbeb;"><div style="font-size:9.5px; color:#b45309; font-weight:600;">工资扣除</div><div>公积金</div></th>
+            <th style="background:#fffbeb;"><div style="font-size:9.5px; color:#b45309; font-weight:600;">工资扣除</div><div>社保</div></th>
+            <th style="background:#fef3c7;"><div style="font-size:9.5px; color:#92400e; font-weight:700;">工资扣除</div><div style="color:#92400e; font-weight:700;">扣除合计</div></th>
+
+            <!-- 3. 专项扣除 (本月五险一金) -->
+            <th style="background:#f0fdf4;"><div style="font-size:9.5px; color:#15803d; font-weight:600;">专项扣除</div><div>基本养老</div></th>
+            <th style="background:#f0fdf4;"><div style="font-size:9.5px; color:#15803d; font-weight:600;">专项扣除</div><div>基本医疗</div></th>
+            <th style="background:#f0fdf4;"><div style="font-size:9.5px; color:#15803d; font-weight:600;">专项扣除</div><div>大额医疗</div></th>
+            <th style="background:#f0fdf4;"><div style="font-size:9.5px; color:#15803d; font-weight:600;">专项扣除</div><div>失业保险</div></th>
+            <th style="background:#f0fdf4;"><div style="font-size:9.5px; color:#15803d; font-weight:600;">专项扣除</div><div>住房公积金</div></th>
+            <th style="background:#dcfce7;"><div style="font-size:9.5px; color:#166534; font-weight:700;">专项扣除</div><div style="color:#166534; font-weight:700;">专项合计</div></th>
+
+            <!-- 4. 专项附加扣除 (本月7项) -->
+            <th style="background:#f0f9ff;"><div style="font-size:9.5px; color:#0369a1; font-weight:600;">专项附加</div><div>子女教育</div></th>
+            <th style="background:#f0f9ff;"><div style="font-size:9.5px; color:#0369a1; font-weight:600;">专项附加</div><div>继续教育</div></th>
+            <th style="background:#f0f9ff;"><div style="font-size:9.5px; color:#0369a1; font-weight:600;">专项附加</div><div>大病医疗</div></th>
+            <th style="background:#f0f9ff;"><div style="font-size:9.5px; color:#0369a1; font-weight:600;">专项附加</div><div>房贷利息</div></th>
+            <th style="background:#f0f9ff;"><div style="font-size:9.5px; color:#0369a1; font-weight:600;">专项附加</div><div>住房租金</div></th>
+            <th style="background:#f0f9ff;"><div style="font-size:9.5px; color:#0369a1; font-weight:600;">专项附加</div><div>赡养老人</div></th>
+            <th style="background:#f0f9ff;"><div style="font-size:9.5px; color:#0369a1; font-weight:600;">专项附加</div><div>婴幼儿照护</div></th>
+            <th style="background:#e0f2fe;"><div style="font-size:9.5px; color:#0369a1; font-weight:700;">专项附加</div><div style="color:#0369a1; font-weight:700;">附加合计</div></th>
+
+            <!-- 5. 往期累计 (申报周期) -->
+            <th style="background:#faf5ff;"><div style="font-size:9.5px; color:#7e22ce; font-weight:600;">往期累计</div><div>税前工资</div></th>
+            <th style="background:#faf5ff;"><div style="font-size:9.5px; color:#7e22ce; font-weight:600;">往期累计</div><div>起征点</div></th>
+            <th style="background:#faf5ff;"><div style="font-size:9.5px; color:#7e22ce; font-weight:600;">往期累计</div><div>专项扣除</div></th>
+            <th style="background:#faf5ff;"><div style="font-size:9.5px; color:#7e22ce; font-weight:600;">往期累计</div><div>专项附加</div></th>
+
+            <!-- 6. 全部累计 (往期+本月) -->
+            <th style="background:#fff7ed;"><div style="font-size:9.5px; color:#c2410c; font-weight:600;">全部累计</div><div>税前工资</div></th>
+            <th style="background:#fff7ed;"><div style="font-size:9.5px; color:#c2410c; font-weight:600;">全部累计</div><div>起征点</div></th>
+            <th style="background:#fff7ed;"><div style="font-size:9.5px; color:#c2410c; font-weight:600;">全部累计</div><div>专项扣除</div></th>
+            <th style="background:#fff7ed;"><div style="font-size:9.5px; color:#c2410c; font-weight:600;">全部累计</div><div>专项附加</div></th>
+
+            <!-- 7. 税款计算与实发 -->
+            <th style="background:#fff7ed;"><div style="font-size:9.5px; color:#9a3412; font-weight:700;">税款实发</div><div style="color:#9a3412; font-weight:800;">累计应税所得</div></th>
+            <th style="background:#fef2f2;"><div style="font-size:9.5px; color:#dc2626; font-weight:600;">税款实发</div><div>预扣率</div></th>
+            <th style="background:#fef2f2;"><div style="font-size:9.5px; color:#dc2626; font-weight:600;">税款实发</div><div>速算扣除数</div></th>
+            <th style="background:#fef2f2;"><div style="font-size:9.5px; color:#dc2626; font-weight:600;">税款实发</div><div>累计应纳税额</div></th>
+            <th style="background:#fef2f2;"><div style="font-size:9.5px; color:#dc2626; font-weight:600;">税款实发</div><div>减免税额</div></th>
+            <th style="background:#fef2f2;"><div style="font-size:9.5px; color:#dc2626; font-weight:600;">税款实发</div><div>往期已缴税额</div></th>
+            <th style="background:#fee2e2;"><div style="font-size:9.5px; color:#b91c1c; font-weight:800;">税款实发</div><div style="color:#dc2626; font-weight:800;">应补/退税额</div></th>
+            <th style="background:#dcfce7;"><div style="font-size:9.5px; color:#15803d; font-weight:800;">税款实发</div><div style="color:#166534; font-weight:800;">税后工资</div></th>
         </tr>
         `;
 
@@ -1591,9 +1633,9 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             rows.forEach(r => {
                 trs += `
                 <tr style="font-size:11px;">
-                    <td style="text-align:center; color:#94a3b8;">${r.seq}</td>
-                    <td style="text-align:center;"><strong>${r.employee_no}</strong></td>
-                    <td>
+                    <td class="qifu-col-sticky-1" style="text-align:center; color:#94a3b8;">${r.seq}</td>
+                    <td class="qifu-col-sticky-2" style="text-align:center;"><strong>${r.employee_no}</strong></td>
+                    <td class="qifu-col-sticky-3">
                         <a href="javascript:void(0);" class="btn-drill-emp-history" data-emp="${r.employee_no}" style="color:#2563eb; font-weight:700;">
                             ${r.employee_name}
                         </a>
@@ -1660,7 +1702,8 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
         let tfoot_html = `
         <tr style="font-size:11px; font-weight:700;">
-            <td colspan="9" style="text-align:center; color:#334155;">合计</td>
+            <td colspan="3" class="qifu-col-sticky-foot">合计 (${rows.length}人)</td>
+            <td colspan="6" style="background:#f8fafc;"></td>
             <td class="qifu-money-cell" style="color:#2563eb;">${fmtMoney(tot.gross_salary)}</td>
             <td class="qifu-money-cell">${fmtMoney(tot.thresh_cur)}</td>
             <td class="qifu-money-cell">${fmtMoney(tot.hf_cur)}</td>
@@ -1794,9 +1837,9 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
             html += `
             <tr>
-                <td style="color:#94a3b8;">${idx + 1}</td>
-                <td><strong>${it.employee_no || '-'}</strong></td>
-                <td><strong style="color:#1e3a8a;">${it.employee_name}</strong></td>
+                <td class="qifu-col-sticky-1" style="color:#94a3b8; text-align:center;">${idx + 1}</td>
+                <td class="qifu-col-sticky-2" style="text-align:center;"><strong>${it.employee_no || '-'}</strong></td>
+                <td class="qifu-col-sticky-3"><strong style="color:#1e3a8a;">${it.employee_name}</strong></td>
                 <td>${jobTitle}</td>
                 <td><span class="qifu-status-badge ${empType === '正式工' ? 'qifu-status-locked' : 'qifu-status-draft'}">${empType}</span></td>
                 <td>${attStr}</td>

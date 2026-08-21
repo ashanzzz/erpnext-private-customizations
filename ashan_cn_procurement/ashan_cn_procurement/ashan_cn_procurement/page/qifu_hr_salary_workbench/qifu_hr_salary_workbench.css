@@ -151,6 +151,7 @@
 }
 
 /* 🌟 吸顶冻结大宽表样式 */
+/* 🌟 吸顶冻结大宽表通用样式 */
 .qifu-table-box {
     background: #ffffff;
     border-radius: 8px;
@@ -187,6 +188,8 @@
     text-align: left;
     min-width: 1100px;
 }
+
+/* 单层/标准表头吸顶 */
 .qifu-table thead th {
     position: sticky !important;
     top: 0 !important;
@@ -194,28 +197,33 @@
     background: #f8fafc;
     color: #334155;
     font-weight: 700;
-    padding: 9px 12px;
+    padding: 8px 10px;
     border-top: 1px solid #e2e8f0;
     border-bottom: 2px solid #cbd5e1 !important;
-    border-right: 1px solid #f1f5f9;
+    border-right: 1px solid #e2e8f0;
     white-space: nowrap;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
+
+/* 双层表头第一行 (大类分组) */
 .qifu-table thead tr:first-child th {
     position: sticky !important;
     top: 0 !important;
     z-index: 12 !important;
 }
+
+/* 双层表头第二行 (具体字段) */
 .qifu-table thead tr:nth-child(2) th {
     position: sticky !important;
-    top: 31px !important;
+    top: 27px !important;
     z-index: 11 !important;
     background: #f8fafc;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
+/* 单元格通用样式 */
 .qifu-table td {
-    padding: 8px 12px;
+    padding: 7px 10px;
     border-bottom: 1px solid #f1f5f9;
     border-right: 1px solid rgba(0,0,0,0.03);
     color: #1e293b;
@@ -265,6 +273,7 @@
     width: 90px !important;
     min-width: 90px !important;
     max-width: 90px !important;
+    border-right: 1px solid #cbd5e1 !important;
     box-shadow: 2px 0 5px rgba(0,0,0,0.06);
 }
 
@@ -303,6 +312,7 @@
     width: 90px !important;
     min-width: 90px !important;
     max-width: 90px !important;
+    border-right: 1px solid #cbd5e1 !important;
     box-shadow: 2px 0 5px rgba(0,0,0,0.06);
 }
 
@@ -321,76 +331,150 @@
 }
 
 /* ==========================================
-   标准宽表左侧固定前三列 (适用于无勾选框表格 Tab 2-6)
+   精准语义化左侧冻结类体系 (适用于 Tab 2-6 标准宽表与 68 列大宽表)
    ========================================== */
-.qifu-table:not(#table-qifu-emp) thead tr th:first-child {
+
+/* 双层表头第1行大类分组左侧冻结 (宽度 = 46 + 72 + 90 = 208px) */
+.qifu-table th.qifu-th-group-sticky {
     position: sticky !important;
-    left: 0 !important;
-    z-index: 25 !important;
-    background: #f8fafc;
-}
-.qifu-table:not(#table-qifu-emp) thead tr th:nth-child(2) {
-    position: sticky !important;
-    left: 42px !important;
-    z-index: 25 !important;
-    background: #f8fafc;
-}
-.qifu-table:not(#table-qifu-emp) thead tr th:nth-child(3) {
-    position: sticky !important;
-    left: 115px !important;
-    z-index: 25 !important;
-    background: #f8fafc;
-    box-shadow: 2px 0 5px rgba(0,0,0,0.06);
+    left: 0px !important;
+    top: 0px !important;
+    z-index: 99 !important;
+    width: 208px !important;
+    min-width: 208px !important;
+    max-width: 208px !important;
+    border-right: 1px solid #cbd5e1 !important;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.06) !important;
 }
 
-.qifu-table:not(#table-qifu-emp) tbody tr td:first-child {
+/* 双层表头第2行 或 单层表头前3列冻结 */
+/* 1. 表头第1列: 序号 (46px) */
+.qifu-table th.qifu-col-sticky-1 {
     position: sticky !important;
-    left: 0 !important;
-    z-index: 5 !important;
-    background: #ffffff;
-}
-.qifu-table:not(#table-qifu-emp) tbody tr td:nth-child(2) {
-    position: sticky !important;
-    left: 42px !important;
-    z-index: 5 !important;
-    background: #ffffff;
-}
-.qifu-table:not(#table-qifu-emp) tbody tr td:nth-child(3) {
-    position: sticky !important;
-    left: 115px !important;
-    z-index: 5 !important;
-    background: #ffffff;
-    box-shadow: 2px 0 5px rgba(0,0,0,0.06);
+    left: 0px !important;
+    top: 27px !important;
+    z-index: 98 !important;
+    width: 46px !important;
+    min-width: 46px !important;
+    max-width: 46px !important;
+    background: #f8fafc !important;
+    text-align: center !important;
 }
 
-.qifu-table:not(#table-qifu-emp) tbody tr:hover td:first-child,
-.qifu-table:not(#table-qifu-emp) tbody tr:hover td:nth-child(2),
-.qifu-table:not(#table-qifu-emp) tbody tr:hover td:nth-child(3) {
+/* 2. 表头第2列: 工号 (72px) */
+.qifu-table th.qifu-col-sticky-2 {
+    position: sticky !important;
+    left: 46px !important;
+    top: 27px !important;
+    z-index: 98 !important;
+    width: 72px !important;
+    min-width: 72px !important;
+    max-width: 72px !important;
+    background: #f8fafc !important;
+    text-align: center !important;
+}
+
+/* 3. 表头第3列: 姓名 (90px) */
+.qifu-table th.qifu-col-sticky-3 {
+    position: sticky !important;
+    left: 118px !important;
+    top: 27px !important;
+    z-index: 98 !important;
+    width: 90px !important;
+    min-width: 90px !important;
+    max-width: 90px !important;
+    background: #f8fafc !important;
+    text-align: left !important;
+    border-right: 1px solid #cbd5e1 !important;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* 单层表头（Tab 2, Tab 5精简版, Tab 6）的 th 在第一行，top 为 0 */
+.qifu-table thead tr:only-child th.qifu-col-sticky-1,
+.qifu-table thead tr:only-child th.qifu-col-sticky-2,
+.qifu-table thead tr:only-child th.qifu-col-sticky-3,
+.qifu-table thead tr:first-child:last-child th.qifu-col-sticky-1,
+.qifu-table thead tr:first-child:last-child th.qifu-col-sticky-2,
+.qifu-table thead tr:first-child:last-child th.qifu-col-sticky-3 {
+    top: 0px !important;
+    z-index: 99 !important;
+}
+
+/* 数据行第1列: 序号 (46px) */
+.qifu-table td.qifu-col-sticky-1 {
+    position: sticky !important;
+    left: 0px !important;
+    z-index: 15 !important;
+    width: 46px !important;
+    min-width: 46px !important;
+    max-width: 46px !important;
+    background: #ffffff !important;
+    text-align: center !important;
+}
+
+/* 数据行第2列: 工号 (72px) */
+.qifu-table td.qifu-col-sticky-2 {
+    position: sticky !important;
+    left: 46px !important;
+    z-index: 15 !important;
+    width: 72px !important;
+    min-width: 72px !important;
+    max-width: 72px !important;
+    background: #ffffff !important;
+    text-align: center !important;
+}
+
+/* 数据行第3列: 姓名 (90px) */
+.qifu-table td.qifu-col-sticky-3 {
+    position: sticky !important;
+    left: 118px !important;
+    z-index: 15 !important;
+    width: 90px !important;
+    min-width: 90px !important;
+    max-width: 90px !important;
+    background: #ffffff !important;
+    text-align: left !important;
+    border-right: 1px solid #cbd5e1 !important;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* 数据行 Hover 高亮 */
+.qifu-table tr:hover td.qifu-col-sticky-1,
+.qifu-table tr:hover td.qifu-col-sticky-2,
+.qifu-table tr:hover td.qifu-col-sticky-3 {
     background: #f8fafc !important;
 }
 
-.qifu-table:not(#table-qifu-emp) tfoot td:first-child {
+/* 表尾合计行吸底与左侧锁定 (宽度 = 208px) */
+.qifu-table tfoot td {
     position: sticky !important;
-    left: 0 !important;
-    z-index: 15 !important;
+    bottom: 0 !important;
+    z-index: 9 !important;
     background: #f8fafc !important;
+    border-top: 2px solid #cbd5e1 !important;
+    font-weight: 700;
+    box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.05);
 }
-.qifu-table:not(#table-qifu-emp) tfoot td:nth-child(2) {
+
+.qifu-table tfoot td.qifu-col-sticky-foot {
     position: sticky !important;
-    left: 42px !important;
-    z-index: 15 !important;
+    left: 0px !important;
+    bottom: 0px !important;
+    z-index: 99 !important;
+    width: 208px !important;
+    min-width: 208px !important;
+    max-width: 208px !important;
     background: #f8fafc !important;
-}
-.qifu-table:not(#table-qifu-emp) tfoot td:nth-child(3) {
-    position: sticky !important;
-    left: 115px !important;
-    z-index: 15 !important;
-    background: #f8fafc !important;
-    box-shadow: 2px 0 5px rgba(0,0,0,0.06);
+    font-weight: 700 !important;
+    text-align: center !important;
+    border-right: 1px solid #cbd5e1 !important;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.06) !important;
+    color: #334155 !important;
 }
 
 .qifu-money-cell {
     font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     font-weight: 600;
     text-align: right !important;
+    font-variant-numeric: tabular-nums;
 }
