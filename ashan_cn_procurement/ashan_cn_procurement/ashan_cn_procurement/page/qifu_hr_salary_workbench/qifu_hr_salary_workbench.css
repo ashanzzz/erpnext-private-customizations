@@ -64,6 +64,45 @@
     border-color: #1e3a8a;
     box-shadow: 0 2px 4px rgba(30, 58, 138, 0.25);
 }
+.qifu-tab-role {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 4px;
+    font-weight: 700;
+    line-height: 1.4;
+    display: inline-block;
+}
+.qifu-tab-role.input {
+    background: #e0f2fe;
+    color: #0369a1;
+    border: 1px solid #bae6fd;
+}
+.qifu-tab-role.result {
+    background: #f0fdf4;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+.qifu-tab-role.audit {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+}
+.qifu-tab-btn.active .qifu-tab-role.input {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.4);
+}
+.qifu-tab-btn.active .qifu-tab-role.result {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.4);
+}
+.qifu-tab-btn.active .qifu-tab-role.audit {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.4);
+}
 
 /* KPI 指标卡片 */
 .qifu-kpi-grid {
@@ -327,9 +366,9 @@
     left: 155px !important;
     z-index: 25 !important;
     background: #f8fafc;
-    width: 90px !important;
-    min-width: 90px !important;
-    max-width: 90px !important;
+    width: 140px !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
     border-right: 1px solid #cbd5e1 !important;
     box-shadow: 2px 0 5px rgba(0,0,0,0.06);
 }
@@ -366,9 +405,9 @@
     left: 155px !important;
     z-index: 5 !important;
     background: #ffffff;
-    width: 90px !important;
-    min-width: 90px !important;
-    max-width: 90px !important;
+    width: 140px !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
     border-right: 1px solid #cbd5e1 !important;
     box-shadow: 2px 0 5px rgba(0,0,0,0.06);
 }
@@ -391,15 +430,15 @@
    精准语义化左侧冻结类体系 (适用于 Tab 2-6 标准宽表与 68 列大宽表)
    ========================================== */
 
-/* 双层表头第1行大类分组左侧冻结 (宽度 = 46 + 72 + 90 = 208px) */
+/* 双层表头第1行大类分组左侧冻结 (宽度 = 46 + 75 + 140 = 261px) */
 .qifu-table th.qifu-th-group-sticky {
     position: sticky !important;
     left: 0px !important;
     top: 0px !important;
     z-index: 99 !important;
-    width: 208px !important;
-    min-width: 208px !important;
-    max-width: 208px !important;
+    width: 261px !important;
+    min-width: 261px !important;
+    max-width: 261px !important;
     border-right: 1px solid #cbd5e1 !important;
     box-shadow: 2px 0 5px rgba(0, 0, 0, 0.06) !important;
 }
@@ -418,28 +457,28 @@
     text-align: center !important;
 }
 
-/* 2. 表头第2列: 工号 (72px) */
+/* 2. 表头第2列: 工号 (75px) */
 .qifu-table th.qifu-col-sticky-2 {
     position: sticky !important;
     left: 46px !important;
     top: 27px !important;
     z-index: 98 !important;
-    width: 72px !important;
-    min-width: 72px !important;
-    max-width: 72px !important;
+    width: 75px !important;
+    min-width: 75px !important;
+    max-width: 75px !important;
     background: #f8fafc !important;
     text-align: center !important;
 }
 
-/* 3. 表头第3列: 姓名 (90px) */
+/* 3. 表头第3列: 姓名 (140px) */
 .qifu-table th.qifu-col-sticky-3 {
     position: sticky !important;
-    left: 118px !important;
+    left: 121px !important;
     top: 27px !important;
     z-index: 98 !important;
-    width: 90px !important;
-    min-width: 90px !important;
-    max-width: 90px !important;
+    width: 140px !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
     background: #f8fafc !important;
     text-align: left !important;
     border-right: 1px solid #cbd5e1 !important;
@@ -469,26 +508,26 @@
     text-align: center !important;
 }
 
-/* 数据行第2列: 工号 (72px) */
+/* 数据行第2列: 工号 (75px) */
 .qifu-table td.qifu-col-sticky-2 {
     position: sticky !important;
     left: 46px !important;
     z-index: 15 !important;
-    width: 72px !important;
-    min-width: 72px !important;
-    max-width: 72px !important;
+    width: 75px !important;
+    min-width: 75px !important;
+    max-width: 75px !important;
     background: #ffffff !important;
     text-align: center !important;
 }
 
-/* 数据行第3列: 姓名 (90px) */
+/* 数据行第3列: 姓名 (140px) */
 .qifu-table td.qifu-col-sticky-3 {
     position: sticky !important;
-    left: 118px !important;
+    left: 121px !important;
     z-index: 15 !important;
-    width: 90px !important;
-    min-width: 90px !important;
-    max-width: 90px !important;
+    width: 140px !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
     background: #ffffff !important;
     text-align: left !important;
     border-right: 1px solid #cbd5e1 !important;
@@ -502,7 +541,7 @@
     background: #f8fafc !important;
 }
 
-/* 表尾合计行吸底与左侧锁定 (宽度 = 208px) */
+/* 表尾合计行吸底与左侧锁定 (宽度 = 261px) */
 .qifu-table tfoot td {
     position: sticky !important;
     bottom: 0 !important;
@@ -518,9 +557,9 @@
     left: 0px !important;
     bottom: 0px !important;
     z-index: 99 !important;
-    width: 208px !important;
-    min-width: 208px !important;
-    max-width: 208px !important;
+    width: 261px !important;
+    min-width: 261px !important;
+    max-width: 261px !important;
     background: #f8fafc !important;
     font-weight: 700 !important;
     text-align: center !important;
