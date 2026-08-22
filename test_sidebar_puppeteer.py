@@ -20,7 +20,7 @@ USER_SSH = os.getenv('UNRAID_SSH_USER', 'root')
 PASSWORD = os.getenv('UNRAID_SSH_PASSWORD', '')
 SITE_URL = os.getenv('ERPNEXT_SITE_URL', 'http://192.168.8.11:6888')
 ERPNEXT_USER = os.getenv('ERPNEXT_USER', 'Administrator')
-ERPNEXT_PASS = os.getenv('ERPNEXT_PASSWORD', 'admin')
+ERPNEXT_PASS = os.getenv('ERPNEXT_PASSWORD', '')
 
 # 用 Node.js Puppeteer (在 Unraid 主机上) 进行截图测试
 PUPPETEER_SCRIPT = f"""

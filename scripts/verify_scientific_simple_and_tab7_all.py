@@ -12,8 +12,8 @@ sys.stdout.reconfigure(encoding='utf-8')
 load_dotenv(r"d:\SynologyDrive团队\antigravity\erpnext16\.env")
 
 SITE_URL = os.getenv('ERPNEXT_SITE_URL', 'http://192.168.8.11:6888')
-USERNAME = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
-USER_PWD = os.getenv('ERPNEXT_PASSWORD', 'Woo@@@204317')
+USERNAME = os.getenv('ERPNEXT_USERNAME', 'dev@example.invalid')
+USER_PWD = os.getenv('ERPNEXT_PASSWORD', '')
 
 for i in range(25):
     try:

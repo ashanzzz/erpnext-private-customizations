@@ -467,6 +467,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
             primary_action(values) {
                 frappe.call({
                     method: 'ashan_cn_procurement.services.employee_salary_service.save_insurance_setting',
+                    type: 'POST',
                     args: {
                         company: COMPANY,
                         year: year,
@@ -555,6 +556,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
     $container.on("click", "#btn-jz-calc-payroll", function() {
         frappe.call({
             method: 'ashan_cn_procurement.services.payroll_settlement_service.calculate_and_generate_payroll',
+            type: 'POST',
             args: {
                 company: COMPANY,
                 period_month: current_month
@@ -575,6 +577,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
             function() {
                 frappe.call({
                     method: 'ashan_cn_procurement.services.payroll_settlement_service.confirm_and_lock_payroll',
+                    type: 'POST',
                     args: {
                         company: COMPANY,
                         period_month: current_month
@@ -606,6 +609,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         ], function(values) {
             frappe.call({
                 method: 'ashan_cn_procurement.services.payroll_settlement_service.unlock_payroll',
+                type: 'POST',
                 args: {
                     company: COMPANY,
                     period_month: current_month,

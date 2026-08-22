@@ -9,11 +9,24 @@ import frappe
 def execute():
     COMPANY = "天津祺富机械加工有限公司"
     
-    # 读取同级目录或指定路径下的 JSON 数据
-    json_path = os.path.join(os.path.dirname(__file__), "qifu_full_40_historical_data.json")
-    if not os.path.exists(json_path):
-        json_path = "/tmp/qifu_full_40_historical_data.json"
-    
+    # 真实历史工资数据属于私密数据，不应提交到 Git。优先读取环境变量，其次读取站点 private/files。
+    json_path = os.environ.get("QIFU_HISTORICAL_DATA_PATH", "").strip()
+    if not json_path:
+        try:
+            json_path = frappe.get_site_path("private", "files", "qifu_full_40_historical_data.json")
+        except Exception:
+            json_path = ""
+    if not json_path or not os.path.exists(json_path):
+        local_legacy = os.path.join(os.path.dirname(__file__), "qifu_full_40_historical_data.json")
+        if os.path.exists(local_legacy):
+            json_path = local_legacy
+    if not json_path or not os.path.exists(json_path):
+        tmp_path = "/tmp/qifu_full_40_historical_data.json"
+        if os.path.exists(tmp_path):
+            json_path = tmp_path
+    if not json_path or not os.path.exists(json_path):
+        frappe.throw("未找到祺富历史工资私密数据。请将 qifu_full_40_historical_data.json 放入站点 private/files，或设置环境变量 QIFU_HISTORICAL_DATA_PATH。")
+
     with open(json_path, "r", encoding="utf-8") as f:
         batches = json.load(f)
 
@@ -94,7 +107,7 @@ def execute():
                 "taxable_income": max(0.0, it.get("gross_salary", 0.0) - it.get("ss_person_total", 0.0) - it.get("hf_person_total", 0.0) - it.get("special_deductions_total", 0.0) - it.get("tax_threshold", 5000.0)),
                 "tax_amount": it.get("tax_amount", 0.0),
                 "net_salary": it.get("net_salary", 0.0),
-                "remarks": ""
+                "remarks": "历史累计期初快照（非单月工资明细）" if p_month == "2025-10" else ""
             }
             doc.append("items", row)
 

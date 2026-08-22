@@ -18,7 +18,7 @@ def load_env_file(env_path='.env'):
 load_env_file()
 SITE_URL = os.getenv('ERPNEXT_SITE_URL', 'http://192.168.8.11:6888')
 USERNAME  = os.getenv('ERPNEXT_USER', 'Administrator')
-PASSWORD  = os.getenv('ERPNEXT_PASSWORD', 'admin')
+PASSWORD  = os.getenv('ERPNEXT_PASSWORD', '')
 
 opts = webdriver.ChromeOptions()
 opts.add_argument('--headless=new')

@@ -1,0 +1,12 @@
+ERPNext payroll async/history Git-ready static validation
+Date: 2026-08-21
+Python AST: 995 files, 0 errors
+JSON parse: 105 files, 0 errors
+JavaScript node --check: 79 files, 0 errors
+Qifu workbench: 7 tabs present; legacy tax-only recalculation UI labels absent
+History complete ledger: 68 calculation-column assertion present + ERP audit fields
+Async engine: long queue + enqueue_after_commit + company serialization/readiness guard present
+Tax participation: 临时工/零工 excluded; 返聘工/退休返聘/其他-返聘工 included
+Private real payroll seed files: 0
+Hard-coded MariaDB CLI password hits: 0
+Live Frappe/bench/Playwright: NOT RUN in this packaging environment

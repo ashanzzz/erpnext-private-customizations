@@ -14,7 +14,7 @@ def load_env_file(env_path='.env'):
 
 load_env_file()
 SITE_URL = os.getenv('ERPNEXT_SITE_URL', 'http://192.168.8.11:6888')
-TOKEN = os.getenv('ERPNEXT_TOKEN', 'token 781e6538a0816f3:ebfe8d61c03e289')
+TOKEN = os.getenv('ERPNEXT_TOKEN', '')
 
 def call_api(endpoint, method='GET', data=None):
     headers = {
@@ -34,7 +34,7 @@ def call_api(endpoint, method='GET', data=None):
         return None
 
 def main():
-    # Fetch User Settings for user ashanzzz1213@gmail.com
+    # Fetch User Settings for user dev@example.invalid
     # User Settings are stored in tabUser Settings
     # We can fetch via REST API User Settings
     res = call_api('/api/resource/User%20Settings?limit_page_length=100')

@@ -20,7 +20,7 @@ load_env_file()
 
 SITE_URL = os.getenv('ERPNEXT_SITE_URL_LOCAL', 'http://192.168.8.11:6888')
 ERPNEXT_USER = os.getenv('ERPNEXT_USER', 'Administrator')
-ERPNEXT_PASS = os.getenv('ERPNEXT_PASSWORD', 'admin')
+ERPNEXT_PASS = os.getenv('ERPNEXT_PASSWORD', '')
 OUTPUT_DIR = r"C:\Users\ashan\.gemini\antigravity\brain\49a429d8-4554-471e-974e-f9d70d7ec2f8"
 
 # 1. API 验证

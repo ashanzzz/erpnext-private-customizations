@@ -32,7 +32,7 @@ def load_env_file(env_path='.env'):
 load_env_file()
 
 SITE_URL = os.getenv('ERPNEXT_SITE_URL', 'http://192.168.8.11:6888')
-TOKEN = os.getenv('ERPNEXT_TOKEN', 'token 781e6538a0816f3:ebfe8d61c03e289')
+TOKEN = os.getenv('ERPNEXT_TOKEN', '')
 APP_NAME = os.getenv('ERPNEXT_APP_NAME', 'ashan_cn_procurement')
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))

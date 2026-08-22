@@ -18,7 +18,7 @@ USER_SSH = os.getenv('UNRAID_SSH_USER', 'root')
 PASSWORD = os.getenv('UNRAID_SSH_PASSWORD', '')
 SITE_URL = os.getenv('ERPNEXT_SITE_URL', 'http://192.168.8.11:6888')
 ERPNEXT_USER = os.getenv('ERPNEXT_USER', 'Administrator')
-ERPNEXT_PASS = os.getenv('ERPNEXT_PASSWORD', 'admin')
+ERPNEXT_PASS = os.getenv('ERPNEXT_PASSWORD', '')
 
 # Install puppeteer on Unraid host with npm
 INSTALL_CMD = "npm install -g puppeteer --prefer-offline 2>&1 | tail -5"

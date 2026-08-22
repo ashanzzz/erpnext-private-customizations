@@ -1,4 +1,5 @@
 import os
+import shlex
 import paramiko
 
 def load_env_file(env_path='.env'):
@@ -15,6 +16,10 @@ HOST = os.getenv('UNRAID_SSH_HOST', '192.168.8.11')
 PORT = int(os.getenv('UNRAID_SSH_PORT', '22'))
 USER = os.getenv('UNRAID_SSH_USER', 'root')
 PASSWORD = os.getenv('UNRAID_SSH_PASSWORD', '')
+DB_USER = shlex.quote(os.getenv('ERPNEXT_DB_USER', 'erpnext16'))
+DB_PASSWORD = os.getenv('ERPNEXT_DB_PASSWORD', '')
+DB_PASSWORD_ARG = shlex.quote(f'-p{DB_PASSWORD}') if DB_PASSWORD else ''
+DB_NAME = shlex.quote(os.getenv('ERPNEXT_DB_NAME', 'erpnext16'))
 
 ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -33,9 +38,9 @@ with sftp.file('/tmp/clean_workspaces.sql', 'w') as f:
     f.write(sql_content)
 sftp.close()
 
-exec_cmd = """
+exec_cmd = rf"""
 docker cp /tmp/clean_workspaces.sql 1Panel-mariadb:/tmp/clean_workspaces.sql
-docker exec 1Panel-mariadb mariadb -u erpnext16 -pbAtk7Gn2BbzbypHS erpnext16 -e "source /tmp/clean_workspaces.sql;"
+docker exec 1Panel-mariadb mariadb -u {DB_USER} {DB_PASSWORD_ARG} {DB_NAME} -e "source /tmp/clean_workspaces.sql;"
 docker exec 1Panel-mariadb rm -f /tmp/clean_workspaces.sql
 rm -f /tmp/clean_workspaces.sql
 docker restart erpnext16

@@ -1,1 +1,2 @@
 ashan_cn_procurement.patches.v1_0.add_system_management_sidebar
+ashan_cn_procurement.patches.v1_4.initialize_housing_fund_quarter_policy

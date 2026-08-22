@@ -16,7 +16,7 @@ def load_env_file(env_path='.env'):
 load_env_file()
 SITE_URL = os.getenv('ERPNEXT_SITE_URL_LOCAL', 'http://192.168.8.11:6888')
 USER = os.getenv('ERPNEXT_USER', 'Administrator')
-PWD = os.getenv('ERPNEXT_PASSWORD', 'admin')
+PWD = os.getenv('ERPNEXT_PASSWORD', '')
 
 cj = CookieJar()
 opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))

@@ -168,7 +168,7 @@ class TestTaxInvoiceSuite(unittest.TestCase):
   </Header>
   <EInvoiceData>
     <SellerInformation>
-      <SellerIdNum>911200001030612345</SellerIdNum>
+      <SellerIdNum>911200000000000000</SellerIdNum>
       <SellerName>中国人民财产保险股份有限公司</SellerName>
     </SellerInformation>
     <BuyerInformation>
@@ -188,7 +188,7 @@ class TestTaxInvoiceSuite(unittest.TestCase):
       <TotaltaxIncludedAmount>734.50</TotaltaxIncludedAmount>
     </IssuItemInformation>
     <AdditionalInformation>
-      <Remark>保\\批单号:PDZA202612010000204490; 车牌号:津B3F278; 代收车船税:325.00元,税款所属期:2026年01月-2026年12月; 滞纳金:0.00元; 合计:1059.50元;</Remark>
+      <Remark>保\\批单号:PDZA202600000000000090; 车牌号:津A00000; 代收车船税:325.00元,税款所属期:2026年01月-2026年12月; 滞纳金:0.00元; 合计:1059.50元;</Remark>
     </AdditionalInformation>
   </EInvoiceData>
   <TaxSupervisionInfo>
@@ -299,10 +299,10 @@ class TestTaxInvoiceSuite(unittest.TestCase):
 		import pypdf
 		# 使用已验证的 pdf_parser 逻辑
 		from ashan_cn_procurement.parser.common import parse_remark_vehicle_vessel_tax
-		rem_res = parse_remark_vehicle_vessel_tax("保\\批单号:PDZA2026; 车牌号:津B3F278; 代收车船税:325.00元; 合计:1059.50元;")
+		rem_res = parse_remark_vehicle_vessel_tax("保\\批单号:PDZA2026; 车牌号:津A00000; 代收车船税:325.00元; 合计:1059.50元;")
 		self.assertEqual(rem_res["vehicle_vessel_tax"], 325.00)
 		self.assertEqual(rem_res["remark_total"], 1059.50)
-		self.assertEqual(rem_res["plate_number"], "津B3F278")
+		self.assertEqual(rem_res["plate_number"], "津A00000")
 
 	def test_h_purchase_invoice_matching(self):
 		"""Test H: Purchase Invoice 自动双向勾稽"""

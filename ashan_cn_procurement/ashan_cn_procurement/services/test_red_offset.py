@@ -17,7 +17,7 @@ def seed_and_test_red_offset():
 	blue.seller_name = '天津某某自动化控制设备有限公司'
 	blue.seller_tax_id = '91120000MA0123456X'
 	blue.buyer_name = '天津吉众机电设备安装工程有限公司'
-	blue.buyer_tax_id = '911201111038486937'
+	blue.buyer_tax_id = '911200000000000000'
 	blue.amount_without_tax = 5000.00
 	blue.tax_amount = 650.00
 	blue.invoice_grand_total = 5650.00
@@ -37,7 +37,7 @@ def seed_and_test_red_offset():
 	red.seller_name = '天津某某自动化控制设备有限公司'
 	red.seller_tax_id = '91120000MA0123456X'
 	red.buyer_name = '天津吉众机电设备安装工程有限公司'
-	red.buyer_tax_id = '911201111038486937'
+	red.buyer_tax_id = '911200000000000000'
 	red.amount_without_tax = -5000.00
 	red.tax_amount = -650.00
 	red.invoice_grand_total = -5650.00

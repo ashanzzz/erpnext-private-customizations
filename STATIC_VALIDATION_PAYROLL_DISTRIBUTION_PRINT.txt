@@ -1,0 +1,28 @@
+=== Python AST validation ===
+Python files: 1002
+Errors: 0
+=== JSON validation ===
+JSON files: 105
+Errors: 0
+=== XLSM reference cash helper cross-check ===
+Cash rows checked: 23
+Mismatches: 0
+=== Git-ready hygiene ===
+cache artifacts: 0
+.git directories: 0
+real .env files: 0
+private payroll seed files: 0
+=== Targeted source assertions ===
+17col label: PASS
+DL: PASS
+all people: PASS
+accounting export: PASS
+cash headers: PASS
+cash formula: PASS
+17col filename: PASS
+=== Basic secret-pattern scan ===
+hard-coded password-like files: 0
+=== JavaScript node --check ===
+JavaScript files: 79
+Errors: 0
+ALL STATIC CHECKS PASSED
