@@ -2949,20 +2949,20 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 { fieldtype: 'Currency', fieldname: 'deduction_elderly_care', label: '赡养老人', default: emp_data ? emp_data.deduction_elderly_care : 0 },
                 { fieldtype: 'Currency', fieldname: 'deduction_infant_care', label: '3岁以下婴幼儿照护', default: emp_data ? emp_data.deduction_infant_care : 0 },
 
-                { fieldtype: 'Section Break', label: '导入兼容与备注' },
+                { fieldtype: 'Section Break', label: '外部工资表姓名别名兼容' },
                 {
-                    fieldtype: 'Table', fieldname: 'name_aliases', label: '姓名别名（外部工资表兼容匹配）',
+                    fieldtype: 'Table', fieldname: 'name_aliases', label: '姓名别名登记表',
                     data: emp_data ? (emp_data.name_aliases || []) : [],
                     in_place_edit: true,
                     cannot_add_rows: false,
                     cannot_delete_rows: false,
-                    description: '车间外部工资表出现错别字、曾用字或称谓时（如刘海锋/刘海峰），在此登记别名。解析实发表时别名将 100% 精准优先匹配该员工档案。',
+                    description: '车间外部工资表出现错别字、曾用字或特定称谓时（如刘海锋/刘海峰），在此登记。外部实发表解析时将 100% 精准优先匹配该员工档案。',
                     fields: [
-                        { fieldtype: 'Data', fieldname: 'alias_name', label: '姓名别名 (如曾用字/错别字)', reqd: 1, in_list_view: 1, columns: 5 },
-                        { fieldtype: 'Data', fieldname: 'alias_note', label: '别名备注/使用场景', in_list_view: 1, columns: 7 }
+                        { fieldtype: 'Data', fieldname: 'alias_name', label: '姓名别名 (如错别字/曾用字)', reqd: 1, in_list_view: 1, columns: 5 },
+                        { fieldtype: 'Data', fieldname: 'alias_note', label: '别名备注 / 来源说明', in_list_view: 1, columns: 7 }
                     ]
                 },
-                { fieldtype: 'Column Break' },
+                { fieldtype: 'Section Break', label: '其他备注' },
                 { fieldtype: 'Small Text', fieldname: 'notes', label: '备注说明', default: emp_data ? emp_data.notes : '' }
             ],
             primary_action_label: isEdit ? '保存修改' : '立即创建',
