@@ -2759,16 +2759,27 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     function open_emp_dialog(emp_data) {
         const isEdit = !!emp_data;
         let d = null;
-        let applyingRetirementPreview = false;
+        let isSettingValues = false;
+        let debounceTimer = null;
+        let lastSignature = '';
 
         const getField = (name) => d && d.fields_dict && d.fields_dict[name] ? d.get_value(name) : null;
+        const safeSetValue = (name, val) => {
+            if (!d || !d.fields_dict || !d.fields_dict[name]) return;
+            const current = d.get_value(name);
+            if (current !== val && String(current || '') !== String(val || '')) {
+                isSettingValues = true;
+                d.set_value(name, val);
+                setTimeout(() => { isSettingValues = false; }, 100);
+            }
+        };
         const setPreviewHtml = (html) => {
             if (d && d.fields_dict && d.fields_dict.retirement_preview) {
                 d.fields_dict.retirement_preview.$wrapper.html(html || '');
             }
         };
         const refreshRetirementPreview = () => {
-            if (!d || applyingRetirementPreview) return;
+            if (!d || isSettingValues) return;
             const isChineseId = (getField('certificate_type') || '中国居民身份证') === '中国居民身份证';
             const isManualRetirement = getField('retirement_category') === '特殊政策/人工确认';
             if (d.set_df_property) {
@@ -2777,59 +2788,63 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 d.set_df_property('original_retirement_age', 'read_only', isManualRetirement ? 0 : 1);
                 d.set_df_property('delayed_retirement_age', 'read_only', isManualRetirement ? 0 : 1);
             }
+            const payload = {
+                certificate_type: getField('certificate_type') || '中国居民身份证',
+                id_card: String(getField('id_card') || '').trim(),
+                birth_date: getField('birth_date') || '',
+                gender: getField('gender') || '',
+                job_title: getField('job_title') || '',
+                retirement_category: getField('retirement_category') || '',
+                original_retirement_age: getField('original_retirement_age') || 0,
+                delayed_retirement_age: getField('delayed_retirement_age') || 0,
+                period_month: current_month
+            };
+            const sig = JSON.stringify(payload);
+            if (sig === lastSignature) return; // Prevent identical duplicate requests
+            lastSignature = sig;
+
             frappe.call({
                 method: 'ashan_cn_procurement.services.employee_salary_service.calculate_employee_age_and_retirement',
-                args: {
-                    certificate_type: getField('certificate_type'),
-                    id_card: getField('id_card'),
-                    birth_date: getField('birth_date'),
-                    gender: getField('gender'),
-                    job_title: getField('job_title'),
-                    retirement_category: getField('retirement_category'),
-                    original_retirement_age: getField('original_retirement_age'),
-                    delayed_retirement_age: getField('delayed_retirement_age'),
-                    period_month: current_month
-                },
+                args: payload,
                 callback: function(r) {
                     const x = r.message || {};
-                    applyingRetirementPreview = true;
-                    if (x.birth_date && getField('certificate_type') === '中国居民身份证') d.set_value('birth_date', x.birth_date);
-                    if (x.gender && getField('certificate_type') === '中国居民身份证') d.set_value('gender', x.gender);
-                    if (x.current_age !== undefined) d.set_value('current_age', x.current_age || 0);
-                    if (!x.needs_retirement_category_confirmation) {
-                        if (x.retirement_category) d.set_value('retirement_category', x.retirement_category);
-                        if (x.original_retirement_age !== undefined) d.set_value('original_retirement_age', x.original_retirement_age || 0);
-                        if (x.delayed_retirement_age !== undefined) d.set_value('delayed_retirement_age', x.delayed_retirement_age || 0);
-                    }
-                    applyingRetirementPreview = false;
+                    isSettingValues = true;
+                    if (x.birth_date && getField('certificate_type') === '中国居民身份证') safeSetValue('birth_date', x.birth_date);
+                    if (x.gender && getField('certificate_type') === '中国居民身份证') safeSetValue('gender', x.gender);
+                    if (x.current_age !== undefined) safeSetValue('current_age', x.current_age || 0);
+                    if (x.retirement_category) safeSetValue('retirement_category', x.retirement_category);
+                    if (x.original_retirement_age !== undefined) safeSetValue('original_retirement_age', x.original_retirement_age || 0);
+                    if (x.delayed_retirement_age !== undefined) safeSetValue('delayed_retirement_age', x.delayed_retirement_age || 0);
+                    setTimeout(() => { isSettingValues = false; }, 150);
 
                     const identityTip = getField('certificate_type') === '中国居民身份证'
                         ? (x.is_valid_id ? '<span style="color:#059669;">身份证校验通过，出生日期和性别由证件自动识别</span>' : `<span style="color:#dc2626;">${x.identity_validation_message || '请输入有效18位身份证号码'}</span>`)
                         : '<span style="color:#64748b;">非居民身份证，请手工维护出生日期、性别和退休类别</span>';
-                    const categoryTip = x.needs_retirement_category_confirmation
-                        ? '<div style="margin-top:6px;color:#b45309;font-weight:700;">⚠️ 女职工原50岁/55岁退休类别需要人事确认，系统不会把岗位名称猜测写入母表。</div>'
-                        : '';
-                    const original = x.original_retirement_age_str || '待确认';
-                    const delayed = x.delayed_retirement_age_str || '待确认';
+                    const original = x.original_retirement_age_str || (x.original_retirement_age ? `${x.original_retirement_age}岁` : '待确认');
+                    const delayed = x.delayed_retirement_age_str || (x.delayed_retirement_age ? `${x.delayed_retirement_age}岁` : '待确认');
                     const flexible = x.earliest_flexible_retire_period || '-';
                     const latest = x.latest_flexible_retire_period || '-';
                     const warn = x.primary_retirement_warning || '正常';
                     const contribution = x.earliest_flexible_minimum_contribution_str || '-';
                     setPreviewHtml(`
                         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.7;">
-                            <div>${identityTip}</div>${categoryTip}
+                            <div>${identityTip}</div>
                             <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:8px;">
                                 <div><span style="color:#64748b;">退休年龄(原)</span><br><strong>${original}</strong><br><span style="color:#94a3b8;">${x.original_retire_period || '-'}</span></div>
                                 <div><span style="color:#64748b;">退休年龄(延)</span><br><strong>${delayed}</strong><br><span style="color:#94a3b8;">${x.delayed_retire_period || '-'}</span></div>
                                 <div><span style="color:#64748b;">最早弹性退休</span><br><strong>${flexible}</strong><br><span style="color:#94a3b8;">最迟延后至 ${latest}</span></div>
-                                <div><span style="color:#64748b;">当前状态</span><br><strong style="color:${warn === '正常' ? '#059669' : '#c2410c'};">${warn}</strong><br><span style="color:#94a3b8;">按 ${current_month} 账期</span></div>
+                                <div><span style="color:#64748b;">当前状态</span><br><strong style="color:${warn.includes('正常') ? '#059669' : '#c2410c'};">${warn}</strong><br><span style="color:#94a3b8;">按 ${current_month} 账期</span></div>
                             </div>
-                            <div style="margin-top:7px;color:#64748b;">政策引擎 ${x.policy_version || 'CN-RETIRE-2025-V1'}。原退休年龄和延迟法定退休年龄分别预警，距到龄 1 个月内标记。最早弹性退休对应最低养老缴费年限门槛：${contribution}。系统不自动认定个人实际缴费年限。</div>
+                            <div style="margin-top:7px;color:#64748b;">政策引擎 ${x.policy_version || 'CN-RETIRE-2025-V1'}。原退休年龄和延迟法定退休年龄分别计算，距到龄3个月内预警。最早弹性退休对应最低养老缴费年限门槛：${contribution}。</div>
                         </div>`);
                 }
             });
         };
-        const retirementOnChange = () => { if (!applyingRetirementPreview) refreshRetirementPreview(); };
+        const retirementOnChange = () => {
+            if (isSettingValues) return;
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(refreshRetirementPreview, 250);
+        };
 
         d = new frappe.ui.Dialog({
             title: isEdit ? `✏️ 修改员工薪酬档案 · ${emp_data.employee_name}` : '➕ 新增祺富员工档案',
