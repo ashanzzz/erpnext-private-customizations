@@ -16,6 +16,9 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     let last_recalc_status = null;
     let current_tax_view_mode = "full_68"; // 默认直接进入 68 列全量法定申报大宽表
     let cached_insurance_setting = null;
+    let distribution_assist_rows = [];
+    let distribution_assist_index = 0;
+    let distribution_assist_view = 'person';
 
     const html = `
     <style>
@@ -785,6 +788,57 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     <button class="btn btn-default btn-sm" id="btn-tab2-print-dist" style="font-weight:600;">
                         🖨️ 打印 / 导出 PDF
                     </button>
+                    <button class="btn btn-default btn-sm" id="btn-tab2-toggle-assist" style="font-weight:700; color:#7c3aed; border-color:#c4b5fd;">
+                        💵 发放辅助 ▾
+                    </button>
+                </div>
+            </div>
+
+            <!-- 发放辅助抽屉：参照 XLSM 当月发薪工资表 Y:AE 隐藏辅助列 -->
+            <div id="tab2-distribution-assist" class="qifu-distribution-assist" style="display:none;">
+                <div class="qifu-assist-head">
+                    <div>
+                        <strong>💵 发放辅助</strong>
+                        <span>24列主表保持纯净；逐人核对、DL 信封与现金点钞在此独立处理</span>
+                    </div>
+                    <div class="qifu-assist-tabs">
+                        <button class="btn btn-xs qifu-assist-view active" data-view="person">👤 逐人分页</button>
+                        <button class="btn btn-xs qifu-assist-view" data-view="envelope">✉️ DL 信封</button>
+                        <button class="btn btn-xs qifu-assist-view" data-view="cash">💴 现金点钞</button>
+                    </div>
+                </div>
+                <div id="tab2-assist-person" class="qifu-assist-pane">
+                    <div class="qifu-person-pager">
+                        <button class="btn btn-default btn-xs" id="btn-assist-prev">← 上一人</button>
+                        <select class="form-control input-xs" id="assist-employee-select"></select>
+                        <span id="assist-person-page" class="qifu-person-page-label">0 / 0</span>
+                        <button class="btn btn-default btn-xs" id="btn-assist-next">下一人 →</button>
+                        <button class="btn btn-default btn-xs" id="btn-assist-print-person">🖨️ 打印当前员工</button>
+                        <button class="btn btn-default btn-xs" id="btn-assist-print-all-people">🗂️ 批量逐人分页</button>
+                    </div>
+                    <div id="assist-person-card" class="qifu-person-card"></div>
+                </div>
+                <div id="tab2-assist-envelope" class="qifu-assist-pane" style="display:none;">
+                    <div class="qifu-assist-actions">
+                        <span>DL 标准信封：220 × 110 mm，每名员工一页。</span>
+                        <button class="btn btn-default btn-xs" id="btn-print-current-envelope">✉️ 打印当前员工</button>
+                        <button class="btn btn-primary btn-xs" id="btn-print-all-envelopes">🖨️ 批量打印全部 DL 信封</button>
+                    </div>
+                    <div id="assist-envelope-preview" class="qifu-envelope-preview"></div>
+                </div>
+                <div id="tab2-assist-cash" class="qifu-assist-pane" style="display:none;">
+                    <div class="qifu-assist-actions">
+                        <span>按 XLSM 逻辑自动分解：100 / 50 / 10 / 5 / 1 元；核定 = ROUND(实发,0) − 现金合计。</span>
+                        <button class="btn btn-default btn-xs" id="btn-print-cash-sheet">🖨️ 打印点钞表</button>
+                        <button class="btn btn-primary btn-xs" id="btn-export-cash-sheet">📥 导出现金点钞表</button>
+                    </div>
+                    <div class="qifu-cash-table-wrap">
+                        <table class="qifu-table table-bordered" id="table-tab2-cash-sheet">
+                            <thead><tr><th>序号</th><th>工号</th><th>姓名</th><th>100 元</th><th>50 元</th><th>10 元</th><th>5 元</th><th>1 元</th><th>现金合计</th><th>核定</th></tr></thead>
+                            <tbody id="tbody-tab2-cash-sheet"></tbody>
+                            <tfoot id="tfoot-tab2-cash-sheet"></tfoot>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -1022,7 +1076,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                             📑 VBA 68列完整核算台账
                         </button>
                         <button type="button" class="btn btn-default btn-tax-view-mode" data-mode="simple" style="font-weight:700; font-size:12px; background:#fff; color:#334155; border-color:#cbd5e1;">
-                            ✨ 财税精简版 (15列)
+                            ✨ 财税精简版 (17列)
                         </button>
                     </div>
                     <button class="btn btn-default btn-sm" id="btn-qifu-edit-tax-setting" style="color:#b45309; border-color:#fde68a; background:#fef3c7; font-weight:600;">
@@ -1165,7 +1219,10 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         ⚖️ 查看个人所得税 (15列弹窗)
                     </button>
                 </div>
-                <div class="qifu-toolbar-right" style="display:flex; gap:8px;">
+                <div class="qifu-toolbar-right" style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+                    <button class="btn btn-default btn-sm" id="btn-export-accounting-xlsm" title="按参考 XLSM 的 11 列结构导出；外籍人员自动放入独立工作表" style="color:#15803d; border-color:#86efac; font-weight:700;">
+                        📥 导出记账工资表
+                    </button>
                     <button class="btn btn-primary btn-sm" id="btn-export-excel-both" style="background:#2563eb; border-color:#2563eb; font-weight:600;">
                         📥 导出标准全量 Excel (7张Sheet)
                     </button>
@@ -1268,6 +1325,15 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     function fmtMoney(val) {
         if (val === null || val === undefined || isNaN(val)) return '¥ 0.00';
         return '¥ ' + Number(val).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function escHtml(val) {
+        return String(val == null ? '' : val)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
 
@@ -1475,6 +1541,201 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     }
 
     // 2. 加载 Tab 2: 24 列薪资发放表
+    // ------------------------------------------
+    // Tab 2 发放辅助：逐人分页 / DL 信封 / 现金点钞
+    // 24 列主表保持为权威业务表，辅助视图只读取同一批服务器数据。
+    // ------------------------------------------
+    function distribution_cash_parts(row) {
+        const rounded = Math.max(0, Math.round(Number(row.net_salary || 0)));
+        let rem = rounded;
+        const fallback = {};
+        [100, 50, 10, 5, 1].forEach(denom => {
+            fallback['cash_' + denom] = Math.floor(rem / denom);
+            rem = rem % denom;
+        });
+        fallback.cash_total = rounded - rem;
+        fallback.cash_check = rounded - fallback.cash_total;
+        fallback.cash_target = rounded;
+        return {
+            cash_100: row.cash_100 != null ? Number(row.cash_100) : fallback.cash_100,
+            cash_50: row.cash_50 != null ? Number(row.cash_50) : fallback.cash_50,
+            cash_10: row.cash_10 != null ? Number(row.cash_10) : fallback.cash_10,
+            cash_5: row.cash_5 != null ? Number(row.cash_5) : fallback.cash_5,
+            cash_1: row.cash_1 != null ? Number(row.cash_1) : fallback.cash_1,
+            cash_total: row.cash_total != null ? Number(row.cash_total) : fallback.cash_total,
+            cash_check: row.cash_check != null ? Number(row.cash_check) : fallback.cash_check,
+            cash_target: row.cash_target != null ? Number(row.cash_target) : fallback.cash_target
+        };
+    }
+
+    function set_distribution_assist_rows(rows) {
+        distribution_assist_rows = Array.isArray(rows) ? rows.slice() : [];
+        if (distribution_assist_index >= distribution_assist_rows.length) distribution_assist_index = 0;
+        const $select = $('#assist-employee-select');
+        $select.empty();
+        distribution_assist_rows.forEach((r, idx) => {
+            $('<option>')
+                .val(String(idx))
+                .text(`${r.employee_no || '-'} · ${r.employee_name || '-'}`)
+                .appendTo($select);
+        });
+        if (distribution_assist_rows.length) $select.val(String(distribution_assist_index));
+        render_distribution_assist();
+        render_distribution_cash_table();
+    }
+
+    function current_distribution_assist_row() {
+        if (!distribution_assist_rows.length) return null;
+        distribution_assist_index = Math.max(0, Math.min(distribution_assist_index, distribution_assist_rows.length - 1));
+        return distribution_assist_rows[distribution_assist_index];
+    }
+
+    function render_distribution_assist() {
+        const row = current_distribution_assist_row();
+        const total = distribution_assist_rows.length;
+        $('#assist-person-page').text(total ? `${distribution_assist_index + 1} / ${total}` : '0 / 0');
+        $('#btn-assist-prev').prop('disabled', !total || distribution_assist_index <= 0);
+        $('#btn-assist-next').prop('disabled', !total || distribution_assist_index >= total - 1);
+        $('#btn-assist-print-person, #btn-print-current-envelope').prop('disabled', !row);
+
+        if (!row) {
+            $('#assist-person-card').html('<div style="padding:26px; text-align:center; color:#94a3b8;">当前账期暂无外部实发数据。</div>');
+            $('#assist-envelope-preview').html('<div style="margin:auto; color:#94a3b8;">暂无可打印员工</div>');
+            return;
+        }
+        $('#assist-employee-select').val(String(distribution_assist_index));
+        const cash = distribution_cash_parts(row);
+        const checkOk = Math.abs(Number(cash.cash_check || 0)) < 0.005;
+        $('#assist-person-card').html(`
+            <div class="qifu-person-card-title">
+                <div><strong>${escHtml(row.employee_name)}</strong><span>${escHtml(row.employee_no)} · ${escHtml(current_month)}</span></div>
+                <div class="qifu-person-net">实发 ${fmtMoney(row.net_salary)}</div>
+            </div>
+            <div class="qifu-person-card-grid">
+                <div class="qifu-person-metric"><div class="label">作业天数 / 小时</div><div class="value">${Number(row.work_days || 0)} 天 · ${Number(row.work_hours || 0)} 小时</div></div>
+                <div class="qifu-person-metric"><div class="label">考勤绩效工资</div><div class="value">${fmtMoney(row.workshop_net)}</div></div>
+                <div class="qifu-person-metric"><div class="label">补贴工资合计</div><div class="value">${fmtMoney(row.subsidies_total)}</div></div>
+                <div class="qifu-person-metric"><div class="label">应发工资合计</div><div class="value">${fmtMoney(row.payable_total)}</div></div>
+                <div class="qifu-person-metric"><div class="label">工资调整</div><div class="value">${fmtMoney(row.salary_adjust)}</div></div>
+                <div class="qifu-person-metric qifu-person-metric-strong"><div class="label">最终实发</div><div class="value">${fmtMoney(row.net_salary)}</div></div>
+                <div class="qifu-person-metric"><div class="label">现金张数</div><div class="value">100×${cash.cash_100} · 50×${cash.cash_50} · 10×${cash.cash_10} · 5×${cash.cash_5} · 1×${cash.cash_1}</div></div>
+                <div class="qifu-person-metric ${checkOk ? 'qifu-person-check-ok' : 'qifu-person-check-warn'}"><div class="label">现金核定</div><div class="value">${fmtMoney(cash.cash_total)} · 差额 ${fmtMoney(cash.cash_check)}</div></div>
+            </div>
+        `);
+
+        $('#assist-envelope-preview').html(`
+            <div class="env-company">${escHtml(COMPANY)} · 工资发放信封</div>
+            <div>
+                <div class="env-name">${escHtml(row.employee_name)}</div>
+                <div class="env-meta">工号 ${escHtml(row.employee_no)} · 发薪账期 ${escHtml(current_month)}</div>
+            </div>
+            <div>
+                <div class="env-pay">实发 ${fmtMoney(row.net_salary)}</div>
+                <div class="env-meta">现金核定 ${fmtMoney(cash.cash_total)} · 核定差额 ${fmtMoney(cash.cash_check)}</div>
+            </div>
+        `);
+    }
+
+    function render_distribution_cash_table() {
+        let body = '';
+        let totals = {cash_100:0,cash_50:0,cash_10:0,cash_5:0,cash_1:0,cash_total:0,cash_check:0};
+        distribution_assist_rows.forEach((r, idx) => {
+            const cash = distribution_cash_parts(r);
+            Object.keys(totals).forEach(k => totals[k] += Number(cash[k] || 0));
+            const checkOk = Math.abs(Number(cash.cash_check || 0)) < 0.005;
+            body += `<tr>
+                <td>${idx + 1}</td><td><strong>${escHtml(r.employee_no)}</strong></td><td>${escHtml(r.employee_name)}</td>
+                <td>${cash.cash_100}</td><td>${cash.cash_50}</td><td>${cash.cash_10}</td><td>${cash.cash_5}</td><td>${cash.cash_1}</td>
+                <td class="qifu-money-cell">${fmtMoney(cash.cash_total)}</td>
+                <td class="${checkOk ? 'qifu-cash-check-ok' : 'qifu-cash-check-warn'}">${fmtMoney(cash.cash_check)}</td>
+            </tr>`;
+        });
+        if (!body) body = '<tr><td colspan="10" style="padding:24px; text-align:center; color:#94a3b8;">当前账期暂无现金点钞数据。</td></tr>';
+        $('#tbody-tab2-cash-sheet').html(body);
+        $('#tfoot-tab2-cash-sheet').html(`
+            <tr><td colspan="3" style="text-align:center; font-weight:800;">合计 (${distribution_assist_rows.length}人)</td>
+            <td>${totals.cash_100}</td><td>${totals.cash_50}</td><td>${totals.cash_10}</td><td>${totals.cash_5}</td><td>${totals.cash_1}</td>
+            <td class="qifu-money-cell">${fmtMoney(totals.cash_total)}</td><td class="qifu-money-cell">${fmtMoney(totals.cash_check)}</td></tr>
+        `);
+    }
+
+    function distribution_print_document(title, pageCss, contentHtml) {
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed'; iframe.style.right = '0'; iframe.style.bottom = '0';
+        iframe.style.width = '0'; iframe.style.height = '0'; iframe.style.border = '0';
+        document.body.appendChild(iframe);
+        const doc = iframe.contentWindow.document;
+        doc.open();
+        doc.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escHtml(title)}</title><style>
+            ${pageCss}
+            *{box-sizing:border-box} body{margin:0;color:#111827;font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;background:#fff}
+            table{border-collapse:collapse;width:100%} th,td{border:1px solid #64748b;padding:5px 6px;font-size:10.5pt} th{background:#f1f5f9;text-align:center}
+            .money{text-align:right;font-variant-numeric:tabular-nums}.center{text-align:center}.muted{color:#64748b}.title{text-align:center;font-size:16pt;font-weight:800;margin-bottom:3mm}.subtitle{text-align:center;font-size:9.5pt;color:#475569;margin-bottom:4mm}
+        </style></head><body>${contentHtml}</body></html>`);
+        doc.close();
+        setTimeout(() => {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+            setTimeout(() => { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 3000);
+        }, 250);
+    }
+
+    function distribution_person_print_html(row) {
+        const cash = distribution_cash_parts(row);
+        return `<div class="title">${escHtml(COMPANY)} ${escHtml(current_month)} 员工工资发放核对单</div>
+            <div class="subtitle">工号 ${escHtml(row.employee_no)} · 姓名 ${escHtml(row.employee_name)} · 数据来源：外部实发与发放表</div>
+            <table><tbody>
+                <tr><th>作业天数</th><td class="center">${Number(row.work_days||0)}</td><th>作业小时</th><td class="center">${Number(row.work_hours||0)}</td><th>考勤绩效</th><td class="money">${fmtMoney(row.workshop_net)}</td></tr>
+                <tr><th>职位补贴</th><td class="money">${fmtMoney(row.post_allowance)}</td><th>房/车补</th><td class="money">${fmtMoney(row.house_rent_allowance)}</td><th>补贴合计</th><td class="money">${fmtMoney(row.subsidies_total)}</td></tr>
+                <tr><th>应发工资</th><td class="money">${fmtMoney(row.payable_total)}</td><th>工资调整</th><td class="money">${fmtMoney(row.salary_adjust)}</td><th>实发工资</th><td class="money"><strong>${fmtMoney(row.net_salary)}</strong></td></tr>
+                <tr><th>100 元</th><td class="center">${cash.cash_100}</td><th>50 元</th><td class="center">${cash.cash_50}</td><th>10 元</th><td class="center">${cash.cash_10}</td></tr>
+                <tr><th>5 元</th><td class="center">${cash.cash_5}</td><th>1 元</th><td class="center">${cash.cash_1}</td><th>现金核定</th><td class="money">${fmtMoney(cash.cash_total)}</td></tr>
+            </tbody></table>
+            <div style="margin-top:12mm; display:flex; justify-content:space-between; font-size:10.5pt;"><span>员工签收：________________</span><span>发放人：________________</span><span>日期：____年__月__日</span></div>`;
+    }
+
+    function print_distribution_person(row) {
+        if (!row) return;
+        distribution_print_document(`${row.employee_name}-${current_month}-工资核对单`, '@page{size:A4 portrait;margin:12mm}', distribution_person_print_html(row));
+    }
+
+    function print_all_distribution_people() {
+        if (!distribution_assist_rows.length) { frappe.msgprint('当前没有可打印的员工发放数据。'); return; }
+        const html = distribution_assist_rows.map(row => `<section class="person-print-page">${distribution_person_print_html(row)}</section>`).join('');
+        const css = '@page{size:A4 portrait;margin:12mm}.person-print-page{page-break-after:always;min-height:260mm}.person-print-page:last-child{page-break-after:auto}';
+        distribution_print_document(`${current_month}-逐人工资发放核对单`, css, html);
+    }
+
+    function dl_envelope_html(row) {
+        const cash = distribution_cash_parts(row);
+        return `<section class="dl-envelope">
+            <div class="dl-top"><span>${escHtml(COMPANY)}</span><span>${escHtml(current_month)}</span></div>
+            <div class="dl-center"><div class="dl-name">${escHtml(row.employee_name)}</div><div class="dl-no">工号 ${escHtml(row.employee_no)}</div></div>
+            <div class="dl-bottom"><div><span>实发工资</span><strong>${fmtMoney(row.net_salary)}</strong></div><div class="dl-cash">现金核定 ${fmtMoney(cash.cash_total)} · 差额 ${fmtMoney(cash.cash_check)}</div></div>
+        </section>`;
+    }
+
+    function print_dl_envelopes(printAll) {
+        const rows = printAll ? distribution_assist_rows : [current_distribution_assist_row()].filter(Boolean);
+        if (!rows.length) { frappe.msgprint('当前没有可打印的工资信封数据。'); return; }
+        const css = `@page{size:220mm 110mm;margin:0}.dl-envelope{width:220mm;height:110mm;padding:12mm 16mm;page-break-after:always;display:flex;flex-direction:column;justify-content:space-between;border:0}.dl-envelope:last-child{page-break-after:auto}.dl-top{display:flex;justify-content:space-between;font-size:10pt;color:#475569}.dl-center{text-align:center}.dl-name{font-size:28pt;font-weight:800;letter-spacing:2px}.dl-no{margin-top:3mm;font-size:11pt;color:#64748b}.dl-bottom{display:flex;align-items:flex-end;justify-content:space-between;border-top:1px solid #94a3b8;padding-top:5mm}.dl-bottom span{display:block;color:#64748b;font-size:9.5pt}.dl-bottom strong{display:block;font-size:18pt;margin-top:1mm}.dl-cash{font-size:9.5pt;color:#475569}`;
+        distribution_print_document(`${current_month}-DL工资信封`, css, rows.map(dl_envelope_html).join(''));
+    }
+
+    function print_cash_count_sheet() {
+        if (!distribution_assist_rows.length) { frappe.msgprint('当前没有现金点钞数据。'); return; }
+        let body = '';
+        let totals = {cash_100:0,cash_50:0,cash_10:0,cash_5:0,cash_1:0,cash_total:0,cash_check:0};
+        distribution_assist_rows.forEach((r, idx) => {
+            const c = distribution_cash_parts(r);
+            Object.keys(totals).forEach(k => totals[k] += Number(c[k]||0));
+            body += `<tr><td class="center">${idx+1}</td><td class="center">${escHtml(r.employee_no)}</td><td>${escHtml(r.employee_name)}</td><td class="center">${c.cash_100}</td><td class="center">${c.cash_50}</td><td class="center">${c.cash_10}</td><td class="center">${c.cash_5}</td><td class="center">${c.cash_1}</td><td class="money">${fmtMoney(c.cash_total)}</td><td class="money">${fmtMoney(c.cash_check)}</td></tr>`;
+        });
+        body += `<tr><th colspan="3">合计 (${distribution_assist_rows.length}人)</th><th>${totals.cash_100}</th><th>${totals.cash_50}</th><th>${totals.cash_10}</th><th>${totals.cash_5}</th><th>${totals.cash_1}</th><th class="money">${fmtMoney(totals.cash_total)}</th><th class="money">${fmtMoney(totals.cash_check)}</th></tr>`;
+        const html = `<div class="title">${escHtml(COMPANY)} ${escHtml(current_month)} 现金点钞核定表</div><div class="subtitle">参照 XLSM《当月发薪工资表》隐藏辅助列；核定 = ROUND(实发工资,0) − 现金合计</div><table><thead><tr><th>序号</th><th>工号</th><th>姓名</th><th>100 元</th><th>50 元</th><th>10 元</th><th>5 元</th><th>1 元</th><th>现金合计</th><th>核定</th></tr></thead><tbody>${body}</tbody></table>`;
+        distribution_print_document(`${current_month}-现金点钞核定表`, '@page{size:A4 landscape;margin:7mm}', html);
+    }
+
     function load_salary_distribution_tab() {
         frappe.call({
             method: 'ashan_cn_procurement.services.payroll_settlement_service.get_salary_distribution_sheet',
@@ -1492,7 +1753,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         <td class="qifu-col-sticky-1" style="text-align:center; color:#94a3b8;">${r.seq}</td>
                         <td class="qifu-col-sticky-2" style="text-align:center;"><strong>${r.employee_no}</strong></td>
                         <td class="qifu-col-sticky-3"><strong style="color:#1e3a8a;">${r.employee_name}</strong></td>
-                        <td class="qifu-money-cell">${r.attendance_days || 0}</td>
+                        <td class="qifu-money-cell">${r.work_days || 0}</td>
                         <td class="qifu-money-cell">${r.work_hours || 0}</td>
                         <td class="qifu-money-cell">${fmtMoney(r.day_salary)}</td>
                         <td class="qifu-money-cell">${fmtMoney(r.hour_salary)}</td>
@@ -1504,12 +1765,12 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         <td style="text-align:center;">${r.target_rate || '-'}</td>
                         <td class="qifu-money-cell">${fmtMoney(r.target_salary)}</td>
                         <td class="qifu-money-cell" style="color:#dc2626;">${fmtMoney(r.deduction)}</td>
-                        <td class="qifu-money-cell" style="font-weight:600;">${fmtMoney(r.workshop_subtotal)}</td>
+                        <td class="qifu-money-cell" style="font-weight:600;">${fmtMoney(r.workshop_net)}</td>
                         <td class="qifu-money-cell" style="color:#b45309; font-weight:600;">${fmtMoney(r.post_allowance)}</td>
                         <td class="qifu-money-cell" style="color:#b45309; font-weight:600;">${fmtMoney(r.house_rent_allowance)}</td>
-                        <td class="qifu-money-cell" style="color:#b45309; font-weight:700;">${fmtMoney(r.allowance_subtotal)}</td>
-                        <td class="qifu-money-cell" style="color:#2563eb; font-weight:700;">${fmtMoney(r.payable_salary)}</td>
-                        <td class="qifu-money-cell">${fmtMoney(r.salary_adjustment)}</td>
+                        <td class="qifu-money-cell" style="color:#b45309; font-weight:700;">${fmtMoney(r.subsidies_total)}</td>
+                        <td class="qifu-money-cell" style="color:#2563eb; font-weight:700;">${fmtMoney(r.payable_total)}</td>
+                        <td class="qifu-money-cell">${fmtMoney(r.salary_adjust)}</td>
                         <td class="qifu-money-cell" style="color:#16a34a; font-weight:800; font-size:13px;">${fmtMoney(r.net_salary)}</td>
                         <td style="text-align:center; color:#cbd5e1;">${r.sign || ''}</td>
                         <td style="font-size:11px; color:#64748b;">${r.remarks || ''}</td>
@@ -1517,12 +1778,13 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     `;
                 });
                 $("#tbody-tab2-dist-sheet").html(trs);
+                set_distribution_assist_rows(rows);
                 setTimeout(adjust_active_table_height, 50);
 
                 let tfoot_html = `
                 <tr>
                     <td colspan="3" class="qifu-col-sticky-foot">合计 (${rows.length}人)</td>
-                    <td class="qifu-money-cell">${tot.attendance_days || 0}</td>
+                    <td class="qifu-money-cell">${tot.work_days || 0}</td>
                     <td class="qifu-money-cell">${tot.work_hours || 0}</td>
                     <td>-</td><td>-</td>
                     <td class="qifu-money-cell">${fmtMoney(tot.full_attendance)}</td>
@@ -1533,12 +1795,12 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     <td>-</td>
                     <td class="qifu-money-cell">${fmtMoney(tot.target_salary)}</td>
                     <td class="qifu-money-cell" style="color:#dc2626;">${fmtMoney(tot.deduction)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(tot.workshop_subtotal)}</td>
+                    <td class="qifu-money-cell">${fmtMoney(tot.workshop_net)}</td>
                     <td class="qifu-money-cell" style="color:#b45309;">${fmtMoney(tot.post_allowance)}</td>
                     <td class="qifu-money-cell" style="color:#b45309;">${fmtMoney(tot.house_rent_allowance)}</td>
-                    <td class="qifu-money-cell" style="color:#b45309;">${fmtMoney(tot.allowance_subtotal)}</td>
-                    <td class="qifu-money-cell" style="color:#2563eb;">${fmtMoney(tot.payable_salary)}</td>
-                    <td class="qifu-money-cell">${fmtMoney(tot.salary_adjustment)}</td>
+                    <td class="qifu-money-cell" style="color:#b45309;">${fmtMoney(tot.subsidies_total)}</td>
+                    <td class="qifu-money-cell" style="color:#2563eb;">${fmtMoney(tot.payable_total)}</td>
+                    <td class="qifu-money-cell">${fmtMoney(tot.salary_adjust)}</td>
                     <td class="qifu-money-cell" style="color:#16a34a; font-size:13px;">${fmtMoney(tot.net_salary)}</td>
                     <td>-</td><td>-</td>
                 </tr>
@@ -1686,9 +1948,9 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         });
     }
 
-    // 5. 加载 Tab 5: 个人所得税核定与申报台账 · 支持【✨ 财税精简版 (15列)】与【📑 VBA 68列完整核算台账】
+    // 5. 加载 Tab 5: 个人所得税核定与申报台账 · 支持【✨ 财税精简版 (17列)】与【📑 VBA 68列完整核算台账】
     function render_tax_simple_table(data, cur_m) {
-        $("#table-tab5-tax-sheet").css("min-width", "1900px");
+        $("#table-tab5-tax-sheet").addClass("qifu-tax-simple-table").css("min-width", "1760px");
         const rows = data.rows || [];
         const tot = data.totals || {};
 
@@ -1789,7 +2051,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     }
 
     function render_tax_full_68_table(data, cur_m) {
-        $("#table-tab5-tax-sheet").css("min-width", "6200px");
+        $("#table-tab5-tax-sheet").removeClass("qifu-tax-simple-table").css("min-width", "6200px");
         const rows = data.rows || [];
         const tot = data.totals || {};
         const cols = [
@@ -2744,7 +3006,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         <td style="text-align:center; color:#94a3b8;">${r.seq}</td>
                         <td style="text-align:center;"><strong>${r.employee_no}</strong></td>
                         <td><strong style="color:#1e3a8a;">${r.employee_name}</strong></td>
-                        <td class="qifu-money-cell">${r.attendance_days || 0}</td>
+                        <td class="qifu-money-cell">${r.work_days || 0}</td>
                         <td class="qifu-money-cell">${r.work_hours || 0}</td>
                         <td class="qifu-money-cell">${fmtMoney(r.day_salary)}</td>
                         <td class="qifu-money-cell">${fmtMoney(r.hour_salary)}</td>
@@ -2756,12 +3018,12 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         <td style="text-align:center;">${r.target_rate || '-'}</td>
                         <td class="qifu-money-cell">${fmtMoney(r.target_salary)}</td>
                         <td class="qifu-money-cell" style="color:#dc2626;">${fmtMoney(r.deduction)}</td>
-                        <td class="qifu-money-cell" style="font-weight:600;">${fmtMoney(r.workshop_subtotal)}</td>
+                        <td class="qifu-money-cell" style="font-weight:600;">${fmtMoney(r.workshop_net)}</td>
                         <td class="qifu-money-cell" style="color:#b45309; font-weight:600;">${fmtMoney(r.post_allowance)}</td>
                         <td class="qifu-money-cell" style="color:#b45309; font-weight:600;">${fmtMoney(r.house_rent_allowance)}</td>
-                        <td class="qifu-money-cell" style="color:#b45309; font-weight:700;">${fmtMoney(r.allowance_subtotal)}</td>
-                        <td class="qifu-money-cell" style="color:#2563eb; font-weight:700;">${fmtMoney(r.payable_salary)}</td>
-                        <td class="qifu-money-cell">${fmtMoney(r.salary_adjustment)}</td>
+                        <td class="qifu-money-cell" style="color:#b45309; font-weight:700;">${fmtMoney(r.subsidies_total)}</td>
+                        <td class="qifu-money-cell" style="color:#2563eb; font-weight:700;">${fmtMoney(r.payable_total)}</td>
+                        <td class="qifu-money-cell">${fmtMoney(r.salary_adjust)}</td>
                         <td class="qifu-money-cell" style="color:#16a34a; font-weight:800; font-size:13px;">${fmtMoney(r.net_salary)}</td>
                         <td style="text-align:center; color:#cbd5e1;">${r.sign || ''}</td>
                         <td style="font-size:11px; color:#64748b;">${r.remarks || ''}</td>
@@ -2814,7 +3076,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         <tfoot style="background:#f8fafc; font-weight:700;">
                             <tr>
                                 <td colspan="3" style="text-align:center;">合计</td>
-                                <td class="qifu-money-cell">${tot.attendance_days || 0}</td>
+                                <td class="qifu-money-cell">${tot.work_days || 0}</td>
                                 <td class="qifu-money-cell">${tot.work_hours || 0}</td>
                                 <td>-</td><td>-</td>
                                 <td class="qifu-money-cell">${fmtMoney(tot.full_attendance)}</td>
@@ -2825,12 +3087,12 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                                 <td>-</td>
                                 <td class="qifu-money-cell">${fmtMoney(tot.target_salary)}</td>
                                 <td class="qifu-money-cell" style="color:#dc2626;">${fmtMoney(tot.deduction)}</td>
-                                <td class="qifu-money-cell">${fmtMoney(tot.workshop_subtotal)}</td>
+                                <td class="qifu-money-cell">${fmtMoney(tot.workshop_net)}</td>
                                 <td class="qifu-money-cell" style="color:#b45309;">${fmtMoney(tot.post_allowance)}</td>
                                 <td class="qifu-money-cell" style="color:#b45309;">${fmtMoney(tot.house_rent_allowance)}</td>
-                                <td class="qifu-money-cell" style="color:#b45309;">${fmtMoney(tot.allowance_subtotal)}</td>
-                                <td class="qifu-money-cell" style="color:#2563eb;">${fmtMoney(tot.payable_salary)}</td>
-                                <td class="qifu-money-cell">${fmtMoney(tot.salary_adjustment)}</td>
+                                <td class="qifu-money-cell" style="color:#b45309;">${fmtMoney(tot.subsidies_total)}</td>
+                                <td class="qifu-money-cell" style="color:#2563eb;">${fmtMoney(tot.payable_total)}</td>
+                                <td class="qifu-money-cell">${fmtMoney(tot.salary_adjust)}</td>
                                 <td class="qifu-money-cell" style="color:#16a34a; font-size:13px;">${fmtMoney(tot.net_salary)}</td>
                                 <td>-</td><td>-</td>
                             </tr>
@@ -4773,6 +5035,45 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         print_modal_report(`【${COMPANY}】${current_month} 薪资发放表`, `发薪所属账期: ${current_month}`, "table-tab2-dist-sheet");
     });
 
+    $container.on("click", "#btn-tab2-toggle-assist", function() {
+        const $panel = $("#tab2-distribution-assist");
+        const show = !$panel.is(':visible');
+        $panel.toggle(show);
+        $(this).text(show ? '💵 发放辅助 ▴' : '💵 发放辅助 ▾');
+        if (show) {
+            render_distribution_assist();
+            render_distribution_cash_table();
+        }
+    });
+    $container.on("click", ".qifu-assist-view", function() {
+        distribution_assist_view = $(this).attr('data-view') || 'person';
+        $(".qifu-assist-view").removeClass('active');
+        $(this).addClass('active');
+        $(".qifu-assist-pane").hide();
+        $("#tab2-assist-" + distribution_assist_view).show();
+        if (distribution_assist_view === 'cash') render_distribution_cash_table();
+        else render_distribution_assist();
+    });
+    $container.on("click", "#btn-assist-prev", function() {
+        if (distribution_assist_index > 0) distribution_assist_index -= 1;
+        render_distribution_assist();
+    });
+    $container.on("click", "#btn-assist-next", function() {
+        if (distribution_assist_index < distribution_assist_rows.length - 1) distribution_assist_index += 1;
+        render_distribution_assist();
+    });
+    $container.on("change", "#assist-employee-select", function() {
+        const idx = Number($(this).val());
+        if (Number.isInteger(idx) && idx >= 0 && idx < distribution_assist_rows.length) distribution_assist_index = idx;
+        render_distribution_assist();
+    });
+    $container.on("click", "#btn-assist-print-person", function() { print_distribution_person(current_distribution_assist_row()); });
+    $container.on("click", "#btn-assist-print-all-people", function() { print_all_distribution_people(); });
+    $container.on("click", "#btn-print-current-envelope", function() { print_dl_envelopes(false); });
+    $container.on("click", "#btn-print-all-envelopes", function() { print_dl_envelopes(true); });
+    $container.on("click", "#btn-print-cash-sheet", function() { print_cash_count_sheet(); });
+    $container.on("click", "#btn-export-cash-sheet", function() { export_excel_action("cash"); });
+
     // 7. 社保/公积金 Tab 导出、打印与配置修改
     $container.on("click", "#btn-qifu-edit-ss-setting, #btn-qifu-edit-hf-setting", function() {
         open_insurance_edit_dialog();
@@ -4892,6 +5193,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     $container.on("click", "#btn-view-hf-sheet-modal", function() { open_housing_fund_modal(); });
     $container.on("click", "#btn-view-tax-sheet-modal", function() { open_tax_modal(); });
     $container.on("click", "#btn-export-excel-both", function() { export_excel_action("all"); });
+    $container.on("click", "#btn-export-accounting-xlsm", function() { export_excel_action("accounting_xlsm"); });
 
     // 全局委派模态框事件
     $(document).off("click", "#btn-modal-export-dist").on("click", "#btn-modal-export-dist", function() { export_excel_action("distribution"); });

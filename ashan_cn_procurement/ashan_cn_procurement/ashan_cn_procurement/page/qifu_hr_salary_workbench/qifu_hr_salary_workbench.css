@@ -486,3 +486,138 @@
     .qifu-tab-btn { font-size: 12.5px; padding: 8px 10px; }
     .qifu-kpi-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
 }
+
+/* ============================================================
+   2026-08 薪资发放辅助 / 个税17列人机工程优化
+   ============================================================ */
+.qifu-distribution-assist {
+    margin: 0 0 12px 0;
+    border: 1px solid #ddd6fe;
+    border-radius: 10px;
+    background: #fafafa;
+    box-shadow: 0 2px 10px rgba(76, 29, 149, 0.06);
+    overflow: hidden;
+}
+.qifu-assist-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #f5f3ff;
+    border-bottom: 1px solid #ede9fe;
+}
+.qifu-assist-head strong { color: #5b21b6; font-size: 13px; }
+.qifu-assist-head span { color: #64748b; font-size: 11.5px; margin-left: 8px; }
+.qifu-assist-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.qifu-assist-tabs .btn { font-weight: 700; border-color: #ddd6fe; background: #fff; color: #6d28d9; }
+.qifu-assist-tabs .btn.active { background: #6d28d9; color: #fff; border-color: #6d28d9; }
+.qifu-assist-pane { padding: 12px 14px; background: #fff; }
+.qifu-assist-actions, .qifu-person-pager {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+    color: #475569;
+    font-size: 11.5px;
+}
+.qifu-person-pager #assist-employee-select { width: 220px; height: 28px; font-size: 12px; }
+.qifu-person-page-label { min-width: 54px; text-align: center; color: #475569; font-weight: 700; }
+.qifu-person-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px 14px;
+    background: #f8fafc;
+}
+.qifu-person-card-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(150px, 1fr));
+    gap: 8px;
+}
+.qifu-person-metric { background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; }
+.qifu-person-metric .label { font-size: 10.5px; color: #64748b; }
+.qifu-person-metric .value { margin-top: 3px; font-size: 13px; color: #0f172a; font-weight: 700; }
+.qifu-envelope-preview {
+    width: min(100%, 760px);
+    aspect-ratio: 2 / 1;
+    min-height: 260px;
+    border: 1px dashed #94a3b8;
+    background: #fff;
+    margin: 0 auto;
+    padding: 24px 30px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.qifu-envelope-preview .env-company { font-size: 13px; color: #475569; font-weight: 700; }
+.qifu-envelope-preview .env-name { font-size: 26px; color: #0f172a; font-weight: 800; letter-spacing: 1px; }
+.qifu-envelope-preview .env-pay { font-size: 21px; color: #166534; font-weight: 800; }
+.qifu-envelope-preview .env-meta { color: #64748b; font-size: 11.5px; }
+.qifu-cash-table-wrap { overflow: auto; max-height: 360px; border: 1px solid #e2e8f0; }
+#table-tab2-cash-sheet { min-width: 920px; margin: 0; }
+#table-tab2-cash-sheet th { text-align: center; white-space: nowrap; }
+#table-tab2-cash-sheet td { text-align: center; }
+#table-tab2-cash-sheet td:nth-child(3) { text-align: left; font-weight: 700; color: #1e3a8a; }
+
+/* 17列个税精简版：序号是定位列，不再占用与金额列相同的视觉权重。 */
+#table-tab5-tax-sheet.qifu-tax-simple-table th.qifu-col-sticky-1,
+#table-tab5-tax-sheet.qifu-tax-simple-table td.qifu-col-sticky-1 {
+    width: 34px !important; min-width: 34px !important; max-width: 34px !important; left: 0 !important;
+    padding-left: 4px !important; padding-right: 4px !important;
+}
+#table-tab5-tax-sheet.qifu-tax-simple-table th.qifu-col-sticky-2,
+#table-tab5-tax-sheet.qifu-tax-simple-table td.qifu-col-sticky-2 {
+    width: 72px !important; min-width: 72px !important; max-width: 72px !important; left: 34px !important;
+}
+#table-tab5-tax-sheet.qifu-tax-simple-table th.qifu-col-sticky-3,
+#table-tab5-tax-sheet.qifu-tax-simple-table td.qifu-col-sticky-3 {
+    width: 96px !important; min-width: 96px !important; max-width: 96px !important; left: 106px !important;
+}
+#table-tab5-tax-sheet.qifu-tax-simple-table th:nth-child(4) { min-width: 158px; }
+#table-tab5-tax-sheet.qifu-tax-simple-table th:nth-child(5) { min-width: 84px; }
+#table-tab5-tax-sheet.qifu-tax-simple-table th:nth-child(6) { min-width: 84px; }
+#table-tab5-tax-sheet.qifu-tax-simple-table th:nth-child(7) { min-width: 112px; }
+#table-tab5-tax-sheet.qifu-tax-simple-table th:nth-child(8) { min-width: 126px; }
+#table-tab5-tax-sheet.qifu-tax-simple-table th:nth-child(9),
+#table-tab5-tax-sheet.qifu-tax-simple-table th:nth-child(10) { min-width: 112px; }
+#table-tab5-tax-sheet.qifu-tax-simple-table th:nth-child(11) { min-width: 134px; }
+#table-tab5-tax-sheet.qifu-tax-simple-table th:nth-child(12) { min-width: 140px; }
+#table-tab5-tax-sheet.qifu-tax-simple-table th:nth-child(13) { min-width: 72px; }
+#table-tab5-tax-sheet.qifu-tax-simple-table th:nth-child(14) { min-width: 104px; }
+#table-tab5-tax-sheet.qifu-tax-simple-table th:nth-child(15) { min-width: 112px; }
+#table-tab5-tax-sheet.qifu-tax-simple-table th:nth-child(16),
+#table-tab5-tax-sheet.qifu-tax-simple-table th:nth-child(17) { min-width: 124px; }
+
+@media (max-width: 1100px) {
+    .qifu-assist-head { align-items: flex-start; flex-direction: column; }
+    .qifu-person-card-grid { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+}
+
+
+/* 发放辅助的核对层级：先看员工/实发，再看明细与现金核定。 */
+.qifu-person-card-title {
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    margin-bottom:10px; padding-bottom:9px; border-bottom:1px solid #e2e8f0;
+}
+.qifu-person-card-title strong { font-size:16px; color:#0f172a; }
+.qifu-person-card-title span { margin-left:8px; font-size:11.5px; color:#64748b; }
+.qifu-person-net { font-size:15px; font-weight:800; color:#166534; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; padding:5px 9px; white-space:nowrap; }
+.qifu-person-metric-strong { border-color:#bbf7d0; background:#f0fdf4; }
+.qifu-person-metric-strong .value { color:#166534; font-size:14px; }
+.qifu-person-check-ok { border-color:#bbf7d0; background:#f0fdf4; }
+.qifu-person-check-ok .value, .qifu-cash-check-ok { color:#166534; font-weight:800; }
+.qifu-person-check-warn { border-color:#fecaca; background:#fef2f2; }
+.qifu-person-check-warn .value, .qifu-cash-check-warn { color:#b91c1c; font-weight:800; }
+
+/* 现金点钞表：金额与张数分区，核定列突出异常而不是靠颜色装饰。 */
+#table-tab2-cash-sheet th:nth-child(n+4):nth-child(-n+8) { background:#eff6ff; color:#1e3a8a; }
+#table-tab2-cash-sheet th:nth-child(9) { background:#f8fafc; }
+#table-tab2-cash-sheet th:nth-child(10) { background:#f0fdf4; color:#166534; }
+#table-tab2-cash-sheet tfoot td { font-weight:800; background:#f8fafc; }
+
+/* 17列精简税表采用紧凑定位列，证件/累计金额列保留足够宽度。 */
+#table-tab5-tax-sheet.qifu-tax-simple-table th,
+#table-tab5-tax-sheet.qifu-tax-simple-table td { white-space: nowrap; }
+#table-tab5-tax-sheet.qifu-tax-simple-table th.qifu-col-sticky-1,
+#table-tab5-tax-sheet.qifu-tax-simple-table td.qifu-col-sticky-1 { font-variant-numeric: tabular-nums; }
