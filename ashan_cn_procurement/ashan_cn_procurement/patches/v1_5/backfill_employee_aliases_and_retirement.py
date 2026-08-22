@@ -28,11 +28,8 @@ def _looks_like_prc_id(value):
 
 def execute():
     """Upgrade V3-V5 payroll masters to structured aliases and refresh identity/retirement fields."""
-    try:
-        frappe.reload_doc("ashan_cn_procurement", "doctype", "ashan_employee_name_alias")
-        frappe.reload_doc("ashan_cn_procurement", "doctype", "ashan_employee_salary_profile")
-    except Exception:
-        pass
+    frappe.reload_doc("ashan_cn_procurement", "doctype", "ashan_employee_name_alias", force=True)
+    frappe.reload_doc("ashan_cn_procurement", "doctype", "ashan_employee_salary_profile", force=True)
 
     if not frappe.db.exists("DocType", "Ashan Employee Salary Profile"):
         return
