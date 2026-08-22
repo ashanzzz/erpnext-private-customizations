@@ -71,7 +71,11 @@ run_cmd(client, "docker exec erpnext16 chown -R frappe:frappe /home/frappe/frapp
 print("Running bench migrate...")
 run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench --site site1.local migrate")
 
-# 5. 清理缓存并重启容器重载 Python 模块
+# 5. 构建前端静态资源
+print("Building frontend assets...")
+run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench build --app ashan_cn_procurement")
+
+# 6. 清理缓存并重启容器重载 Python 模块
 print("Clearing cache & restarting container...")
 run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench --site site1.local clear-cache")
 run_cmd(client, "docker restart erpnext16")
