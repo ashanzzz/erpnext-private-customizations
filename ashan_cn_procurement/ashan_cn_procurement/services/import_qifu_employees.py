@@ -118,6 +118,7 @@ def import_qifu_employees_from_seed():
 		doc.employee_name = emp_name
 		doc.company = company
 		doc.id_card = r.get("id_card", "")
+		doc.certificate_type = r.get("certificate_type") or ("中国居民身份证" if len(str(doc.id_card or "").strip()) in (15, 18) else ("护照" if doc.id_card else "其他证件"))
 		doc.mobile = r.get("mobile", "")
 		doc.gender = r.get("gender", "男")
 		doc.birth_date = r.get("birth_date")
@@ -142,6 +143,10 @@ def import_qifu_employees_from_seed():
 		doc.deduction_infant_care = flt(r.get("deduction_infant_care", 0))
 
 		doc.is_insured = cint(r.get("is_insured", 1))
+		if r.get("retirement_category"):
+			doc.retirement_category = r.get("retirement_category")
+		if r.get("name_aliases") is not None:
+			doc.set("name_aliases", r.get("name_aliases") or [])
 
 		doc.save(ignore_permissions=True)
 		imported_count += 1

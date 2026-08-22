@@ -93,6 +93,65 @@ def _queue_salary_recalculation(company, period_month, employee_no=None, trigger
 		frappe.log_error(frappe.get_traceback(), "Payroll recalculation enqueue failed")
 		frappe.throw("数据未提交：服务器无法创建薪酬重算任务。请稍后重试，或联系系统管理员检查后台队列。")
 
+def _normalize_alias_rows(value=None, legacy_text=None, primary_name=None):
+	"""Normalize structured/legacy employee aliases for API and AI writes."""
+	import re
+	rows = value
+	if isinstance(rows, str):
+		text = rows.strip()
+		if text.startswith("["):
+			try:
+				rows = json.loads(text)
+			except Exception:
+				rows = []
+		else:
+			legacy_text = text
+			rows = []
+	if not isinstance(rows, (list, tuple)):
+		rows = []
+
+	items = []
+	if rows:
+		for row in rows:
+			if isinstance(row, str):
+				items.append({"alias_name": row.strip(), "alias_note": ""})
+			elif isinstance(row, dict):
+				items.append({
+					"alias_name": str(row.get("alias_name") or row.get("name") or "").strip(),
+					"alias_note": str(row.get("alias_note") or row.get("note") or "").strip(),
+				})
+	else:
+		for part in re.split(r"[,，;；/、\n\r]+", str(legacy_text or "")):
+			name = part.strip()
+			if name:
+				items.append({"alias_name": name, "alias_note": ""})
+
+	primary_key = re.sub(r"\s+", "", str(primary_name or "")).lower()
+	cleaned = []
+	seen = set()
+	for row in items:
+		name = row["alias_name"]
+		key = re.sub(r"\s+", "", name).lower()
+		if not key or key == primary_key or key in seen:
+			continue
+		seen.add(key)
+		cleaned.append(row)
+	return cleaned
+
+
+def _apply_alias_payload(doc, payload, existing=None):
+	"""Apply the structured aliases and synchronize the legacy compatibility mirror."""
+	if "name_aliases" not in payload and "external_name_aliases" not in payload:
+		return
+	rows = _normalize_alias_rows(
+		payload.get("name_aliases"),
+		payload.get("external_name_aliases"),
+		payload.get("employee_name") or getattr(doc, "employee_name", None) or ((existing or {}).get("employee_name")),
+	)
+	doc.set("name_aliases", rows)
+	doc.external_name_aliases = "\n".join(row["alias_name"] for row in rows)
+
+
 def calculate_age_and_retirement_details(
 	id_card="",
 	birth_date_str=None,
@@ -262,6 +321,29 @@ def get_employee_profiles(company="天津祺富机械加工有限公司", search
 		order_by="employee_no asc"
 	)
 
+	# V6: 一次性加载结构化姓名别名。旧版本只存文本时继续兼容。
+	alias_map = {}
+	parent_names = [r.get("name") for r in records if r.get("name")]
+	if parent_names:
+		try:
+			alias_rows = frappe.get_all(
+				"Ashan Employee Name Alias",
+				filters={"parent": ["in", parent_names], "parenttype": "Ashan Employee Salary Profile"},
+				fields=["parent", "alias_name", "alias_note", "idx"],
+				order_by="parent asc, idx asc",
+			)
+			for row in alias_rows:
+				alias_map.setdefault(row.parent, []).append({
+					"alias_name": row.alias_name,
+					"alias_note": row.alias_note or "",
+				})
+		except Exception:
+			alias_map = {}
+	for r in records:
+		structured = alias_map.get(r.get("name")) or _normalize_alias_rows(legacy_text=r.get("external_name_aliases"), primary_name=r.get("employee_name"))
+		r["name_aliases"] = structured
+		r["external_name_aliases"] = "\n".join(row.get("alias_name") or "" for row in structured if row.get("alias_name"))
+
 	# 内存级快速搜索过滤
 	if search_text:
 		st = search_text.strip().lower()
@@ -273,6 +355,7 @@ def get_employee_profiles(company="天津祺富机械加工有限公司", search
 			or st in (r.get("id_card") or "").lower()
 			or st in (r.get("department") or "").lower()
 			or st in (r.get("job_title") or "").lower()
+			or st in (r.get("external_name_aliases") or "").lower()
 		]
 
 	# 计算每位员工的专项附加扣除合计、津贴合计与年龄/退休参数 (以本月1日为基准)
@@ -508,8 +591,11 @@ def create_employee_salary_profile(**kwargs):
 	payload, _calc = _normalize_employee_identity_retirement_payload(kwargs, period_month=period_month)
 	doc = frappe.new_doc("Ashan Employee Salary Profile")
 	for k, v in payload.items():
+		if k in {"name_aliases", "external_name_aliases"}:
+			continue
 		if hasattr(doc, k):
 			setattr(doc, k, v)
+	_apply_alias_payload(doc, payload)
 	if not doc.company:
 		doc.company = "天津祺富机械加工有限公司"
 	if not doc.employment_status:
@@ -532,8 +618,11 @@ def update_employee_salary_profile(name, **kwargs):
 	existing = doc.as_dict()
 	payload, _calc = _normalize_employee_identity_retirement_payload(kwargs, period_month=period_month, existing=existing)
 	for k, v in payload.items():
+		if k in {"name_aliases", "external_name_aliases"}:
+			continue
 		if hasattr(doc, k) and k not in ["name", "doctype", "owner", "creation"]:
 			setattr(doc, k, v)
+	_apply_alias_payload(doc, payload, existing=existing)
 	doc.save()
 	_queue_salary_recalculation(doc.company, period_month, doc.employee_no, "员工薪酬档案", trigger_detail="修改员工薪酬档案")
 	return {
@@ -561,7 +650,7 @@ def update_single_employee(employee_name, data, period_month=None):
 	allowed_fields = [
 		"certificate_type", "id_card", "gender", "birth_date", "current_age", "retirement_age", "retirement_date",
 		"retirement_category", "original_retirement_age", "delayed_retirement_age",
-		"original_retirement_period", "delayed_retirement_period", "retirement_policy_version", "external_name_aliases",
+		"original_retirement_period", "delayed_retirement_period", "retirement_policy_version", "external_name_aliases", "name_aliases",
 		"employee_type", "employment_status", "date_of_joining", "relieving_date", "resignation_reason",
 		"salary_mode", "department", "job_title", "base_salary", "post_allowance", "house_rent_allowance", "performance_base",
 		"meal_allowance", "traffic_allowance", "communication_allowance", "other_allowance",
@@ -575,6 +664,8 @@ def update_single_employee(employee_name, data, period_month=None):
 
 	for field in allowed_fields:
 		if field in data:
+			if field in {"name_aliases", "external_name_aliases"}:
+				continue
 			val = data[field]
 			if field in ["fixed_salary", "base_salary", "post_allowance", "house_rent_allowance", "performance_base",
 			             "meal_allowance", "traffic_allowance", "communication_allowance",
@@ -587,6 +678,7 @@ def update_single_employee(employee_name, data, period_month=None):
 				val = cint(val)
 			doc.set(field, val)
 
+	_apply_alias_payload(doc, data, existing=doc.as_dict())
 	doc.save(ignore_permissions=True)
 	_queue_salary_recalculation(doc.company, period_month, doc.employee_no, "员工薪酬档案", trigger_detail="单人参数更新")
 	frappe.db.commit()

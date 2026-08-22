@@ -1887,7 +1887,10 @@ def upload_and_import_qifu_salary(file_url=None, file_data=None, filename=None, 
 			"source_match_method": wdata.get("source_match_method", "") if wdata else "",
 			"source_match_confidence": flt(wdata.get("source_match_confidence")) if wdata else 0.0,
 			"source_raw_json": wdata.get("source_raw_json", "") if wdata else "",
-			"remarks": (str(wdata.get("remarks") or "").strip() if (wdata and wdata.get("remarks")) else "")
+			"remarks": (
+				str(wdata.get("remarks") or "").strip() if (wdata and wdata.get("remarks"))
+				else ("母表固定工资 · 无需外部实发表" if (not wdata and flt(emp.fixed_salary) > 0) else "")
+			)
 		})
 
 		# 同步考勤
@@ -2054,7 +2057,7 @@ def get_salary_distribution_sheet(company="天津祺富机械加工有限公司"
 	for it in items:
 		rem = it.get("remarks") or ""
 		# 过滤非车间出勤人员（如外籍工/非车间在册人员即便直接输入工资，也绝不混入车间24列实发表）
-		if "非车间出勤" in rem or it.get("employee_type") == "外籍工" or (flt(it.get("work_hours")) == 0 and flt(it.get("attendance_days")) == 0 and not str(it.get("employee_no", "")).startswith("A")):
+		if "母表固定工资" in rem or "非车间出勤" in rem or it.get("employee_type") == "外籍工" or (flt(it.get("work_hours")) == 0 and flt(it.get("attendance_days")) == 0 and not str(it.get("employee_no", "")).startswith("A")):
 			continue
 
 		workshop_net = flt(it.get("fixed_salary"))
@@ -2690,7 +2693,9 @@ def get_tax_settlement_full_sheet(company="天津祺富机械加工有限公司"
     prior_months = cinfo["prior_months"]
 
     detail = get_payroll_settlement_detail(company, period_month)
-    items = detail.get("items", [])
+    items = _supplement_master_fixed_salary_items_for_tax(
+        company, period_month, detail.get("items", [])
+    )
 
     # 一次性读取往期明细，保留 VBA 需要的专项扣除与 7 项专项附加扣除分项。
     prior_parent_names = [f"{company}-{m}" for m in prior_months]
@@ -4614,6 +4619,68 @@ def _append_payroll_item_from_profile(doc, company, employee_no):
     return row
 
 
+def _restore_master_fixed_salary_items(doc, company, period_month):
+    """Restore employees whose authoritative monthly salary comes from the master.
+
+    External workshop spreadsheets are optional for these employees. Deleting an
+    uploaded spreadsheet must therefore remove only external facts, not their
+    system-managed salary rows.
+    """
+    profiles = _salary_profiles_for_period(
+        company, period_month, fields=["employee_no", "fixed_salary"]
+    )
+    restored = []
+    existing = {str(it.employee_no) for it in (doc.items or [])}
+    for profile in profiles:
+        emp_no = str(profile.get("employee_no") or "").strip()
+        if not emp_no or emp_no in existing or flt(profile.get("fixed_salary")) <= 0:
+            continue
+        row = _append_payroll_item_from_profile(doc, company, emp_no)
+        row.remarks = "母表固定工资 · 无需外部实发表"
+        restored.append(emp_no)
+        existing.add(emp_no)
+    return restored
+
+
+def _supplement_master_fixed_salary_items_for_tax(company, period_month, items):
+    """Add read-only calculated master-fixed rows missing from the current snapshot.
+
+    This makes the tax ledger useful even before an external workshop sheet has ever
+    been uploaded. No database row is created by this read path.
+    """
+    result = [dict(it) if isinstance(it, dict) else it.as_dict() for it in (items or [])]
+    existing = {str(it.get("employee_no") or "").strip() for it in result}
+    profiles = _salary_profiles_for_period(
+        company, period_month, fields=["employee_no", "employee_type", "fixed_salary"]
+    )
+    temp_doc = frappe.new_doc("Ashan Monthly Payroll Settlement")
+    temp_doc.company = company
+    temp_doc.period_month = period_month
+    temp_doc.imported_excel_file = None
+    for profile in profiles:
+        emp_no = str(profile.get("employee_no") or "").strip()
+        if (
+            not emp_no
+            or emp_no in existing
+            or flt(profile.get("fixed_salary")) <= 0
+            or not is_tax_ledger_employee(profile.get("employee_type"))
+        ):
+            continue
+        row = _append_payroll_item_from_profile(temp_doc, company, emp_no)
+        _recalculate_payroll_item_vba(
+            temp_doc, row, company, period_month,
+            trigger_source="个税台账母表固定工资只读兜底",
+            task_name="", input_hash="virtual-master-fixed", refresh_from_profile=True,
+        )
+        row.remarks = "母表固定工资 · 无需外部实发表"
+        data = row.as_dict()
+        data["salary_source"] = "master_fixed_salary"
+        result.append(data)
+        existing.add(emp_no)
+    result.sort(key=lambda x: str(x.get("employee_no") or ""))
+    return result
+
+
 @frappe.whitelist(methods=["POST"])
 def recalculate_employee_payroll(
     company="天津祺富机械加工有限公司",
@@ -5320,12 +5387,12 @@ def delete_payroll_proof_file(company, period_month, proof_type):
 		deleted_type_name = "车间外部实发工资表"
 		settle_doc.imported_excel_file = None
 		settle_doc.items = []
-		settle_doc.total_net_salary = 0.0
-		settle_doc.total_gross_salary = 0.0
-		settle_doc.total_individual_tax = 0.0
-		settle_doc.employee_count = 0
-		# 删除对应的子表 Item
+		# 删除外部月度事实后，母表固定工资人员必须继续存在。
 		frappe.db.delete("Ashan Monthly Payroll Item", {"parent": doc_name})
+		restored_fixed = _restore_master_fixed_salary_items(settle_doc, company, period_month)
+		_refresh_monthly_payroll_totals(settle_doc)
+		if hasattr(settle_doc, "employee_count"):
+			settle_doc.employee_count = len(settle_doc.items)
 
 	elif proof_type in ["social_security", "ss", "pdf_ss"]:
 		deleted_type_name = "社会保险缴费申报表"
@@ -5346,9 +5413,20 @@ def delete_payroll_proof_file(company, period_month, proof_type):
 
 	settle_doc.flags.ignore_version = True
 	settle_doc.save(ignore_permissions=True)
+	if proof_type in ["salary", "workshop", "excel"] and restored_fixed:
+		# 同步完成少量固定工资人员的法定扣除与累计个税，删除后立即可在 Tab 5/6 使用。
+		recalculate_and_save_monthly_tax(
+			company=company, period_month=period_month,
+			trigger_source="删除外部实发表后恢复母表固定工资", force_recompute=1,
+		)
 	frappe.db.commit()
 
 	return {
 		"success": True,
-		"message": f"🗑️ 已成功删除【{period_month}】的{deleted_type_name}！任务已重置为待上传状态。"
+		"restored_master_fixed_count": len(restored_fixed) if proof_type in ["salary", "workshop", "excel"] else 0,
+		"message": (
+			f"🗑️ 已删除【{period_month}】的{deleted_type_name}。"
+			+ (f" 已从员工母表自动恢复 {len(restored_fixed)} 名固定工资人员，个税与综合结算继续有效。" if proof_type in ["salary", "workshop", "excel"] and restored_fixed else "")
+			+ " 外部工资任务已重置为待上传状态。"
+		)
 	}

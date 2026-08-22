@@ -5,6 +5,102 @@ import frappe
 from frappe.model.document import Document
 
 
+
+
+def _split_aliases(value):
+	import re
+	result = []
+	seen = set()
+	for raw in re.split(r"[,，;；/、\n\r]+", str(value or "")):
+		alias = str(raw or "").strip()
+		key = alias.lower().replace(" ", "")
+		if alias and key not in seen:
+			seen.add(key)
+			result.append(alias)
+	return result
+
+
+def _sync_employee_name_aliases(doc):
+	"""Keep the structured alias child table authoritative while mirroring legacy text.
+
+	Existing V3/V4/V5 records may only have ``external_name_aliases``. The first save
+	migrates those values into the child table. Once child rows have existed, clearing
+	them is treated as an intentional removal and the legacy mirror is cleared too.
+	"""
+	current_rows = list(doc.get("name_aliases") or [])
+	previous_child_count = 0
+	if not doc.is_new() and doc.name:
+		try:
+			previous_child_count = frappe.db.count("Ashan Employee Name Alias", {"parent": doc.name})
+		except Exception:
+			previous_child_count = 0
+
+	aliases = []
+	notes = {}
+	if current_rows:
+		for row in current_rows:
+			name = str(row.get("alias_name") or "").strip()
+			if name:
+				aliases.append(name)
+				notes[name.lower().replace(" ", "")] = str(row.get("alias_note") or "").strip()
+	elif previous_child_count <= 0:
+		aliases = _split_aliases(doc.get("external_name_aliases"))
+
+	primary_key = str(doc.employee_name or "").strip().lower().replace(" ", "")
+	cleaned = []
+	seen = set()
+	for alias in aliases:
+		key = alias.lower().replace(" ", "")
+		if not key or key == primary_key or key in seen:
+			continue
+		seen.add(key)
+		cleaned.append(alias)
+
+	doc.set("name_aliases", [])
+	for alias in cleaned:
+		doc.append("name_aliases", {
+			"alias_name": alias,
+			"alias_note": notes.get(alias.lower().replace(" ", ""), ""),
+		})
+	doc.external_name_aliases = "\n".join(cleaned)
+
+
+def _validate_alias_uniqueness(doc):
+	"""Reject aliases that would make an external-payroll match ambiguous inside a company."""
+	if not doc.company:
+		return
+	for row in list(doc.get("name_aliases") or []):
+		alias = str(row.get("alias_name") or "").strip()
+		if not alias:
+			continue
+		primary_matches = frappe.get_all(
+			"Ashan Employee Salary Profile",
+			filters={"company": doc.company, "employee_name": alias},
+			fields=["name", "employee_no", "employee_name"],
+			limit=2,
+		)
+		for match in primary_matches:
+			if match.name != doc.name:
+				frappe.throw(f"姓名别名【{alias}】与员工 {match.employee_no} {match.employee_name} 的正式姓名重复，请改用更明确的外部称谓。")
+		try:
+			alias_matches = frappe.db.sql(
+				"""
+				SELECT p.name, p.employee_no, p.employee_name
+				  FROM `tabAshan Employee Name Alias` a
+				  JOIN `tabAshan Employee Salary Profile` p ON p.name=a.parent
+				 WHERE p.company=%s AND a.alias_name=%s AND p.name<>%s
+				 LIMIT 2
+				""",
+				(doc.company, alias, doc.name or ""),
+				as_dict=True,
+			)
+		except Exception:
+			alias_matches = []
+		if alias_matches:
+			match = alias_matches[0]
+			frappe.throw(f"姓名别名【{alias}】已由员工 {match.employee_no} {match.employee_name} 使用。别名在同一公司内必须唯一。")
+
+
 class AshanEmployeeSalaryProfile(Document):
 	"""Employee payroll master with one authoritative identity/retirement rule path.
 
@@ -14,6 +110,9 @@ class AshanEmployeeSalaryProfile(Document):
 	"""
 
 	def validate(self):
+		_sync_employee_name_aliases(self)
+		if not getattr(self.flags, "skip_alias_uniqueness", False):
+			_validate_alias_uniqueness(self)
 		from ashan_cn_procurement.services.retirement_policy_service import (
 			calculate_retirement_details,
 			validate_chinese_id_number,

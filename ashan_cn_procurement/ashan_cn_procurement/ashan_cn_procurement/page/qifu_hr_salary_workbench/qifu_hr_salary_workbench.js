@@ -1489,7 +1489,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     <td style="text-align:center;"><input type="checkbox" class="tab1-emp-check" data-emp-no="${escHtml(emp.employee_no || '')}" data-emp-name="${escHtml(emp.employee_name || '')}"></td>
                     <td style="text-align:center;color:#94a3b8;">${idx + 1}</td>
                     <td style="text-align:center;"><strong>${escHtml(emp.employee_no || '-')}</strong></td>
-                    <td><strong style="color:${resigned ? '#991b1b' : '#1e3a8a'};">${escHtml(emp.employee_name || '-')}</strong></td>
+                    <td><strong style="color:${resigned ? '#991b1b' : '#1e3a8a'};">${escHtml(emp.employee_name || '-')}</strong>${(emp.name_aliases || []).length ? `<div class="qifu-emp-cell-sub" title="外部工资表姓名别名">别名 ${(emp.name_aliases || []).map(x => escHtml(x.alias_name || '')).filter(Boolean).join(' / ')}</div>` : ''}</td>
                     <td><div class="qifu-emp-cell-main">${escHtml(mask_employee_certificate(emp.id_card))}</div><div class="qifu-emp-cell-sub">${escHtml(emp.current_age_detail || (emp.current_age != null ? `${emp.current_age}岁` : '-'))} · ${escHtml(emp.gender || '-')} · ${escHtml(emp.certificate_type || '中国居民身份证')}</div></td>
                     <td><div class="qifu-emp-cell-main">${escHtml(emp.job_title || '未设置岗位')}</div><div class="qifu-emp-cell-sub">${escHtml(emp.department || '未设置部门')} · ${resigned ? '本月离职' : escHtml(emp.employee_type || '正式工')}</div></td>
                     <td><div class="qifu-emp-cell-main">${escHtml(emp.salary_mode || '未设置')} · ${fmtMoney(emp.fixed_salary)}</div><div class="qifu-emp-cell-sub">长期津贴 ${fmtMoney(totalAllowance)}</div></td>
@@ -2796,7 +2796,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 { fieldtype: 'Data', fieldname: 'id_card', label: '证件号码', default: emp_data ? emp_data.id_card : '', onchange: retirementOnChange },
                 { fieldtype: 'Column Break' },
                 { fieldtype: 'Date', fieldname: 'birth_date', label: '出生日期', default: emp_data ? emp_data.birth_date : '', onchange: retirementOnChange },
-                { fieldtype: 'Int', fieldname: 'current_age', label: '年龄', read_only: 1, default: emp_data ? emp_data.current_age : 0 },
+                { fieldtype: 'Int', fieldname: 'current_age', label: '年龄（自动）', read_only: 1, default: emp_data ? emp_data.current_age : 0, description: '身份证自动识别；护照/其他证件根据手填出生日期计算。' },
                 { fieldtype: 'Select', fieldname: 'gender', label: '性别', options: ['','男','女'], default: emp_data ? emp_data.gender : '', onchange: retirementOnChange },
 
                 { fieldtype: 'Section Break', label: '人事与用工' },
@@ -2841,7 +2841,18 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 { fieldtype: 'Currency', fieldname: 'deduction_infant_care', label: '3岁以下婴幼儿照护', default: emp_data ? emp_data.deduction_infant_care : 0 },
 
                 { fieldtype: 'Section Break', label: '导入兼容与备注' },
-                { fieldtype: 'Small Text', fieldname: 'external_name_aliases', label: '外部姓名别名', default: emp_data ? emp_data.external_name_aliases : '', description: '仅用于兼容历史工资表姓名写法，可用逗号、顿号或换行分隔。' },
+                {
+                    fieldtype: 'Table', fieldname: 'name_aliases', label: '姓名别名（可多个）',
+                    data: emp_data ? (emp_data.name_aliases || []) : [],
+                    in_place_edit: true,
+                    cannot_add_rows: false,
+                    cannot_delete_rows: false,
+                    description: '外部工资表出现曾用字、错别字或称谓时，在这里逐条登记。明确别名优先于模糊匹配。',
+                    fields: [
+                        { fieldtype: 'Data', fieldname: 'alias_name', label: '姓名别名', reqd: 1, in_list_view: 1, columns: 5 },
+                        { fieldtype: 'Data', fieldname: 'alias_note', label: '说明', in_list_view: 1, columns: 7 }
+                    ]
+                },
                 { fieldtype: 'Column Break' },
                 { fieldtype: 'Small Text', fieldname: 'notes', label: '备注说明', default: emp_data ? emp_data.notes : '' }
             ],
@@ -4400,7 +4411,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         const cur_m = $("#qifu-month-select").val() || current_month;
         if (state === "uploaded") {
             frappe.confirm(
-                `⚠️ 确定要删除【${cur_m}】已上传的车间外部实发工资表吗？<br><br><span style="color:#dc2626; font-size:12px;">删除后该月份车间发放台账与核算明细将被清空重置，需重新上传 Excel 文件。</span>`,
+                `⚠️ 确定要删除【${cur_m}】已上传的车间外部实发工资表吗？<br><br><span style="color:#dc2626; font-size:12px;">只会清除外部工资来源。员工母表中的固定工资人员会保留，并立即重新计算个税与综合结算；车间外部实发仍需重新上传 Excel。</span>`,
                 function() {
                     execute_delete_proof('salary', '车间实发工资表');
                 }
