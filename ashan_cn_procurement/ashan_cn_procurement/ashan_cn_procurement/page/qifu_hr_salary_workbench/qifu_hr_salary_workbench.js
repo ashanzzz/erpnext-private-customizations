@@ -708,30 +708,30 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         <div id="qifu-tab-employees" class="qifu-tab-content">
             <div class="qifu-master-summary-grid">
                 <div class="qifu-master-summary-card" style="border-left:4px solid #2563eb;"><div class="label">在册员工</div><div class="value" id="tab1-active-total">—</div><div class="sub" id="tab1-active-sub">当前账期有效薪酬档案</div></div>
-                <div class="qifu-master-summary-card" style="border-left:4px solid #059669;"><div class="label">档案资料完整</div><div class="value" id="tab1-profile-ready">—</div><div class="sub" id="tab1-profile-ready-sub">身份、用工、计薪与退休关键字段</div></div>
-                <div class="qifu-master-summary-card" style="border-left:4px solid #d97706;"><div class="label">退休事项待处理</div><div class="value" id="tab1-ret-attention">—</div><div class="sub" id="tab1-ret-attention-sub">原年龄、延迟年龄与类别确认</div></div>
-                <div class="qifu-master-summary-card" style="border-left:4px solid #dc2626;"><div class="label">本月离职</div><div class="value" id="tab1-emp-resigned">—</div><div class="sub">当月参与结算，次月按规则减员</div></div>
+                <div class="qifu-master-summary-card" style="border-left:4px solid #059669;"><div class="label">正式与返聘员工</div><div class="value" id="tab1-regular-rehire-total">—</div><div class="sub" id="tab1-regular-rehire-sub">正式工 — 人 ｜ 返聘工 — 人</div></div>
+                <div class="qifu-master-summary-card" style="border-left:4px solid #7c3aed;"><div class="label">其他类型员工</div><div class="value" id="tab1-other-total">—</div><div class="sub" id="tab1-other-sub">其他-返聘 — 人 ｜ 其他-外籍 — 人</div></div>
+                <div class="qifu-master-summary-card" style="border-left:4px solid #dc2626;"><div class="label">退休预警与离职</div><div class="value" id="tab1-ret-warn-resigned-total">—</div><div class="sub" id="tab1-ret-warn-resigned-sub">3个月内临退 — 人 ｜ 本月离职 — 人</div></div>
             </div>
             <div class="qifu-master-meta">
-                <div class="qifu-master-meta-group"><span style="font-weight:700;color:#334155;">人员结构</span><span class="qifu-master-chip">正式工 <strong id="tab1-type-regular">0</strong></span><span class="qifu-master-chip">退休返聘 <strong id="tab1-type-rehire">0</strong></span><span class="qifu-master-chip">临时/零工 <strong id="tab1-type-temp">0</strong></span><span class="qifu-master-chip">其他 <strong id="tab1-type-other">0</strong></span></div>
-                <div class="qifu-master-meta-group"><span style="font-weight:700;color:#334155;">退休规则</span><span class="qifu-master-chip" style="background:#fff7ed;border-color:#fed7aa;color:#c2410c;">原年龄预警 <strong id="tab1-ret-orig-warning">0</strong></span><span class="qifu-master-chip" style="background:#f5f3ff;border-color:#ddd6fe;color:#6d28d9;">延迟年龄预警 <strong id="tab1-ret-delay-warning">0</strong></span><span class="qifu-master-chip" style="background:#fefce8;border-color:#fde68a;color:#a16207;">类别待确认 <strong id="tab1-ret-unconfirmed">0</strong></span></div>
+                <div class="qifu-master-meta-group"><span style="font-weight:700;color:#334155;">人员结构</span><span class="qifu-master-chip">🛡️ 正式工 <strong id="tab1-type-regular">0</strong></span><span class="qifu-master-chip">👴 返聘工 <strong id="tab1-type-rehire">0</strong></span><span class="qifu-master-chip">🏷️ 其他-返聘工 <strong id="tab1-type-other-rehire">0</strong></span><span class="qifu-master-chip">🌏 其他-外籍工 <strong id="tab1-type-foreign">0</strong></span><span class="qifu-master-chip">⏱️ 临时/零工 <strong id="tab1-type-temp">0</strong></span></div>
+                <div class="qifu-master-meta-group"><span style="font-weight:700;color:#334155;">退休规则</span><span class="qifu-master-chip" style="background:#fff7ed;border-color:#fed7aa;color:#c2410c;">⚠️ 3个月内临退 <strong id="tab1-ret-3m-warning">0</strong></span><span class="qifu-master-chip" style="background:#f1f5f9;border-color:#cbd5e1;color:#475569;">已达龄/返聘 <strong id="tab1-ret-already-retired">0</strong></span><span class="qifu-master-chip" style="background:#f0fdf4;border-color:#bbf7d0;color:#15803d;">正常 (未到龄) <strong id="tab1-ret-normal">0</strong></span></div>
             </div>
             <div class="qifu-toolbar" style="align-items:center;">
                 <div class="qifu-toolbar-left qifu-master-filters">
-                    <input type="text" class="form-control" id="qifu-emp-search" placeholder="搜索工号、姓名、证件、岗位" style="width:220px;">
-                    <select class="form-control" id="qifu-emp-type-filter" style="width:116px;"><option value="all">全部用工</option><option value="正式工">正式工</option><option value="rehire">退休返聘</option><option value="temp">临时/零工</option><option value="other">其他类型</option></select>
+                    <input type="text" class="form-control" id="qifu-emp-search" placeholder="搜索工号、姓名、证件、岗位" style="width:210px;">
+                    <select class="form-control" id="qifu-emp-type-filter" style="width:130px;"><option value="all">全部用工</option><option value="正式工">正式工</option><option value="返聘工">返聘工</option><option value="其他-返聘工">其他-返聘工</option><option value="其他-外籍工">其他-外籍工</option><option value="临时工">临时/零工</option></select>
                     <select class="form-control" id="qifu-emp-status-filter" style="width:104px;"><option value="all">全部状态</option><option value="active">在职</option><option value="resigned">本月离职</option></select>
-                    <select class="form-control" id="qifu-emp-ret-filter" style="width:126px;"><option value="all">全部退休状态</option><option value="attention">需处理</option><option value="normal">正常</option></select>
+                    <select class="form-control" id="qifu-emp-ret-filter" style="width:136px;"><option value="all">全部退休状态</option><option value="warning">⚠️ 3个月内临退</option><option value="retired">已达龄/返聘</option><option value="normal">正常 (未到龄)</option></select>
                     <select class="form-control" id="qifu-emp-profile-filter" style="width:116px;"><option value="all">全部档案</option><option value="complete">资料完整</option><option value="incomplete">待完善</option></select>
                     <button class="btn btn-default btn-sm" id="btn-qifu-emp-reset-filter">重置</button>
                 </div>
                 <div class="qifu-toolbar-right" style="display:flex;gap:7px;"><button class="btn btn-default btn-sm" id="btn-batch-resign" style="color:#b91c1c;border-color:#fecaca;font-weight:600;">批量办理离职</button><button class="btn btn-primary btn-sm" id="btn-qifu-new-emp" style="background:#2563eb;border-color:#2563eb;font-weight:600;">新增员工档案</button></div>
             </div>
             <div class="qifu-table-box">
-                <table class="qifu-table" id="table-qifu-emp" style="min-width:1550px;">
+                <table class="qifu-table" id="table-qifu-emp" style="min-width:1600px;">
                     <thead><tr>
                         <th style="width:36px;min-width:36px;text-align:center;"><input type="checkbox" id="check-all-tab1-employees" title="全选当前筛选结果"></th><th style="width:44px;min-width:44px;text-align:center;">序号</th><th style="min-width:72px;text-align:center;">工号</th><th style="min-width:90px;text-align:left;">姓名</th>
-                        <th style="min-width:190px;text-align:left;"><div class="qifu-history-group-label">身份底册</div><div class="qifu-history-main-label">身份资料</div></th><th style="min-width:155px;text-align:left;"><div class="qifu-history-group-label">组织属性</div><div class="qifu-history-main-label">岗位 / 用工</div></th><th style="min-width:155px;text-align:left;"><div class="qifu-history-group-label">长期参数</div><div class="qifu-history-main-label">计薪 / 固定项</div></th><th style="min-width:150px;text-align:right;"><div class="qifu-history-group-label">长期参数</div><div class="qifu-history-main-label">社保 / 公积金</div></th><th style="min-width:110px;text-align:right;"><div class="qifu-history-group-label">个税参数</div><div class="qifu-history-main-label">专项附加扣除</div></th><th style="min-width:205px;text-align:left;"><div class="qifu-history-group-label">政策引擎</div><div class="qifu-history-main-label">退休信息</div></th><th style="min-width:120px;text-align:center;">档案状态</th><th style="width:130px;min-width:130px;text-align:center;">操作</th>
+                        <th style="min-width:200px;text-align:left;"><div class="qifu-history-group-label">身份底册</div><div class="qifu-history-main-label">身份资料 (证件号/年龄/性别)</div></th><th style="min-width:150px;text-align:left;"><div class="qifu-history-group-label">组织属性</div><div class="qifu-history-main-label">岗位 / 用工性质</div></th><th style="min-width:150px;text-align:left;"><div class="qifu-history-group-label">长期参数</div><div class="qifu-history-main-label">计薪 / 固定项</div></th><th style="min-width:115px;text-align:right;"><div class="qifu-history-group-label">长期参数</div><div class="qifu-history-main-label">社保基数</div></th><th style="min-width:145px;text-align:right;"><div class="qifu-history-group-label">长期参数</div><div class="qifu-history-main-label">公积金基数</div></th><th style="min-width:110px;text-align:right;"><div class="qifu-history-group-label">个税参数</div><div class="qifu-history-main-label">专项附加扣除</div></th><th style="min-width:200px;text-align:left;"><div class="qifu-history-group-label">政策引擎</div><div class="qifu-history-main-label">退休信息 (原方式/预警)</div></th><th style="min-width:105px;text-align:center;">档案状态</th><th style="width:130px;min-width:130px;text-align:center;">操作</th>
                     </tr></thead><tbody id="tbody-qifu-emp"></tbody>
                 </table>
             </div>
@@ -1400,13 +1400,27 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
     function mask_employee_certificate(value) {
         const text = String(value || '').trim();
-        if (!text) return '-';
-        if (text.length <= 8) return text.slice(0, 2) + '••' + text.slice(-2);
-        return text.slice(0, 4) + '••••••' + text.slice(-4);
+        return text || '-';
+    }
+
+    function is_employee_retirement_warning(emp) {
+        if (!emp) return false;
+        if (emp.original_retirement_warning || emp.delayed_retirement_warning) return true;
+        if (emp.primary_retirement_warning && ['临退预警', '临退预警(原)', '临退预警(延)', '退休预警(原)', '退休预警(延)'].includes(emp.primary_retirement_warning)) return true;
+        if (emp.retire_months_left != null && emp.retire_months_left >= 0 && emp.retire_months_left <= 3) return true;
+        return false;
+    }
+
+    function is_employee_already_retired(emp) {
+        if (!emp) return false;
+        if (['退休返聘', '返聘工', '其他-返聘工'].includes(emp.employee_type || '')) return true;
+        if (emp.primary_retirement_warning && ['已到龄', '已达原龄', '已过原退休年龄', '已到法定退休年龄'].includes(emp.primary_retirement_warning)) return true;
+        if (emp.retire_months_left != null && emp.retire_months_left < 0) return true;
+        return false;
     }
 
     function employee_retirement_attention(emp) {
-        return !!(emp.needs_retirement_category_confirmation || emp.original_retirement_warning || emp.delayed_retirement_warning || ['已过原退休年龄','已到法定退休年龄'].includes(emp.primary_retirement_warning || ''));
+        return is_employee_retirement_warning(emp) || is_employee_already_retired(emp);
     }
 
     function render_employees_view(list) {
@@ -1415,89 +1429,122 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         const activeList = all.filter(e => !isResigned(e));
         const resignedList = all.filter(isResigned);
         const regularList = activeList.filter(e => (e.employee_type || '正式工') === '正式工');
-        const rehireList = activeList.filter(e => ['退休返聘','返聘工'].includes(e.employee_type || ''));
-        const tempList = activeList.filter(e => ['临时工','零工'].includes(e.employee_type || ''));
-        const otherList = activeList.filter(e => !['正式工','退休返聘','返聘工','临时工','零工'].includes(e.employee_type || ''));
-        const readyCount = activeList.filter(e => employee_profile_health(e).complete).length;
-        const retAttention = activeList.filter(employee_retirement_attention).length;
-        const origWarn = activeList.filter(e => e.original_retirement_warning).length;
-        const delayWarn = activeList.filter(e => e.delayed_retirement_warning).length;
-        const unconfirmed = activeList.filter(e => e.needs_retirement_category_confirmation).length;
+        const rehireList = activeList.filter(e => ['退休返聘', '返聘工'].includes(e.employee_type || ''));
+        const otherRehireList = activeList.filter(e => e.employee_type === '其他-返聘工');
+        const foreignList = activeList.filter(e => ['外籍工', '其他-外籍工'].includes(e.employee_type || ''));
+        const tempList = activeList.filter(e => ['临时工', '零工'].includes(e.employee_type || ''));
+        const otherTotalList = activeList.filter(e => (e.employee_type || '正式工') !== '正式工' && !['退休返聘', '返聘工'].includes(e.employee_type || ''));
+        
+        const retWarningList = activeList.filter(is_employee_retirement_warning);
+        const alreadyRetiredList = activeList.filter(e => !is_employee_retirement_warning(e) && is_employee_already_retired(e));
+        const normalRetList = activeList.filter(e => !is_employee_retirement_warning(e) && !is_employee_already_retired(e));
 
+        const readyCount = activeList.filter(e => employee_profile_health(e).complete).length;
+
+        // 顶部 4 大核心 KPI 卡片
         $('#tab1-active-total').text(`${activeList.length} 人`);
         $('#tab1-active-sub').text(`母表共 ${all.length} 人 · 当前账期在职 ${activeList.length} 人`);
-        $('#tab1-profile-ready').text(`${readyCount} / ${activeList.length}`);
-        $('#tab1-profile-ready-sub').text(activeList.length ? `完整率 ${Math.round(readyCount * 100 / activeList.length)}% · 待完善 ${activeList.length - readyCount} 人` : '暂无在册员工');
-        $('#tab1-ret-attention').text(`${retAttention} 人`);
-        $('#tab1-ret-attention-sub').text(`原年龄 ${origWarn} · 延迟年龄 ${delayWarn} · 类别待确认 ${unconfirmed}`);
-        $('#tab1-emp-resigned').text(`${resignedList.length} 人`);
+        
+        $('#tab1-regular-rehire-total').text(`${regularList.length + rehireList.length} 人`);
+        $('#tab1-regular-rehire-sub').text(`🛡️ 正式工 ${regularList.length} 人 ｜ 👴 返聘工 ${rehireList.length} 人`);
+        
+        $('#tab1-other-total').text(`${otherTotalList.length} 人`);
+        $('#tab1-other-sub').text(`🏷️ 其他-返聘 ${otherRehireList.length} 人 ｜ 🌏 外籍 ${foreignList.length} 人${tempList.length ? ` ｜ ⏱️ 临时 ${tempList.length}人` : ''}`);
+        
+        $('#tab1-ret-warn-resigned-total').text(`${retWarningList.length + resignedList.length} 人`);
+        $('#tab1-ret-warn-resigned-sub').text(`⚠️ 3个月内临退 ${retWarningList.length} 人 ｜ 🚪 本月离职 ${resignedList.length} 人`);
+
+        // 子类别芯片明细
         $('#tab1-type-regular').text(regularList.length);
         $('#tab1-type-rehire').text(rehireList.length);
+        $('#tab1-type-other-rehire').text(otherRehireList.length);
+        $('#tab1-type-foreign').text(foreignList.length);
         $('#tab1-type-temp').text(tempList.length);
-        $('#tab1-type-other').text(otherList.length);
-        $('#tab1-ret-orig-warning').text(origWarn);
-        $('#tab1-ret-delay-warning').text(delayWarn);
-        $('#tab1-ret-unconfirmed').text(unconfirmed);
+        
+        $('#tab1-ret-3m-warning').text(retWarningList.length);
+        $('#tab1-ret-already-retired').text(alreadyRetiredList.length);
+        $('#tab1-ret-normal').text(normalRetList.length);
 
         const query = String($('#qifu-emp-search').val() || '').trim().toLowerCase();
         const typeFilter = $('#qifu-emp-type-filter').val() || 'all';
         const statusFilter = $('#qifu-emp-status-filter').val() || 'all';
         const retFilter = $('#qifu-emp-ret-filter').val() || 'all';
         const profileFilter = $('#qifu-emp-profile-filter').val() || 'all';
+
         const visibleList = all.filter(emp => {
             const resigned = isResigned(emp);
             const profile = employee_profile_health(emp);
-            const retAttentionFlag = employee_retirement_attention(emp);
+            const empType = String(emp.employee_type || '正式工').trim();
+            const isWarn = is_employee_retirement_warning(emp);
+            const isRet = is_employee_already_retired(emp);
+
             const haystack = [emp.employee_no, emp.employee_name, emp.id_card, emp.job_title, emp.department, emp.employee_type, emp.external_name_aliases].join(' ').toLowerCase();
             if (query && !haystack.includes(query)) return false;
+
+            // 状态过滤
             if (statusFilter === 'active' && resigned) return false;
             if (statusFilter === 'resigned' && !resigned) return false;
-            if (typeFilter === '正式工' && (emp.employee_type || '正式工') !== '正式工') return false;
-            if (typeFilter === 'rehire' && !['退休返聘','返聘工'].includes(emp.employee_type || '')) return false;
-            if (typeFilter === 'temp' && !['临时工','零工'].includes(emp.employee_type || '')) return false;
-            if (typeFilter === 'other' && ['正式工','退休返聘','返聘工','临时工','零工'].includes(emp.employee_type || '')) return false;
-            if (retFilter === 'attention' && !retAttentionFlag) return false;
-            if (retFilter === 'normal' && retAttentionFlag) return false;
+
+            // 用工性质过滤
+            if (typeFilter === '正式工' && empType !== '正式工') return false;
+            if (typeFilter === '返聘工' && !['退休返聘', '返聘工'].includes(empType)) return false;
+            if (typeFilter === '其他-返聘工' && empType !== '其他-返聘工') return false;
+            if (typeFilter === '其他-外籍工' && !['外籍工', '其他-外籍工'].includes(empType)) return false;
+            if (typeFilter === '临时工' && !['临时工', '零工'].includes(empType)) return false;
+
+            // 退休状态过滤
+            if (retFilter === 'warning' && !isWarn) return false;
+            if (retFilter === 'retired' && (!isRet || isWarn)) return false;
+            if (retFilter === 'normal' && (isWarn || isRet)) return false;
+
+            // 档案资料过滤
             if (profileFilter === 'complete' && !profile.complete) return false;
             if (profileFilter === 'incomplete' && profile.complete) return false;
+
             return true;
         });
 
-        const retirementStatusHtml = (emp) => {
-            if (emp.needs_retirement_category_confirmation) return '<span class="qifu-status-badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">类别待确认</span>';
-            if (emp.original_retirement_warning) return '<span class="qifu-status-badge" style="background:#ffedd5;color:#c2410c;border:1px solid #fdba74;">原年龄预警</span>';
-            if (emp.delayed_retirement_warning) return '<span class="qifu-status-badge" style="background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;">延迟年龄预警</span>';
-            if (emp.primary_retirement_warning === '已到法定退休年龄') return '<span class="qifu-status-badge" style="background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;">已到法定年龄</span>';
-            if (emp.primary_retirement_warning === '已过原退休年龄') return '<span class="qifu-status-badge" style="background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;">已过原年龄</span>';
-            return '<span class="qifu-status-badge" style="background:#f8fafc;color:#64748b;border:1px solid #e2e8f0;">正常</span>';
+        const retirementStatusBadge = (emp) => {
+            if (is_employee_retirement_warning(emp)) {
+                return '<span class="qifu-status-badge" style="background:#fef2f2;color:#991b1b;border:1px solid #fecaca;font-weight:700;">⚠️ 3个月内临退</span>';
+            }
+            if (is_employee_already_retired(emp)) {
+                return '<span class="qifu-status-badge" style="background:#f8fafc;color:#475569;border:1px solid #cbd5e1;">已达龄/返聘</span>';
+            }
+            if (emp.needs_retirement_category_confirmation) {
+                return '<span class="qifu-status-badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">原方式待核</span>';
+            }
+            return '<span class="qifu-status-badge" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;">正常 (原方式)</span>';
         };
 
         $('#check-all-tab1-employees').prop('checked', false);
         let html = '';
         if (!visibleList.length) {
-            html = '<tr><td colspan="12" style="text-align:center;padding:30px;color:#94a3b8;">当前筛选条件下没有员工档案</td></tr>';
+            html = '<tr><td colspan="13" style="text-align:center;padding:30px;color:#94a3b8;">当前筛选条件下没有员工档案</td></tr>';
         } else {
             visibleList.forEach((emp, idx) => {
                 const resigned = isResigned(emp);
                 const profile = employee_profile_health(emp);
                 const totalAllowance = Number(emp.total_allowance || 0);
-                const origAge = emp.original_retirement_age_str || (emp.original_retirement_age ? `${emp.original_retirement_age}岁` : '待确认');
-                const delayAge = emp.delayed_retirement_age_str || (emp.delayed_retirement_age ? `${emp.delayed_retirement_age}岁` : '待确认');
+                const origAge = emp.original_retirement_age_str || (emp.original_retirement_age ? `${emp.original_retirement_age}岁` : '60岁');
+                const delayAge = emp.delayed_retirement_age_str || (emp.delayed_retirement_age ? `${emp.delayed_retirement_age}岁` : '-');
                 const profileTitle = profile.complete ? '关键资料完整' : `待完善：${profile.missing.join('、')}`;
+
                 html += `
                 <tr style="${resigned ? 'background:#fff7f7;' : ''}">
                     <td style="text-align:center;"><input type="checkbox" class="tab1-emp-check" data-emp-no="${escHtml(emp.employee_no || '')}" data-emp-name="${escHtml(emp.employee_name || '')}"></td>
                     <td style="text-align:center;color:#94a3b8;">${idx + 1}</td>
                     <td style="text-align:center;"><strong>${escHtml(emp.employee_no || '-')}</strong></td>
                     <td><strong style="color:${resigned ? '#991b1b' : '#1e3a8a'};">${escHtml(emp.employee_name || '-')}</strong>${(emp.name_aliases || []).length ? `<div class="qifu-emp-cell-sub" title="外部工资表姓名别名">别名 ${(emp.name_aliases || []).map(x => escHtml(x.alias_name || '')).filter(Boolean).join(' / ')}</div>` : ''}</td>
-                    <td><div class="qifu-emp-cell-main">${escHtml(mask_employee_certificate(emp.id_card))}</div><div class="qifu-emp-cell-sub">${escHtml(emp.current_age_detail || (emp.current_age != null ? `${emp.current_age}岁` : '-'))} · ${escHtml(emp.gender || '-')} · ${escHtml(emp.certificate_type || '中国居民身份证')}</div></td>
+                    <td><div class="qifu-emp-cell-main" style="font-family:monospace;font-size:12.5px;font-weight:600;color:#1e293b;">${escHtml(mask_employee_certificate(emp.id_card))}</div><div class="qifu-emp-cell-sub">${escHtml(emp.current_age_detail || (emp.current_age != null ? `${emp.current_age}岁` : '-'))} · ${escHtml(emp.gender || '-')} · ${escHtml(emp.certificate_type || '中国居民身份证')}</div></td>
                     <td><div class="qifu-emp-cell-main">${escHtml(emp.job_title || '未设置岗位')}</div><div class="qifu-emp-cell-sub">${escHtml(emp.department || '未设置部门')} · ${resigned ? '本月离职' : escHtml(emp.employee_type || '正式工')}</div></td>
                     <td><div class="qifu-emp-cell-main">${escHtml(emp.salary_mode || '未设置')} · ${fmtMoney(emp.fixed_salary)}</div><div class="qifu-emp-cell-sub">长期津贴 ${fmtMoney(totalAllowance)}</div></td>
-                    <td style="text-align:right;"><div class="qifu-emp-cell-main">社保 ${fmtMoney(emp.social_security_base)}</div><div class="qifu-emp-cell-sub">公积金 ${fmtMoney(emp.housing_fund_base)} · ${escHtml(emp.housing_fund_policy || '跟随公司规则')}</div></td>
+                    <td class="qifu-money-cell" style="font-weight:700;color:#1e40af;">${fmtMoney(emp.social_security_base)}</td>
+                    <td class="qifu-money-cell"><div class="qifu-emp-cell-main" style="font-weight:700;color:#0f766e;">${fmtMoney(emp.housing_fund_base)}</div><div class="qifu-emp-cell-sub" style="font-size:11px;color:#64748b;">${escHtml(emp.housing_fund_policy || '跟随公司规则')}</div></td>
                     <td class="qifu-money-cell"><strong>${fmtMoney(emp.total_deduction || emp.special_deductions_total)}</strong></td>
-                    <td><div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">${retirementStatusHtml(emp)}<span style="font-size:10.5px;color:#64748b;">${escHtml(emp.retirement_category || '')}</span></div><div class="qifu-emp-cell-sub">原 ${escHtml(origAge)} ${escHtml(emp.orig_retire_period || '-')} · 延 ${escHtml(delayAge)} ${escHtml(emp.delayed_retire_period || '-')}</div></td>
+                    <td><div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">${retirementStatusBadge(emp)}<span style="font-size:10.5px;color:#64748b;">原 ${escHtml(origAge)}</span></div><div class="qifu-emp-cell-sub">原到龄 ${escHtml(emp.orig_retire_period || '-')} ｜ 延迟 ${escHtml(delayAge)} (${escHtml(emp.delayed_retire_period || '-')})</div></td>
                     <td style="text-align:center;"><span class="qifu-status-badge ${profile.complete ? 'qifu-profile-ok' : 'qifu-profile-warn'}" title="${escHtml(profileTitle)}">${profile.complete ? '资料完整' : `待完善 ${profile.missing.length}项`}</span></td>
-                    <td style="text-align:center;white-space:nowrap;"><button class="btn btn-default btn-xs btn-edit-emp" data-id="${escHtml(emp.name || '')}" style="color:#2563eb;margin-right:4px;">修改</button>${resigned ? `<button class="btn btn-default btn-xs btn-unresign-emp" data-emp-no="${escHtml(emp.employee_no || '')}" data-emp-name="${escHtml(emp.employee_name || '')}" style="color:#059669;border-color:#86efac;">恢复</button>` : `<button class="btn btn-default btn-xs btn-resign-emp" data-emp-no="${escHtml(emp.employee_no || '')}" data-emp-name="${escHtml(emp.employee_name || '')}" style="color:#dc2626;border-color:#fca5a5;">离职</button>`}</td>
+                    <td style="text-align:center;white-space:nowrap;"><button class="btn btn-default btn-xs btn-edit-emp" data-id="${escHtml(emp.name || '')}" data-emp-no="${escHtml(emp.employee_no || '')}" style="color:#2563eb;margin-right:4px;">修改</button>${resigned ? `<button class="btn btn-default btn-xs btn-unresign-emp" data-emp-no="${escHtml(emp.employee_no || '')}" data-emp-name="${escHtml(emp.employee_name || '')}" style="color:#059669;border-color:#86efac;">恢复</button>` : `<button class="btn btn-default btn-xs btn-resign-emp" data-emp-no="${escHtml(emp.employee_no || '')}" data-emp-name="${escHtml(emp.employee_name || '')}" style="color:#dc2626;border-color:#fca5a5;">离职</button>`}</td>
                 </tr>`;
             });
         }
@@ -4828,13 +4875,19 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     });
     $container.on("click", ".btn-edit-emp", function() {
         const emp_id = $(this).attr("data-id");
-        frappe.call({
-            method: 'frappe.client.get',
-            args: { doctype: 'Ashan Employee Salary Profile', name: emp_id },
-            callback: function(r) {
-                if (r.message) open_emp_dialog(r.message);
-            }
-        });
+        const emp_no = $(this).attr("data-emp-no");
+        const cached = (employee_master_rows || []).find(x => (emp_id && x.name === emp_id) || (emp_no && x.employee_no === emp_no));
+        if (cached) {
+            open_emp_dialog(cached);
+        } else {
+            frappe.call({
+                method: 'frappe.client.get',
+                args: { doctype: 'Ashan Employee Salary Profile', name: emp_id },
+                callback: function(r) {
+                    if (r.message) open_emp_dialog(r.message);
+                }
+            });
+        }
     });
 
     // 单人离职

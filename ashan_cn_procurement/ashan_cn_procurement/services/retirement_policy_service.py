@@ -74,7 +74,7 @@ POLICY_RULES = {
 
 FLEXIBLE_EARLY_MAX_MONTHS = 36
 FLEXIBLE_DELAY_MAX_MONTHS = 36
-WARNING_MONTHS = 1
+WARNING_MONTHS = 3
 EARLY_RETIREMENT_NOTICE_MONTHS = 3
 LATE_RETIREMENT_AGREEMENT_NOTICE_MONTHS = 1
 
@@ -337,20 +337,20 @@ def calculate_retirement_details(
         elif left == 0:
             status = "本月到龄"
         elif left <= WARNING_MONTHS:
-            status = "1个月内"
+            status = f"{left}个月内"
         else:
             status = "正常"
         return {"months_left": left, "status": status, "warning": 0 <= left <= WARNING_MONTHS, "label": label}
 
-    original_status = status_for(original_month, "退休预警(原)")
-    statutory_status = status_for(statutory_month, "退休预警(延)")
+    original_status = status_for(original_month, "临退预警(原)")
+    statutory_status = status_for(statutory_month, "临退预警(延)")
 
     if original_status["warning"]:
-        primary_warning = "退休预警(原)"
+        primary_warning = "临退预警"
     elif statutory_status["warning"]:
-        primary_warning = "退休预警(延)"
+        primary_warning = "延迟到龄预警"
     elif original_status["status"] == "已到龄" and statutory_status["status"] not in ("已到龄", "本月到龄"):
-        primary_warning = "已过原退休年龄"
+        primary_warning = "已达原龄"
     elif statutory_status["status"] in ("已到龄", "本月到龄"):
         primary_warning = "已到法定退休年龄"
     else:

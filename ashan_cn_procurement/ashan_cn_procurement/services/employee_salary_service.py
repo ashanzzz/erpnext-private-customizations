@@ -379,6 +379,7 @@ def get_employee_profiles(company="天津祺富机械加工有限公司", search
 			"months_left_orig", "original_retirement_warning",
 			"delayed_retirement_age", "delayed_retirement_age_str", "delay_months",
 			"delayed_retire_period", "months_left_delayed", "delayed_retirement_warning",
+			"primary_retirement_warning",
 			"earliest_flexible_retire_period", "earliest_flexible_notice_period",
 			"latest_flexible_retire_period", "policy_version", "is_valid_id",
 		]:
