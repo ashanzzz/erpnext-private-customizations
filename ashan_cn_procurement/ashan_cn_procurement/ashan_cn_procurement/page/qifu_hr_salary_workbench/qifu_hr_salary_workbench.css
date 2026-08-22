@@ -132,6 +132,51 @@
     gap: 10px;
 }
 
+.qifu-toolbar select,
+.qifu-toolbar select.form-control,
+.qifu-master-filters select {
+    height: 34px !important;
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    color: #1e293b !important;
+    background-color: #ffffff !important;
+    border: 1px solid #94a3b8 !important;
+    border-radius: 6px !important;
+    padding: 4px 8px !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+    outline: none !important;
+    cursor: pointer !important;
+}
+
+.qifu-toolbar select:focus,
+.qifu-toolbar select.form-control:focus,
+.qifu-master-filters select:focus {
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15) !important;
+}
+
+.qifu-toolbar select option {
+    background-color: #ffffff !important;
+    color: #1e293b !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    padding: 6px 10px !important;
+}
+
+.qifu-toolbar input[type="text"],
+.qifu-toolbar input.form-control,
+.qifu-master-filters input {
+    height: 34px !important;
+    font-size: 12.5px !important;
+    font-weight: 500 !important;
+    color: #1e293b !important;
+    background-color: #ffffff !important;
+    border: 1px solid #94a3b8 !important;
+    border-radius: 6px !important;
+    padding: 4px 10px !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+}
+
 /* 状态标签 */
 .qifu-status-badge {
     display: inline-block;

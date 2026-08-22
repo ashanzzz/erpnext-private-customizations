@@ -707,25 +707,25 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         <!-- Tab 1: 员工薪酬档案 · 权威母表底册 -->
         <div id="qifu-tab-employees" class="qifu-tab-content">
             <div class="qifu-master-summary-grid">
-                <div class="qifu-master-summary-card" style="border-left:4px solid #2563eb;"><div class="label">在册员工</div><div class="value" id="tab1-active-total">—</div><div class="sub" id="tab1-active-sub">当前账期有效薪酬档案</div></div>
-                <div class="qifu-master-summary-card" style="border-left:4px solid #059669;"><div class="label">正式与返聘员工</div><div class="value" id="tab1-regular-rehire-total">—</div><div class="sub" id="tab1-regular-rehire-sub">正式工 — 人 ｜ 返聘工 — 人</div></div>
-                <div class="qifu-master-summary-card" style="border-left:4px solid #7c3aed;"><div class="label">其他类型员工</div><div class="value" id="tab1-other-total">—</div><div class="sub" id="tab1-other-sub">其他-返聘 — 人 ｜ 其他-外籍 — 人</div></div>
-                <div class="qifu-master-summary-card" style="border-left:4px solid #dc2626;"><div class="label">退休预警与离职</div><div class="value" id="tab1-ret-warn-resigned-total">—</div><div class="sub" id="tab1-ret-warn-resigned-sub">3个月内临退 — 人 ｜ 本月离职 — 人</div></div>
+                <div class="qifu-master-summary-card" style="border-left:4px solid #2563eb;"><div class="label">在册全员</div><div class="value" id="tab1-active-total">—</div><div class="sub" id="tab1-active-sub">当前账期有效薪酬档案</div></div>
+                <div class="qifu-master-summary-card" style="border-left:4px solid #059669;"><div class="label">正式与返聘员工 (全量参税)</div><div class="value" id="tab1-regular-rehire-total">—</div><div class="sub" id="tab1-regular-rehire-sub">🛡️ 正式工 — 人 ｜ 👴 返聘工 — 人</div></div>
+                <div class="qifu-master-summary-card" style="border-left:4px solid #7c3aed;"><div class="label">其他在册参税员工</div><div class="value" id="tab1-other-total">—</div><div class="sub" id="tab1-other-sub">🌏 外籍工 — 人 ｜ 🏷️ 其他-返聘 — 人</div></div>
+                <div class="qifu-master-summary-card" style="border-left:4px solid #f59e0b;"><div class="label">临时工与变动 (免申报/离职)</div><div class="value" id="tab1-temp-change-total">—</div><div class="sub" id="tab1-temp-change-sub">⏱️ 临时工 — 人 (免税不入账) ｜ 🚪 本月离职 — 人</div></div>
             </div>
             <div class="qifu-master-meta">
-                <div class="qifu-master-meta-group"><span style="font-weight:700;color:#334155;">人员结构</span><span class="qifu-master-chip">🛡️ 正式工 <strong id="tab1-type-regular">0</strong></span><span class="qifu-master-chip">👴 返聘工 <strong id="tab1-type-rehire">0</strong></span><span class="qifu-master-chip">🏷️ 其他-返聘工 <strong id="tab1-type-other-rehire">0</strong></span><span class="qifu-master-chip">🌏 其他-外籍工 <strong id="tab1-type-foreign">0</strong></span><span class="qifu-master-chip">⏱️ 临时/零工 <strong id="tab1-type-temp">0</strong></span></div>
-                <div class="qifu-master-meta-group"><span style="font-weight:700;color:#334155;">退休规则</span><span class="qifu-master-chip" style="background:#fff7ed;border-color:#fed7aa;color:#c2410c;">⚠️ 3个月内临退 <strong id="tab1-ret-3m-warning">0</strong></span><span class="qifu-master-chip" style="background:#f1f5f9;border-color:#cbd5e1;color:#475569;">已达龄/返聘 <strong id="tab1-ret-already-retired">0</strong></span><span class="qifu-master-chip" style="background:#f0fdf4;border-color:#bbf7d0;color:#15803d;">正常 (未到龄) <strong id="tab1-ret-normal">0</strong></span></div>
+                <div class="qifu-master-meta-group"><span style="font-weight:700;color:#334155;">用工结构</span><span class="qifu-master-chip">🛡️ 正式工 <strong id="tab1-type-regular">0</strong></span><span class="qifu-master-chip">👴 返聘工 <strong id="tab1-type-rehire">0</strong></span><span class="qifu-master-chip">🏷️ 其他-返聘工 <strong id="tab1-type-other-rehire">0</strong></span><span class="qifu-master-chip">🌏 其他-外籍工 <strong id="tab1-type-foreign">0</strong></span><span class="qifu-master-chip" style="background:#fffbeb;border-color:#fde68a;color:#b45309;">⏱️ 临时/零工 (免税独立) <strong id="tab1-type-temp">0</strong></span></div>
+                <div class="qifu-master-meta-group"><span style="font-weight:700;color:#334155;">退休预警</span><span class="qifu-master-chip" style="background:#fff7ed;border-color:#fed7aa;color:#c2410c;">⚠️ 3个月内临退 <strong id="tab1-ret-3m-warning">0</strong></span><span class="qifu-master-chip" style="background:#f1f5f9;border-color:#cbd5e1;color:#475569;">已达龄/返聘 <strong id="tab1-ret-already-retired">0</strong></span><span class="qifu-master-chip" style="background:#f0fdf4;border-color:#bbf7d0;color:#15803d;">正常 (未到龄) <strong id="tab1-ret-normal">0</strong></span></div>
             </div>
             <div class="qifu-toolbar" style="align-items:center;">
-                <div class="qifu-toolbar-left qifu-master-filters">
-                    <input type="text" class="form-control" id="qifu-emp-search" placeholder="搜索工号、姓名、证件、岗位" style="width:210px;">
-                    <select class="form-control" id="qifu-emp-type-filter" style="width:130px;"><option value="all">全部用工</option><option value="正式工">正式工</option><option value="返聘工">返聘工</option><option value="其他-返聘工">其他-返聘工</option><option value="其他-外籍工">其他-外籍工</option><option value="临时工">临时/零工</option></select>
-                    <select class="form-control" id="qifu-emp-status-filter" style="width:104px;"><option value="all">全部状态</option><option value="active">在职</option><option value="resigned">本月离职</option></select>
-                    <select class="form-control" id="qifu-emp-ret-filter" style="width:136px;"><option value="all">全部退休状态</option><option value="warning">⚠️ 3个月内临退</option><option value="retired">已达龄/返聘</option><option value="normal">正常 (未到龄)</option></select>
-                    <select class="form-control" id="qifu-emp-profile-filter" style="width:116px;"><option value="all">全部档案</option><option value="complete">资料完整</option><option value="incomplete">待完善</option></select>
-                    <button class="btn btn-default btn-sm" id="btn-qifu-emp-reset-filter">重置</button>
+                <div class="qifu-toolbar-left qifu-master-filters" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <input type="text" class="form-control" id="qifu-emp-search" placeholder="🔍 搜索工号、姓名、证件、岗位" style="width:220px;height:34px;">
+                    <select class="form-control" id="qifu-emp-type-filter" style="width:145px;height:34px;"><option value="all">👥 全部用工类型</option><option value="正式工">🛡️ 正式工</option><option value="返聘工">👴 返聘工</option><option value="其他-返聘工">🏷️ 其他-返聘工</option><option value="其他-外籍工">🌏 其他-外籍工</option><option value="临时工">⏱️ 临时工/零工</option></select>
+                    <select class="form-control" id="qifu-emp-status-filter" style="width:115px;height:34px;"><option value="all">📌 全部状态</option><option value="active">在职</option><option value="resigned">本月离职</option></select>
+                    <select class="form-control" id="qifu-emp-ret-filter" style="width:150px;height:34px;"><option value="all">⏳ 全部退休状态</option><option value="warning">⚠️ 3个月内临退</option><option value="retired">👴 已达龄/返聘</option><option value="normal">✅ 正常 (未到龄)</option></select>
+                    <select class="form-control" id="qifu-emp-profile-filter" style="width:130px;height:34px;"><option value="all">📁 全部档案</option><option value="complete">资料完整</option><option value="incomplete">待完善</option></select>
+                    <button class="btn btn-default btn-sm" id="btn-qifu-emp-reset-filter" style="height:34px;font-weight:600;">🔄 重置</button>
                 </div>
-                <div class="qifu-toolbar-right" style="display:flex;gap:7px;"><button class="btn btn-default btn-sm" id="btn-batch-resign" style="color:#b91c1c;border-color:#fecaca;font-weight:600;">批量办理离职</button><button class="btn btn-primary btn-sm" id="btn-qifu-new-emp" style="background:#2563eb;border-color:#2563eb;font-weight:600;">新增员工档案</button></div>
+                <div class="qifu-toolbar-right" style="display:flex;gap:7px;"><button class="btn btn-default btn-sm" id="btn-batch-resign" style="height:34px;color:#b91c1c;border-color:#fecaca;font-weight:600;">批量办理离职</button><button class="btn btn-primary btn-sm" id="btn-qifu-new-emp" style="height:34px;background:#2563eb;border-color:#2563eb;font-weight:600;">新增员工档案</button></div>
             </div>
             <div class="qifu-table-box">
                 <table class="qifu-table" id="table-qifu-emp" style="min-width:1600px;">
@@ -1432,8 +1432,8 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         const rehireList = activeList.filter(e => ['退休返聘', '返聘工'].includes(e.employee_type || ''));
         const otherRehireList = activeList.filter(e => e.employee_type === '其他-返聘工');
         const foreignList = activeList.filter(e => ['外籍工', '其他-外籍工'].includes(e.employee_type || ''));
+        const taxOtherList = activeList.filter(e => ['外籍工', '其他-外籍工', '其他-返聘工', '其他-管理', '其他-正式工'].includes(e.employee_type || ''));
         const tempList = activeList.filter(e => ['临时工', '零工'].includes(e.employee_type || ''));
-        const otherTotalList = activeList.filter(e => (e.employee_type || '正式工') !== '正式工' && !['退休返聘', '返聘工'].includes(e.employee_type || ''));
         
         const retWarningList = activeList.filter(is_employee_retirement_warning);
         const alreadyRetiredList = activeList.filter(e => !is_employee_retirement_warning(e) && is_employee_already_retired(e));
@@ -1441,18 +1441,18 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
         const readyCount = activeList.filter(e => employee_profile_health(e).complete).length;
 
-        // 顶部 4 大核心 KPI 卡片
-        $('#tab1-active-total').text(`${activeList.length} 人`);
-        $('#tab1-active-sub').text(`母表共 ${all.length} 人 · 当前账期在职 ${activeList.length} 人`);
+        // 顶部 4 大核心 KPI 卡片 (临时工独立核算，不与参税员工混同)
+        $('#tab1-active-total').text(`${all.length} 人`);
+        $('#tab1-active-sub').text(`在职 ${activeList.length} 人 ｜ 离职 ${resignedList.length} 人`);
         
         $('#tab1-regular-rehire-total').text(`${regularList.length + rehireList.length} 人`);
         $('#tab1-regular-rehire-sub').text(`🛡️ 正式工 ${regularList.length} 人 ｜ 👴 返聘工 ${rehireList.length} 人`);
         
-        $('#tab1-other-total').text(`${otherTotalList.length} 人`);
-        $('#tab1-other-sub').text(`🏷️ 其他-返聘 ${otherRehireList.length} 人 ｜ 🌏 外籍 ${foreignList.length} 人${tempList.length ? ` ｜ ⏱️ 临时 ${tempList.length}人` : ''}`);
+        $('#tab1-other-total').text(`${taxOtherList.length} 人`);
+        $('#tab1-other-sub').text(`🌏 外籍工 ${foreignList.length} 人 ｜ 🏷️ 其他-返聘 ${otherRehireList.length} 人`);
         
-        $('#tab1-ret-warn-resigned-total').text(`${retWarningList.length + resignedList.length} 人`);
-        $('#tab1-ret-warn-resigned-sub').text(`⚠️ 3个月内临退 ${retWarningList.length} 人 ｜ 🚪 本月离职 ${resignedList.length} 人`);
+        $('#tab1-temp-change-total').text(`${tempList.length + resignedList.length} 人`);
+        $('#tab1-temp-change-sub').text(`⏱️ 临时工 ${tempList.length} 人 (免税独立) ｜ 🚪 本月离职 ${resignedList.length} 人`);
 
         // 子类别芯片明细
         $('#tab1-type-regular').text(regularList.length);
@@ -1505,16 +1505,15 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         });
 
         const retirementStatusBadge = (emp) => {
+            const defaultAgeStr = emp.gender === '女' ? '50岁' : '60岁';
+            const ageDisplay = emp.original_retirement_age_str || (emp.original_retirement_age ? `${emp.original_retirement_age}岁` : defaultAgeStr);
             if (is_employee_retirement_warning(emp)) {
                 return '<span class="qifu-status-badge" style="background:#fef2f2;color:#991b1b;border:1px solid #fecaca;font-weight:700;">⚠️ 3个月内临退</span>';
             }
             if (is_employee_already_retired(emp)) {
-                return '<span class="qifu-status-badge" style="background:#f8fafc;color:#475569;border:1px solid #cbd5e1;">已达龄/返聘</span>';
+                return '<span class="qifu-status-badge" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-weight:600;">👴 已达龄/返聘</span>';
             }
-            if (emp.needs_retirement_category_confirmation) {
-                return '<span class="qifu-status-badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">原方式待核</span>';
-            }
-            return '<span class="qifu-status-badge" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;">正常 (原方式)</span>';
+            return `<span class="qifu-status-badge" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:600;">✅ 正常 (原 ${ageDisplay})</span>`;
         };
 
         $('#check-all-tab1-employees').prop('checked', false);

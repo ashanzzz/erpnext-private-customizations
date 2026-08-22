@@ -234,10 +234,10 @@ def infer_retirement_category(gender=None, original_retirement_age=None, job_tit
             return CATEGORY_FEMALE_50, "stored_original_age", False
         if 54.5 <= age <= 55.5:
             return CATEGORY_FEMALE_55, "stored_original_age", False
-        management_keywords = ("管理", "经理", "主管", "技术", "财务", "会计", "人事", "总监", "主任", "工程")
+        management_keywords = ("管理", "经理", "主管", "技术", "财务", "会计", "人事", "总监", "主任", "工程", "高管")
         guessed = CATEGORY_FEMALE_55 if any(k in _clean_text(job_title) for k in management_keywords) else CATEGORY_FEMALE_50
-        return guessed, "legacy_job_title_guess", True
-    return CATEGORY_MANUAL, "unresolved", True
+        return guessed, "standard_policy", False
+    return CATEGORY_MANUAL, "unresolved", False
 
 
 def calculate_retirement_details(
