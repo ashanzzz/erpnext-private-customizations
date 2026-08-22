@@ -5343,11 +5343,74 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         });
     });
 
-    // 初始化默认加载 Tab 1、任务看板与服务器计算中心
-    current_history_period = current_month;
-    load_qifu_employees();
-    load_monthly_workflow_hub();
-    load_calculation_center();
+    // 初始化：先从后端查询允许的最大核算账期，再初始化月份选择器与数据加载
+    // 业务规则：7月未封账 → 最大可选 2026-07（8月灰色不可选）；7月封账后 → 最大可选 2026-08
+    function init_workbench_with_billing_period() {
+        frappe.call({
+            method: "ashan_cn_procurement.ashan_cn_procurement.doctype.ashan_monthly_payroll_settlement.ashan_monthly_payroll_settlement.get_allowed_billing_period",
+            args: { company: COMPANY },
+            callback: function(r) {
+                const data = r.message || {};
+                const allowed_max = data.allowed_max || current_month;
+                const default_period = data.default_period || current_month;
+                const latest_closed = data.latest_closed;
+
+                // 更新 current_month 为后端返回的合法默认账期
+                current_month = default_period;
+                current_history_period = current_month;
+
+                // 设置月份选择器的 value 与 max（max 限制用户无法选择超过允许的最大账期）
+                const $picker = $("#qifu-month-select");
+                $picker.val(current_month);
+                $picker.attr("max", allowed_max);
+
+                // 更新账期文字显示
+                $("#workflow-period-text").text(current_month);
+
+                // 在月份选择器旁显示锁定状态提示
+                let lock_tip = "";
+                if (latest_closed) {
+                    lock_tip = `<span id="qifu-period-lock-tip" style="font-size:11px; color:#7c3aed; background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; padding:2px 8px; margin-left:6px;">🔒 ${latest_closed} 已封账 · 当前可操作: ${allowed_max}</span>`;
+                } else {
+                    lock_tip = `<span id="qifu-period-lock-tip" style="font-size:11px; color:#92400e; background:#fef3c7; border:1px solid #fde68a; border-radius:8px; padding:2px 8px; margin-left:6px;">⚠️ 尚无已封账月份 · 当前可操作: ${allowed_max}</span>`;
+                }
+                // 移除旧提示后插入
+                $("#qifu-period-lock-tip").remove();
+                $picker.after(lock_tip);
+
+                // 月份选择器变更时强制校验不超过 max
+                $picker.off("input.lock_check").on("input.lock_check", function() {
+                    const sel = $(this).val();
+                    if (sel && sel > allowed_max) {
+                        frappe.msgprint({
+                            title: "⛔ 账期未解锁",
+                            message: `<strong>${sel}</strong> 账期尚未解锁！<br><br>必须先完成并封账 <strong>${allowed_max}</strong> 账期后，下一个账期才会自动解锁。<br><br>当前最大可操作账期：<strong>${allowed_max}</strong>`,
+                            indicator: "red"
+                        });
+                        $(this).val(allowed_max);
+                        current_month = allowed_max;
+                        current_history_period = current_month;
+                        return false;
+                    }
+                });
+
+                // 初始化数据加载
+                load_qifu_employees();
+                load_monthly_workflow_hub();
+                load_calculation_center();
+            },
+            error: function() {
+                // 降级：如果 API 失败，保持原来的默认上月逻辑继续加载
+                console.warn("get_allowed_billing_period failed, falling back to default prev month");
+                current_history_period = current_month;
+                load_qifu_employees();
+                load_monthly_workflow_hub();
+                load_calculation_center();
+            }
+        });
+    }
+
+    init_workbench_with_billing_period();
 
     // 后台计算完成后仅刷新当前可见业务区，避免整页刷新打断操作。
     if (frappe.realtime && frappe.realtime.on) {
