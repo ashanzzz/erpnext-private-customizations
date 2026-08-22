@@ -13,14 +13,14 @@
    "label": "姓名别名",
    "reqd": 1,
    "in_list_view": 1,
-   "columns": 5
+   "columns": 4
   },
   {
    "fieldname": "alias_note",
    "fieldtype": "Data",
-   "label": "别名备注/来源",
+   "label": "备注说明",
    "in_list_view": 1,
-   "columns": 7,
+   "columns": 6,
    "description": "可填写曾用字、外部工资表称谓、历史错别字等来源说明。"
   }
  ],

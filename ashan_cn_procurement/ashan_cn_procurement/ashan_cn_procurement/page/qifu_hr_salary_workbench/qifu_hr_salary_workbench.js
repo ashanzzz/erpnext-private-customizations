@@ -2958,8 +2958,8 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     cannot_delete_rows: false,
                     description: '车间外部工资表出现错别字、曾用字或特定称谓时（如刘海锋/刘海峰），在此登记。外部实发表解析时将 100% 精准优先匹配该员工档案。',
                     fields: [
-                        { fieldtype: 'Data', fieldname: 'alias_name', label: '姓名别名 (如错别字/曾用字)', reqd: 1, in_list_view: 1, columns: 5 },
-                        { fieldtype: 'Data', fieldname: 'alias_note', label: '别名备注 / 来源说明', in_list_view: 1, columns: 7 }
+                        { fieldtype: 'Data', fieldname: 'alias_name', label: '姓名别名', reqd: 1, in_list_view: 1, columns: 4 },
+                        { fieldtype: 'Data', fieldname: 'alias_note', label: '备注说明', in_list_view: 1, columns: 6 }
                     ]
                 },
                 { fieldtype: 'Section Break', label: '其他备注' },
