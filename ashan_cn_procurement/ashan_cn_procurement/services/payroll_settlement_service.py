@@ -2733,8 +2733,8 @@ def _history_full_columns():
 
 
 @frappe.whitelist()
-def get_history_full_ledger(company="天津祺富机械加工有限公司", period_month="2026-07", history_period_month=None):
-    """Historical VBA-68 snapshot + ERP audit fields for one selected month in the tax cycle."""
+def get_history_full_ledger(company="天津祺富机械加工有限公司", period_month="2026-07", history_period_month=None, employee_no=None):
+    """Historical VBA-68 snapshot + ERP audit fields for one selected month or all months in the tax cycle."""
     check_payroll_workbench_permission("read")
     params = get_effective_tax_parameters(company, period_month)
     cinfo = get_tax_cycle_info(period_month, params["tax_threshold"], params["tax_cycle_start_month"])
@@ -2743,21 +2743,15 @@ def get_history_full_ledger(company="天津祺富机械加工有限公司", peri
         y, m = _add_month(cinfo["cycle_start_year"], cinfo["cycle_start_month"], offset)
         cycle_months.append(f"{y:04d}-{m:02d}")
     available_cycle_months = [m for m in cycle_months if m <= str(period_month)]
-    selected = str(history_period_month or period_month)
-    if selected not in available_cycle_months:
+    selected = str(history_period_month or period_month).strip()
+    emp_no_filter = str(employee_no or "").strip()
+
+    if selected != "all" and selected not in available_cycle_months:
         frappe.throw(f"历史月份 {selected} 不在当前已发生申报周期 {available_cycle_months[0]} ~ {available_cycle_months[-1]} 内。")
 
-    parent_name = f"{company}-{selected}"
-    if not frappe.db.exists("Ashan Monthly Payroll Settlement", parent_name):
-        return {
-            "company": company, "period_month": period_month, "history_period_month": selected,
-            "cycle_months": cycle_months, "available_cycle_months": available_cycle_months,
-            "columns": [dict(key=k,label=l,type=t,group=g) for k,l,t,g in _history_full_columns()],
-            "rows": [], "totals": {}, "locked": False, "status": "未建账",
-        }
+    months_to_process = available_cycle_months if selected == "all" else [selected]
 
-    data = get_tax_settlement_full_sheet(company, selected)
-    parent = frappe.get_doc("Ashan Monthly Payroll Settlement", parent_name)
+    all_rows = []
     audit_supported = frappe.get_meta("Ashan Monthly Payroll Item").has_field("calculation_status")
     audit_fields = ["employee_no", "modified"]
     if audit_supported:
@@ -2765,25 +2759,71 @@ def get_history_full_ledger(company="天津祺富机械加工有限公司", peri
             "calculation_status", "calculation_trigger_source", "calculation_requested_at", "calculation_started_at",
             "calculation_completed_at", "calculation_engine_version", "calculation_task_id",
         ]
-    audits = frappe.get_all(
-        "Ashan Monthly Payroll Item", filters={"parent": parent_name}, fields=audit_fields, order_by="idx asc"
-    )
-    audit_by_emp = {r.employee_no: r for r in audits}
-    lock_status = "已冻结" if (cint(parent.locked) or parent.status in ["已核定锁定", "已归档发放"]) else (parent.status or "草稿")
-    for row in data.get("rows", []):
-        audit = audit_by_emp.get(row.get("employee_no"), {})
-        row["history_lock_status"] = lock_status
-        for field in [
-            "calculation_status", "calculation_trigger_source", "calculation_requested_at", "calculation_started_at",
-            "calculation_completed_at", "calculation_engine_version", "calculation_task_id", "modified",
-        ]:
-            row[field] = audit.get(field) if audit else None
+
+    for m in months_to_process:
+        parent_name = f"{company}-{m}"
+        if not frappe.db.exists("Ashan Monthly Payroll Settlement", parent_name):
+            continue
+        parent = frappe.get_doc("Ashan Monthly Payroll Settlement", parent_name)
+        data = get_tax_settlement_full_sheet(company, m)
+        audits = frappe.get_all(
+            "Ashan Monthly Payroll Item", filters={"parent": parent_name}, fields=audit_fields, order_by="idx asc"
+        )
+        audit_by_emp = {r.employee_no: r for r in audits}
+        lock_status = "已冻结" if (cint(parent.locked) or parent.status in ["已核定锁定", "已归档发放"]) else (parent.status or "草稿")
+        
+        m_rows = data.get("rows", [])
+        if emp_no_filter:
+            m_rows = [r for r in m_rows if str(r.get("employee_no")) == emp_no_filter]
+
+        for row in m_rows:
+            audit = audit_by_emp.get(row.get("employee_no"), {})
+            row["history_lock_status"] = lock_status
+            row["history_period_month"] = m
+            for field in [
+                "calculation_status", "calculation_trigger_source", "calculation_requested_at", "calculation_started_at",
+                "calculation_completed_at", "calculation_engine_version", "calculation_task_id", "modified",
+            ]:
+                row[field] = audit.get(field) if audit else None
+            all_rows.append(row)
+
+    # 重建连续序号
+    for idx, r in enumerate(all_rows, start=1):
+        r["seq"] = idx
+
+    numeric_keys = [
+        "target_salary", "gross_salary", "thresh_cur", "hf_person", "ss_person", "deduct_cur_tot",
+        "ss_pension", "ss_med", "ss_large_med", "ss_unemp", "hf_spec", "spec_tot_cur",
+        "spec_add_child", "spec_add_edu", "spec_add_med", "spec_add_loan", "spec_add_rent", "spec_add_elder", "spec_add_baby", "spec_add_tot_cur",
+        "gross_prior", "thresh_prior", "ss_pension_prior", "ss_med_prior", "ss_large_med_prior", "ss_unemp_prior", "hf_spec_prior", "spec_tot_prior",
+        "spec_add_child_prior", "spec_add_edu_prior", "spec_add_med_prior", "spec_add_loan_prior", "spec_add_rent_prior", "spec_add_elder_prior", "spec_add_baby_prior", "spec_add_tot_prior",
+        "gross_all", "thresh_all", "ss_pension_all", "ss_med_all", "ss_large_med_all", "ss_unemp_all", "hf_spec_all", "spec_tot_all",
+        "spec_add_child_all", "spec_add_edu_all", "spec_add_med_all", "spec_add_loan_all", "spec_add_rent_all", "spec_add_elder_all", "spec_add_baby_all", "spec_add_tot_all",
+        "taxable_all", "tax_calculated", "tax_relief", "tax_paid_prior", "tax_current", "net_salary",
+    ]
+    totals = {k: round(sum(flt(r.get(k)) for r in all_rows), 2) for k in numeric_keys}
+    totals.update({
+        "seq": "合计", "employee_no": f"共 {len(all_rows)} 条",
+        "tax_threshold": totals.get("thresh_cur", 0.0),
+        "hf_cur": totals.get("hf_person", 0.0), "ss_cur": totals.get("ss_person", 0.0),
+        "deduct_cur": totals.get("deduct_cur_tot", 0.0),
+        "special_deductions_total": totals.get("spec_add_tot_cur", 0.0),
+        "taxable_income": totals.get("taxable_all", 0.0),
+        "current_tax": totals.get("tax_current", 0.0), "tax_amount": totals.get("tax_current", 0.0),
+    })
+
+    is_single_month = (selected != "all")
+    parent_doc = frappe.get_doc("Ashan Monthly Payroll Settlement", f"{company}-{selected}") if is_single_month and frappe.db.exists("Ashan Monthly Payroll Settlement", f"{company}-{selected}") else None
+
     return {
         "company": company, "period_month": period_month, "history_period_month": selected,
-        "cycle_name": data.get("cycle_name"), "cycle_months": cycle_months, "available_cycle_months": available_cycle_months,
+        "employee_no": emp_no_filter,
+        "cycle_name": cinfo.get("cycle_name", f"{cycle_months[0]} ~ {cycle_months[-1]}"),
+        "cycle_months": cycle_months, "available_cycle_months": available_cycle_months,
         "columns": [dict(key=k,label=l,type=t,group=g) for k,l,t,g in _history_full_columns()],
-        "rows": data.get("rows", []), "totals": data.get("totals", {}),
-        "locked": bool(cint(parent.locked)), "status": parent.status or "草稿",
+        "rows": all_rows, "totals": totals,
+        "locked": bool(cint(parent_doc.locked)) if parent_doc else False,
+        "status": parent_doc.status if parent_doc else ("全部月份合并" if selected == "all" else "草稿"),
     }
 
 
@@ -3571,16 +3611,17 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 	# -------------------------------------------------------------
 	# 8. 指定历史月完整核算快照 (VBA68列 + ERP审计)
 	# -------------------------------------------------------------
-	def build_history_full_sheet(ws, selected_month):
-		data_res = get_history_full_ledger(company, period_month, selected_month)
+	def build_history_full_sheet(ws, selected_month, emp_no=None):
+		data_res = get_history_full_ledger(company, period_month, selected_month, employee_no=emp_no)
 		rows = data_res.get("rows", [])
 		columns = data_res.get("columns", [])
 		totals = data_res.get("totals", {})
 		last_col = get_column_letter(max(len(columns), 1))
-		ws.title = f"7.历史完整核算_{selected_month}"[:31]
+		emp_tag = f"_{emp_no}" if emp_no else ""
+		ws.title = f"7.历史完整核算_{selected_month}{emp_tag}"[:31]
 
 		ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max(len(columns), 1))
-		ws["A1"] = f"{company} {selected_month} 历史完整核算快照（VBA 68列 + ERP审计）"
+		ws["A1"] = f"{company} {selected_month} 历史完整核算快照（VBA 68列 + ERP审计）{f' - {emp_no}' if emp_no else ''}"
 		ws["A1"].font = font_title
 		ws["A1"].alignment = align_center
 		ws.row_dimensions[1].height = 32
@@ -3761,8 +3802,9 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 			filename = f"{filename_prefix}_{history_emp_no}_个税申报周期月度穿透流水.xlsx"
 		elif history_mode == "full":
 			selected_history_month = history_period_month or period_month
-			build_history_full_sheet(ws_default, selected_history_month)
-			filename = f"祺富薪资台账_{selected_history_month}_历史完整核算_VBA68列加审计.xlsx"
+			build_history_full_sheet(ws_default, selected_history_month, history_emp_no)
+			emp_suffix = f"_{history_emp_no}" if history_emp_no else ""
+			filename = f"祺富薪资台账_{selected_history_month}{emp_suffix}_历史完整核算_VBA68列加审计.xlsx"
 		else:
 			build_history_all_sheet(ws_default)
 			filename = f"{filename_prefix}_全员薪酬与个税年度申报周期累计总览表(15列).xlsx"
