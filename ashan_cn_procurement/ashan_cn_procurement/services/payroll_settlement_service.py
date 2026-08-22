@@ -3097,6 +3097,7 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 	import openpyxl
 	from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 	from openpyxl.utils import get_column_letter
+	from openpyxl.worksheet.pagebreak import Break
 
 	wb = openpyxl.Workbook()
 	ws_default = wb.active
@@ -3135,13 +3136,13 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 		rows = data_res.get("rows", [])
 		totals = data_res.get("totals", {})
 
-		ws.merge_cells("A1:AE1")
-		ws["A1"] = f"{company} {period_month} 薪资发放表（24列标准版 + 现金点钞辅助）"
+		ws.merge_cells("A1:X1")
+		ws["A1"] = f"{company} {period_month} 薪资发放表"
 		ws["A1"].font = font_title
 		ws["A1"].alignment = align_center
 		ws.row_dimensions[1].height = 32
 
-		ws.merge_cells("A2:AE2")
+		ws.merge_cells("A2:X2")
 		ws["A2"] = f"发薪月份: {period_month}  |  生成日期: {date.today().strftime('%Y-%m-%d')}  |  员工人数: {len(rows)} 人  |  单位: 元"
 		ws["A2"].font = font_sub
 		ws["A2"].alignment = align_center
@@ -3244,7 +3245,18 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 			ws.column_dimensions[get_column_letter(idx)].hidden = False
 
 		ws.freeze_panes = "D4"
-		ws.print_area = f"A1:AE{tot_row}"
+
+		# 顶端标题行重复（第 1~3 行），打印每页均显示表头
+		ws.print_title_rows = "1:3"
+
+		# 打印范围严格限定为第 1 列（序号）至备考列（A:X）
+		ws.print_area = f"A1:X{tot_row}"
+
+		# 每个人员独立分页：在每名员工数据行后插入分页符
+		if rows:
+			for r_break_idx in range(4, len(rows) + 4):
+				ws.row_breaks.append(Break(id=r_break_idx))
+
 		ws.page_setup.paperSize = ws.PAPERSIZE_A4
 		ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
 		ws.page_setup.fitToWidth = 1
