@@ -138,7 +138,7 @@ class AshanEmployeeSalaryProfile(Document):
 				missing.append("出生日期")
 			if not self.gender:
 				missing.append("性别")
-			if missing:
+			if missing and not frappe.flags.in_migrate and not getattr(self.flags, "skip_birth_validation", False):
 				frappe.throw(f"{certificate_type}无法自动识别{'、'.join(missing)}，请人工填写后再保存。")
 
 		calculated = calculate_retirement_details(

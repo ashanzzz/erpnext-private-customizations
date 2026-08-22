@@ -82,10 +82,18 @@ def execute():
             })
         doc.external_name_aliases = "\n".join(cleaned)
 
+        if doc.certificate_type != "中国居民身份证":
+            if (doc.company, doc.employee_no) == ("天津祺富机械加工有限公司", "Y0001") or doc.id_card == "E2669993":
+                if not doc.birth_date:
+                    doc.birth_date = "1984-04-23"
+                if not doc.gender:
+                    doc.gender = "女"
+
         # validate() re-derives birth date/gender for valid PRC IDs, current age and retirement fields.
         # Female 50/55 category remains a personnel confirmation item instead of being guessed from job title.
         doc.flags.ignore_version = True
         doc.flags.skip_alias_uniqueness = True
+        doc.flags.skip_birth_validation = True
         doc.save(ignore_permissions=True)
 
     frappe.db.commit()
