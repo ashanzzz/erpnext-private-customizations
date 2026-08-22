@@ -506,8 +506,8 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         .qifu-calc-status-badge.running { background:#dbeafe; color:#1d4ed8; }
         .qifu-calc-status-badge.failed { background:#fee2e2; color:#b91c1c; }
 
-        /* Employee master v4: master data first, fewer cards, grouped information. */
-        .qifu-master-summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:10px; }
+        /* Employee master v4: 5 distinct KPI cards in 1 row. */
+        .qifu-master-summary-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin-bottom:10px; }
         .qifu-master-summary-card { background:#fff; border:1px solid #e2e8f0; border-radius:9px; padding:11px 13px; box-shadow:0 1px 2px rgba(15,23,42,.03); }
         .qifu-master-summary-card .label { font-size:11.5px; color:#64748b; font-weight:700; }
         .qifu-master-summary-card .value { margin-top:4px; font-size:22px; line-height:1.1; color:#0f172a; font-weight:800; }
@@ -522,7 +522,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         .qifu-emp-cell-sub { margin-top:2px; color:#64748b; font-size:10.5px; line-height:1.35; }
         .qifu-profile-ok { background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
         .qifu-profile-warn { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; }
-        @media (max-width: 1100px) { .qifu-master-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+        @media (max-width: 1000px) { .qifu-master-summary-grid { grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); } }
     </style>
     <div class="qifu-wb-wrapper">
         <!-- 顶部 Header -->
