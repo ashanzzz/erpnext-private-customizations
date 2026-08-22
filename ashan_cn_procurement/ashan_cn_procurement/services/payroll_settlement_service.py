@@ -3112,9 +3112,9 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 	side_medium = Side(border_style="medium", color="000000")
 	side_double = Side(border_style="double", color="000000")
 
-	align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
-	align_left = Alignment(horizontal="left", vertical="center")
-	align_right = Alignment(horizontal="right", vertical="center")
+	align_center = Alignment(horizontal="center", vertical="center", shrink_to_fit=True)
+	align_left = Alignment(horizontal="left", vertical="center", shrink_to_fit=True)
+	align_right = Alignment(horizontal="right", vertical="center", shrink_to_fit=True)
 
 	def apply_clean_table_borders(ws, start_row, end_row, start_col, end_col, split_col=None, total_row=None):
 		"""标题行和工资行外框加粗，内部边框普通，合计行底部双细线。"""
