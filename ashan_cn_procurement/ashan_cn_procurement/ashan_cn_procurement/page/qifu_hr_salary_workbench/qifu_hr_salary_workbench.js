@@ -7,7 +7,11 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
     const COMPANY = "天津祺富机械加工有限公司";
     const initial_today = (frappe.datetime && frappe.datetime.get_today) ? frappe.datetime.get_today() : new Date().toISOString().slice(0, 10);
-    let current_month = initial_today.slice(0, 7);
+    // 薪资工作台核定账期默认取【上一个自然月】：8月打开应默认处理7月账单
+    // 当月账期尚未到期，不应作为默认核定月份
+    const _today_d = new Date(initial_today);
+    const _prev = new Date(_today_d.getFullYear(), _today_d.getMonth() - 1, 1);
+    let current_month = `${_prev.getFullYear()}-${String(_prev.getMonth() + 1).padStart(2, '0')}`;
     let current_tab = "employees"; // 默认第 1 个 Tab: 员工薪酬档案 (权威母表底册)
     let current_history_mode = "all";
     let current_history_employee = "";
