@@ -1528,9 +1528,21 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 const resigned = isResigned(emp);
                 const profile = employee_profile_health(emp);
                 const totalAllowance = Number(emp.total_allowance || 0);
-                const origAge = emp.original_retirement_age_str || (emp.original_retirement_age ? `${emp.original_retirement_age}岁` : '60岁');
+                const defaultAgeStr = emp.gender === '女' ? '50岁' : '60岁';
+                const origAge = emp.original_retirement_age_str || (emp.original_retirement_age ? `${emp.original_retirement_age}岁` : defaultAgeStr);
                 const delayAge = emp.delayed_retirement_age_str || (emp.delayed_retirement_age ? `${emp.delayed_retirement_age}岁` : '-');
                 const profileTitle = profile.complete ? '关键资料完整' : `待完善：${profile.missing.join('、')}`;
+
+                let origRetPeriod = emp.original_retirement_period || emp.original_retire_period || emp.orig_retire_period || '';
+                if (!origRetPeriod && emp.birth_date && String(emp.birth_date).length >= 7) {
+                    const birthYear = parseInt(String(emp.birth_date).substring(0, 4), 10);
+                    const birthMonth = String(emp.birth_date).substring(5, 7);
+                    const ageNum = parseInt(String(origAge).replace(/[^\d]/g, '') || (emp.gender === '女' ? '50' : '60'), 10);
+                    if (!isNaN(birthYear) && !isNaN(ageNum)) {
+                        origRetPeriod = `${birthYear + ageNum}-${birthMonth}`;
+                    }
+                }
+                const delayedRetPeriod = emp.delayed_retirement_period || emp.delayed_retire_period || '-';
 
                 html += `
                 <tr style="${resigned ? 'background:#fff7f7;' : ''}">
