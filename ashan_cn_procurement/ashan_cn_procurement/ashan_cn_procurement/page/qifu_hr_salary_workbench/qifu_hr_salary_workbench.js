@@ -788,57 +788,6 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                     <button class="btn btn-default btn-sm" id="btn-tab2-print-dist" style="font-weight:600;">
                         🖨️ 打印 / 导出 PDF
                     </button>
-                    <button class="btn btn-default btn-sm" id="btn-tab2-toggle-assist" style="font-weight:700; color:#7c3aed; border-color:#c4b5fd;">
-                        💵 发放辅助 ▾
-                    </button>
-                </div>
-            </div>
-
-            <!-- 发放辅助抽屉：参照 XLSM 当月发薪工资表 Y:AE 隐藏辅助列 -->
-            <div id="tab2-distribution-assist" class="qifu-distribution-assist" style="display:none;">
-                <div class="qifu-assist-head">
-                    <div>
-                        <strong>💵 发放辅助</strong>
-                        <span>24列主表保持纯净；逐人核对、DL 信封与现金点钞在此独立处理</span>
-                    </div>
-                    <div class="qifu-assist-tabs">
-                        <button class="btn btn-xs qifu-assist-view active" data-view="person">👤 逐人分页</button>
-                        <button class="btn btn-xs qifu-assist-view" data-view="envelope">✉️ DL 信封</button>
-                        <button class="btn btn-xs qifu-assist-view" data-view="cash">💴 现金点钞</button>
-                    </div>
-                </div>
-                <div id="tab2-assist-person" class="qifu-assist-pane">
-                    <div class="qifu-person-pager">
-                        <button class="btn btn-default btn-xs" id="btn-assist-prev">← 上一人</button>
-                        <select class="form-control input-xs" id="assist-employee-select"></select>
-                        <span id="assist-person-page" class="qifu-person-page-label">0 / 0</span>
-                        <button class="btn btn-default btn-xs" id="btn-assist-next">下一人 →</button>
-                        <button class="btn btn-default btn-xs" id="btn-assist-print-person">🖨️ 打印当前员工</button>
-                        <button class="btn btn-default btn-xs" id="btn-assist-print-all-people">🗂️ 批量逐人分页</button>
-                    </div>
-                    <div id="assist-person-card" class="qifu-person-card"></div>
-                </div>
-                <div id="tab2-assist-envelope" class="qifu-assist-pane" style="display:none;">
-                    <div class="qifu-assist-actions">
-                        <span>DL 标准信封：220 × 110 mm，每名员工一页。</span>
-                        <button class="btn btn-default btn-xs" id="btn-print-current-envelope">✉️ 打印当前员工</button>
-                        <button class="btn btn-primary btn-xs" id="btn-print-all-envelopes">🖨️ 批量打印全部 DL 信封</button>
-                    </div>
-                    <div id="assist-envelope-preview" class="qifu-envelope-preview"></div>
-                </div>
-                <div id="tab2-assist-cash" class="qifu-assist-pane" style="display:none;">
-                    <div class="qifu-assist-actions">
-                        <span>按 XLSM 逻辑自动分解：100 / 50 / 10 / 5 / 1 元；核定 = ROUND(实发,0) − 现金合计。</span>
-                        <button class="btn btn-default btn-xs" id="btn-print-cash-sheet">🖨️ 打印点钞表</button>
-                        <button class="btn btn-primary btn-xs" id="btn-export-cash-sheet">📥 导出现金点钞表</button>
-                    </div>
-                    <div class="qifu-cash-table-wrap">
-                        <table class="qifu-table table-bordered" id="table-tab2-cash-sheet">
-                            <thead><tr><th>序号</th><th>工号</th><th>姓名</th><th>100 元</th><th>50 元</th><th>10 元</th><th>5 元</th><th>1 元</th><th>现金合计</th><th>核定</th></tr></thead>
-                            <tbody id="tbody-tab2-cash-sheet"></tbody>
-                            <tfoot id="tfoot-tab2-cash-sheet"></tfoot>
-                        </table>
-                    </div>
                 </div>
             </div>
 
@@ -5034,45 +4983,6 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     $container.on("click", "#btn-tab2-print-dist", function() {
         print_modal_report(`【${COMPANY}】${current_month} 薪资发放表`, `发薪所属账期: ${current_month}`, "table-tab2-dist-sheet");
     });
-
-    $container.on("click", "#btn-tab2-toggle-assist", function() {
-        const $panel = $("#tab2-distribution-assist");
-        const show = !$panel.is(':visible');
-        $panel.toggle(show);
-        $(this).text(show ? '💵 发放辅助 ▴' : '💵 发放辅助 ▾');
-        if (show) {
-            render_distribution_assist();
-            render_distribution_cash_table();
-        }
-    });
-    $container.on("click", ".qifu-assist-view", function() {
-        distribution_assist_view = $(this).attr('data-view') || 'person';
-        $(".qifu-assist-view").removeClass('active');
-        $(this).addClass('active');
-        $(".qifu-assist-pane").hide();
-        $("#tab2-assist-" + distribution_assist_view).show();
-        if (distribution_assist_view === 'cash') render_distribution_cash_table();
-        else render_distribution_assist();
-    });
-    $container.on("click", "#btn-assist-prev", function() {
-        if (distribution_assist_index > 0) distribution_assist_index -= 1;
-        render_distribution_assist();
-    });
-    $container.on("click", "#btn-assist-next", function() {
-        if (distribution_assist_index < distribution_assist_rows.length - 1) distribution_assist_index += 1;
-        render_distribution_assist();
-    });
-    $container.on("change", "#assist-employee-select", function() {
-        const idx = Number($(this).val());
-        if (Number.isInteger(idx) && idx >= 0 && idx < distribution_assist_rows.length) distribution_assist_index = idx;
-        render_distribution_assist();
-    });
-    $container.on("click", "#btn-assist-print-person", function() { print_distribution_person(current_distribution_assist_row()); });
-    $container.on("click", "#btn-assist-print-all-people", function() { print_all_distribution_people(); });
-    $container.on("click", "#btn-print-current-envelope", function() { print_dl_envelopes(false); });
-    $container.on("click", "#btn-print-all-envelopes", function() { print_dl_envelopes(true); });
-    $container.on("click", "#btn-print-cash-sheet", function() { print_cash_count_sheet(); });
-    $container.on("click", "#btn-export-cash-sheet", function() { export_excel_action("cash"); });
 
     // 7. 社保/公积金 Tab 导出、打印与配置修改
     $container.on("click", "#btn-qifu-edit-ss-setting, #btn-qifu-edit-hf-setting", function() {

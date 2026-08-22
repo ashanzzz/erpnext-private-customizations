@@ -22,6 +22,14 @@ def is_tax_after_salary_mode(salary_mode):
     return str(salary_mode or "").strip() in TAX_AFTER_SALARY_MODES
 
 
+def _normalize_period_month(period_month):
+    """Normalize period month to YYYY-MM format."""
+    pm_str = str(period_month or "").strip()
+    if len(pm_str) == 6 and pm_str.isdigit():
+        return f"{pm_str[:4]}-{pm_str[4:]}"
+    return pm_str or "2026-07"
+
+
 def _salary_profiles_for_period(company, period_month, fields=None, order_by="employee_no asc"):
     """Return employees who actually belong to a payroll month.
 
@@ -33,12 +41,13 @@ def _salary_profiles_for_period(company, period_month, fields=None, order_by="em
     from calendar import monthrange
     from datetime import date
 
+    pm_str = _normalize_period_month(period_month)
     try:
-        year, month = [int(part) for part in str(period_month or "").split("-")[:2]]
+        year, month = [int(part) for part in pm_str.split("-")[:2]]
         month_start = date(year, month, 1)
         month_end = date(year, month, monthrange(year, month)[1])
     except Exception:
-        frappe.throw("账期格式必须为 YYYY-MM，例如 2026-07。")
+        frappe.throw("账期格式必须为 YYYY-MM 或 YYYYMM，例如 2026-07。")
 
     wanted = list(fields or ["name", "employee_no", "employee_name"])
     required = ["employment_status", "date_of_joining", "relieving_date"]
@@ -3079,6 +3088,9 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 	7. all: 包含上述全部 7 个工作表的完整年度薪资结算财务工作簿
 	"""
 	check_payroll_workbench_permission("read")
+	period_month = _normalize_period_month(period_month)
+	if history_period_month:
+		history_period_month = _normalize_period_month(history_period_month)
 	import io
 	import base64
 	from datetime import datetime, date
@@ -3114,22 +3126,22 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 	align_right = Alignment(horizontal="right", vertical="center")
 
 	# -------------------------------------------------------------
-	# 1. 24 列薪资发放表 (车间实发 + 考勤工时)
+	# 1. 24 列薪资发放表 (车间实发 + 考勤工时 + 备考后直接呈现现金点钞辅助列)
 	# -------------------------------------------------------------
 	def build_distribution_sheet(ws):
-		"""Build the 24-column external pay sheet plus XLSM-compatible hidden cash helpers."""
+		"""Build the 24-column external pay sheet plus visible cash note helpers right after Remarks."""
 		ws.title = "1.薪资发放表(24列)"
 		data_res = get_salary_distribution_sheet(company, period_month)
 		rows = data_res.get("rows", [])
 		totals = data_res.get("totals", {})
 
-		ws.merge_cells("A1:X1")
-		ws["A1"] = f"{company} {period_month} 薪资发放表（24列标准版）"
+		ws.merge_cells("A1:AE1")
+		ws["A1"] = f"{company} {period_month} 薪资发放表（24列标准版 + 现金点钞辅助）"
 		ws["A1"].font = font_title
 		ws["A1"].alignment = align_center
 		ws.row_dimensions[1].height = 32
 
-		ws.merge_cells("A2:X2")
+		ws.merge_cells("A2:AE2")
 		ws["A2"] = f"发薪月份: {period_month}  |  生成日期: {date.today().strftime('%Y-%m-%d')}  |  员工人数: {len(rows)} 人  |  单位: 元"
 		ws["A2"].font = font_sub
 		ws["A2"].alignment = align_center
@@ -3157,18 +3169,23 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 			cell.border = border_cell
 
 		for row_idx, r in enumerate(rows, start=4):
-			ws.row_dimensions[row_idx].height = 20
+			ws.row_dimensions[row_idx].height = 22
 			vals = [
 				r.get("seq"), r.get("employee_no"), r.get("employee_name"),
-				r.get("work_days", 0), r.get("work_hours", 0), r.get("day_salary", 0), r.get("hour_salary", 0),
-				r.get("full_attendance", 0), r.get("overtime_hours", 0), r.get("overtime_salary", 0),
-				r.get("national_days", 0), r.get("national_salary", 0), r.get("target_rate", ""),
-				r.get("target_salary", 0), r.get("deduction", 0), r.get("workshop_net", 0),
-				r.get("post_allowance", 0), r.get("house_rent_allowance", 0), r.get("subsidies_total", 0),
-				r.get("payable_total", 0), r.get("salary_adjust", 0), r.get("net_salary", 0),
+				r.get("work_days", 0) or None, r.get("work_hours", 0) or None, r.get("day_salary", 0) or None, r.get("hour_salary", 0) or None,
+				r.get("full_attendance", 0) or None, r.get("overtime_hours", 0) or None, r.get("overtime_salary", 0) or None,
+				r.get("national_days", 0) or None, r.get("national_salary", 0) or None, r.get("target_rate", "") or None,
+				r.get("target_salary", 0) or None, r.get("deduction", 0) or None,
+				f"=F{row_idx}+G{row_idx}+H{row_idx}+J{row_idx}+L{row_idx}+N{row_idx}-O{row_idx}",
+				r.get("post_allowance", 0) or None, r.get("house_rent_allowance", 0) or None,
+				f"=Q{row_idx}+R{row_idx}",
+				f"=P{row_idx}+S{row_idx}",
+				r.get("salary_adjust", 0) or None,
+				f"=ROUND(T{row_idx}+U{row_idx},0)",
 				r.get("sign", ""), r.get("remarks", ""),
 				r.get("cash_100", 0), r.get("cash_50", 0), r.get("cash_10", 0), r.get("cash_5", 0), r.get("cash_1", 0),
-				r.get("cash_total", 0), r.get("cash_check", 0),
+				f"=100*Y{row_idx}+50*Z{row_idx}+10*AA{row_idx}+5*AB{row_idx}+1*AC{row_idx}",
+				f"=ROUND(V{row_idx},0)-AD{row_idx}",
 			]
 			for col_idx, val in enumerate(vals, start=1):
 				cell = ws.cell(row=row_idx, column=col_idx, value=val)
@@ -3180,67 +3197,69 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 					cell.alignment = align_left
 				else:
 					cell.alignment = align_right
-				if isinstance(val, (int, float)) and col_idx not in [25, 26, 27, 28, 29]:
-					cell.number_format = "#,##0.00"
-
-			# Keep the two verification columns live exactly like the reference XLSM.
-			# Users may unhide Y:AE and adjust note counts; AD/AE recalculate automatically.
-			ws.cell(row=row_idx, column=30, value=f"=100*Y{row_idx}+50*Z{row_idx}+10*AA{row_idx}+5*AB{row_idx}+AC{row_idx}")
-			ws.cell(row=row_idx, column=31, value=f"=ROUND(V{row_idx},0)-AD{row_idx}")
-			for col_idx in (30, 31):
-				cell = ws.cell(row=row_idx, column=col_idx)
-				cell.font = font_data
-				cell.border = border_cell
-				cell.alignment = align_center if col_idx == 31 else align_right
-				cell.number_format = "#,##0.00"
+				if col_idx in [25, 26, 27, 28, 29]:
+					cell.number_format = "0"
+				elif col_idx == 31:
+					cell.number_format = "0"
+				elif col_idx in [4, 5, 9, 11]:
+					if isinstance(val, (int, float)):
+						cell.number_format = "#,##0.0"
+				else:
+					if isinstance(val, (int, float)) or (isinstance(val, str) and val.startswith("=")):
+						cell.number_format = "#,##0.00"
 
 		tot_row = len(rows) + 4
 		ws.row_dimensions[tot_row].height = 24
 		ws.cell(row=tot_row, column=1, value="合计").alignment = align_center
 		ws.cell(row=tot_row, column=2, value=f"共 {len(rows)} 人").alignment = align_center
-		ws.cell(row=tot_row, column=4, value=totals.get("work_days", 0)).number_format = "#,##0.0"
-		ws.cell(row=tot_row, column=5, value=totals.get("work_hours", 0)).number_format = "#,##0.0"
-		ws.cell(row=tot_row, column=8, value=totals.get("full_attendance", 0)).number_format = "#,##0.00"
-		ws.cell(row=tot_row, column=9, value=totals.get("overtime_hours", 0)).number_format = "#,##0.0"
-		ws.cell(row=tot_row, column=10, value=totals.get("overtime_salary", 0)).number_format = "#,##0.00"
-		ws.cell(row=tot_row, column=11, value=totals.get("national_days", 0)).number_format = "#,##0.0"
-		ws.cell(row=tot_row, column=12, value=totals.get("national_salary", 0)).number_format = "#,##0.00"
-		ws.cell(row=tot_row, column=14, value=totals.get("target_salary", 0)).number_format = "#,##0.00"
-		ws.cell(row=tot_row, column=15, value=totals.get("deduction", 0)).number_format = "#,##0.00"
-		ws.cell(row=tot_row, column=16, value=totals.get("workshop_net", 0)).number_format = "#,##0.00"
-		ws.cell(row=tot_row, column=17, value=totals.get("post_allowance", 0)).number_format = "#,##0.00"
-		ws.cell(row=tot_row, column=18, value=totals.get("house_rent_allowance", 0)).number_format = "#,##0.00"
-		ws.cell(row=tot_row, column=19, value=totals.get("subsidies_total", 0)).number_format = "#,##0.00"
-		ws.cell(row=tot_row, column=20, value=totals.get("payable_total", 0)).number_format = "#,##0.00"
-		ws.cell(row=tot_row, column=21, value=totals.get("salary_adjust", 0)).number_format = "#,##0.00"
-		ws.cell(row=tot_row, column=22, value=totals.get("net_salary", 0)).number_format = "#,##0.00"
-		for col_idx, key in enumerate(("cash_100", "cash_50", "cash_10", "cash_5", "cash_1", "cash_total", "cash_check"), start=25):
-			ws.cell(row=tot_row, column=col_idx, value=totals.get(key, 0))
 		if rows:
-			ws.cell(row=tot_row, column=30, value=f"=SUM(AD4:AD{tot_row - 1})")
-			ws.cell(row=tot_row, column=31, value=f"=SUM(AE4:AE{tot_row - 1})")
+			for col_idx in (4, 5, 8, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22):
+				col_letter = get_column_letter(col_idx)
+				ws.cell(row=tot_row, column=col_idx, value=f"=SUM({col_letter}4:{col_letter}{tot_row - 1})")
+			for col_idx in (25, 26, 27, 28, 29, 30, 31):
+				col_letter = get_column_letter(col_idx)
+				ws.cell(row=tot_row, column=col_idx, value=f"=SUM({col_letter}4:{col_letter}{tot_row - 1})")
+		else:
+			for col_idx in range(4, 32):
+				ws.cell(row=tot_row, column=col_idx, value=0)
 
 		for col_idx in range(1, 32):
 			c = ws.cell(row=tot_row, column=col_idx)
 			c.font = font_total
 			c.fill = fill_total
 			c.border = double_bottom
+			if col_idx in [25, 26, 27, 28, 29, 31]:
+				c.alignment = align_center
+				c.number_format = "0"
+			elif col_idx in [1, 2]:
+				c.alignment = align_center
+			else:
+				c.alignment = align_right
+				c.number_format = "#,##0.00"
 
-		# Match the reference XLSM: 24 business columns are the print area, cash helper
-		# columns Y:AE exist in the workbook but stay hidden until the user needs them.
-		for col_letter in ("Y", "Z", "AA", "AB", "AC", "AD", "AE"):
-			ws.column_dimensions[col_letter].hidden = True
+		# 设置列宽（参照参考工作簿，姓名列加宽）
+		dist_widths = [5.625, 8.625, 13.5, 8.625, 13.0, 9.125, 13.0, 13.0, 13.0, 13.0, 13.0, 13.0, 8.625, 13.0, 9.125, 12.625, 8.625, 13.0, 12.625, 13.0, 9.125, 13.625, 16.625, 14.625, 10.625, 9.0, 9.0, 9.0, 9.0, 12.0, 10.625]
+		for idx, w in enumerate(dist_widths, start=1):
+			ws.column_dimensions[get_column_letter(idx)].width = w
+			ws.column_dimensions[get_column_letter(idx)].hidden = False
+
 		ws.freeze_panes = "D4"
-		ws.print_area = f"A1:X{tot_row}"
+		ws.print_area = f"A1:AE{tot_row}"
 		ws.page_setup.paperSize = ws.PAPERSIZE_A4
 		ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
 		ws.page_setup.fitToWidth = 1
 		ws.page_setup.fitToHeight = 0
 		ws.sheet_properties.pageSetUpPr.fitToPage = True
-		ws.sheet_view.showGridLines = False
+		ws.page_margins.left = 0.3
+		ws.page_margins.right = 0.3
+		ws.page_margins.top = 0.5
+		ws.page_margins.bottom = 0.5
+		ws.page_margins.header = 0.3
+		ws.page_margins.footer = 0.3
+		ws.sheet_view.showGridLines = True
 
 	# -------------------------------------------------------------
-	# 2. 11 列记账工资表 (严格参照 XLSM；外籍人员另 Sheet)
+	# 2. 11 列记账工资表 (严格参照 XLSM；表格全部缩小以填充，姓名加宽)
 	# -------------------------------------------------------------
 	def build_accounting_sheet(ws, foreign=False):
 		data_res = get_accounting_payroll_sheet(company, period_month)
@@ -3252,7 +3271,7 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 		ws["A1"] = f"{company} {period_month} {'记账工资表外籍' if foreign else '记账工资表'}"
 		ws["A1"].font = font_title
 		ws["A1"].alignment = align_center
-		ws.row_dimensions[1].height = 30
+		ws.row_dimensions[1].height = 32
 
 		headers = [
 			"工号", "姓名", "基本绩效工资", "职位补贴", "房/车补", "税前工资",
@@ -3267,33 +3286,60 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 			cell.border = border_cell
 
 		for row_idx, r in enumerate(rows, start=3):
-			ws.row_dimensions[row_idx].height = 20
+			ws.row_dimensions[row_idx].height = 22
 			vals = [
-				r.get("employee_no"), r.get("employee_name"), r.get("base_perf_salary", 0),
-				r.get("post_allowance", 0), r.get("house_rent_allowance", 0), r.get("gross_salary", 0),
-				r.get("hf_person_total", 0), r.get("ss_person_total", 0), r.get("tax_amount", 0),
-				r.get("total_deduction", 0), r.get("net_salary", 0),
+				r.get("employee_no"),
+				r.get("employee_name"),
+				f"=F{row_idx}-D{row_idx}-E{row_idx}",
+				r.get("post_allowance", 0) or None,
+				r.get("house_rent_allowance", 0) or None,
+				r.get("gross_salary", 0) or 0,
+				r.get("hf_person_total", 0) or None,
+				r.get("ss_person_total", 0) or None,
+				r.get("tax_amount", 0) or 0,
+				f"=SUM(G{row_idx}:I{row_idx})",
+				f"=F{row_idx}-J{row_idx}",
 			]
 			for col_idx, val in enumerate(vals, start=1):
 				cell = ws.cell(row=row_idx, column=col_idx, value=val)
 				cell.font = font_data
 				cell.border = border_cell
-				cell.alignment = align_left if col_idx == 2 else (align_center if col_idx == 1 else align_right)
-				if isinstance(val, (int, float)):
+				if col_idx == 1:
+					cell.alignment = align_center
+				elif col_idx == 2:
+					cell.alignment = align_left
+				else:
+					cell.alignment = align_right
+				if isinstance(val, (int, float)) or (isinstance(val, str) and val.startswith("=")):
 					cell.number_format = "#,##0.00"
 
 		tot_row = len(rows) + 3
+		ws.row_dimensions[tot_row].height = 24
 		ws.cell(row=tot_row, column=1, value="合计").alignment = align_center
-		for col_idx, key in enumerate((
-			"base_perf_salary", "post_allowance", "house_rent_allowance", "gross_salary",
-			"hf_person_total", "ss_person_total", "tax_amount", "total_deduction", "net_salary",
-		), start=3):
-			ws.cell(row=tot_row, column=col_idx, value=totals.get(key, 0)).number_format = "#,##0.00"
+		ws.cell(row=tot_row, column=2, value=f"共 {len(rows)} 人").alignment = align_center
+		if rows:
+			for col_idx in range(3, 12):
+				col_letter = get_column_letter(col_idx)
+				ws.cell(row=tot_row, column=col_idx, value=f"=SUM({col_letter}3:{col_letter}{tot_row - 1})")
+		else:
+			for col_idx in range(3, 12):
+				ws.cell(row=tot_row, column=col_idx, value=0)
+
 		for col_idx in range(1, 12):
 			c = ws.cell(row=tot_row, column=col_idx)
 			c.font = font_total
 			c.fill = fill_total
 			c.border = double_bottom
+			if col_idx in [1, 2]:
+				c.alignment = align_center
+			else:
+				c.alignment = align_right
+				c.number_format = "#,##0.00"
+
+		# 列宽设置（姓名稍微宽一点点 14.0，参考 XLSM 比例）
+		acc_widths = [8.625, 14.0, 11.625, 8.625, 13.0, 11.625, 9.5, 10.5, 9.5, 10.5, 11.625]
+		for idx, w in enumerate(acc_widths, start=1):
+			ws.column_dimensions[get_column_letter(idx)].width = w
 
 		ws.freeze_panes = "C3"
 		ws.print_area = f"A1:K{tot_row}"
@@ -3302,7 +3348,13 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 		ws.page_setup.fitToWidth = 1
 		ws.page_setup.fitToHeight = 0
 		ws.sheet_properties.pageSetUpPr.fitToPage = True
-		ws.sheet_view.showGridLines = False
+		ws.page_margins.left = 0.3
+		ws.page_margins.right = 0.3
+		ws.page_margins.top = 0.5
+		ws.page_margins.bottom = 0.5
+		ws.page_margins.header = 0.3
+		ws.page_margins.footer = 0.3
+		ws.sheet_view.showGridLines = True
 
 	def build_cash_count_sheet(ws):
 		"""Build the cash-note counting/check sheet from the reference XLSM helper columns."""
@@ -4033,12 +4085,14 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 			for idx, width in enumerate(widths, start=1):
 				sheet.column_dimensions[get_column_letter(idx)].width = width
 		elif sheet.title == "1.薪资发放表(24列)":
-			# 前24列参照《当月发薪工资表》，后7列为默认隐藏的点钞辅助列。
-			widths = [5.6, 8.6, 10, 8.6, 8.6, 9.1, 9.1, 9.1, 9.1, 9.1, 9.1, 9.1, 8.6, 8.6, 9.1, 12.6, 8.6, 8.6, 12.6, 12.6, 9.1, 13.6, 10.5, 16]
+			# 严格对齐参考 XLSM：24列业务数据 + 7列现金点钞辅助列，姓名列加宽
+			widths = [5.625, 8.625, 13.5, 8.625, 13.0, 9.125, 13.0, 13.0, 13.0, 13.0, 13.0, 13.0, 8.625, 13.0, 9.125, 12.625, 8.625, 13.0, 12.625, 13.0, 9.125, 13.625, 16.625, 14.625, 10.625, 9.0, 9.0, 9.0, 9.0, 12.0, 10.625]
 			for idx, width in enumerate(widths, start=1):
 				sheet.column_dimensions[get_column_letter(idx)].width = width
+				sheet.column_dimensions[get_column_letter(idx)].hidden = False
 		elif sheet.title in {"2.记账工资表(11列)", "记账工资表外籍"}:
-			widths = [8.6, 10, 11.6, 8.6, 8.6, 11.6, 9.5, 10.5, 9.5, 10.5, 11.6]
+			# 严格对齐参考 XLSM：姓名列加宽至 14.0，适配中长姓名与外籍姓名，适合整表缩小填充打印
+			widths = [8.625, 14.0, 11.625, 8.625, 13.0, 11.625, 9.5, 10.5, 9.5, 10.5, 11.625]
 			for idx, width in enumerate(widths, start=1):
 				sheet.column_dimensions[get_column_letter(idx)].width = width
 		elif sheet.title == "现金点钞核定表":
