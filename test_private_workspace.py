@@ -36,14 +36,14 @@ def call_api(endpoint, method='GET', data=None):
         return None
 
 def create_user_workspace(name, title, parent_page="", shortcuts=None):
-    # Set public=0 and for_user=ashanzzz1213@gmail.com
+    # Set public=0 and for_user=dev@example.invalid
     payload = {
         "doctype": "Workspace",
         "name": name,
         "label": name,
         "title": title,
         "public": 0,
-        "for_user": "ashanzzz1213@gmail.com",
+        "for_user": "dev@example.invalid",
         "module": "Ashan CN Procurement",
         "parent_page": parent_page,
         "is_hidden": 0,
@@ -84,26 +84,26 @@ def create_user_workspace(name, title, parent_page="", shortcuts=None):
     return res
 
 def main():
-    # Create private workspace "我的业务" and children for user ashanzzz1213@gmail.com
-    create_user_workspace("My Business-ashanzzz1213@gmail.com", "我的业务")
+    # Create private workspace "我的业务" and children for user dev@example.invalid
+    create_user_workspace("My Business-dev@example.invalid", "我的业务")
     
-    create_user_workspace("Vehicle Management-ashanzzz1213@gmail.com", "车油管理", parent_page="My Business-ashanzzz1213@gmail.com", shortcuts=[
+    create_user_workspace("Vehicle Management-dev@example.invalid", "车油管理", parent_page="My Business-dev@example.invalid", shortcuts=[
         {"type": "DocType", "link_to": "Vehicle", "name": "车辆台账"},
         {"type": "DocType", "link_to": "Oil Card Refuel Log", "name": "车辆加油台账"},
         {"type": "Report", "link_to": "Vehicle Fuel Cost Summary", "name": "车辆油耗汇总"}
     ])
     
-    create_user_workspace("Compliance Center-ashanzzz1213@gmail.com", "公司合规中心", parent_page="My Business-ashanzzz1213@gmail.com", shortcuts=[
+    create_user_workspace("Compliance Center-dev@example.invalid", "公司合规中心", parent_page="My Business-dev@example.invalid", shortcuts=[
         {"type": "DocType", "link_to": "Compliance Equipment Item", "name": "特种设备到期"},
         {"type": "DocType", "link_to": "Employee Certificate Item", "name": "人员证书到期"},
         {"type": "DocType", "link_to": "Environmental Compliance Item", "name": "环保检测到期"}
     ])
 
-    create_user_workspace("Reimbursements-ashanzzz1213@gmail.com", "报销申请", parent_page="My Business-ashanzzz1213@gmail.com", shortcuts=[
+    create_user_workspace("Reimbursements-dev@example.invalid", "报销申请", parent_page="My Business-dev@example.invalid", shortcuts=[
         {"type": "DocType", "link_to": "Reimbursement Request", "name": "报销申请台账"}
     ])
 
-    create_user_workspace("Oil Cards-ashanzzz1213@gmail.com", "油卡", parent_page="My Business-ashanzzz1213@gmail.com", shortcuts=[
+    create_user_workspace("Oil Cards-dev@example.invalid", "油卡", parent_page="My Business-dev@example.invalid", shortcuts=[
         {"type": "DocType", "link_to": "Oil Card", "name": "油卡卡片汇总"},
         {"type": "DocType", "link_to": "Oil Card Recharge", "name": "充值台账"}
     ])

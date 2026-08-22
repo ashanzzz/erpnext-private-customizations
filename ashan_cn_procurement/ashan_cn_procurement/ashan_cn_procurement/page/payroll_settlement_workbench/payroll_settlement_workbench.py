@@ -10,12 +10,14 @@ import base64
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from ashan_cn_procurement.ashan_cn_procurement.payroll_engine import AshanPayrollCalculator
+from ashan_cn_procurement.services.payroll_settlement_service import check_payroll_workbench_permission
 
 @frappe.whitelist()
 def get_payroll_workbench_data(period_month=None, company=None, tax_cycle_start_month=None):
     """
     加载月度人事薪酬工作台核心数据 (支持吉众与祺富双模，支持自定义个税起始计税月)
     """
+    check_payroll_workbench_permission("read")
     if not period_month:
         now = datetime.datetime.now()
         period_month = now.strftime('%Y-%m')
@@ -215,11 +217,12 @@ def get_cumulative_history(company, period_month, tax_cycle_start_month="2026-01
 
     return hist_map
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def upload_boss_payroll_file(filedata, filename, period_month, company="天津祺富机械加工有限公司"):
     """
     智能解析并导入【老板娘工资表】(Excel: .xlsx / .xls / .xlsm)
     """
+    check_payroll_workbench_permission("write")
     if "," in filedata:
         filedata = filedata.split(",", 1)[1]
 
@@ -352,11 +355,12 @@ def upload_boss_payroll_file(filedata, filename, period_month, company="天津�
         "workbench_data": get_payroll_workbench_data(period_month, company)
     }
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def save_payroll_settlement(data):
     """
     保存月度薪资核算草稿
     """
+    check_payroll_workbench_permission("write")
     if isinstance(data, str):
         data = json.loads(data)
 
@@ -396,11 +400,12 @@ def save_payroll_settlement(data):
 
     return {"success": True, "name": doc.name, "message": "薪资月结草稿已成功保存"}
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def finalize_payroll_settlement(data):
     """
     核定并锁定薪资月结
     """
+    check_payroll_workbench_permission("write")
     res = save_payroll_settlement(data)
     name = res["name"]
     doc = frappe.get_doc("Ashan Payroll Settlement", name)
@@ -415,6 +420,7 @@ def export_payroll_excel(period_month=None, company=None, tax_cycle_start_month=
     """
     导出 1:1 多工作表标准人事薪酬 Excel 文件
     """
+    check_payroll_workbench_permission("read")
     data = get_payroll_workbench_data(period_month, company, tax_cycle_start_month)
     items = data.get("items", [])
     summary = data.get("summary", {})
@@ -530,6 +536,7 @@ def get_payslip_print_data(period_month=None, company=None, mode="A4", tax_cycle
     """
     获取 A4 签收单或信封工资条打印数据
     """
+    check_payroll_workbench_permission("read")
     data = get_payroll_workbench_data(period_month, company, tax_cycle_start_month)
     return {
         "company": company,

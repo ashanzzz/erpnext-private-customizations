@@ -34,7 +34,7 @@ def call_api(endpoint, method='GET', data=None):
         return None
 
 def main():
-    # Fetch User Settings for user ashanzzz1213@gmail.com
+    # Fetch User Settings for user dev@example.invalid
     # User Settings are stored in tabUser Settings
     # We can fetch via REST API User Settings
     res = call_api('/api/resource/User%20Settings?limit_page_length=100')

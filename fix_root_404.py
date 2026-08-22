@@ -45,7 +45,7 @@ CLEAN_HOOKS_PY = """app_name = "ashan_cn_procurement"
 app_title = "业务扩展"
 app_publisher = "Ashan CN Procurement"
 app_description = "ERPNext 16 采购与仓储定制业务扩展"
-app_email = "ashanzzz1213@gmail.com"
+app_email = "dev@example.invalid"
 app_license = "mit"
 
 # Includes in <head>

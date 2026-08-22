@@ -43,7 +43,7 @@ ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 ssh.connect(HOST, port=PORT, username=USER, password=PASSWORD, timeout=10)
 
-sql_cmd = """
+sql_cmd = r"""
 docker exec erpnext16 su - frappe -c '
 cd /home/frappe/frappe-bench
 bench --site site1.local mariadb -e "

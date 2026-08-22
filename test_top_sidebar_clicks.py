@@ -13,7 +13,7 @@ def load_env_file(env_path='.env'):
 
 load_env_file()
 SITE_URL = 'http://192.168.8.11:6888'
-USERNAME = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
+USERNAME = os.getenv('ERPNEXT_USERNAME', 'dev@example.invalid')
 PASSWORD = os.getenv('ERPNEXT_PASSWORD', '')
 
 ARTIFACT_DIR = r"C:\Users\ashan\.gemini\antigravity\brain\49a429d8-4554-471e-974e-f9d70d7ec2f8"

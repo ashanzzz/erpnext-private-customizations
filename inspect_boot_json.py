@@ -15,7 +15,7 @@ def load_env_file(env_path='.env'):
 
 load_env_file()
 SITE_URL = 'http://192.168.8.11:6888'
-USER = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
+USER = os.getenv('ERPNEXT_USERNAME', 'dev@example.invalid')
 PWD = os.getenv('ERPNEXT_PASSWORD', '')
 
 cj = CookieJar()

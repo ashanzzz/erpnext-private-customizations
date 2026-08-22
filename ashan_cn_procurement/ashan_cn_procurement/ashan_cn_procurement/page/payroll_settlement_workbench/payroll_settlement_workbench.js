@@ -753,6 +753,7 @@ class AshanPayrollWorkbench {
 
         frappe.call({
             method: 'ashan_cn_procurement.ashan_cn_procurement.page.payroll_settlement_workbench.payroll_settlement_workbench.save_payroll_settlement',
+            type: 'POST',
             args: {
                 data: JSON.stringify(self.data)
             },
@@ -808,6 +809,7 @@ class AshanPayrollWorkbench {
                             const base64Data = e.target.result;
                             frappe.call({
                                 method: 'ashan_cn_procurement.ashan_cn_procurement.page.payroll_settlement_workbench.payroll_settlement_workbench.upload_boss_payroll_file',
+                                type: 'POST',
                                 args: {
                                     filedata: base64Data,
                                     filename: values.attach_file.split('/').pop(),
@@ -843,6 +845,7 @@ class AshanPayrollWorkbench {
                 self.data.tax_cycle_start_month = self.taxCycleStartMonth;
                 frappe.call({
                     method: 'ashan_cn_procurement.ashan_cn_procurement.page.payroll_settlement_workbench.payroll_settlement_workbench.finalize_payroll_settlement',
+                    type: 'POST',
                     args: {
                         data: JSON.stringify(self.data)
                     },

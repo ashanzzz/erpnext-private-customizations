@@ -41,7 +41,7 @@ if not frappe.db.exists("Material Request", {"docstatus": ["<", 2]}):
 # 2. 确保 Reimbursement Request 有测试数据
 if not frappe.db.exists("Reimbursement Request", {"docstatus": ["<", 2]}):
     try:
-        user = frappe.db.get_value("User", {"email": "ashanzzz1213@gmail.com"}, "name") or "Administrator"
+        user = frappe.db.get_value("User", {"email": "dev@example.invalid"}, "name") or "Administrator"
         rr = frappe.new_doc("Reimbursement Request")
         rr.applicant = user
         rr.custom_biz_mode = "报销申请"

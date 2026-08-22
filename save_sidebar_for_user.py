@@ -17,7 +17,7 @@ load_env_file()
 
 def main():
     site_url = os.getenv('ERPNEXT_SITE_URL', 'http://192.168.8.11:6888')
-    username = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
+    username = os.getenv('ERPNEXT_USERNAME', 'dev@example.invalid')
     password = os.getenv('ERPNEXT_PASSWORD', '')
     
     cj = http.cookiejar.CookieJar()
@@ -35,7 +35,7 @@ def main():
         print("Login failed:", e)
         return
 
-    # 2. Save sidebar in User Settings for ashanzzz1213@gmail.com
+    # 2. Save sidebar in User Settings for dev@example.invalid
     pages = [
         {"name": "Home", "title": "Home", "type": "workspace"},
         {"name": "My Business", "title": "我的业务", "type": "workspace"},

@@ -1,4 +1,5 @@
 import os
+import shlex
 import paramiko
 
 def load_env_file(env_path='.env'):
@@ -15,13 +16,17 @@ HOST = os.getenv('UNRAID_SSH_HOST', '192.168.8.11')
 PORT = int(os.getenv('UNRAID_SSH_PORT', '22'))
 USER = os.getenv('UNRAID_SSH_USER', 'root')
 PASSWORD = os.getenv('UNRAID_SSH_PASSWORD', '')
+DB_USER = shlex.quote(os.getenv('ERPNEXT_DB_USER', 'erpnext16'))
+DB_PASSWORD = os.getenv('ERPNEXT_DB_PASSWORD', '')
+DB_PASSWORD_ARG = shlex.quote(f'-p{DB_PASSWORD}') if DB_PASSWORD else ''
+DB_NAME = shlex.quote(os.getenv('ERPNEXT_DB_NAME', 'erpnext16'))
 
 ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 ssh.connect(HOST, port=PORT, username=USER, password=PASSWORD, timeout=10)
 
-cmd = """
-docker exec 1Panel-mariadb mariadb -u erpnext16 -pbAtk7Gn2BbzbypHS erpnext16 -e "
+cmd = rf"""
+docker exec 1Panel-mariadb mariadb -u {DB_USER} {DB_PASSWORD_ARG} {DB_NAME} -e "
 SELECT idx, label, type, link_type, link_to, icon, collapsible FROM \\\`tabWorkspace Sidebar Item\\\` WHERE parent = 'Buying' ORDER BY idx ASC;
 "
 """

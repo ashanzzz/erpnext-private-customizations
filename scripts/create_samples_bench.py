@@ -32,7 +32,7 @@ mr.save(ignore_permissions=True)
 print("MR created:", mr.name, mr.custom_doc_details)
 
 # 2. 确保 Reimbursement Request
-user = frappe.db.get_value("User", {"email": "ashanzzz1213@gmail.com"}, "name") or "Administrator"
+user = frappe.db.get_value("User", {"email": "dev@example.invalid"}, "name") or "Administrator"
 rr = frappe.new_doc("Reimbursement Request")
 rr.applicant = user
 rr.company = comp

@@ -8,7 +8,7 @@ version = "0.11.0"
 description = "ERPNext 16 采购、报销、油卡与受限单据业务扩展"
 readme = "README.md"
 authors = [
-    { name = "Ashan CN Procurement", email = "ashanzzz1213@gmail.com" }
+    { name = "Ashan CN Procurement", email = "dev@example.invalid" }
 ]
 dependencies = [
     # "frappe",

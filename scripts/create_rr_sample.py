@@ -17,7 +17,7 @@ frappe.init(site="site1.local")
 frappe.connect()
 
 comp = frappe.get_all("Company", limit=1)[0].name
-user = frappe.db.get_value("User", {"email": "ashanzzz1213@gmail.com"}, "name") or "Administrator"
+user = frappe.db.get_value("User", {"email": "dev@example.invalid"}, "name") or "Administrator"
 
 rr = frappe.new_doc("Reimbursement Request")
 rr.title = "8月份车间应急采购及差旅报销"

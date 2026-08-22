@@ -10,15 +10,16 @@ sys.stdout.reconfigure(encoding='utf-8')
 load_dotenv(r"d:\SynologyDrive团队\antigravity\erpnext16\.env")
 
 SITE_URL = os.getenv('ERPNEXT_SITE_URL', 'http://192.168.8.11:6888')
-USERNAME = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
+USERNAME = os.getenv('ERPNEXT_USERNAME', 'dev@example.invalid')
 USER_PWD = os.getenv('ERPNEXT_PASSWORD', '')
 
 session = requests.Session()
 session.post(f"{SITE_URL}/api/method/login", data={"usr": USERNAME, "pwd": USER_PWD})
 
-# 1. 直接登记一笔补缴调整：A0010 李金刚 补缴202605社保 + 滞纳金50元
+# 1. 直接登记一笔补缴调整；测试员工从环境变量读取，避免公开仓库保留真实工号/姓名。
+test_employee_no = os.getenv("ERPNEXT_TEST_EMPLOYEE_NO", "DEMO001")
 adj_data = {
-    "employee_no": "A0010",
+    "employee_no": test_employee_no,
     "period_month_str": "202605",
     "biz_type": "历史补缴",
     "ss_base": 5124.0,

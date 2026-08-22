@@ -78,13 +78,13 @@ frappe.pages['employee-salary-workbench'].on_page_load = function(wrapper) {
 
                     <!-- 祺富专属快捷公积金一键控制组 -->
                     <div id="qifu-quick-actions" style="display: flex; gap: 8px; align-items: center;">
-                        <button class="btn btn-default btn-sm" id="btn-qifu-hf-min" style="border-color: #2563eb; color: #2563eb; font-weight: 600;" title="将祺富全员公积金设为最低基数(2320元)，孟祥山自动豁免保留">
+                        <button class="btn btn-default btn-sm" id="btn-qifu-hf-min" style="border-color: #2563eb; color: #2563eb; font-weight: 600;" title="将符合条件的参保员工公积金基数批量设为最低基数">
                             ⚡ 一键全员公积金 (最低基数)
                         </button>
-                        <button class="btn btn-default btn-sm" id="btn-qifu-hf-zero" style="border-color: #ef4444; color: #ef4444; font-weight: 600;" title="将祺富全员公积金清零，孟祥山自动豁免保留">
+                        <button class="btn btn-default btn-sm" id="btn-qifu-hf-zero" style="border-color: #ef4444; color: #ef4444; font-weight: 600;" title="将符合批量规则的员工公积金基数清零">
                             🚫 一键取消公积金 (清零)
                         </button>
-                        <span style="font-size: 12px; color: #64748b; background: #f1f5f9; padding: 2px 8px; border-radius: 4px;">🛡️ 孟祥山受豁免保护</span>
+                        <span style="font-size: 12px; color: #64748b; background: #f1f5f9; padding: 2px 8px; border-radius: 4px;">批量操作按员工参保状态动态执行</span>
                     </div>
                 </div>
                 <div class="emp-toolbar-right">
@@ -456,6 +456,7 @@ frappe.pages['employee-salary-workbench'].on_page_load = function(wrapper) {
 
                 frappe.call({
                     method: 'ashan_cn_procurement.services.employee_salary_service.update_single_employee',
+                        type: 'POST',
                     args: {
                         employee_name: emp_name,
                         data: patch_data
@@ -531,6 +532,7 @@ frappe.pages['employee-salary-workbench'].on_page_load = function(wrapper) {
                 frappe.confirm(`确定要将选中的 ${emp_names.length} 位员工的【${values.target_field}】统一修改为【${values.target_value}】吗？`, function() {
                     frappe.call({
                         method: 'ashan_cn_procurement.services.employee_salary_service.batch_update_employees',
+                        type: 'POST',
                         args: {
                             employee_names: emp_names,
                             fieldname: values.target_field,
@@ -574,18 +576,19 @@ frappe.pages['employee-salary-workbench'].on_page_load = function(wrapper) {
             规则说明：<br>
             1. <strong>资格条件</strong>：仅对【社保基数 > 0】的在保员工生效，一键设为最低基数 (2320 元)；<br>
             2. <strong>未参保跳过</strong>：社保基数为 0 的人员将自动跳过并保持 0 元；<br>
-            3. <span style="color: #15803d; font-weight: 600;">🛡️ 核心豁免：员工【孟祥山】受最高保护，绝不被修改并保留原有基数！</span><br><br>
+            3. <span style="color: #15803d; font-weight: 600;">系统按当前员工参保状态逐人校验，不使用任何人员姓名硬编码例外。</span><br><br>
             确认执行吗？`,
             function() {
                 frappe.call({
                     method: 'ashan_cn_procurement.services.employee_salary_service.set_qifu_housing_fund_batch',
+                    type: 'POST',
                     args: { mode: 'min' },
                     callback: function(r) {
                         if (r.message && r.message.success) {
                             frappe.msgprint({
                                 title: '✅ 批处理完成',
                                 indicator: 'green',
-                                message: r.message.message + '<br><br>受保护员工：' + (r.message.protected_employees.join(', ') || '无')
+                                message: r.message.message + '<br><br>未参保跳过：' + ((r.message.skipped_no_insurance || []).join(', ') || '无')
                             });
                             load_data();
                         }
@@ -598,17 +601,18 @@ frappe.pages['employee-salary-workbench'].on_page_load = function(wrapper) {
     // 祺富一键取消全员公积金（清零）
     $container.on("click", "#btn-qifu-hf-zero", function() {
         frappe.confirm(
-            `<strong>【🚫 一键取消全员公积金 (设为0)】</strong><br><br>将一键把天津祺富机械加工有限公司所有员工公积金基数清零 (0 元)。<br><br><span style="color: #15803d; font-weight: 600;">🛡️ 核心保护：员工【孟祥山】将自动豁免，不受任何影响并保留其原有基数！</span><br><br>确认执行吗？`,
+            `<strong>【🚫 一键取消全员公积金 (设为0)】</strong><br><br>将一键把天津祺富机械加工有限公司所有员工公积金基数清零 (0 元)。<br><br><span style="color: #15803d; font-weight: 600;">系统将按当前员工参保状态逐人校验，不使用姓名硬编码例外。</span><br><br>确认执行吗？`,
             function() {
                 frappe.call({
                     method: 'ashan_cn_procurement.services.employee_salary_service.set_qifu_housing_fund_batch',
+                    type: 'POST',
                     args: { mode: 'zero' },
                     callback: function(r) {
                         if (r.message && r.message.success) {
                             frappe.msgprint({
                                 title: '✅ 批处理完成',
                                 indicator: 'green',
-                                message: r.message.message + '<br><br>受保护员工：' + (r.message.protected_employees.join(', ') || '无')
+                                message: r.message.message + '<br><br>未参保跳过：' + ((r.message.skipped_no_insurance || []).join(', ') || '无')
                             });
                             load_data();
                         }

@@ -9,7 +9,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 load_dotenv()
 
 SITE_URL = os.getenv('ERPNEXT_SITE_URL', 'http://192.168.8.11:6888')
-USERNAME = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
+USERNAME = os.getenv('ERPNEXT_USERNAME', 'dev@example.invalid')
 USER_PWD = os.getenv('ERPNEXT_PASSWORD', '')
 
 # 1. 种子数据准备：创建一张真实发票和一张金额不符的采购发票

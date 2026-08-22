@@ -12,7 +12,7 @@ def load_env_file(env_path='.env'):
 
 load_env_file()
 REMOTE_URL = 'https://erpnext.335356119.xyz'
-USERNAME = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
+USERNAME = os.getenv('ERPNEXT_USERNAME', 'dev@example.invalid')
 PASSWORD = os.getenv('ERPNEXT_PASSWORD', '')
 
 def main():

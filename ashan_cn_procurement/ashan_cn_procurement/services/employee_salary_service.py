@@ -5,6 +5,91 @@ from frappe.utils import flt, cint, getdate, today
 import math
 from datetime import datetime, date
 
+
+def _check_payroll_permission(perm_type="read"):
+	"""Use the payroll workbench permission policy without creating a top-level circular import."""
+	from ashan_cn_procurement.services.payroll_settlement_service import check_payroll_workbench_permission
+	return check_payroll_workbench_permission(perm_type)
+
+
+def _default_insurance_setting_values(company, year):
+	"""Return read-only defaults; reading configuration must never create database rows."""
+	company_text = str(company or "")
+	return {
+		"name": f"{company}-{cint(year)}",
+		"company": company,
+		"effective_year": cint(year),
+		"ss_company_pension": 16.0,
+		"ss_company_unemployment": 0.5,
+		"ss_company_medical": 10.0,
+		"ss_company_other_medical": 0.5,
+		"ss_company_injury": 0.55 if "祺富" in company_text else 0.35,
+		"ss_person_pension": 8.0,
+		"ss_person_unemployment": 0.5,
+		"ss_person_medical": 2.0,
+		"big_medical_amount_default": 22.0,
+		"big_medical_amount_special": 21.0,
+		"big_medical_special_months": "3,12",
+		"hf_company_rate": 5.0,
+		"hf_person_rate": 5.0,
+		"ss_min_base": 5013.0 if "祺富" in company_text else 5124.0,
+		"hf_min_base": 2320.0,
+		"tax_threshold": 5000.0,
+		"tax_cycle_start_month": 12,
+	}
+
+
+def _new_insurance_setting(company, year):
+	"""Create an unsaved settings document populated with the same defaults shown by the read API."""
+	doc = frappe.new_doc("Ashan Insurance Setting")
+	for fieldname, value in _default_insurance_setting_values(company, year).items():
+		if fieldname != "name" and hasattr(doc, fieldname):
+			setattr(doc, fieldname, value)
+	return doc
+
+
+def _queue_salary_recalculation(company, period_month, employee_no=None, trigger_source="员工薪酬档案", start_period=None, trigger_detail=""):
+	"""Create an auditable recalculation task in the same transaction as the input change.
+
+	For payroll inputs, silently accepting a save while task creation fails can leave a
+	previously ``已计算`` row looking current and could undermine the final-lock guard.
+	Therefore task creation is part of the financial write contract: if it fails, the
+	request is rejected so Frappe rolls the input write back as well.
+	"""
+	if not company:
+		frappe.throw("缺少公司，无法创建薪酬后台重算任务。")
+	if not period_month:
+		# Legacy/profile-only entry points do not always send the workbench month.
+		# In that case use the latest existing *unlocked* payroll month.  If the company
+		# has no open monthly settlement yet, there is no calculated snapshot to become
+		# stale, so the master-data save can safely stand without a task.
+		rows = frappe.get_all(
+			"Ashan Monthly Payroll Settlement",
+			filters={"company": company},
+			fields=["period_month", "locked", "status"],
+			order_by="period_month desc",
+			limit=24,
+		)
+		for row in rows:
+			if not cint(row.get("locked")) and row.get("status") not in {"已核定锁定", "已归档发放", "Locked", "Submitted"}:
+				period_month = row.get("period_month")
+				break
+		if not period_month:
+			return None
+	try:
+		from ashan_cn_procurement.services.payroll_recalculation_service import queue_recalculation_after_change
+		return queue_recalculation_after_change(
+			company=company,
+			period_month=period_month,
+			employee_no=employee_no,
+			trigger_source=trigger_source,
+			start_period=start_period,
+			trigger_detail=trigger_detail,
+		)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Payroll recalculation enqueue failed")
+		frappe.throw("数据未提交：服务器无法创建薪酬重算任务。请稍后重试，或联系系统管理员检查后台队列。")
+
 def calculate_age_and_retirement_details(id_card="", birth_date_str=None, gender=None, job_title="操作工", original_retirement_age=None, ref_period_month=None):
 	"""
 	国家法定标准渐进式延迟法定退休年龄计算器 (2024年9月13日全国人大常委会决定 & Excel法定核心公式)
@@ -155,6 +240,7 @@ def calculate_age_and_retirement_details(id_card="", birth_date_str=None, gender
 @frappe.whitelist()
 def calculate_employee_age_and_retirement(id_card=None, birth_date=None, gender=None, job_title=None, original_retirement_age=None, period_month=None):
 	"""白名单 RPC：以指定账期本月1日为基准返回年龄与原退休/延迟退休倒计时指标"""
+	_check_payroll_permission("read")
 	return calculate_age_and_retirement_details(
 		id_card=id_card,
 		birth_date_str=birth_date,
@@ -171,6 +257,7 @@ def get_employee_profiles(company="天津祺富机械加工有限公司", search
 	"""
 	获取指定公司的人员薪酬档案列表与统计指标
 	"""
+	_check_payroll_permission("read")
 	filters = {"company": company}
 	if employee_type and employee_type != "全部":
 		filters["employee_type"] = employee_type
@@ -306,12 +393,13 @@ def get_employee_profiles(company="天津祺富机械加工有限公司", search
 
 @frappe.whitelist()
 def get_qifu_employees(company="天津祺富机械加工有限公司", period_month=None):
-	"""获取祺富在职及当月离职员工档案母表列表 (支持动态按月份基准计算年龄与退休)"""
+	"""获取在职及当月离职员工档案母表列表 (支持动态按月份基准计算年龄与退休)"""
+	_check_payroll_permission("read")
 	res = get_employee_profiles(company=company, period_month=period_month)
 	return res.get("records", [])
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def set_employee_resignation(employee_no, relieving_date=None, resignation_reason=None, company="天津祺富机械加工有限公司", period_month="2026-07"):
 	"""
 	办理单名员工离职：
@@ -319,6 +407,7 @@ def set_employee_resignation(employee_no, relieving_date=None, resignation_reaso
 	2. employment_status 设为 离职，employee_type 可显示本月离职
 	3. 自动触发次月社保公积金减员
 	"""
+	_check_payroll_permission("write")
 	doc_name = frappe.db.get_value("Ashan Employee Salary Profile", {"company": company, "employee_no": employee_no}, "name")
 	if not doc_name:
 		frappe.throw(f"未找到工号为 {employee_no} 的员工档案")
@@ -334,6 +423,7 @@ def set_employee_resignation(employee_no, relieving_date=None, resignation_reaso
 	doc.relieving_date = relieving_date
 	doc.resignation_reason = resignation_reason or "正常离职"
 	doc.save(ignore_permissions=True)
+	_queue_salary_recalculation(company, period_month, employee_no, "员工薪酬档案", trigger_detail="办理员工离职")
 	frappe.db.commit()
 
 	return {
@@ -345,12 +435,13 @@ def set_employee_resignation(employee_no, relieving_date=None, resignation_reaso
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def batch_set_employee_resignation(employee_nos, relieving_date=None, resignation_reason=None, company="天津祺富机械加工有限公司", period_month="2026-07"):
 	"""
 	批量办理员工离职：
 	可多选人员，填入离职日期（默认当月最后一天），一键全部办理离职并实现次月社保公积金自动减员
 	"""
+	_check_payroll_permission("write")
 	if isinstance(employee_nos, str):
 		try:
 			employee_nos = json.loads(employee_nos)
@@ -367,6 +458,7 @@ def batch_set_employee_resignation(employee_nos, relieving_date=None, resignatio
 		relieving_date = f"{y:04d}-{m:02d}-{last_day:02d}"
 
 	updated_list = []
+	updated_emp_nos = []
 	for emp_no in employee_nos:
 		doc_name = frappe.db.get_value("Ashan Employee Salary Profile", {"company": company, "employee_no": emp_no}, "name")
 		if doc_name:
@@ -376,7 +468,10 @@ def batch_set_employee_resignation(employee_nos, relieving_date=None, resignatio
 			doc.resignation_reason = resignation_reason or "正常离职"
 			doc.save(ignore_permissions=True)
 			updated_list.append(f"{doc.employee_name} ({emp_no})")
+			updated_emp_nos.append(emp_no)
 
+	for emp_no in updated_emp_nos:
+		_queue_salary_recalculation(company, period_month, emp_no, "员工薪酬档案", trigger_detail="批量办理员工离职")
 	frappe.db.commit()
 	return {
 		"success": True,
@@ -387,11 +482,12 @@ def batch_set_employee_resignation(employee_nos, relieving_date=None, resignatio
 	}
 
 
-@frappe.whitelist()
-def cancel_employee_resignation(employee_no, company="天津祺富机械加工有限公司"):
+@frappe.whitelist(methods=["POST"])
+def cancel_employee_resignation(employee_no, company="天津祺富机械加工有限公司", period_month=None):
 	"""
 	撤销员工离职，恢复在职
 	"""
+	_check_payroll_permission("write")
 	doc_name = frappe.db.get_value("Ashan Employee Salary Profile", {"company": company, "employee_no": employee_no}, "name")
 	if not doc_name:
 		frappe.throw(f"未找到工号为 {employee_no} 的员工档案")
@@ -401,19 +497,22 @@ def cancel_employee_resignation(employee_no, company="天津祺富机械加工�
 	doc.relieving_date = None
 	doc.resignation_reason = None
 	doc.save(ignore_permissions=True)
+	_queue_salary_recalculation(company, period_month, employee_no, "员工薪酬档案", trigger_detail="撤销员工离职")
 	frappe.db.commit()
 
 	return {
 		"success": True,
 		"employee_no": employee_no,
 		"employee_name": doc.employee_name,
-		"message": f"✅ 已成功恢复员工【{doc.employee_name} ({employee_no})】为正常在职状态！"
+		"message": f"✅ 已成功恢复员工【{doc.employee_name} ({employee_no})】为正常在职状态，并已自动进入后台重算队列！"
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_employee_salary_profile(**kwargs):
 	"""新建员工薪酬档案"""
+	_check_payroll_permission("write")
+	period_month = kwargs.pop("period_month", None)
 	doc = frappe.new_doc("Ashan Employee Salary Profile")
 	for k, v in kwargs.items():
 		if hasattr(doc, k):
@@ -423,33 +522,36 @@ def create_employee_salary_profile(**kwargs):
 	if not doc.employment_status:
 		doc.employment_status = "在职"
 	doc.insert()
+	_queue_salary_recalculation(doc.company, period_month, doc.employee_no, "员工薪酬档案", trigger_detail="新增员工薪酬档案")
 	return {
 		"success": True,
-		"message": f"✅ 成功创建员工【{doc.employee_name}】薪酬母表档案！",
+		"message": f"✅ 成功创建员工【{doc.employee_name}】薪酬母表档案！保存后已自动进入后台计算队列。",
 		"doc": doc
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def update_employee_salary_profile(name, **kwargs):
 	"""更新员工薪酬档案"""
+	_check_payroll_permission("write")
+	period_month = kwargs.pop("period_month", None)
 	doc = frappe.get_doc("Ashan Employee Salary Profile", name)
 	for k, v in kwargs.items():
 		if hasattr(doc, k) and k not in ["name", "doctype", "owner", "creation"]:
 			setattr(doc, k, v)
 	doc.save()
+	_queue_salary_recalculation(doc.company, period_month, doc.employee_no, "员工薪酬档案", trigger_detail="修改员工薪酬档案")
 	return {
 		"success": True,
-		"message": f"✅ 员工【{doc.employee_name}】档案已更新！",
+		"message": f"✅ 员工【{doc.employee_name}】档案已更新，并已自动标记后台重新计算。",
 		"doc": doc
 	}
 
 
-@frappe.whitelist()
-def update_single_employee(employee_name, data):
-	"""
-	更新单名员工的薪酬与人事参数
-	"""
+@frappe.whitelist(methods=["POST"])
+def update_single_employee(employee_name, data, period_month=None):
+	"""更新单名员工的薪酬与人事参数；保存后按当前账期自动进入后台重算。"""
+	_check_payroll_permission("write")
 	if isinstance(data, str):
 		data = json.loads(data)
 
@@ -487,16 +589,18 @@ def update_single_employee(employee_name, data):
 			doc.set(field, val)
 
 	doc.save(ignore_permissions=True)
+	_queue_salary_recalculation(doc.company, period_month, doc.employee_no, "员工薪酬档案", trigger_detail="单人参数更新")
 	frappe.db.commit()
 
-	return {"success": True, "message": f"员工 {doc.employee_name} 档案参数更新成功！"}
+	return {"success": True, "message": f"员工 {doc.employee_name} 档案参数更新成功，并已进入后台重算队列！"}
 
 
-@frappe.whitelist()
-def batch_update_employees(employee_names, fieldname, value):
+@frappe.whitelist(methods=["POST"])
+def batch_update_employees(employee_names, fieldname, value, period_month=None):
 	"""
 	批量更新多名员工的指定字段
 	"""
+	_check_payroll_permission("write")
 	if isinstance(employee_names, str):
 		employee_names = json.loads(employee_names)
 
@@ -531,35 +635,75 @@ def batch_update_employees(employee_names, fieldname, value):
 		val = str(value).strip()
 
 	updated_count = 0
+	affected_companies = set()
 	for name in employee_names:
 		if frappe.db.exists("Ashan Employee Salary Profile", name):
 			doc = frappe.get_doc("Ashan Employee Salary Profile", name)
 			doc.set(fieldname, val)
 			doc.save(ignore_permissions=True)
 			updated_count += 1
+			if doc.company:
+				affected_companies.add(doc.company)
 
+	# 批量修改统一合并为公司级任务，避免逐人制造大量重复 RQ Job。
+	for company in affected_companies:
+		_queue_salary_recalculation(company, period_month, None, "员工薪酬档案", trigger_detail=f"批量修改字段 {fieldname}")
 	frappe.db.commit()
 
 	return {
 		"success": True,
 		"updated_count": updated_count,
-		"message": f"成功批量修改 {updated_count} 位员工的【{fieldname}】为 {value}！"
+		"message": f"成功批量修改 {updated_count} 位员工的【{fieldname}】为 {value}，已合并提交后台重算！"
 	}
 
 
-@frappe.whitelist()
-def set_qifu_social_security_batch(mode="min"):
+@frappe.whitelist(methods=["POST"])
+def update_employee_contribution_base(company, period_month, employee_no, base_type, amount):
+	"""从社保/公积金台账单人调整权威基数，保存后自动后台重算该员工。"""
+	_check_payroll_permission("write")
+	period_month = str(period_month or "").strip()
+	parent_name = f"{company}-{period_month}"
+	if frappe.db.exists("Ashan Monthly Payroll Settlement", parent_name):
+		state = frappe.db.get_value("Ashan Monthly Payroll Settlement", parent_name, ["locked", "status"], as_dict=True) or {}
+		if cint(state.get("locked")) or state.get("status") in ["已核定锁定", "已归档发放"]:
+			frappe.throw("当前选择账期已经冻结。请在历史数据中按审计流程反审核后再更正，或切换到未冻结月份。")
+	name = frappe.db.get_value("Ashan Employee Salary Profile", {"company": company, "employee_no": employee_no}, "name")
+	if not name:
+		frappe.throw(f"未找到员工 {employee_no} 的薪酬档案。")
+	amount = round(flt(amount), 2)
+	if amount < 0:
+		frappe.throw("缴费基数不能为负数。")
+	doc = frappe.get_doc("Ashan Employee Salary Profile", name)
+	if base_type == "social_security":
+		doc.social_security_base = amount
+		doc.is_insured = 1 if amount > 0 else 0
+		source = "社会保险台账与配置"
+		label = "社保缴费基数"
+	elif base_type == "housing_fund":
+		doc.housing_fund_base = amount
+		source = "住房公积金台账与配置"
+		label = "公积金缴费基数"
+	else:
+		frappe.throw("不支持的基数类型。")
+	doc.save(ignore_permissions=True)
+	_queue_salary_recalculation(company, period_month, employee_no, source, trigger_detail=f"单人调整{label}")
+	return {
+		"success": True, "employee_no": employee_no, "employee_name": doc.employee_name, "amount": amount,
+		"message": f"{doc.employee_name} ({employee_no}) 的{label}已更新为 {amount:,.2f} 元，并已自动进入服务器重算队列。",
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def set_qifu_social_security_batch(mode="min", period_month=None, company="天津祺富机械加工有限公司"):
 	"""
 	祺富全员社保一键批量设置：
 	将所有用工性质为【正式工】的员工社保基数设为最低基数 5124.0 元 (或配置中的 ss_min_base)；
 	退休返聘、临时工等非正式用工保持 0 元。
 	"""
-	company = "天津祺富机械加工有限公司"
-	target_base = 5124.0
-	setting_name = f"{company}-社保公积金配置"
-	if frappe.db.exists("Ashan Insurance Setting", setting_name):
-		doc_setting = frappe.get_doc("Ashan Insurance Setting", setting_name)
-		target_base = flt(doc_setting.ss_min_base) or 5124.0
+	_check_payroll_permission("write")
+	year = cint(str(period_month or "")[:4]) or datetime.now().year
+	doc_setting = get_insurance_setting(company, year)
+	target_base = flt(doc_setting.get("ss_min_base")) or 5124.0
 
 	employees = frappe.get_all(
 		"Ashan Employee Salary Profile",
@@ -570,41 +714,41 @@ def set_qifu_social_security_batch(mode="min"):
 	updated_count = 0
 	for emp in employees:
 		emp_type = emp.get("employee_type") or "正式工"
-		if emp_type == "正式工":
-			val = target_base if mode == "min" else 0.0
-			doc = frappe.get_doc("Ashan Employee Salary Profile", emp["name"])
-			doc.social_security_base = val
-			doc.is_insured = 1 if val > 0 else 0
-			doc.save(ignore_permissions=True)
-			updated_count += 1
+		# 正式工按批量动作设置；返聘/临时/零工等明确归零，避免历史遗留错误基数继续参与计算。
+		val = (target_base if mode == "min" else 0.0) if emp_type == "正式工" else 0.0
+		if abs(flt(emp.get("social_security_base")) - val) < 0.005:
+			continue
+		doc = frappe.get_doc("Ashan Employee Salary Profile", emp["name"])
+		doc.social_security_base = val
+		doc.is_insured = 1 if val > 0 else 0
+		doc.save(ignore_permissions=True)
+		updated_count += 1
 
+	_queue_salary_recalculation(company, period_month, None, "社会保险台账与配置", trigger_detail="批量调整社保基数")
 	frappe.db.commit()
 	return {
 		"success": True,
 		"updated_count": updated_count,
-		"message": f"✅ 已成功将 {updated_count} 位正式工的社保基数设为最低基数 ({target_base:,.2f} 元)！"
+		"message": f"✅ 已成功将 {updated_count} 位符合条件的正式工社保基数设为最低基数 ({target_base:,.2f} 元)！"
 	}
 
 
-@frappe.whitelist()
-def set_qifu_housing_fund_batch(mode="min"):
+@frappe.whitelist(methods=["POST"])
+def set_qifu_housing_fund_batch(mode="min", period_month=None, company="天津祺富机械加工有限公司"):
 	"""
 	祺富全员公积金一键批量设置优化：
 	1. 核心资格准入：只有社保基数 > 0 (social_security_base > 0) 的在职参保员工才有资格设置公积金！未参保人员(社保基数=0)自动跳过并保持 0。
-	2. 核心白名单豁免：孟祥山 (工号 A0006) 绝对豁免，不受任何一键操作影响并保留原有基数！
-	3. mode == 'min': 将符合资格的在保员工公积金基数设为当年配置中的最低基数 (如 2320 元)。
-	4. mode == 'zero': 将所有祺富员工(除孟祥山外)公积金基数清零 (0 元)。
+	2. mode == 'min': 将符合资格的在保员工公积金基数设为当年配置中的最低基数。
+	3. mode == 'zero': 将符合资格的员工公积金基数清零 (0 元)。
+	4. 所有规则按公司配置与员工状态动态判断，源码不设置个人白名单。
 	"""
-	company = "天津祺富机械加工有限公司"
+	_check_payroll_permission("write")
 	target_base = 0.0
 
 	if mode == "min":
-		setting_name = f"{company}-社保公积金配置"
-		if frappe.db.exists("Ashan Insurance Setting", setting_name):
-			doc_setting = frappe.get_doc("Ashan Insurance Setting", setting_name)
-			target_base = flt(doc_setting.hf_min_base) or 2320.0
-		else:
-			target_base = 2320.0
+		year = cint(str(period_month or "")[:4]) or datetime.now().year
+		doc_setting = get_insurance_setting(company, year)
+		target_base = flt(doc_setting.get("hf_min_base")) or 2320.0
 
 	employees = frappe.get_all(
 		"Ashan Employee Salary Profile",
@@ -614,21 +758,21 @@ def set_qifu_housing_fund_batch(mode="min"):
 
 	updated_count = 0
 	skipped_no_insurance = []
-	protected_employees = []
 
 	for emp in employees:
 		emp_name = (emp.get("employee_name") or "").strip()
 		emp_no = (emp.get("employee_no") or "").strip()
 		ss_base = flt(emp.get("social_security_base"))
 
-		# 1. 白名单豁免保护
-		if emp_name == "孟祥山" or emp_no == "A0006":
-			protected_employees.append(f"{emp_name} ({emp_no}) [当前基数: {emp.get('housing_fund_base')}]")
-			continue
 
-		# 2. 资格校验：仅社保基数 > 0 才有资格开启公积金
+		# 2. 资格校验：仅社保基数 > 0 才有资格开启公积金；不符合资格时清除历史遗留基数。
 		if mode == "min" and ss_base <= 0:
 			skipped_no_insurance.append(f"{emp_name} ({emp_no})")
+			if flt(emp.get("housing_fund_base")) > 0:
+				doc = frappe.get_doc("Ashan Employee Salary Profile", emp.get("name"))
+				doc.housing_fund_base = 0.0
+				doc.save(ignore_permissions=True)
+				updated_count += 1
 			continue
 
 		doc = frappe.get_doc("Ashan Employee Salary Profile", emp.get("name"))
@@ -638,6 +782,7 @@ def set_qifu_housing_fund_batch(mode="min"):
 		doc.save(ignore_permissions=True)
 		updated_count += 1
 
+	_queue_salary_recalculation(company, period_month, None, "住房公积金台账与配置", trigger_detail="批量调整公积金基数")
 	frappe.db.commit()
 
 	action_desc = f"设置为最低基数 ({target_base} 元)" if mode == "min" else "取消公积金 (设为 0)"
@@ -652,70 +797,47 @@ def set_qifu_housing_fund_batch(mode="min"):
 		"updated_count": updated_count,
 		"skipped_count": len(skipped_no_insurance),
 		"skipped_no_insurance": skipped_no_insurance,
-		"protected_employees": protected_employees,
-		"message": f"操作成功！已将祺富 {updated_count} 位在保员工公积金{action_desc}。{skip_msg}<br>🛡️ 孟祥山已自动豁免保护！"
+		"message": f"操作成功！已对 {updated_count} 位符合条件的在保员工执行公积金{action_desc}。{skip_msg}"
 	}
 
 @frappe.whitelist()
 def get_insurance_setting(company="天津祺富机械加工有限公司", year=2026):
-	"""
-	获取指定公司与年份的社保公积金费率配置及合计比例
-	"""
+	"""读取指定公司与年份的社保、公积金和个税基础参数；GET 永不写数据库。"""
+	_check_payroll_permission("read")
+	year = cint(year) or datetime.now().year
 	setting_name = f"{company}-{year}"
-	if not frappe.db.exists("Ashan Insurance Setting", setting_name):
-		# 初始化默认记录
-		doc = frappe.new_doc("Ashan Insurance Setting")
-		doc.company = company
-		doc.effective_year = cint(year)
-		doc.ss_company_pension = 16.0
-		doc.ss_company_unemployment = 0.5
-		doc.ss_company_medical = 10.0
-		doc.ss_company_other_medical = 0.5
-		doc.ss_company_injury = 0.55 if "祺富" in company else 0.35
-		doc.ss_person_pension = 8.0
-		doc.ss_person_unemployment = 0.5
-		doc.ss_person_medical = 2.0
-		doc.big_medical_amount_default = 22.0
-		doc.big_medical_amount_special = 21.0
-		doc.big_medical_special_months = "3,12"
-		doc.hf_company_rate = 5.0
-		doc.hf_person_rate = 5.0
-		doc.ss_min_base = 5013.0 if "祺富" in company else 5124.0
-		doc.hf_min_base = 2320.0
-		doc.tax_threshold = 5000.0
-		doc.tax_cycle_start_month = 12
-		doc.save(ignore_permissions=True)
-		frappe.db.commit()
-	else:
+	if frappe.db.exists("Ashan Insurance Setting", setting_name):
 		doc = frappe.get_doc("Ashan Insurance Setting", setting_name)
+		res = doc.as_dict()
+		res["is_persisted"] = True
+	else:
+		res = _default_insurance_setting_values(company, year)
+		res["is_persisted"] = False
 
-	# 汇总计算合计比例
 	comp_ss_total = round(
-		flt(doc.ss_company_pension) + flt(doc.ss_company_unemployment) +
-		flt(doc.ss_company_medical) + flt(doc.ss_company_other_medical) +
-		flt(doc.ss_company_injury), 4
+		flt(res.get("ss_company_pension")) + flt(res.get("ss_company_unemployment"))
+		+ flt(res.get("ss_company_medical")) + flt(res.get("ss_company_other_medical"))
+		+ flt(res.get("ss_company_injury")), 4
 	)
 	pers_ss_total = round(
-		flt(doc.ss_person_pension) + flt(doc.ss_person_unemployment) +
-		flt(doc.ss_person_medical), 4
+		flt(res.get("ss_person_pension")) + flt(res.get("ss_person_unemployment"))
+		+ flt(res.get("ss_person_medical")), 4
 	)
-	hf_total = round(flt(doc.hf_company_rate) + flt(doc.hf_person_rate), 4)
-	overall_rate = round(comp_ss_total + pers_ss_total + hf_total, 4)
-
-	res = doc.as_dict()
+	hf_total = round(flt(res.get("hf_company_rate")) + flt(res.get("hf_person_rate")), 4)
 	res.update({
 		"total_ss_company_rate": comp_ss_total,
 		"total_ss_person_rate": pers_ss_total,
 		"total_hf_rate": hf_total,
-		"total_overall_rate": overall_rate
+		"total_overall_rate": round(comp_ss_total + pers_ss_total + hf_total, 4),
 	})
 	return res
 
-@frappe.whitelist()
-def save_insurance_setting(company, year, data):
+@frappe.whitelist(methods=["POST"])
+def save_insurance_setting(company, year, data, period_month=None):
 	"""
 	保存/更新指定公司与年份的社保公积金费率与基数配置
 	"""
+	_check_payroll_permission("write")
 	if isinstance(data, str):
 		data = json.loads(data)
 
@@ -723,9 +845,7 @@ def save_insurance_setting(company, year, data):
 	if frappe.db.exists("Ashan Insurance Setting", setting_name):
 		doc = frappe.get_doc("Ashan Insurance Setting", setting_name)
 	else:
-		doc = frappe.new_doc("Ashan Insurance Setting")
-		doc.company = company
-		doc.effective_year = cint(year)
+		doc = _new_insurance_setting(company, year)
 
 	for k, v in data.items():
 		if hasattr(doc, k):
@@ -737,11 +857,12 @@ def save_insurance_setting(company, year, data):
 				setattr(doc, k, flt(v))
 
 	doc.save(ignore_permissions=True)
+	_queue_salary_recalculation(company, period_month, None, "社会保险台账与配置", trigger_detail="调整社保/公积金年度配置")
 	frappe.db.commit()
 
 	return {
 		"success": True,
-		"message": f"🎉【{company}】{year} 年度社保公积金配置保存成功！",
+		"message": f"🎉【{company}】{year} 年度社保公积金配置保存成功，并已自动标记后台重算！",
 		"doc": get_insurance_setting(company, year)
 	}
 
@@ -751,6 +872,7 @@ def save_insurance_setting(company, year, data):
 @frappe.whitelist()
 def get_tax_setting(company="天津祺富机械加工有限公司", year=2026, period_month=None):
     """读取个税参数。7级累计预扣税率为法定参数，仅展示、不允许从前端随意修改。"""
+    _check_payroll_permission("read")
     year = cint(year) or 2026
     setting = get_insurance_setting(company, year)
     threshold = flt(setting.get("tax_threshold")) or 5000.0
@@ -777,9 +899,10 @@ def get_tax_setting(company="天津祺富机械加工有限公司", year=2026, p
     }
 
 
-@frappe.whitelist()
-def save_tax_setting(company, year, tax_threshold, tax_cycle_start_month):
+@frappe.whitelist(methods=["POST"])
+def save_tax_setting(company, year, tax_threshold, tax_cycle_start_month, period_month=None):
     """仅保存个税参数，不触碰社保、公积金费率。"""
+    _check_payroll_permission("write")
     year = cint(year) or 2026
     tax_threshold = flt(tax_threshold)
     tax_cycle_start_month = cint(tax_cycle_start_month)
@@ -792,16 +915,16 @@ def save_tax_setting(company, year, tax_threshold, tax_cycle_start_month):
     if frappe.db.exists("Ashan Insurance Setting", setting_name):
         doc = frappe.get_doc("Ashan Insurance Setting", setting_name)
     else:
-        # 统一通过默认配置初始化，避免新建记录缺少社保/公积金必填项
-        get_insurance_setting(company, year)
-        doc = frappe.get_doc("Ashan Insurance Setting", setting_name)
+        # 写接口中显式创建默认记录；读取接口永不产生数据库副作用。
+        doc = _new_insurance_setting(company, year)
 
     doc.tax_threshold = tax_threshold
     doc.tax_cycle_start_month = tax_cycle_start_month
     doc.save(ignore_permissions=True)
+    _queue_salary_recalculation(company, period_month, None, "个税参数设置", trigger_detail="调整个税起征点或申报周期")
     frappe.db.commit()
     return {
         "success": True,
-        "message": f"【{company}】{year} 年个税参数已保存。重新核定未冻结月份后生效。",
+        "message": f"【{company}】{year} 年个税参数已保存，未冻结账期已自动进入后台重算队列。",
         "setting": get_tax_setting(company, year),
     }

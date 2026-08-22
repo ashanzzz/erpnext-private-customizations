@@ -2,8 +2,9 @@ import pypdf
 import zipfile
 # Copyright (c) 2026, Ashan CN Procurement
 import json
+import re
 import frappe
-from frappe.utils import flt, cint, now_datetime
+from frappe.utils import flt, cint, now_datetime, getdate
 from ashan_cn_procurement.services.employee_salary_service import get_insurance_setting
 
 # 个税台账参与规则：临时工/零工不进入个税申报台账；返聘类（含“其他-返聘工”）参与个税。
@@ -17,6 +18,50 @@ def is_tax_ledger_employee(employee_type):
 
 def is_tax_after_salary_mode(salary_mode):
     return str(salary_mode or "").strip() in TAX_AFTER_SALARY_MODES
+
+
+def _salary_profiles_for_period(company, period_month, fields=None, order_by="employee_no asc"):
+    """Return employees who actually belong to a payroll month.
+
+    A current ``employment_status='离职'`` must not erase the employee from an earlier
+    payroll month. Conversely, a future joiner must not appear in an older month.  The
+    period boundaries therefore come from joining/relieving dates, with current status
+    used only as a fallback when no relieving date exists.
+    """
+    from calendar import monthrange
+    from datetime import date
+
+    try:
+        year, month = [int(part) for part in str(period_month or "").split("-")[:2]]
+        month_start = date(year, month, 1)
+        month_end = date(year, month, monthrange(year, month)[1])
+    except Exception:
+        frappe.throw("账期格式必须为 YYYY-MM，例如 2026-07。")
+
+    wanted = list(fields or ["name", "employee_no", "employee_name"])
+    required = ["employment_status", "date_of_joining", "relieving_date"]
+    query_fields = list(dict.fromkeys(wanted + required))
+    rows = frappe.get_all(
+        "Ashan Employee Salary Profile",
+        filters={"company": company},
+        fields=query_fields,
+        order_by=order_by,
+    )
+
+    result = []
+    for row in rows:
+        joined = getdate(row.get("date_of_joining")) if row.get("date_of_joining") else None
+        relieved = getdate(row.get("relieving_date")) if row.get("relieving_date") else None
+        status = str(row.get("employment_status") or "在职").strip()
+        if joined and joined > month_end:
+            continue
+        if relieved and relieved < month_start:
+            continue
+        if status in {"离职", "已离职"} and not relieved:
+            continue
+        result.append(row)
+    return result
+
 
 def check_payroll_workbench_permission(perm_type="read"):
 	"""
@@ -40,6 +85,7 @@ def check_payroll_workbench_permission(perm_type="read"):
 # 个税统一由累计预扣/税后反推引擎处理；不再保留旧“单月税率表”算法，避免后续入口误用。
 @frappe.whitelist()
 def get_payroll_settlement_detail(company, period_month):
+	check_payroll_workbench_permission("read")
 	# 缴纳期计算
 	parts = period_month.split("-")
 	year_int = int(parts[0]) if len(parts) > 0 else 2026
@@ -53,11 +99,10 @@ def get_payroll_settlement_detail(company, period_month):
 	payment_month_name = f"{payment_year}年{payment_month}月"
 	period_month_str = period_month.replace("-", "")
 
-	# 母表人员结构统计 (正式工, 返聘工, 临时工, 其他员工[外籍/管理等], 本月离职)
-	all_profiles = frappe.get_all(
-		"Ashan Employee Salary Profile",
-		filters={"company": company},
-		fields=["employee_no", "employee_name", "employee_type", "employment_status", "relieving_date", "fixed_salary", "base_salary", "social_security_base", "housing_fund_base"]
+	# 母表人员结构统计：按选择账期还原实际在册边界，避免今天的离职状态污染历史月份。
+	all_profiles = _salary_profiles_for_period(
+		company, period_month,
+		fields=["employee_no", "employee_name", "employee_type", "employment_status", "relieving_date", "fixed_salary", "base_salary", "social_security_base", "housing_fund_base"],
 	)
 	total_profile_count = len(all_profiles)
 	regular_count = 0
@@ -84,7 +129,7 @@ def get_payroll_settlement_detail(company, period_month):
 		etype = (p.get("employee_type") or "正式工").strip()
 		emp_no = p.get("employee_no")
 		rel_d = str(p.get("relieving_date") or "")
-		is_resigned = (p.get("employment_status") in ["离职", "本月离职"] or (rel_d and rel_d.startswith(period_month)))
+		is_resigned = bool(rel_d and rel_d.startswith(period_month))
 		
 		emp_cur_sal = item_sal_map.get(emp_no, flt(p.get("fixed_salary")) or flt(p.get("base_salary")))
 		is_zero_sal = (emp_cur_sal <= 0.001)
@@ -97,7 +142,7 @@ def get_payroll_settlement_detail(company, period_month):
 			regular_count += 1
 			if is_zero_sal:
 				regular_zero_count += 1
-		elif etype in ["返聘工", "退休返聘"]:
+		elif etype in TAX_REHIRE_EMPLOYEE_TYPES:
 			rehire_count += 1
 			if is_zero_sal:
 				rehire_zero_count += 1
@@ -236,7 +281,7 @@ def get_payroll_settlement_detail(company, period_month):
 		"kpi_summary": kpi_summary
 	}
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def calculate_and_generate_payroll(company, period_month):
     """
     按当前员工母表、社保/公积金配置与历史工资快照重新融合核算。
@@ -247,6 +292,7 @@ def calculate_and_generate_payroll(company, period_month):
     - 临时工/零工：保留薪酬核算，但不进入个税台账，本月个税固定为 0；
     - 返聘工/退休返聘/其他-返聘工：参与个税累计预扣，但通常不缴社保公积金。
     """
+    check_payroll_workbench_permission("write")
     doc_name = f"{company}-{period_month}"
     if frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
         existing = frappe.get_doc("Ashan Monthly Payroll Settlement", doc_name)
@@ -287,9 +333,9 @@ def calculate_and_generate_payroll(company, period_month):
     tax_threshold = tax_params["tax_threshold"]
     cinfo = get_tax_cycle_info(period_month, tax_threshold, tax_params["tax_cycle_start_month"])
 
-    employees = frappe.get_all(
-        "Ashan Employee Salary Profile",
-        filters={"company": company, "employment_status": "在职"},
+    employees = _salary_profiles_for_period(
+        company,
+        period_month,
         fields=[
             "name", "employee_no", "employee_name", "id_card", "gender", "mobile", "birth_date",
             "department", "job_title", "employee_type", "salary_mode", "fixed_salary", "base_salary",
@@ -299,7 +345,6 @@ def calculate_and_generate_payroll(company, period_month):
             "deduction_housing_rent", "deduction_elderly_care", "deduction_infant_care",
             "deduction_serious_illness"
         ],
-        order_by="employee_no asc",
     )
 
     attendances = {}
@@ -503,8 +548,9 @@ def calculate_and_generate_payroll(company, period_month):
         "doc": get_payroll_settlement_detail(company, period_month),
     }
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def confirm_and_lock_payroll(company, period_month):
+	check_payroll_workbench_permission("write")
 	doc_name = f"{company}-{period_month}"
 	if not frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
 		frappe.throw(f"请先生成【{company}】{period_month} 的月度薪酬测算表！")
@@ -525,8 +571,9 @@ def confirm_and_lock_payroll(company, period_month):
 		"doc": get_payroll_settlement_detail(company, period_month)
 	}
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def unlock_payroll(company, period_month, reason=""):
+	check_payroll_workbench_permission("write")
 	doc_name = f"{company}-{period_month}"
 	if not frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
 		frappe.throw("单据不存在！")
@@ -546,29 +593,6 @@ def unlock_payroll(company, period_month, reason=""):
 		"doc": get_payroll_settlement_detail(company, period_month)
 	}
 
-def reverse_taxable_income(net_after_tax_base):
-	"""
-	已知 Y = X - Tax(X)，反推应纳税所得额 X
-	基于中国大陆综合所得月度预扣预缴税率表区间速算反推
-	"""
-	if net_after_tax_base <= 0:
-		return 0.0
-	y = net_after_tax_base
-	if y <= 2910:
-		x = y / 0.97
-	elif y <= 11010:
-		x = (y - 210) / 0.90
-	elif y <= 21410:
-		x = (y - 1410) / 0.80
-	elif y <= 28910:
-		x = (y - 2660) / 0.75
-	elif y <= 42910:
-		x = (y - 4410) / 0.70
-	elif y <= 59160:
-		x = (y - 7160) / 0.65
-	else:
-		x = (y - 15160) / 0.55
-	return round(x, 2)
 
 # 7 级综合所得年度税率表 (严格还原中国税法与 VBA 个人所得税_税率表)
 TAX_BRACKETS = [
@@ -936,6 +960,7 @@ def get_payroll_periods_summary(company="天津祺富机械加工有限公司"):
 	"""
 	获取企业已核定/已创建的账期汇总列表，并计算当前最新账期与下一连续应导入账期
 	"""
+	check_payroll_workbench_permission("read")
 	records = frappe.get_all(
 		"Ashan Monthly Payroll Settlement",
 		filters={"company": company},
@@ -954,12 +979,13 @@ def get_payroll_periods_summary(company="天津祺富机械加工有限公司"):
 		"expected_next_period": expected_next_period
 	}
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_blank_payroll_period(company, period_month):
 	"""
 	为指定月份创建【空白/零工资核定账期】（用于停产月或跳过月份的自动补齐，确保账期连续）
 	在保人员正常代扣社保公积金并生成企业统筹，实发/应发为0
 	"""
+	check_payroll_workbench_permission("write")
 	doc_name = f"{company}-{period_month}"
 	year = period_month.split("-")[0] if "-" in period_month else "2026"
 	setting_name = f"{company}-{year}"
@@ -1000,11 +1026,11 @@ def create_blank_payroll_period(company, period_month):
 		else:
 			big_med_amount = flt(ins.get("big_medical_amount_default")) or 22.0
 
-	# 提取所有在职员工
-	employees = frappe.get_all(
-		"Ashan Employee Salary Profile",
-		filters={"company": company, "employment_status": "在职"},
-		fields=["employee_no", "employee_name", "department", "job_title", "employee_type", "social_security_base", "housing_fund_base"]
+	# 按账期提取实际在册员工；历史月份不能被当前“离职”状态反向抹除。
+	employees = _salary_profiles_for_period(
+		company,
+		period_month,
+		fields=["employee_no", "employee_name", "department", "job_title", "employee_type", "social_security_base", "housing_fund_base"],
 	)
 
 	items_data = []
@@ -1097,6 +1123,14 @@ def create_blank_payroll_period(company, period_month):
 
 	frappe.flags.ignore_lock = True
 	settle_doc.save(ignore_permissions=True)
+	from ashan_cn_procurement.services.payroll_recalculation_service import queue_recalculation_after_change
+	queue_recalculation_after_change(
+		company=company,
+		period_month=period_month,
+		employee_no=None,
+		trigger_source="外部实发与发放表",
+		trigger_detail="导入/覆盖外部实发与发放表后统一服务器复核",
+	)
 	frappe.db.commit()
 
 	return {
@@ -1110,6 +1144,7 @@ def detect_qifu_excel_info(file_data=None, file_url=None, server_file_path=None,
 	"""
 	预检上传的 Excel 文件，返回智能识别的核定月份与连续性校验状态
 	"""
+	check_payroll_workbench_permission("read")
 	import io
 	import openpyxl
 	import base64
@@ -1182,6 +1217,7 @@ def preview_import_excel_data(file_base64=None, file_name=None, file_data=None, 
 	"""
 	预检并解析上传的 Excel 文件，返回智能识别的账期、工资人数、考勤工资合计、考勤加补贴合计以及前 10 行预览数据
 	"""
+	check_payroll_workbench_permission("read")
 	import io
 	import openpyxl
 	import base64
@@ -1220,12 +1256,8 @@ def preview_import_excel_data(file_base64=None, file_name=None, file_data=None, 
 	else:
 		detected_month = current_target_month
 
-	# 2. 别名映射与表头定位
-	name_alias_map = {
-		"刘海峰": "刘海锋",
-		"张引娣": "张引弟",
-		"徐经理": "徐凤云"
-	}
+	# 2. 表头定位；姓名不再硬编码个人别名，优先使用工号并要求姓名精确匹配。
+	name_alias_map = {}
 
 	header_row = -1
 	col_map = {}
@@ -1331,12 +1363,13 @@ def preview_import_excel_data(file_base64=None, file_name=None, file_data=None, 
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def import_and_calculate_payroll_excel(file_base64=None, file_name=None, file_data=None, filename=None, company="天津祺富机械加工有限公司", period_month=None):
 	"""
 	导入外部实发表并执行融合计算：
 	如果当前账期已存在，自动清空旧数据并重新导入覆盖！
 	"""
+	check_payroll_workbench_permission("write")
 	return upload_and_import_qifu_salary(
 		file_data=file_base64 or file_data,
 		filename=file_name or filename,
@@ -1344,7 +1377,7 @@ def import_and_calculate_payroll_excel(file_base64=None, file_name=None, file_da
 	)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def upload_and_import_qifu_salary(file_url=None, file_data=None, filename=None, period_month=None, server_file_path=None):
 	"""
 	上传/解析祺富外部实发工资表 Excel，智能核定月份与匹配人员信息，并执行【税后实发倒推税前应发与个税】
@@ -1411,12 +1444,8 @@ def upload_and_import_qifu_salary(file_url=None, file_data=None, filename=None, 
 			if not frappe.db.exists("Ashan Monthly Payroll Settlement", f"{company}-{sm}"):
 				create_blank_payroll_period(company, sm)
 
-	# 别名映射库（处理老板娘表的错别字/昵称）
-	name_alias_map = {
-		"刘海峰": "刘海锋",
-		"张引娣": "张引弟",
-		"徐经理": "徐凤云"
-	}
+	# 不在源码中硬编码具体员工别名。
+	name_alias_map = {}
 
 	# 3. 提取老板娘表中的【主表车间实发】
 	header_row = -1
@@ -1570,10 +1599,10 @@ def upload_and_import_qifu_salary(file_url=None, file_data=None, filename=None, 
 		else:
 			big_med_amount = flt(ins.get("big_medical_amount_default")) or 22.0
 
-	# 6. 加载系统母表全员档案 (Master Data)
-	master_employees = frappe.get_all(
-		"Ashan Employee Salary Profile",
-		filters={"company": company, "employment_status": "在职"},
+	# 6. 加载该账期实际在册母表档案 (Master Data)
+	master_employees = _salary_profiles_for_period(
+		company,
+		period_month,
 		fields=[
 			"name", "employee_no", "employee_name", "department", "job_title",
 			"employee_type", "salary_mode", "fixed_salary", "social_security_base",
@@ -1581,29 +1610,21 @@ def upload_and_import_qifu_salary(file_url=None, file_data=None, filename=None, 
 			"deduction_housing_rent", "deduction_elderly_care", "deduction_infant_care",
 			"deduction_serious_illness"
 		],
-		order_by="employee_no asc"
+		order_by="employee_no asc",
 	)
 
 	master_by_name = {emp.employee_name.strip(): emp for emp in master_employees}
 
-	# 检查是否有老板娘表有但母表没有的员工，自动补录
-	for std_name, wdata in wife_payroll_dict.items():
-		if std_name not in master_by_name:
-			new_no = f"QF{len(master_employees)+1:04d}"
-			new_doc = frappe.new_doc("Ashan Employee Salary Profile")
-			new_doc.company = company
-			new_doc.employee_no = new_no
-			new_doc.employee_name = std_name
-			new_doc.employee_type = "正式工"
-			new_doc.employment_status = "在职"
-			new_doc.salary_mode = "税后"
-			new_doc.fixed_salary = wdata["workshop_net"]
-			new_doc.social_security_base = 5013.0 if wdata["is_insured"] != "否" else 0.0
-			new_doc.housing_fund_base = 2320.0 if (std_name != "孟祥山" and wdata["is_insured"] != "否") else (20000.0 if std_name == "孟祥山" else 0.0)
-			new_doc.save(ignore_permissions=True)
-			new_emp_dict = new_doc.as_dict()
-			master_employees.append(new_emp_dict)
-			master_by_name[std_name] = new_emp_dict
+	# 外部实发表是月度输入，不得反向猜测并创建权威员工母表。
+	# 如发现未建档人员，先在 Tab 1 完成人员属性/计薪方式/参保信息，再重新导入。
+	unknown_names = [name for name in wife_payroll_dict if name not in master_by_name]
+	if unknown_names:
+		preview = "、".join(unknown_names[:8])
+		more = f" 等 {len(unknown_names)} 人" if len(unknown_names) > 8 else ""
+		frappe.throw(
+			f"外部实发表存在未录入【员工薪酬档案（母表底册）】的人员：{preview}{more}。"
+			"为避免系统自动猜测员工类型、工资类型或社保公积金基数，已停止导入。请先在 Tab 1 建档后再试。"
+		)
 
 	# 7. 以母表为基准，融合老板娘表并全员执行【税后倒推税前】
 	items_data = []
@@ -1809,6 +1830,14 @@ def upload_and_import_qifu_salary(file_url=None, file_data=None, filename=None, 
 
 	frappe.flags.ignore_lock = True
 	settle_doc.save(ignore_permissions=True)
+	from ashan_cn_procurement.services.payroll_recalculation_service import queue_recalculation_after_change
+	queue_recalculation_after_change(
+		company=company,
+		period_month=period_month,
+		employee_no=None,
+		trigger_source="外部实发与发放表",
+		trigger_detail="导入/覆盖24列外部实发后，服务器统一按VBA累计口径复核全月",
+	)
 	frappe.db.commit()
 
 	return {
@@ -1828,7 +1857,7 @@ def upload_and_import_qifu_salary(file_url=None, file_data=None, filename=None, 
 		"total_hf_comp": round(total_hf_comp, 2),
 		"total_hf_pers": round(total_hf_pers, 2),
 		"total_comp_cost": round(total_ss_comp + total_hf_comp, 2),
-		"message": f"🎉 成功以系统母表为基准，智能融合老板娘实发与底部补贴表！全员 {len(items_data)} 人（含车间出勤与在册人员），实发总盘 ¥{total_net:,.2f}，已全量完成【税后倒推税前应发 (¥{total_gross:,.2f}) 与个税预扣 (¥{total_tax:,.2f})】！",
+		"message": f"✅ 已以员工母表为基准导入 {len(items_data)} 人的24列外部实发数据，实发总盘 ¥{total_net:,.2f}。服务器后台任务已提交，将统一按 VBA 累计预扣/税后反推口径复核工资、社保、公积金与个税；计算中心可查看状态和完成时间。",
 		"doc": get_payroll_settlement_detail(company, period_month)
 	}
 
@@ -1841,6 +1870,7 @@ def get_salary_distribution_sheet(company="天津祺富机械加工有限公司"
 	国勤天数, 国勤工资, 达标率, 达标工资, 扣除, 考勤绩效工资合计, 职位补贴, 房/车补,
 	补贴工资合计, 应发工资合计, 工资调整, 实发工资合计, 签字, 备考
 	"""
+	check_payroll_workbench_permission("read")
 	detail = get_payroll_settlement_detail(company, period_month)
 	items = detail.get("items", [])
 
@@ -1953,6 +1983,7 @@ def get_accounting_payroll_sheet(company="天津祺富机械加工有限公司",
 	获取《记账工资表》数据 (精准 11 列)：
 	工号, 姓名, 基本绩效工资, 职位补贴, 房/车补, 税前工资, 公积金, 社保, 应补/退税额, 合计扣除, 税后工资合计
 	"""
+	check_payroll_workbench_permission("read")
 	detail = get_payroll_settlement_detail(company, period_month)
 	items = detail.get("items", [])
 
@@ -2010,24 +2041,60 @@ def get_accounting_payroll_sheet(company="天津祺富机械加工有限公司",
 # ==========================================
 @frappe.whitelist()
 def get_social_insurance_sheet(company="天津祺富机械加工有限公司", period_month="2026-07"):
-	items = frappe.get_all(
-		"Ashan Employee Salary Profile",
-		filters={"company": company},
+	check_payroll_workbench_permission("read")
+	parent_name = f"{company}-{period_month}"
+	locked_snapshot = False
+	if frappe.db.exists("Ashan Monthly Payroll Settlement", parent_name):
+		state = frappe.db.get_value("Ashan Monthly Payroll Settlement", parent_name, ["locked", "status"], as_dict=True) or {}
+		locked_snapshot = bool(cint(state.get("locked"))) or state.get("status") in ["已核定锁定", "已归档发放"]
+	if locked_snapshot:
+		snapshot_rows = frappe.get_all(
+			"Ashan Monthly Payroll Item", filters={"parent": parent_name},
+			fields=[
+				"employee_no", "employee_name", "id_card", "employee_type", "ss_base",
+				"pension_company", "unemployment_company", "medical_company", "other_medical_company", "work_injury_company", "ss_company_total",
+				"pension_person", "unemployment_person", "medical_person", "large_medical_person", "ss_person_total",
+			], order_by="idx asc",
+		)
+	else:
+		snapshot_rows = []
+
+	items = _salary_profiles_for_period(
+		company, period_month,
 		fields=["employee_no", "employee_name", "id_card", "employee_type", "employment_status", "relieving_date", "social_security_base"],
-		order_by="employee_no asc"
+		order_by="employee_no asc",
 	)
 	ss_setting = get_insurance_setting(company, period_month.split("-")[0] if "-" in period_month else 2026)
 
 	rows = []
 	seq_idx = 1
-	for it in items:
+	if locked_snapshot:
+		for it in snapshot_rows:
+			ss_base = flt(it.get("ss_base"))
+			if ss_base <= 0:
+				continue
+			comp_tot = flt(it.get("ss_company_total"))
+			pers_tot = flt(it.get("ss_person_total"))
+			rows.append({
+				"seq": seq_idx, "employee_no": it.get("employee_no"), "employee_name": it.get("employee_name"),
+				"id_card": it.get("id_card") or "-", "period_month_str": period_month.replace("-", ""),
+				"employee_type": it.get("employee_type") or "正式工", "ss_base": ss_base,
+				"comp_pension": flt(it.get("pension_company")), "comp_unemp": flt(it.get("unemployment_company")),
+				"comp_med": flt(it.get("medical_company")), "comp_other_med": flt(it.get("other_medical_company")),
+				"comp_injury": flt(it.get("work_injury_company")), "comp_total": comp_tot,
+				"pers_pension": flt(it.get("pension_person")), "pers_unemp": flt(it.get("unemployment_person")),
+				"pers_med": flt(it.get("medical_person")), "pers_large_med": flt(it.get("large_medical_person")),
+				"pers_total": pers_tot, "grand_total": round(comp_tot + pers_tot, 2),
+			})
+			seq_idx += 1
+	for it in ([] if locked_snapshot else items):
 		ss_base = flt(it.get("social_security_base"))
 		emp_type = it.get("employee_type") or "正式工"
 		emp_status = it.get("employment_status") or "在职"
 		rel_d = str(it.get("relieving_date") or "")
-		is_retired = (emp_type in ["退休返聘", "返聘工"])
-		is_other = (emp_type in ["临时工", "外籍工", "实习生", "劳务派遣"])
-		is_resigned = (emp_status == "离职" or (rel_d and rel_d <= f"{period_month}-31"))
+		is_retired = (emp_type in TAX_REHIRE_EMPLOYEE_TYPES)
+		is_other = (emp_type in ["临时工", "零工", "外籍工", "实习生", "劳务派遣"])
+		is_resigned = bool(rel_d and rel_d.startswith(period_month))
 
 		# 纯净权责边界：不缴纳社保人员（退休返聘、临时工、外籍工、实习生、本月离职减员或基数<=0）自动过滤排除
 		if is_retired or is_other or is_resigned or ss_base <= 0:
@@ -2074,9 +2141,34 @@ def get_social_insurance_sheet(company="天津祺富机械加工有限公司", p
 		})
 		seq_idx += 1
 
+	# 特殊补缴/滞纳金作为独立财务快照行，不回写员工母表基数。
+	if frappe.db.exists("DocType", "Ashan Social Insurance Adjustment"):
+		adjustments = frappe.get_all(
+			"Ashan Social Insurance Adjustment",
+			filters={"company": company, "payroll_period": period_month},
+			fields=[
+				"name", "employee_no", "employee_name", "id_card", "employee_type", "adjustment_period", "biz_type",
+				"ss_base", "comp_pension", "comp_unemp", "comp_med", "comp_other_med", "comp_injury", "comp_total",
+				"pers_pension", "pers_unemp", "pers_med", "pers_large_med", "pers_total", "late_fee", "grand_total", "remarks",
+			],
+			order_by="creation asc",
+		)
+		for adj in adjustments:
+			rows.append({
+				"seq": seq_idx, "adj_id": adj.name, "employee_no": adj.employee_no, "employee_name": adj.employee_name,
+				"id_card": adj.id_card or "-", "period_month_str": adj.adjustment_period, "employee_type": adj.employee_type or "调整项",
+				"biz_type": adj.biz_type, "ss_base": flt(adj.ss_base), "comp_pension": flt(adj.comp_pension),
+				"comp_unemp": flt(adj.comp_unemp), "comp_med": flt(adj.comp_med), "comp_other_med": flt(adj.comp_other_med),
+				"comp_injury": flt(adj.comp_injury), "comp_total": flt(adj.comp_total), "pers_pension": flt(adj.pers_pension),
+				"pers_unemp": flt(adj.pers_unemp), "pers_med": flt(adj.pers_med), "pers_large_med": flt(adj.pers_large_med),
+				"pers_total": flt(adj.pers_total), "late_fee": flt(adj.late_fee), "grand_total": flt(adj.grand_total),
+				"remarks": adj.remarks or "",
+			})
+			seq_idx += 1
+
 	totals = {
 		"seq": "合计",
-		"employee_no": f"参保共 {len(rows)} 人",
+		"employee_no": f"台账共 {len(rows)} 行",
 		"ss_base": sum(r["ss_base"] for r in rows),
 		"comp_pension": sum(r["comp_pension"] for r in rows),
 		"comp_unemp": sum(r["comp_unemp"] for r in rows),
@@ -2101,16 +2193,117 @@ def get_social_insurance_sheet(company="天津祺富机械加工有限公司", p
 	}
 
 
+@frappe.whitelist(methods=["POST"])
+def save_social_insurance_adjustment(company, period_month, adjustment_json):
+	"""保存社保特殊补缴/滞纳金快照。仅影响社保台账与凭证核验，不静默改写历史工资。"""
+	check_payroll_workbench_permission("write")
+	parent_name = f"{company}-{period_month}"
+	if frappe.db.exists("Ashan Monthly Payroll Settlement", parent_name):
+		parent_state = frappe.db.get_value("Ashan Monthly Payroll Settlement", parent_name, ["locked", "status"], as_dict=True) or {}
+		if cint(parent_state.get("locked")) or parent_state.get("status") in ["已核定锁定", "已归档发放"]:
+			frappe.throw("当前薪酬账期已冻结，不能新增社保调整。请先反审核解锁。")
+	payload = json.loads(adjustment_json) if isinstance(adjustment_json, str) else (adjustment_json or {})
+	emp_no = str(payload.get("employee_no") or "").strip()
+	adjustment_period = str(payload.get("period_month_str") or "").replace("-", "").strip()
+	if len(adjustment_period) != 6 or not adjustment_period.isdigit():
+		frappe.throw("补缴/调整所属期必须为 YYYYMM，例如 202605。")
+	if not emp_no:
+		frappe.throw("请选择员工。")
+	emp = frappe.db.get_value(
+		"Ashan Employee Salary Profile", {"company": company, "employee_no": emp_no},
+		["employee_name", "employee_type", "id_card"], as_dict=True,
+	)
+	if not emp:
+		frappe.throw(f"未找到员工 {emp_no} 的薪酬档案。")
+	ss_base = round(flt(payload.get("ss_base")), 2)
+	late_fee = round(flt(payload.get("late_fee")), 2)
+	if ss_base < 0 or late_fee < 0:
+		frappe.throw("社保基数与滞纳金不能为负数。")
+	year = cint(adjustment_period[:4])
+	month = cint(adjustment_period[4:6])
+	setting = get_insurance_setting(company, year) or {}
+	comp_pension = round(ss_base * flt(setting.get("ss_company_pension", 16.0)) / 100.0, 2)
+	comp_unemp = round(ss_base * flt(setting.get("ss_company_unemployment", 0.5)) / 100.0, 2)
+	comp_med = round(ss_base * flt(setting.get("ss_company_medical", 10.0)) / 100.0, 2)
+	comp_other_med = round(ss_base * flt(setting.get("ss_company_other_medical", 0.5)) / 100.0, 2)
+	comp_injury = round(ss_base * flt(setting.get("ss_company_injury", 0.55)) / 100.0, 2)
+	comp_contrib = round(comp_pension + comp_unemp + comp_med + comp_other_med + comp_injury, 2)
+	pers_pension = round(ss_base * flt(setting.get("ss_person_pension", 8.0)) / 100.0, 2)
+	pers_unemp = round(ss_base * flt(setting.get("ss_person_unemployment", 0.5)) / 100.0, 2)
+	pers_med = round(ss_base * flt(setting.get("ss_person_medical", 2.0)) / 100.0, 2)
+	special_months = [cint(x.strip()) for x in str(setting.get("big_medical_special_months") or "3,12").split(",") if x.strip().isdigit()]
+	pers_large = flt(setting.get("big_medical_amount_special", 21.0)) if month in special_months else flt(setting.get("big_medical_amount_default", 22.0))
+	pers_total = round(pers_pension + pers_unemp + pers_med + pers_large, 2) if ss_base > 0 else 0.0
+	# 滞纳金作为企业侧额外成本计入单位合计，保留独立字段以便审计。
+	comp_total = round(comp_contrib + late_fee, 2)
+	grand_total = round(comp_total + pers_total, 2)
+	doc = frappe.new_doc("Ashan Social Insurance Adjustment")
+	doc.company = company
+	doc.payroll_period = period_month
+	doc.adjustment_period = adjustment_period
+	doc.employee_no = emp_no
+	doc.employee_name = emp.employee_name
+	doc.employee_type = emp.employee_type
+	doc.id_card = emp.id_card
+	doc.biz_type = payload.get("biz_type") or "历史补缴"
+	doc.ss_base = ss_base
+	doc.comp_pension = comp_pension
+	doc.comp_unemp = comp_unemp
+	doc.comp_med = comp_med
+	doc.comp_other_med = comp_other_med
+	doc.comp_injury = comp_injury
+	doc.comp_total = comp_total
+	doc.pers_pension = pers_pension
+	doc.pers_unemp = pers_unemp
+	doc.pers_med = pers_med
+	doc.pers_large_med = pers_large
+	doc.pers_total = pers_total
+	doc.late_fee = late_fee
+	doc.grand_total = grand_total
+	doc.remarks = payload.get("remarks") or ""
+	doc.insert(ignore_permissions=True)
+	return {"success": True, "name": doc.name, "message": f"社保调整 {doc.name} 已登记，台账增加 ¥{grand_total:,.2f}。"}
+
+
+@frappe.whitelist(methods=["POST"])
+def delete_social_insurance_adjustment(company, period_month, adj_id):
+	"""删除未冻结账期中的社保特殊调整记录。"""
+	check_payroll_workbench_permission("write")
+	parent_name = f"{company}-{period_month}"
+	if frappe.db.exists("Ashan Monthly Payroll Settlement", parent_name):
+		state = frappe.db.get_value("Ashan Monthly Payroll Settlement", parent_name, ["locked", "status"], as_dict=True) or {}
+		if cint(state.get("locked")) or state.get("status") in ["已核定锁定", "已归档发放"]:
+			frappe.throw("当前薪酬账期已冻结，不能删除社保调整。请先反审核解锁。")
+	row = frappe.db.get_value("Ashan Social Insurance Adjustment", adj_id, ["company", "payroll_period"], as_dict=True)
+	if not row or row.company != company or row.payroll_period != period_month:
+		frappe.throw("未找到当前公司/账期对应的社保调整记录。")
+	frappe.delete_doc("Ashan Social Insurance Adjustment", adj_id, ignore_permissions=True)
+	return {"success": True, "message": f"社保调整 {adj_id} 已删除。"}
+
+
 # ==========================================
 # 4. 公积金台账服务 (12列)
 # ==========================================
 @frappe.whitelist()
 def get_housing_fund_sheet(company="天津祺富机械加工有限公司", period_month="2026-07"):
-	items = frappe.get_all(
-		"Ashan Employee Salary Profile",
-		filters={"company": company},
+	check_payroll_workbench_permission("read")
+	parent_name = f"{company}-{period_month}"
+	locked_snapshot = False
+	if frappe.db.exists("Ashan Monthly Payroll Settlement", parent_name):
+		state = frappe.db.get_value("Ashan Monthly Payroll Settlement", parent_name, ["locked", "status"], as_dict=True) or {}
+		locked_snapshot = bool(cint(state.get("locked"))) or state.get("status") in ["已核定锁定", "已归档发放"]
+	if locked_snapshot:
+		snapshot_rows = frappe.get_all(
+			"Ashan Monthly Payroll Item", filters={"parent": parent_name},
+			fields=["employee_no", "employee_name", "id_card", "employee_type", "hf_base", "hf_company_total", "hf_person_total"],
+			order_by="idx asc",
+		)
+	else:
+		snapshot_rows = []
+	items = _salary_profiles_for_period(
+		company, period_month,
 		fields=["employee_no", "employee_name", "id_card", "employee_type", "employment_status", "relieving_date", "housing_fund_base"],
-		order_by="employee_no asc"
+		order_by="employee_no asc",
 	)
 	ss_setting = get_insurance_setting(company, period_month.split("-")[0] if "-" in period_month else 2026)
 
@@ -2119,26 +2312,37 @@ def get_housing_fund_sheet(company="天津祺富机械加工有限公司", perio
 
 	rows = []
 	seq_idx = 1
-	for it in items:
+	if locked_snapshot:
+		for it in snapshot_rows:
+			hf_base = flt(it.get("hf_base"))
+			if hf_base <= 0:
+				continue
+			c_amt = flt(it.get("hf_company_total"))
+			p_amt = flt(it.get("hf_person_total"))
+			rows.append({
+				"seq": seq_idx, "employee_no": it.get("employee_no"), "employee_name": it.get("employee_name"),
+				"id_card": it.get("id_card") or "-", "period_month_str": period_month.replace("-", ""),
+				"employee_type": it.get("employee_type") or "正式工", "hf_base": hf_base,
+				"comp_rate": round(c_amt / hf_base * 100, 4) if hf_base else 0.0, "comp_amount": c_amt,
+				"pers_rate": round(p_amt / hf_base * 100, 4) if hf_base else 0.0, "pers_amount": p_amt,
+				"total_amount": round(c_amt + p_amt, 2),
+			})
+			seq_idx += 1
+	for it in ([] if locked_snapshot else items):
 		hf_base = flt(it.get("housing_fund_base"))
 		emp_type = it.get("employee_type") or "正式工"
 		emp_status = it.get("employment_status") or "在职"
 		rel_d = str(it.get("relieving_date") or "")
 		emp_name = it.get("employee_name") or ""
-		is_resigned = (emp_status == "离职" or (rel_d and rel_d <= f"{period_month}-31"))
+		is_resigned = bool(rel_d and rel_d.startswith(period_month))
 
 		# 纯净权责边界：不缴纳公积金人员（退休返聘、临时工、外籍工、实习生、本月离职减员或基数<=0）自动过滤排除
-		if emp_type in ["退休返聘", "返聘工", "临时工", "外籍工", "实习生"] or is_resigned or hf_base <= 0:
+		if emp_type in TAX_REHIRE_EMPLOYEE_TYPES or emp_type in ["临时工", "零工", "外籍工", "实习生"] or is_resigned or hf_base <= 0:
 			continue
 
-		if "孟祥山" in emp_name:
-			c_amt = 1000.0
-			p_amt = 1000.0
-			tot_amt = 2000.0
-		else:
-			c_amt = round(hf_base * (comp_rate / 100.0), 2)
-			p_amt = round(hf_base * (pers_rate / 100.0), 2)
-			tot_amt = round(c_amt + p_amt, 2)
+		c_amt = round(hf_base * (comp_rate / 100.0), 2)
+		p_amt = round(hf_base * (pers_rate / 100.0), 2)
+		tot_amt = round(c_amt + p_amt, 2)
 
 		rows.append({
 			"seq": seq_idx,
@@ -2407,8 +2611,8 @@ def get_all_employees_tax_history_summary(company="天津祺富机械加工有�
         cycle_months.append(f"{y:04d}-{m:02d}")
     cycle_name = f"{cycle_months[0]} ~ {cycle_months[-1]}"
 
-    employees = frappe.get_all(
-        "Ashan Employee Salary Profile", filters={"company": company},
+    employees = _salary_profiles_for_period(
+        company, period_month,
         fields=["employee_no", "employee_name", "id_card", "gender", "employee_type", "salary_mode", "base_salary"],
         order_by="employee_no asc",
     )
@@ -2470,6 +2674,178 @@ def get_all_employees_tax_history_summary(company="天津祺富机械加工有�
         "company": company, "period_month": period_month, "cycle_name": cycle_name,
         "cycle_months": cycle_months, "cur_month_idx": cinfo["cur_month_index"],
         "rows": rows, "totals": totals,
+    }
+
+
+
+def _history_full_columns():
+    """VBA 68 calculation columns plus ERP audit metadata."""
+    calc_columns = [
+        ("seq", "序号", "text", "员工基本信息"), ("employee_no", "工号", "text", "员工基本信息"),
+        ("employee_name", "姓名", "name", "员工基本信息"), ("id_card", "证件号码", "text", "员工基本信息"),
+        ("gender", "性别", "text", "员工基本信息"), ("period_month_str", "本期所属期", "text", "员工基本信息"),
+        ("employee_type", "员工类型", "text", "员工基本信息"), ("target_salary", "目标工资", "money", "员工基本信息"),
+        ("salary_mode", "工资类型", "text", "员工基本信息"),
+        ("gross_salary", "税前工资", "money", "工资扣除(本月)"), ("thresh_cur", "起征点扣除", "money", "工资扣除(本月)"),
+        ("hf_person", "公积金", "money", "工资扣除(本月)"), ("ss_person", "社保", "money", "工资扣除(本月)"),
+        ("deduct_cur_tot", "工资扣除合计", "money", "工资扣除(本月)"),
+        ("ss_pension", "基本养老", "money", "专项扣除(本月)"), ("ss_med", "基本医疗", "money", "专项扣除(本月)"),
+        ("ss_large_med", "大额医疗", "money", "专项扣除(本月)"), ("ss_unemp", "失业保险", "money", "专项扣除(本月)"),
+        ("hf_spec", "住房公积金", "money", "专项扣除(本月)"), ("spec_tot_cur", "专项扣除合计", "money", "专项扣除(本月)"),
+        ("spec_add_child", "子女教育", "money", "专项附加扣除(本月)"), ("spec_add_edu", "继续教育", "money", "专项附加扣除(本月)"),
+        ("spec_add_med", "大病医疗", "money", "专项附加扣除(本月)"), ("spec_add_loan", "住房贷款利息", "money", "专项附加扣除(本月)"),
+        ("spec_add_rent", "住房租金", "money", "专项附加扣除(本月)"), ("spec_add_elder", "赡养老人", "money", "专项附加扣除(本月)"),
+        ("spec_add_baby", "3岁以下婴幼儿照护", "money", "专项附加扣除(本月)"), ("spec_add_tot_cur", "专项附加扣除合计", "money", "专项附加扣除(本月)"),
+        ("gross_prior", "税前工资(往期)", "money", "个税累计(往期)"), ("thresh_prior", "起征点扣除(往期)", "money", "个税累计(往期)"),
+        ("ss_pension_prior", "基本养老(往期)", "money", "个税累计(往期)"), ("ss_med_prior", "基本医疗(往期)", "money", "个税累计(往期)"),
+        ("ss_large_med_prior", "大额医疗(往期)", "money", "个税累计(往期)"), ("ss_unemp_prior", "失业保险(往期)", "money", "个税累计(往期)"),
+        ("hf_spec_prior", "住房公积金(往期)", "money", "个税累计(往期)"), ("spec_tot_prior", "专项扣除合计(往期)", "money", "个税累计(往期)"),
+        ("spec_add_child_prior", "子女教育(往期)", "money", "个税累计(往期)"), ("spec_add_edu_prior", "继续教育(往期)", "money", "个税累计(往期)"),
+        ("spec_add_med_prior", "大病医疗(往期)", "money", "个税累计(往期)"), ("spec_add_loan_prior", "住房贷款利息(往期)", "money", "个税累计(往期)"),
+        ("spec_add_rent_prior", "住房租金(往期)", "money", "个税累计(往期)"), ("spec_add_elder_prior", "赡养老人(往期)", "money", "个税累计(往期)"),
+        ("spec_add_baby_prior", "3岁以下婴幼儿照护(往期)", "money", "个税累计(往期)"), ("spec_add_tot_prior", "专项附加扣除合计(往期)", "money", "个税累计(往期)"),
+        ("gross_all", "税前工资(全部)", "money", "个税累计(全部)"), ("thresh_all", "起征点扣除(全部)", "money", "个税累计(全部)"),
+        ("ss_pension_all", "基本养老(全部)", "money", "个税累计(全部)"), ("ss_med_all", "基本医疗(全部)", "money", "个税累计(全部)"),
+        ("ss_large_med_all", "大额医疗(全部)", "money", "个税累计(全部)"), ("ss_unemp_all", "失业保险(全部)", "money", "个税累计(全部)"),
+        ("hf_spec_all", "住房公积金(全部)", "money", "个税累计(全部)"), ("spec_tot_all", "专项扣除合计(全部)", "money", "个税累计(全部)"),
+        ("spec_add_child_all", "子女教育(全部)", "money", "个税累计(全部)"), ("spec_add_edu_all", "继续教育(全部)", "money", "个税累计(全部)"),
+        ("spec_add_med_all", "大病医疗(全部)", "money", "个税累计(全部)"), ("spec_add_loan_all", "住房贷款利息(全部)", "money", "个税累计(全部)"),
+        ("spec_add_rent_all", "住房租金(全部)", "money", "个税累计(全部)"), ("spec_add_elder_all", "赡养老人(全部)", "money", "个税累计(全部)"),
+        ("spec_add_baby_all", "3岁以下婴幼儿照护(全部)", "money", "个税累计(全部)"), ("spec_add_tot_all", "专项附加扣除合计(全部)", "money", "个税累计(全部)"),
+        ("taxable_all", "应纳税所得额", "money", "税款计算"), ("tax_rate", "税率", "percent", "税款计算"),
+        ("quick_deduct", "速算扣除数", "money", "税款计算"), ("tax_calculated", "累计应纳税额", "money", "税款计算"),
+        ("tax_relief", "减免税额", "money", "税款计算"), ("tax_paid_prior", "往期已缴税额", "money", "税款计算"),
+        ("tax_current", "本月个税", "money", "税款计算"), ("net_salary", "税后工资", "money", "税款计算"),
+    ]
+    assert len(calc_columns) == 68
+    audit_columns = [
+        ("history_lock_status", "账期状态", "status", "ERP审计"),
+        ("calculation_status", "计算状态", "calc_status", "ERP审计"),
+        ("calculation_trigger_source", "触发来源", "text", "ERP审计"),
+        ("calculation_requested_at", "请求时间", "datetime", "ERP审计"),
+        ("calculation_started_at", "开始时间", "datetime", "ERP审计"),
+        ("calculation_completed_at", "完成时间", "datetime", "ERP审计"),
+        ("calculation_engine_version", "计算引擎", "text", "ERP审计"),
+        ("calculation_task_id", "任务号", "text", "ERP审计"),
+        ("modified", "快照修改时间", "datetime", "ERP审计"),
+    ]
+    return calc_columns + audit_columns
+
+
+@frappe.whitelist()
+def get_history_full_ledger(company="天津祺富机械加工有限公司", period_month="2026-07", history_period_month=None):
+    """Historical VBA-68 snapshot + ERP audit fields for one selected month in the tax cycle."""
+    check_payroll_workbench_permission("read")
+    params = get_effective_tax_parameters(company, period_month)
+    cinfo = get_tax_cycle_info(period_month, params["tax_threshold"], params["tax_cycle_start_month"])
+    cycle_months = []
+    for offset in range(12):
+        y, m = _add_month(cinfo["cycle_start_year"], cinfo["cycle_start_month"], offset)
+        cycle_months.append(f"{y:04d}-{m:02d}")
+    available_cycle_months = [m for m in cycle_months if m <= str(period_month)]
+    selected = str(history_period_month or period_month)
+    if selected not in available_cycle_months:
+        frappe.throw(f"历史月份 {selected} 不在当前已发生申报周期 {available_cycle_months[0]} ~ {available_cycle_months[-1]} 内。")
+
+    parent_name = f"{company}-{selected}"
+    if not frappe.db.exists("Ashan Monthly Payroll Settlement", parent_name):
+        return {
+            "company": company, "period_month": period_month, "history_period_month": selected,
+            "cycle_months": cycle_months, "available_cycle_months": available_cycle_months,
+            "columns": [dict(key=k,label=l,type=t,group=g) for k,l,t,g in _history_full_columns()],
+            "rows": [], "totals": {}, "locked": False, "status": "未建账",
+        }
+
+    data = get_tax_settlement_full_sheet(company, selected)
+    parent = frappe.get_doc("Ashan Monthly Payroll Settlement", parent_name)
+    audit_supported = frappe.get_meta("Ashan Monthly Payroll Item").has_field("calculation_status")
+    audit_fields = ["employee_no", "modified"]
+    if audit_supported:
+        audit_fields += [
+            "calculation_status", "calculation_trigger_source", "calculation_requested_at", "calculation_started_at",
+            "calculation_completed_at", "calculation_engine_version", "calculation_task_id",
+        ]
+    audits = frappe.get_all(
+        "Ashan Monthly Payroll Item", filters={"parent": parent_name}, fields=audit_fields, order_by="idx asc"
+    )
+    audit_by_emp = {r.employee_no: r for r in audits}
+    lock_status = "已冻结" if (cint(parent.locked) or parent.status in ["已核定锁定", "已归档发放"]) else (parent.status or "草稿")
+    for row in data.get("rows", []):
+        audit = audit_by_emp.get(row.get("employee_no"), {})
+        row["history_lock_status"] = lock_status
+        for field in [
+            "calculation_status", "calculation_trigger_source", "calculation_requested_at", "calculation_started_at",
+            "calculation_completed_at", "calculation_engine_version", "calculation_task_id", "modified",
+        ]:
+            row[field] = audit.get(field) if audit else None
+    return {
+        "company": company, "period_month": period_month, "history_period_month": selected,
+        "cycle_name": data.get("cycle_name"), "cycle_months": cycle_months, "available_cycle_months": available_cycle_months,
+        "columns": [dict(key=k,label=l,type=t,group=g) for k,l,t,g in _history_full_columns()],
+        "rows": data.get("rows", []), "totals": data.get("totals", {}),
+        "locked": bool(cint(parent.locked)), "status": parent.status or "草稿",
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def save_history_payroll_input_correction(
+    company, current_period_month, history_period_month, employee_no, correction_json
+):
+    """Correct authoritative historical input fields in an unlocked month and cascade recalculation forward."""
+    check_payroll_workbench_permission("write")
+    history_period_month = str(history_period_month or "").strip()
+    current_period_month = str(current_period_month or "").strip()
+    if not re.match(r"^\d{4}-\d{2}$", history_period_month) or not re.match(r"^\d{4}-\d{2}$", current_period_month):
+        frappe.throw("账期格式必须为 YYYY-MM。")
+    if history_period_month > current_period_month:
+        frappe.throw("历史更正月份不能晚于当前核算月份。")
+    parent_name = f"{company}-{history_period_month}"
+    if not frappe.db.exists("Ashan Monthly Payroll Settlement", parent_name):
+        frappe.throw("该历史月份尚未建账，无法直接更正。")
+    parent = frappe.get_doc("Ashan Monthly Payroll Settlement", parent_name)
+    if parent.locked or parent.status in ["已核定锁定", "已归档发放"]:
+        frappe.throw("该历史月份已经冻结。请先执行反审核解锁，再进行历史输入更正。")
+    payload = json.loads(correction_json) if isinstance(correction_json, str) else (correction_json or {})
+    item = next((row for row in parent.items if row.employee_no == employee_no), None)
+    if not item:
+        frappe.throw(f"{history_period_month} 未找到员工 {employee_no} 的历史薪酬记录。")
+
+    # 工资只允许修改“计薪方式对应的权威侧”：税后模式改目标税后，税前模式改税前工资。
+    # 防止 API 调用同时写入税前/税后两个互相矛盾的输入。
+    salary_mode = str(item.salary_mode or "税后").strip()
+    salary_input_field = "net_salary" if is_tax_after_salary_mode(salary_mode) else "gross_salary"
+    allowed_money = [
+        salary_input_field, "ss_person_total", "hf_person_total",
+        "deduction_child_education", "deduction_continuing_education", "deduction_serious_illness",
+        "deduction_housing_loan", "deduction_housing_rent", "deduction_elderly_care", "deduction_infant_care",
+    ]
+    for field in allowed_money:
+        if field in payload:
+            value = round(flt(payload.get(field)), 2)
+            if value < 0:
+                frappe.throw(f"历史输入字段 {field} 不能为负数。")
+            setattr(item, field, value)
+    item.special_deductions_total = round(sum(flt(getattr(item, f, 0)) for f in [
+        "deduction_child_education", "deduction_continuing_education", "deduction_serious_illness",
+        "deduction_housing_loan", "deduction_housing_rent", "deduction_elderly_care", "deduction_infant_care",
+    ]), 2)
+    _set_payroll_item_calculation_audit(item, "待计算", "历史数据更正")
+    frappe.flags.ignore_lock = True
+    parent.save(ignore_permissions=True)
+    from ashan_cn_procurement.services.payroll_recalculation_service import queue_recalculation_after_change
+    task = queue_recalculation_after_change(
+        company=company,
+        period_month=current_period_month,
+        employee_no=employee_no,
+        trigger_source="历史数据更正",
+        start_period=history_period_month,
+        trigger_detail=f"更正 {history_period_month} 历史薪酬输入，级联重算至 {current_period_month}",
+        force_recompute=True,
+    )
+    return {
+        "success": True,
+        "message": f"{history_period_month} 历史输入已保存，{employee_no} 已进入 {history_period_month} → {current_period_month} 级联后台重算队列。",
+        "task_name": task.name if task else "",
     }
 
 
@@ -2550,7 +2926,7 @@ def get_employee_tax_history_timeline(company="天津祺富机械加工有限公
 
 
 @frappe.whitelist()
-def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", period_month="2026-07", sheet_type="all", tax_view_mode="simple", history_mode="all", history_emp_no="A0001"):
+def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", period_month="2026-07", sheet_type="all", tax_view_mode="simple", history_mode="all", history_emp_no="A0001", history_period_month=None):
 	"""
 	导出专业级 Excel 报表 (.xlsx)：
 	1. distribution: 24 列外部薪资实发表
@@ -2558,7 +2934,7 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 	3. insurance: 19 列双层表头社保缴费明细表
 	4. housing_fund: 12 列双层表头公积金明细表
 	5. tax: 个人所得税表 (根据 tax_view_mode 动态支持 17 列精简版 或 VBA 68列完整核算台账)
-	6. history: 历史数据表 (根据 history_mode 支持 全员15列总览 或 单人12个月穿透流水)
+	6. history: 历史数据表 (支持全员15列总览、单人12个月穿透、指定历史月VBA68列+ERP审计)
 	7. all: 包含上述全部 7 个工作表的完整年度薪资结算财务工作簿
 	"""
 	check_payroll_workbench_permission("read")
@@ -3193,6 +3569,94 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 			c.border = double_bottom
 
 	# -------------------------------------------------------------
+	# 8. 指定历史月完整核算快照 (VBA68列 + ERP审计)
+	# -------------------------------------------------------------
+	def build_history_full_sheet(ws, selected_month):
+		data_res = get_history_full_ledger(company, period_month, selected_month)
+		rows = data_res.get("rows", [])
+		columns = data_res.get("columns", [])
+		totals = data_res.get("totals", {})
+		last_col = get_column_letter(max(len(columns), 1))
+		ws.title = f"7.历史完整核算_{selected_month}"[:31]
+
+		ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max(len(columns), 1))
+		ws["A1"] = f"{company} {selected_month} 历史完整核算快照（VBA 68列 + ERP审计）"
+		ws["A1"].font = font_title
+		ws["A1"].alignment = align_center
+		ws.row_dimensions[1].height = 32
+
+		ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=max(len(columns), 1))
+		ws["A2"] = (
+			f"财务快照月份: {selected_month} | 当前核定账期: {period_month} | "
+			f"账期状态: {data_res.get('status') or '-'} | 员工人数: {len(rows)} 人 | 生成日期: {date.today().strftime('%Y-%m-%d')}"
+		)
+		ws["A2"].font = font_sub
+		ws["A2"].alignment = align_center
+
+		# 第3行按逻辑分组，第4行为字段名；冻结前三列并冻结表头。
+		groups = [c.get("group") or "" for c in columns]
+		start_col = 1
+		while start_col <= len(columns):
+			group = groups[start_col - 1]
+			end_col = start_col
+			while end_col < len(columns) and groups[end_col] == group:
+				end_col += 1
+			if end_col > start_col:
+				ws.merge_cells(start_row=3, start_column=start_col, end_row=3, end_column=end_col)
+			cell = ws.cell(row=3, column=start_col, value=group)
+			cell.font = font_header
+			cell.fill = fill_accent if group == "员工基本信息" else (fill_purple if group == "ERP审计" else fill_header)
+			cell.alignment = align_center
+			cell.border = border_cell
+			for cc in range(start_col, end_col + 1):
+				ws.cell(row=3, column=cc).border = border_cell
+			start_col = end_col + 1
+
+		for col_idx, col in enumerate(columns, start=1):
+			cell = ws.cell(row=4, column=col_idx, value=col.get("label") or col.get("key"))
+			cell.font = font_header
+			cell.fill = fill_purple if col.get("group") == "ERP审计" else fill_header
+			cell.alignment = align_center
+			cell.border = border_cell
+
+		for row_idx, row in enumerate(rows, start=5):
+			for col_idx, col in enumerate(columns, start=1):
+				key = col.get("key")
+				value = row.get(key)
+				cell = ws.cell(row=row_idx, column=col_idx, value=value)
+				cell.font = font_data
+				cell.border = border_cell
+				if col.get("type") == "money":
+					cell.number_format = "#,##0.00"
+					cell.alignment = align_right
+				elif col.get("type") == "percent":
+					cell.number_format = '0.00"%"'
+					cell.alignment = align_center
+				else:
+					cell.alignment = align_left if key in {"employee_name", "calculation_trigger_source", "calculation_error"} else align_center
+
+		tot_row = len(rows) + 5
+		for col_idx, col in enumerate(columns, start=1):
+			key = col.get("key")
+			if col_idx == 1:
+				value = "合计"
+			elif col_idx == 2:
+				value = f"共 {len(rows)} 人"
+			elif col.get("type") == "money" and key in totals:
+				value = totals.get(key, 0)
+			else:
+				value = ""
+			cell = ws.cell(row=tot_row, column=col_idx, value=value)
+			cell.font = font_total
+			cell.fill = fill_total
+			cell.border = double_bottom
+			if isinstance(value, (int, float)):
+				cell.number_format = "#,##0.00"
+
+		ws.freeze_panes = "D5"
+		ws.auto_filter.ref = f"A4:{last_col}{max(tot_row - 1, 4)}"
+
+	# -------------------------------------------------------------
 	# 8. 单人历史流水表 (12 个月)
 	# -------------------------------------------------------------
 	def build_history_single_sheet(ws, emp_no):
@@ -3295,6 +3759,10 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 		if history_mode == "single":
 			build_history_single_sheet(ws_default, history_emp_no)
 			filename = f"{filename_prefix}_{history_emp_no}_个税申报周期月度穿透流水.xlsx"
+		elif history_mode == "full":
+			selected_history_month = history_period_month or period_month
+			build_history_full_sheet(ws_default, selected_history_month)
+			filename = f"祺富薪资台账_{selected_history_month}_历史完整核算_VBA68列加审计.xlsx"
 		else:
 			build_history_all_sheet(ws_default)
 			filename = f"{filename_prefix}_全员薪酬与个税年度申报周期累计总览表(15列).xlsx"
@@ -3338,20 +3806,31 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 	}
 
 
-@frappe.whitelist()
-def recalculate_and_save_monthly_tax(company="天津祺富机械加工有限公司", period_month="2026-07"):
-    """
-    基于当前员工档案、当月真实社保/公积金扣款、7项专项附加扣除和历史月度快照，
-    按与 VBA 相同的累计预扣闭式算法重新核定未冻结账期。
-    """
-    doc_name = f"{company}-{period_month}"
-    if not frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
-        frappe.throw(f"【{company}】尚未生成 {period_month} 账期数据，请先创建或导入！")
+def _set_payroll_item_calculation_audit(it, status, trigger_source="系统任务", task_name="", input_hash="", error=""):
+    """Write recalculation audit fields only when the migrated child table supports them."""
+    meta = frappe.get_meta("Ashan Monthly Payroll Item")
+    if not meta.has_field("calculation_status"):
+        return
+    it.calculation_status = status
+    if status in {"待计算", "排队中"}:
+        it.calculation_requested_at = now_datetime()
+    elif status == "计算中":
+        it.calculation_started_at = now_datetime()
+    elif status == "已计算":
+        it.calculation_completed_at = now_datetime()
+    it.calculation_trigger_source = trigger_source or "系统任务"
+    it.calculation_engine_version = "vba-tax-async-2026.08.21"
+    if input_hash:
+        it.calculation_input_hash = input_hash
+    if task_name:
+        it.calculation_task_id = task_name
+    it.calculation_error = error or ""
 
-    doc = frappe.get_doc("Ashan Monthly Payroll Settlement", doc_name)
-    if doc.locked:
-        frappe.throw(f"【{company}】{period_month} 月度薪酬已被【锁定】，无法重新核定！如需修改请先执行反审核解锁。")
 
+def _recalculate_payroll_item_vba(
+    doc, it, company, period_month, trigger_source="系统任务", task_name="", input_hash="", refresh_from_profile=True
+):
+    """Recalculate one payroll child row with the verified VBA cumulative withholding model."""
     params = get_effective_tax_parameters(company, period_month)
     tax_thresh = params["tax_threshold"]
     cinfo = get_tax_cycle_info(period_month, tax_thresh, params["tax_cycle_start_month"])
@@ -3361,136 +3840,341 @@ def recalculate_and_save_monthly_tax(company="天津祺富机械加工有限公�
     m_rate = flt(ins.get("ss_person_medical")) or 2.0
     u_rate = flt(ins.get("ss_person_unemployment")) or 0.5
 
-    tot_gross = tot_net = tot_tax = 0.0
-    tot_ss_pers = tot_ss_comp = tot_hf_pers = tot_hf_comp = 0.0
+    emp_no = it.employee_no
+    emp_doc = frappe.db.get_value(
+        "Ashan Employee Salary Profile",
+        {"company": company, "employee_no": emp_no},
+        [
+            "id_card", "gender", "mobile", "birth_date", "employee_type", "salary_mode", "is_insured",
+            "fixed_salary", "base_salary", "post_allowance", "performance_base",
+            "meal_allowance", "traffic_allowance", "communication_allowance", "other_allowance",
+            "social_security_base", "housing_fund_base",
+            "deduction_child_education", "deduction_continuing_education",
+            "deduction_serious_illness", "deduction_housing_loan", "deduction_housing_rent",
+            "deduction_elderly_care", "deduction_infant_care",
+        ],
+        as_dict=True,
+    ) or {}
 
-    for it in doc.items:
-        emp_no = it.employee_no
-        emp_doc = frappe.db.get_value(
-            "Ashan Employee Salary Profile",
-            {"company": company, "employee_no": emp_no},
-            [
-                "id_card", "gender", "mobile", "birth_date", "employee_type", "salary_mode",
-                "social_security_base", "housing_fund_base",
-                "deduction_child_education", "deduction_continuing_education",
-                "deduction_serious_illness", "deduction_housing_loan", "deduction_housing_rent",
-                "deduction_elderly_care", "deduction_infant_care",
-            ],
-            as_dict=True,
-        ) or {}
+    _set_payroll_item_calculation_audit(it, "计算中", trigger_source, task_name, input_hash)
 
-        if emp_doc.get("id_card"): it.id_card = emp_doc["id_card"]
-        if emp_doc.get("gender"): it.gender = emp_doc["gender"]
-        if emp_doc.get("mobile"): it.mobile = emp_doc["mobile"]
-        if emp_doc.get("birth_date"): it.birth_date = emp_doc["birth_date"]
-        if emp_doc.get("employee_type"): it.employee_type = emp_doc["employee_type"]
-        if emp_doc.get("salary_mode"): it.salary_mode = emp_doc["salary_mode"]
+    if refresh_from_profile:
+        for fieldname in ["id_card", "gender", "mobile", "birth_date", "employee_type", "salary_mode"]:
+            if emp_doc.get(fieldname):
+                setattr(it, fieldname, emp_doc[fieldname])
 
-        # 7项专项附加扣除完整快照
         for fieldname in [
             "deduction_child_education", "deduction_continuing_education", "deduction_serious_illness",
             "deduction_housing_loan", "deduction_housing_rent", "deduction_elderly_care", "deduction_infant_care",
         ]:
-            setattr(it, fieldname, flt(emp_doc.get(fieldname) if emp_doc.get(fieldname) is not None else getattr(it, fieldname, 0)))
-        spec_add_cur = round(
-            flt(it.deduction_child_education) + flt(it.deduction_continuing_education) +
-            flt(it.deduction_serious_illness) + flt(it.deduction_housing_loan) +
-            flt(it.deduction_housing_rent) + flt(it.deduction_elderly_care) + flt(it.deduction_infant_care), 2
-        )
-        it.special_deductions_total = spec_add_cur
-        it.tax_threshold = tax_thresh
+            value = emp_doc.get(fieldname) if emp_doc.get(fieldname) is not None else getattr(it, fieldname, 0)
+            setattr(it, fieldname, flt(value))
 
-        ss_p = flt(it.ss_person_total)
-        hf_p = flt(it.hf_person_total)
-        ss_base = flt(it.ss_base) or flt(emp_doc.get("social_security_base"))
-        hf_base = flt(it.hf_base) or flt(emp_doc.get("housing_fund_base"))
+    spec_add_cur = round(
+        flt(it.deduction_child_education) + flt(it.deduction_continuing_education)
+        + flt(it.deduction_serious_illness) + flt(it.deduction_housing_loan)
+        + flt(it.deduction_housing_rent) + flt(it.deduction_elderly_care)
+        + flt(it.deduction_infant_care),
+        2,
+    )
+    it.special_deductions_total = spec_add_cur
+    it.tax_threshold = tax_thresh
+
+    # 社保/公积金是权威输入的一部分。当前月从母表+年度参数重建；历史级联时保留当时快照，
+    # 防止用今天的费率或基数改写已形成的历史数据。
+    emp_type = it.employee_type or emp_doc.get("employee_type") or "正式工"
+    no_insurance_types = TAX_REHIRE_EMPLOYEE_TYPES | {"临时工", "零工", "外籍工", "实习生"}
+    if refresh_from_profile:
+        ss_base = flt(emp_doc.get("social_security_base"))
+        hf_base = flt(emp_doc.get("housing_fund_base"))
+        if emp_type in no_insurance_types:
+            ss_base = 0.0
+            hf_base = 0.0
+        elif not cint(emp_doc.get("is_insured", 1)):
+            # “是否参保”只控制社会保险；住房公积金有独立基数，不应被社保开关误清零。
+            ss_base = 0.0
+
+        comp_pension_rate = flt(ins.get("ss_company_pension")) or 16.0
+        comp_unemp_rate = flt(ins.get("ss_company_unemployment")) or 0.5
+        comp_med_rate = flt(ins.get("ss_company_medical")) or 10.0
+        comp_other_med_rate = flt(ins.get("ss_company_other_medical")) or 0.5
+        comp_injury_rate = flt(ins.get("ss_company_injury")) or (0.55 if "祺富" in company else 0.35)
+        hf_person_rate = flt(ins.get("hf_person_rate")) or 5.0
+        hf_company_rate = flt(ins.get("hf_company_rate")) or 5.0
+        month_num = cint(str(period_month).split("-")[1])
+        special_months = [
+            cint(x.strip()) for x in str(ins.get("big_medical_special_months") or "3,12").split(",")
+            if x.strip().isdigit()
+        ]
+        if month_num in special_months:
+            big_medical = flt(ins.get("big_medical_amount_special")) or 21.0
+        else:
+            big_medical = flt(ins.get("big_medical_amount_default")) or 22.0
+
         it.ss_base = ss_base
         it.hf_base = hf_base
-
-        # 为68列台账保存可审计的本月专项扣除分项；总额仍以当月真实扣款为准。
-        if ss_p > 0 and ss_base > 0:
+        it.pension_person = round(ss_base * p_rate / 100.0, 2) if ss_base > 0 else 0.0
+        it.medical_person = round(ss_base * m_rate / 100.0, 2) if ss_base > 0 else 0.0
+        it.unemployment_person = round(ss_base * u_rate / 100.0, 2) if ss_base > 0 else 0.0
+        it.large_medical_person = round(big_medical if ss_base > 0 else 0.0, 2)
+        it.ss_person_total = round(
+            flt(it.pension_person) + flt(it.medical_person) + flt(it.unemployment_person) + flt(it.large_medical_person), 2
+        )
+        it.pension_company = round(ss_base * comp_pension_rate / 100.0, 2) if ss_base > 0 else 0.0
+        it.unemployment_company = round(ss_base * comp_unemp_rate / 100.0, 2) if ss_base > 0 else 0.0
+        it.medical_company = round(ss_base * comp_med_rate / 100.0, 2) if ss_base > 0 else 0.0
+        it.other_medical_company = round(ss_base * comp_other_med_rate / 100.0, 2) if ss_base > 0 else 0.0
+        it.work_injury_company = round(ss_base * comp_injury_rate / 100.0, 2) if ss_base > 0 else 0.0
+        it.ss_company_total = round(
+            flt(it.pension_company) + flt(it.unemployment_company) + flt(it.medical_company)
+            + flt(it.other_medical_company) + flt(it.work_injury_company), 2
+        )
+        it.hf_person_total = round(hf_base * hf_person_rate / 100.0, 2) if hf_base > 0 else 0.0
+        it.hf_company_total = round(hf_base * hf_company_rate / 100.0, 2) if hf_base > 0 else 0.0
+        it.housing_fund_person = flt(it.hf_person_total)
+        it.housing_fund_company = flt(it.hf_company_total)
+    else:
+        ss_base = flt(it.ss_base)
+        hf_base = flt(it.hf_base)
+        # 历史输入更正允许直接调整个人实缴合计；分项仅作为解释性拆分，合计保持用户更正值。
+        ss_p_snapshot = flt(it.ss_person_total)
+        hf_p_snapshot = flt(it.hf_person_total)
+        if ss_p_snapshot > 0 and ss_base > 0:
             it.pension_person = round(ss_base * p_rate / 100.0, 2)
             it.medical_person = round(ss_base * m_rate / 100.0, 2)
             it.unemployment_person = round(ss_base * u_rate / 100.0, 2)
-            it.large_medical_person = round(ss_p - flt(it.pension_person) - flt(it.medical_person) - flt(it.unemployment_person), 2)
-        else:
-            it.pension_person = it.medical_person = it.unemployment_person = it.large_medical_person = 0.0
-        it.housing_fund_person = hf_p
-
-        pdata = get_employee_prior_tax_data(company, emp_no, cinfo["prior_months"], tax_thresh)
-        ded_cur = round(ss_p + hf_p, 2)
-        target_value = flt(it.net_salary)
-        sal_mode = it.salary_mode or emp_doc.get("salary_mode") or "税后"
-        emp_type = it.employee_type or emp_doc.get("employee_type") or "正式工"
-
-        if not is_tax_ledger_employee(emp_type):
-            # 临时工/零工：不进入个税申报台账，不产生个税。
-            if is_tax_after_salary_mode(sal_mode) and target_value > 0:
-                it.gross_salary = round(target_value + ded_cur, 2)
-                it.net_salary = round(target_value, 2)
-            else:
-                it.net_salary = round(flt(it.gross_salary) - ded_cur, 2)
-            it.tax_amount = 0.0
-            it.taxable_income = 0.0
-            it.tax_threshold = 0.0
-        elif is_tax_after_salary_mode(sal_mode) and target_value > 0:
-            calc_res = derive_gross_from_net_vba(
-                net_salary=target_value,
-                deduction_cur=ded_cur,
-                gross_prior=pdata["gross_prior"],
-                threshold_cur=tax_thresh,
-                threshold_prior=pdata["threshold_prior"],
-                spec_ded_cur=ded_cur,
-                spec_ded_prior=pdata["spec_ded_prior"],
-                spec_add_cur=spec_add_cur,
-                spec_add_prior=pdata["spec_add_prior"],
-                paid_tax_prior=pdata["paid_tax_prior"],
+            it.large_medical_person = round(
+                ss_p_snapshot - flt(it.pension_person) - flt(it.medical_person) - flt(it.unemployment_person), 2
             )
-            it.gross_salary = calc_res["gross_salary"]
-            it.tax_amount = calc_res["tax_amount_cur"]
-            it.taxable_income = calc_res["taxable_income"]
-            it.net_salary = calc_res["net_verified"]
+        elif ss_p_snapshot <= 0:
+            it.pension_person = it.medical_person = it.unemployment_person = it.large_medical_person = 0.0
+        it.housing_fund_person = hf_p_snapshot
+
+    ss_p = flt(it.ss_person_total)
+    hf_p = flt(it.hf_person_total)
+    pdata = get_employee_prior_tax_data(company, emp_no, cinfo["prior_months"], tax_thresh)
+    ded_cur = round(ss_p + hf_p, 2)
+    sal_mode = it.salary_mode or emp_doc.get("salary_mode") or "税后"
+
+    # 目标工资来源：有固定工资时按 VBA 业务规则覆盖；否则已导入外部实发表的月份保留当月实发输入；
+    # 没有外部实发表时才回到母表结构工资。这样修改母表能自动生效，又不会抹掉真实月度实发。
+    profile_fixed = flt(emp_doc.get("fixed_salary"))
+    structured_salary = round(
+        flt(emp_doc.get("base_salary")) + flt(emp_doc.get("post_allowance")) + flt(emp_doc.get("performance_base"))
+        + flt(emp_doc.get("meal_allowance")) + flt(emp_doc.get("traffic_allowance"))
+        + flt(emp_doc.get("communication_allowance")) + flt(emp_doc.get("other_allowance")), 2
+    )
+    has_external_salary = bool(getattr(doc, "imported_excel_file", None))
+    if is_tax_after_salary_mode(sal_mode):
+        target_value = profile_fixed if (refresh_from_profile and profile_fixed > 0) else flt(it.net_salary)
+        if refresh_from_profile and profile_fixed <= 0 and not has_external_salary and structured_salary > 0:
+            target_value = structured_salary
+    else:
+        target_value = profile_fixed if (refresh_from_profile and profile_fixed > 0) else flt(it.gross_salary)
+        if refresh_from_profile and profile_fixed <= 0 and not has_external_salary and structured_salary > 0:
+            target_value = structured_salary
+
+    if not is_tax_ledger_employee(emp_type):
+        if is_tax_after_salary_mode(sal_mode) and target_value > 0:
+            it.gross_salary = round(target_value + ded_cur, 2)
+            it.net_salary = round(target_value, 2)
         else:
-            gross_cur = flt(it.gross_salary)
-            gross_all = round(pdata["gross_prior"] + gross_cur, 2)
-            spec_ded_all = round(pdata["spec_ded_prior"] + ded_cur, 2)
-            spec_add_all = round(pdata["spec_add_prior"] + spec_add_cur, 2)
-            thresh_all = round(pdata["threshold_prior"] + tax_thresh, 2)
-            taxable_all_raw = round(gross_all - spec_ded_all - spec_add_all - thresh_all, 2)
-            taxable_for_tax = max(0.0, taxable_all_raw)
-            rate, quick = 0.03, 0.0
-            for _l, upper, r_v, q_v in TAX_BRACKETS:
-                if taxable_for_tax <= upper:
-                    rate, quick = r_v, q_v
-                    break
-            cum_tax = round(taxable_for_tax * rate - quick, 2)
-            cur_tax = max(0.0, round(cum_tax - pdata["paid_tax_prior"], 2))
-            it.tax_amount = cur_tax
-            it.taxable_income = max(0.0, taxable_all_raw)
-            it.net_salary = round(gross_cur - ded_cur - cur_tax, 2)
+            it.gross_salary = round(target_value, 2)
+            it.net_salary = round(flt(it.gross_salary) - ded_cur, 2)
+        it.tax_amount = 0.0
+        it.taxable_income = 0.0
+        it.tax_threshold = 0.0
+    elif is_tax_after_salary_mode(sal_mode) and target_value > 0:
+        calc_res = derive_gross_from_net_vba(
+            net_salary=target_value,
+            deduction_cur=ded_cur,
+            gross_prior=pdata["gross_prior"],
+            threshold_cur=tax_thresh,
+            threshold_prior=pdata["threshold_prior"],
+            spec_ded_cur=ded_cur,
+            spec_ded_prior=pdata["spec_ded_prior"],
+            spec_add_cur=spec_add_cur,
+            spec_add_prior=pdata["spec_add_prior"],
+            paid_tax_prior=pdata["paid_tax_prior"],
+        )
+        it.gross_salary = calc_res["gross_salary"]
+        it.tax_amount = calc_res["tax_amount_cur"]
+        it.taxable_income = calc_res["taxable_income"]
+        it.net_salary = calc_res["net_verified"]
+    else:
+        gross_cur = round(target_value, 2)
+        it.gross_salary = gross_cur
+        gross_all = round(pdata["gross_prior"] + gross_cur, 2)
+        spec_ded_all = round(pdata["spec_ded_prior"] + ded_cur, 2)
+        spec_add_all = round(pdata["spec_add_prior"] + spec_add_cur, 2)
+        thresh_all = round(pdata["threshold_prior"] + tax_thresh, 2)
+        taxable_all_raw = round(gross_all - spec_ded_all - spec_add_all - thresh_all, 2)
+        taxable_for_tax = max(0.0, taxable_all_raw)
+        rate, quick = 0.03, 0.0
+        for _lower, upper, rate_value, quick_value in TAX_BRACKETS:
+            if taxable_for_tax <= upper:
+                rate, quick = rate_value, quick_value
+                break
+        cumulative_tax = round(taxable_for_tax * rate - quick, 2)
+        current_tax = max(0.0, round(cumulative_tax - pdata["paid_tax_prior"], 2))
+        it.tax_amount = current_tax
+        it.taxable_income = max(0.0, taxable_all_raw)
+        it.net_salary = round(gross_cur - ded_cur - current_tax, 2)
 
-        tot_gross += flt(it.gross_salary)
-        tot_net += flt(it.net_salary)
-        tot_tax += flt(it.tax_amount)
-        tot_ss_pers += flt(it.ss_person_total)
-        tot_ss_comp += flt(it.ss_company_total)
-        tot_hf_pers += flt(it.hf_person_total)
-        tot_hf_comp += flt(it.hf_company_total)
+    _set_payroll_item_calculation_audit(it, "已计算", trigger_source, task_name, input_hash)
+    return it
 
-    doc.total_gross_salary = round(tot_gross, 2)
-    doc.total_net_salary = round(tot_net, 2)
-    doc.total_tax = round(tot_tax, 2)
-    doc.total_social_security_person = round(tot_ss_pers, 2)
-    doc.total_social_security_company = round(tot_ss_comp, 2)
-    doc.total_housing_fund_person = round(tot_hf_pers, 2)
-    doc.total_housing_fund_company = round(tot_hf_comp, 2)
 
+def _refresh_monthly_payroll_totals(doc):
+    """Rebuild parent totals from child rows after one or many employee recalculations."""
+    doc.total_employees = len(doc.items)
+    doc.total_gross_salary = round(sum(flt(it.gross_salary) for it in doc.items), 2)
+    doc.total_net_salary = round(sum(flt(it.net_salary) for it in doc.items), 2)
+    doc.total_tax = round(sum(flt(it.tax_amount) for it in doc.items), 2)
+    doc.total_social_security_person = round(sum(flt(it.ss_person_total) for it in doc.items), 2)
+    doc.total_social_security_company = round(sum(flt(it.ss_company_total) for it in doc.items), 2)
+    doc.total_housing_fund_person = round(sum(flt(it.hf_person_total) for it in doc.items), 2)
+    doc.total_housing_fund_company = round(sum(flt(it.hf_company_total) for it in doc.items), 2)
+
+
+def _get_unlocked_settlement(company, period_month):
+    doc_name = f"{company}-{period_month}"
+    if not frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
+        frappe.throw(f"【{company}】尚未生成 {period_month} 账期数据，请先创建或导入！")
+    doc = frappe.get_doc("Ashan Monthly Payroll Settlement", doc_name)
+    if doc.locked or doc.status in ["已核定锁定", "已归档发放"]:
+        frappe.throw(f"【{company}】{period_month} 月度薪酬已被【锁定】，无法重新计算！如需修改请先执行反审核解锁。")
+    return doc
+
+
+def _append_payroll_item_from_profile(doc, company, employee_no):
+    """Create a missing current-month row from the authoritative employee profile.
+
+    This is used when a new employee is added after a monthly settlement has already
+    been created.  It deliberately creates only an input snapshot; the unified VBA
+    calculator fills contribution/tax results immediately afterwards.
+    """
+    profile = frappe.db.get_value(
+        "Ashan Employee Salary Profile",
+        {"company": company, "employee_no": employee_no},
+        [
+            "employee_no", "employee_name", "id_card", "gender", "mobile", "birth_date",
+            "department", "job_title", "employee_type", "salary_mode", "fixed_salary",
+            "base_salary", "post_allowance", "performance_base", "meal_allowance",
+            "traffic_allowance", "communication_allowance", "other_allowance",
+            "deduction_child_education", "deduction_continuing_education",
+            "deduction_serious_illness", "deduction_housing_loan", "deduction_housing_rent",
+            "deduction_elderly_care", "deduction_infant_care",
+        ],
+        as_dict=True,
+    )
+    if not profile:
+        frappe.throw(f"未找到员工 {employee_no} 的薪酬母表档案。")
+
+    fixed_salary = flt(profile.get("fixed_salary"))
+    structured_salary = round(
+        flt(profile.get("base_salary")) + flt(profile.get("post_allowance")) + flt(profile.get("performance_base"))
+        + flt(profile.get("meal_allowance")) + flt(profile.get("traffic_allowance"))
+        + flt(profile.get("communication_allowance")) + flt(profile.get("other_allowance")), 2
+    )
+    target = round(fixed_salary if fixed_salary > 0 else structured_salary, 2)
+    salary_mode = profile.get("salary_mode") or "税后"
+    row = doc.append("items", {
+        "employee_no": profile.get("employee_no"),
+        "employee_name": profile.get("employee_name"),
+        "id_card": profile.get("id_card") or "",
+        "gender": profile.get("gender") or "",
+        "mobile": profile.get("mobile") or "",
+        "birth_date": profile.get("birth_date"),
+        "department": profile.get("department") or "",
+        "job_title": profile.get("job_title") or "",
+        "employee_type": profile.get("employee_type") or "正式工",
+        "salary_mode": salary_mode,
+        "fixed_salary": fixed_salary,
+        "base_salary": flt(profile.get("base_salary")),
+        "post_allowance": flt(profile.get("post_allowance")),
+        "performance_salary": flt(profile.get("performance_base")),
+        "allowances_total": round(
+            flt(profile.get("meal_allowance")) + flt(profile.get("traffic_allowance"))
+            + flt(profile.get("communication_allowance")) + flt(profile.get("other_allowance")), 2
+        ),
+        "gross_salary": target if not is_tax_after_salary_mode(salary_mode) else 0.0,
+        "net_salary": target if is_tax_after_salary_mode(salary_mode) else 0.0,
+        "deduction_child_education": flt(profile.get("deduction_child_education")),
+        "deduction_continuing_education": flt(profile.get("deduction_continuing_education")),
+        "deduction_serious_illness": flt(profile.get("deduction_serious_illness")),
+        "deduction_housing_loan": flt(profile.get("deduction_housing_loan")),
+        "deduction_housing_rent": flt(profile.get("deduction_housing_rent")),
+        "deduction_elderly_care": flt(profile.get("deduction_elderly_care")),
+        "deduction_infant_care": flt(profile.get("deduction_infant_care")),
+        "remarks": "月度结算创建后新增员工，由服务器计算中心自动补入",
+    })
+    return row
+
+
+@frappe.whitelist(methods=["POST"])
+def recalculate_employee_payroll(
+    company="天津祺富机械加工有限公司",
+    period_month="2026-07",
+    employee_no=None,
+    trigger_source="人工重算",
+    task_name="",
+    input_hash="",
+    refresh_from_profile=1,
+):
+    """Server-side single-employee calculator used by asynchronous background jobs."""
+    check_payroll_workbench_permission("write")
+    if not employee_no:
+        frappe.throw("必须指定需要重新计算的员工工号。")
+    doc = _get_unlocked_settlement(company, period_month)
+    item = next((row for row in doc.items if row.employee_no == employee_no), None)
+    if not item:
+        item = _append_payroll_item_from_profile(doc, company, employee_no)
+    _recalculate_payroll_item_vba(
+        doc, item, company, period_month, trigger_source, task_name, input_hash, bool(cint(refresh_from_profile))
+    )
+    _refresh_monthly_payroll_totals(doc)
     frappe.flags.ignore_lock = True
     doc.save(ignore_permissions=True)
-    frappe.db.commit()
     return {
         "success": True,
-        "message": f"【{company}】{period_month} 个税已按 VBA 同口径累计预扣逻辑重新核定；临时工/零工不入个税台账。",
+        "employee_no": employee_no,
+        "period_month": period_month,
+        "gross_salary": flt(item.gross_salary),
+        "tax_amount": flt(item.tax_amount),
+        "net_salary": flt(item.net_salary),
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def recalculate_and_save_monthly_tax(
+    company="天津祺富机械加工有限公司",
+    period_month="2026-07",
+    trigger_source="人工重算",
+    task_name="",
+    force_recompute=0,
+):
+    """Recalculate an unlocked month sequentially with the single verified VBA engine."""
+    check_payroll_workbench_permission("write")
+    doc = _get_unlocked_settlement(company, period_month)
+    from ashan_cn_procurement.services.payroll_recalculation_service import _build_employee_input_hash
+
+    for item in doc.items:
+        input_hash = _build_employee_input_hash(company, period_month, item.employee_no)
+        if (
+            not cint(force_recompute)
+            and getattr(item, "calculation_input_hash", "") == input_hash
+            and getattr(item, "calculation_status", "") == "已计算"
+        ):
+            continue
+        _recalculate_payroll_item_vba(doc, item, company, period_month, trigger_source, task_name, input_hash)
+
+    _refresh_monthly_payroll_totals(doc)
+    frappe.flags.ignore_lock = True
+    doc.save(ignore_permissions=True)
+    return {
+        "success": True,
+        "message": f"【{company}】{period_month} 已由服务器统一按 VBA 同口径完成薪酬与累计个税计算。",
         "data": get_tax_settlement_full_sheet(company, period_month),
     }
 
@@ -3547,6 +4231,7 @@ def get_monthly_workflow_status(company, period_month):
 	"""
 	获取指定月份的全流程任务状态看板数据 (精细化多维度读数与异动摘要)
 	"""
+	check_payroll_workbench_permission("read")
 	# 计算下个月份
 	parts = period_month.split("-")
 	y = int(parts[0]) if len(parts) > 0 else 2026
@@ -3555,21 +4240,21 @@ def get_monthly_workflow_status(company, period_month):
 	next_m = 1 if m == 12 else m + 1
 	next_period_month = f"{next_y}-{str(next_m).zfill(2)}"
 
-	# 1. 档案状态 (母表底册结构、计薪分类与异动)
-	emp_profiles = frappe.get_all(
-		"Ashan Employee Salary Profile",
-		filters={"company": company, "employment_status": "在职"},
+	# 1. 档案状态：按账期判断实际在册，而不是只看员工今天的状态。
+	emp_profiles = _salary_profiles_for_period(
+		company,
+		period_month,
 		fields=[
 			"name", "employee_no", "employee_name", "employee_type", "fixed_salary",
-			"social_security_base", "housing_fund_base",
-			"deduction_child_education", "deduction_housing_loan", "deduction_housing_rent",
+			"social_security_base", "housing_fund_base", "employment_status", "date_of_joining", "relieving_date",
+			"deduction_child_education", "deduction_continuing_education", "deduction_housing_loan", "deduction_housing_rent",
 			"deduction_elderly_care", "deduction_infant_care", "deduction_serious_illness"
-		]
+		],
 	)
 	emp_count = len(emp_profiles)
 	
-	# 离职动态分析
-	resigned_in_period = [e for e in emp_profiles if e.get("employment_status") == "离职" or (e.get("relieving_date") and str(e.get("relieving_date")).startswith(period_month))]
+	# 离职动态分析：只统计本账期发生的离职，不把所有历史离职人员混入。
+	resigned_in_period = [e for e in emp_profiles if e.get("relieving_date") and str(e.get("relieving_date")).startswith(period_month)]
 	if resigned_in_period:
 		profile_change_text = f"当月办理离职 {len(resigned_in_period)} 人 (次月已减员)"
 	else:
@@ -3643,11 +4328,15 @@ def get_monthly_workflow_status(company, period_month):
 	total_tax = flt(doc.total_tax) if doc else 0.0
 	total_company_cost = total_gross_salary + ss_sys_comp + hf_sys_comp
 
-	# 最终核定必须同时满足：基础数据就绪 + 两类法定凭证金额均核验一致。
-	# 仅“上传了文件”绝不能视为可封账。
+	# 服务器计算中心必须完全同步后才能封账。浏览器显示仅作提示，最终判断始终在服务器。
+	from ashan_cn_procurement.services.payroll_recalculation_service import get_payroll_calculation_readiness
+	calculation = get_payroll_calculation_readiness(company, period_month)
+
+	# 最终核定必须同时满足：基础数据就绪 + 后台计算完成 + 两类法定凭证日期/金额均核验一致。
 	can_lock = bool(
 		emp_count > 0
 		and has_items
+		and calculation.get("ready")
 		and ss_status == "verified"
 		and hf_status == "verified"
 	)
@@ -3738,6 +4427,7 @@ def get_monthly_workflow_status(company, period_month):
 			"total_tax": total_tax,
 			"total_company_cost": total_company_cost
 		},
+		"calculation": calculation,
 		"can_lock": can_lock
 	}
 
@@ -3881,7 +4571,7 @@ def _save_proof_pdf_batch(settle_doc, proof_type, payroll_period_month, pdf_entr
 	return saved
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def upload_and_verify_social_security_file(company, period_month, file_name=None, file_base64=None, file_url=None, files_json=None):
 	"""一个或多个社保 PDF/ZIP：先校验次月所属期，日期错误整批拒绝且不保存，再汇总金额。"""
 	check_payroll_workbench_permission("write")
@@ -3918,7 +4608,7 @@ def upload_and_verify_social_security_file(company, period_month, file_name=None
 	frappe.db.commit()
 	return {"success": True, "message": f"✅ 社保凭证所属期全部通过（核定期 {period_month} -> 实际缴费所属期 {expected_period}），共 {len(saved_files)} 份 PDF。" + (f" 合计 ¥{parsed_amount:,.2f} 与系统核算 ¥{sys_amount:,.2f} 完全一致。" if is_matched else f" 但凭证合计 ¥{parsed_amount:,.2f} 与系统核算 ¥{sys_amount:,.2f} 不一致，差额 ¥{diff:,.2f}，禁止最终封账。"), "expected_period": expected_period, "proof_count": len(saved_files), "parsed_amount": parsed_amount, "sys_amount": sys_amount, "difference_amount": diff, "is_matched": is_matched, "file_url": saved_files[0]["file_url"] if saved_files else None, "file_urls": saved_files, "files": validation.get("files", [])}
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def upload_and_verify_housing_fund_file(company, period_month, file_name=None, file_base64=None, file_url=None, files_json=None):
 	"""一个或多个公积金 PDF/ZIP：先校验次月缴存年月，日期错误整批拒绝且不保存，再汇总金额。"""
 	check_payroll_workbench_permission("write")
@@ -3953,20 +4643,32 @@ def upload_and_verify_housing_fund_file(company, period_month, file_name=None, f
 	frappe.db.commit()
 	return {"success": True, "message": f"✅ 公积金凭证所属期全部通过（核定期 {period_month} -> 实际缴费所属期 {expected_period}），共 {len(saved_files)} 份 PDF。" + (f" 合计 ¥{parsed_amount:,.2f} 与系统核算 ¥{sys_amount:,.2f} 完全一致。" if is_matched else f" 但凭证合计 ¥{parsed_amount:,.2f} 与系统核算 ¥{sys_amount:,.2f} 不一致，差额 ¥{diff:,.2f}，禁止最终封账。"), "expected_period": expected_period, "proof_count": len(saved_files), "parsed_amount": parsed_amount, "sys_amount": sys_amount, "difference_amount": diff, "is_matched": is_matched, "file_url": saved_files[0]["file_url"] if saved_files else None, "file_urls": saved_files, "files": validation.get("files", [])}
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def execute_monthly_settlement_lock(company, period_month):
 	"""
 	执行当月薪酬综合核定并封账锁定，同时初始化开启下月发薪账期权限 (前置强拦截校验)
 	"""
+	check_payroll_workbench_permission("write")
 	doc_name = f"{company}-{period_month}"
 	if not frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
 		return {"success": False, "message": f"未找到【{company}】{period_month} 的薪酬核算记录，无法执行封账！"}
 
 	settle_doc = frappe.get_doc("Ashan Monthly Payroll Settlement", doc_name)
 	
-	# 强拦截校验：必须完成实发表导入、社保上传核验、公积金上传核验
+	# 强拦截校验：必须完成实发表导入、服务器计算、社保上传核验、公积金上传核验。
 	if not settle_doc.items or len(settle_doc.items) == 0:
-		frappe.throw(f"【❌ 前置任务未完成】尚未导入【{period_month} 车间外部实发工资表】！请先完成任务 2 导入。")
+		frappe.throw(f"【❌ 前置任务未完成】尚未形成【{period_month}】月度薪酬明细！请先完成任务 2 导入/建账。")
+
+	from ashan_cn_procurement.services.payroll_recalculation_service import get_payroll_calculation_readiness
+	calc_ready = get_payroll_calculation_readiness(company, period_month)
+	if not calc_ready.get("ready"):
+		frappe.throw(
+			"【⛔ 禁止最终核定封账】服务器计算中心尚未完全同步。"
+			f"待计算 {cint(calc_ready.get('pending'))}，排队 {cint(calc_ready.get('queued'))}，"
+			f"计算中 {cint(calc_ready.get('running'))}，失败 {cint(calc_ready.get('failed'))}，"
+			f"未计算 {cint(calc_ready.get('uncomputed'))}，活动任务 {cint(calc_ready.get('active_tasks'))}。"
+			"请等待后台任务完成，或在【服务器计算中心】查看失败原因并重试。"
+		)
 	
 	if not settle_doc.ss_payment_file:
 		frappe.throw(f"【❌ 前置任务未完成】尚未上传【{period_month} 社保缴费申报表 PDF】并完成核验！请先完成任务 3 上传。")
@@ -4025,11 +4727,14 @@ def execute_monthly_settlement_lock(company, period_month):
 		"next_period_month": next_period_month
 	}
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def unlock_monthly_settlement(company, period_month, reason=""):
 	"""
 	反审核/解锁指定月份薪酬核定记录
 	"""
+	check_payroll_workbench_permission("write")
+	if not str(reason or "").strip():
+		frappe.throw("反审核/解锁必须填写原因，以便保留财务审计轨迹。")
 	doc_name = f"{company}-{period_month}"
 	if not frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
 		return {"success": False, "message": f"未找到【{company}】{period_month} 的薪酬核算记录！"}
@@ -4088,7 +4793,7 @@ def download_payroll_proof_file(company, period_month, proof_type):
 	frappe.response.type = "download"
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def delete_payroll_proof_file(company, period_month, proof_type):
 	"""
 	【🗑️ 安全删除已上传凭证文件与重置任务状态】
@@ -4145,109 +4850,3 @@ def delete_payroll_proof_file(company, period_month, proof_type):
 		"success": True,
 		"message": f"🗑️ 已成功删除【{period_month}】的{deleted_type_name}！任务已重置为待上传状态。"
 	}
-
-
-@frappe.whitelist()
-def compare_user_tax_table(company="天津祺富机械加工有限公司", period_month="2026-07"):
-	"""
-	逐行精确比对系统计算结果与用户 Excel 算法
-	"""
-	settlement = get_payroll_settlement_detail(company, period_month)
-	tax_sheet = get_tax_settlement_full_sheet(company, period_month)
-
-	items = {it['employee_no']: it for it in settlement.get('items', [])}
-	tax_rows = {r['employee_no']: r for r in tax_sheet.get('rows', [])}
-
-	user_data = [
-		{"no": "A0001", "name": "余莉影", "type": "正式工", "net": 3560.0, "gross": 4236.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -8523.0, "rate": 0.03, "prev_tax": 0.0, "cur_tax": 0.0},
-		{"no": "A0031", "name": "曹付云", "type": "正式工", "net": 5774.0, "gross": 6473.96, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": 8287.63, "rate": 0.03, "prev_tax": 224.69, "cur_tax": 23.94},
-		{"no": "A0037", "name": "刘风魁", "type": "正式工", "net": 6898.0, "gross": 7574.02, "ss": 560.02, "hf": 116.0, "spec_add": 3500.0, "cum_taxable": -9611.0, "rate": 0.03, "prev_tax": 22.95, "cur_tax": 0.0},
-		{"no": "A0006", "name": "孟祥山", "type": "正式工", "net": 8732.0, "gross": 10407.44, "ss": 560.02, "hf": 1000.0, "spec_add": 0.0, "cum_taxable": 29748.45, "rate": 0.03, "prev_tax": 777.03, "cur_tax": 115.42},
-		{"no": "A0004", "name": "翟风杰", "type": "正式工", "net": 8500.0, "gross": 9237.88, "ss": 560.02, "hf": 116.0, "spec_add": 1500.0, "cum_taxable": 16494.85, "rate": 0.03, "prev_tax": 432.99, "cur_tax": 61.86},
-		{"no": "A0013", "name": "陈小红", "type": "正式工", "net": 5032.0, "gross": 5708.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -7193.66, "rate": 0.03, "prev_tax": 9.34, "cur_tax": 0.0},
-		{"no": "A0014", "name": "辛华", "type": "正式工", "net": 4739.0, "gross": 5415.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -5496.89, "rate": 0.03, "prev_tax": 1.11, "cur_tax": 0.0},
-		{"no": "A0005", "name": "万晓莉", "type": "正式工", "net": 5368.0, "gross": 6044.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -8715.0, "rate": 0.03, "prev_tax": 0.0, "cur_tax": 0.0},
-		{"no": "A0038", "name": "贾翠丽", "type": "正式工", "net": 5157.0, "gross": 5833.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -101.0, "rate": 0.03, "prev_tax": 0.0, "cur_tax": 0.0},
-		{"no": "A0003", "name": "刘海锋", "type": "正式工", "net": 5157.0, "gross": 5833.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -118.0, "rate": 0.03, "prev_tax": 0.0, "cur_tax": 0.0},
-		{"no": "A0021", "name": "米清菊", "type": "正式工", "net": 5769.0, "gross": 6468.80, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": 5968.04, "rate": 0.03, "prev_tax": 155.26, "cur_tax": 23.78},
-		{"no": "A0025", "name": "王永", "type": "正式工", "net": 6819.0, "gross": 7551.28, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": 17779.38, "rate": 0.03, "prev_tax": 477.12, "cur_tax": 56.26},
-		{"no": "A0012", "name": "霍清海", "type": "正式工", "net": 4612.0, "gross": 4728.00, "ss": 0.0, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -13519.0, "rate": 0.03, "prev_tax": 0.0, "cur_tax": 0.0},
-		{"no": "A0011", "name": "张玉博", "type": "正式工", "net": 5954.0, "gross": 6659.53, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": 6396.91, "rate": 0.03, "prev_tax": 162.40, "cur_tax": 29.51},
-		{"no": "A0010", "name": "李金刚", "type": "正式工", "net": 5191.0, "gross": 5867.67, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": 2527.84, "rate": 0.03, "prev_tax": 75.19, "cur_tax": 0.65},
-		{"no": "A0051", "name": "李永丽", "type": "正式工", "net": 4622.0, "gross": 5298.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -17520.0, "rate": 0.03, "prev_tax": 0.0, "cur_tax": 0.0},
-		{"no": "A0064", "name": "姜常玲", "type": "正式工", "net": 5273.0, "gross": 5957.46, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": 1516.49, "rate": 0.03, "prev_tax": 37.05, "cur_tax": 8.44},
-		{"no": "A0065", "name": "孙晓霞", "type": "正式工", "net": 5138.0, "gross": 5814.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -2579.0, "rate": 0.03, "prev_tax": 0.0, "cur_tax": 0.0},
-		{"no": "A0066", "name": "刘勤光", "type": "正式工", "net": 4927.0, "gross": 5603.02, "ss": 560.02, "hf": 116.0, "spec_add": 0.0, "cum_taxable": -4309.0, "rate": 0.03, "prev_tax": 0.0, "cur_tax": 0.0},
-		{"no": "A0032", "name": "林伯新", "type": "返聘工", "net": 5321.0, "gross": 5321.00, "ss": 0.0, "hf": 0.0, "spec_add": 0.0, "cum_taxable": 2133.33, "rate": 0.03, "prev_tax": 67.33, "cur_tax": 0.0},
-		{"no": "A0016", "name": "张引弟", "type": "返聘工", "net": 5686.0, "gross": 5686.00, "ss": 0.0, "hf": 0.0, "spec_add": 0.0, "cum_taxable": 1419.29, "rate": 0.03, "prev_tax": 53.29, "cur_tax": 0.0},
-		{"no": "A0009", "name": "李淑华", "type": "返聘工", "net": 5000.0, "gross": 5000.00, "ss": 0.0, "hf": 0.0, "spec_add": 0.0, "cum_taxable": -753.63, "rate": 0.03, "prev_tax": 12.37, "cur_tax": 0.0},
-		{"no": "A0028", "name": "刘丽艳", "type": "返聘工", "net": 5379.0, "gross": 5390.72, "ss": 0.0, "hf": 0.0, "spec_add": 0.0, "cum_taxable": 6371.13, "rate": 0.03, "prev_tax": 179.41, "cur_tax": 11.72},
-		{"no": "A0035", "name": "贾建丽", "type": "返聘工", "net": 4865.0, "gross": 4865.00, "ss": 0.0, "hf": 0.0, "spec_add": 0.0, "cum_taxable": -2752.06, "rate": 0.03, "prev_tax": 17.94, "cur_tax": 0.0},
-		{"no": "Y0001", "name": "UNURBAYARENKHZUL", "type": "外籍工", "net": 28000.0, "gross": 33375.00, "ss": 0.0, "hf": 0.0, "spec_add": 1500.0, "cum_taxable": 193850.0, "rate": 0.20, "prev_tax": 16475.0, "cur_tax": 5375.0}
-	]
-
-	comparison_results = []
-	for u in user_data:
-		eno = u["no"]
-		sys_item = items.get(eno, {})
-		sys_tax = tax_rows.get(eno, {})
-		
-		sys_net = flt(sys_item.get("net_salary"))
-		sys_gross = flt(sys_item.get("gross_salary"))
-		sys_cur_tax = flt(sys_item.get("tax_amount"))
-		sys_cum_taxable = flt(sys_tax.get("taxable_income"))
-		sys_prev_tax = flt(sys_tax.get("prev_tax_paid"))
-		
-		diff_gross = round(sys_gross - u["gross"], 2)
-		diff_tax = round(sys_cur_tax - u["cur_tax"], 2)
-		diff_taxable = round(sys_cum_taxable - u["cum_taxable"], 2)
-		
-		comparison_results.append({
-			"no": eno,
-			"name": u["name"],
-			"user_net": u["net"],
-			"user_gross": u["gross"],
-			"sys_gross": sys_gross,
-			"diff_gross": diff_gross,
-			"user_tax": u["cur_tax"],
-			"sys_tax": sys_cur_tax,
-			"diff_tax": diff_tax,
-			"user_cum_taxable": u["cum_taxable"],
-			"sys_cum_taxable": sys_cum_taxable,
-			"diff_taxable": diff_taxable,
-			"user_prev_tax": u["prev_tax"],
-			"sys_prev_tax": sys_prev_tax
-		})
-
-	return comparison_results
-
-
-@frappe.whitelist()
-def align_and_compare_profiles(company="天津祺富机械加工有限公司", period_month="2026-07"):
-	"""
-	自动对齐母表中翟风杰、刘风魁、霍清海的专项附加与离职社保状态，并重新核算比对
-	"""
-	if frappe.db.exists("Ashan Employee Salary Profile", {"employee_no": "A0004"}):
-		zfj = frappe.get_doc("Ashan Employee Salary Profile", {"employee_no": "A0004"})
-		zfj.deduction_elderly_care = 1500
-		zfj.save(ignore_permissions=True)
-
-	if frappe.db.exists("Ashan Employee Salary Profile", {"employee_no": "A0037"}):
-		lfk = frappe.get_doc("Ashan Employee Salary Profile", {"employee_no": "A0037"})
-		lfk.deduction_child_education = 2000
-		lfk.deduction_elderly_care = 1500
-		lfk.save(ignore_permissions=True)
-
-	if frappe.db.exists("Ashan Employee Salary Profile", {"employee_no": "A0012"}):
-		hqh = frappe.get_doc("Ashan Employee Salary Profile", {"employee_no": "A0012"})
-		hqh.social_security_base = 0
-		hqh.save(ignore_permissions=True)
-
-	frappe.db.commit()
-
-	# 重新计算并保存 2026-07 结算与个税
-	recalculate_and_save_monthly_tax(company, period_month)
-
-	# 再次执行比对
-	return compare_user_tax_table(company, period_month)
-

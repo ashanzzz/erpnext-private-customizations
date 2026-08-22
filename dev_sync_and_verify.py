@@ -24,7 +24,7 @@ USER = os.getenv('UNRAID_SSH_USER', 'root')
 PASSWORD = os.getenv('UNRAID_SSH_PASSWORD', '')
 
 SITE_URL = os.getenv('ERPNEXT_SITE_URL_LOCAL', 'http://192.168.8.11:6888')
-USERNAME = os.getenv('ERPNEXT_USERNAME', 'ashanzzz1213@gmail.com')
+USERNAME = os.getenv('ERPNEXT_USERNAME', 'dev@example.invalid')
 USER_PWD = os.getenv('ERPNEXT_PASSWORD', '')
 
 LOCAL_APP_DIR = r"d:\SynologyDrive团队\antigravity\erpnext16\ashan_cn_procurement"
