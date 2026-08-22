@@ -2917,13 +2917,13 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 { fieldtype: 'Data', fieldname: 'bank_name', label: '开户行', default: emp_data ? emp_data.bank_name : '' },
                 { fieldtype: 'Data', fieldname: 'bank_account', label: '银行卡号', default: emp_data ? emp_data.bank_account : '' },
 
-                { fieldtype: 'Section Break', label: '退休政策' },
-                { fieldtype: 'Select', fieldname: 'retirement_category', label: '退休类别', options: ['','男职工（原60岁）','女职工（原55岁）','女职工（原50岁）','特殊政策/人工确认'], default: emp_data ? (emp_data.retirement_category || '') : '', onchange: retirementOnChange },
-                { fieldtype: 'Float', fieldname: 'original_retirement_age', label: '退休年龄(原)', default: emp_data ? emp_data.original_retirement_age : 0, onchange: retirementOnChange, description: '可手动调整；修改后自动联动计算到龄年月。' },
-                { fieldtype: 'Data', fieldname: 'original_retirement_period', label: '原到龄年月 (YYYY-MM)', default: emp_data ? (emp_data.original_retirement_period || emp_data.original_retire_period || emp_data.orig_retire_period || '') : '', onchange: retirementOnChange, description: '原法定到龄年月，可手动输入修改。' },
+                { fieldtype: 'Section Break', label: '退休政策 (政策公式全自动推导)' },
+                { fieldtype: 'Select', fieldname: 'retirement_category', label: '退休类别', options: ['','男职工（原60岁）','女职工（原55岁）','女职工（原50岁）','特殊政策/人工确认'], default: emp_data ? (emp_data.retirement_category || '') : '', onchange: retirementOnChange, description: '根据身份证出生日期、性别及岗位自动匹配。' },
+                { fieldtype: 'Float', fieldname: 'original_retirement_age', label: '退休年龄(原)', read_only: 1, default: emp_data ? emp_data.original_retirement_age : 0, description: '根据法定退休类别自动推导（如男60岁/女50岁/女55岁）。' },
+                { fieldtype: 'Data', fieldname: 'original_retirement_period', label: '原到龄年月 (YYYY-MM)', read_only: 1, default: emp_data ? (emp_data.original_retirement_period || emp_data.original_retire_period || emp_data.orig_retire_period || '') : '', description: '根据出生日期与原退休年龄由公式全自动推导（出生年月 + 原法定年龄）。' },
                 { fieldtype: 'Column Break' },
-                { fieldtype: 'Float', fieldname: 'delayed_retirement_age', label: '退休年龄(延)', default: emp_data ? emp_data.delayed_retirement_age : 0, onchange: retirementOnChange, description: '延迟法定退休年龄。' },
-                { fieldtype: 'Data', fieldname: 'delayed_retirement_period', label: '延迟到龄年月 (YYYY-MM)', default: emp_data ? (emp_data.delayed_retirement_period || emp_data.delayed_retire_period || '') : '', description: '延迟法定退休月份。' },
+                { fieldtype: 'Float', fieldname: 'delayed_retirement_age', label: '退休年龄(延)', read_only: 1, default: emp_data ? emp_data.delayed_retirement_age : 0, description: '根据国家《渐进式延迟法定退休年龄》政策引擎自动推导。' },
+                { fieldtype: 'Data', fieldname: 'delayed_retirement_period', label: '延迟到龄年月 (YYYY-MM)', read_only: 1, default: emp_data ? (emp_data.delayed_retirement_period || emp_data.delayed_retire_period || '') : '', description: '根据国家《渐进式延迟法定退休年龄》政策引擎自动推导。' },
                 { fieldtype: 'HTML', fieldname: 'retirement_preview' },
 
                 { fieldtype: 'Section Break', label: '薪酬长期参数' },
@@ -2951,15 +2951,15 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
                 { fieldtype: 'Section Break', label: '导入兼容与备注' },
                 {
-                    fieldtype: 'Table', fieldname: 'name_aliases', label: '姓名别名（可多个）',
+                    fieldtype: 'Table', fieldname: 'name_aliases', label: '姓名别名（外部工资表兼容匹配）',
                     data: emp_data ? (emp_data.name_aliases || []) : [],
                     in_place_edit: true,
                     cannot_add_rows: false,
                     cannot_delete_rows: false,
-                    description: '外部工资表出现曾用字、错别字或称谓时，在这里逐条登记。明确别名优先于模糊匹配。',
+                    description: '车间外部工资表出现错别字、曾用字或称谓时（如刘海锋/刘海峰），在此登记别名。解析实发表时别名将 100% 精准优先匹配该员工档案。',
                     fields: [
-                        { fieldtype: 'Data', fieldname: 'alias_name', label: '姓名别名', reqd: 1, in_list_view: 1, columns: 5 },
-                        { fieldtype: 'Data', fieldname: 'alias_note', label: '说明', in_list_view: 1, columns: 7 }
+                        { fieldtype: 'Data', fieldname: 'alias_name', label: '姓名别名 (如曾用字/错别字)', reqd: 1, in_list_view: 1, columns: 5 },
+                        { fieldtype: 'Data', fieldname: 'alias_note', label: '别名备注/使用场景', in_list_view: 1, columns: 7 }
                     ]
                 },
                 { fieldtype: 'Column Break' },

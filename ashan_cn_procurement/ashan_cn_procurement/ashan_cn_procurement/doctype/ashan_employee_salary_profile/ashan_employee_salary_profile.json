@@ -87,24 +87,26 @@
    "fieldtype": "Float",
    "label": "退休年龄(原)",
    "default": "0",
-   "in_list_view": 1
+   "in_list_view": 1,
+   "read_only": 1
   },
   {
    "fieldname": "delayed_retirement_age",
    "fieldtype": "Float",
    "label": "退休年龄(延)",
-   "in_list_view": 1
+   "in_list_view": 1,
+   "read_only": 1
   },
   {
    "fieldname": "original_retirement_period",
    "fieldtype": "Data",
-   "label": "原退休月份",
+   "label": "原法定到龄年月",
    "read_only": 1
   },
   {
    "fieldname": "delayed_retirement_period",
    "fieldtype": "Data",
-   "label": "延迟后法定退休月份",
+   "label": "延迟法定到龄年月",
    "read_only": 1
   },
   {
