@@ -2216,8 +2216,10 @@ def get_accounting_payroll_sheet(company="天津祺富机械加工有限公司",
 	"""Return the XLSM-aligned accounting payroll ledger.
 
 	The reference workbook has one 11-column sheet for domestic/rehired staff and a
-	separate ``记账工资表外籍`` sheet.  The API therefore returns ``rows`` and
+	separate ``记账工资表-外籍`` sheet.  The API therefore returns ``rows`` and
 	``foreign_rows`` separately so the UI/export can preserve that accounting boundary.
+
+	临时工（employee_type 含「临时」）依法不入账，严格过滤排除。
 	"""
 	check_payroll_workbench_permission("read")
 	detail = get_payroll_settlement_detail(company, period_month)
@@ -2232,6 +2234,7 @@ def get_accounting_payroll_sheet(company="天津祺富机械加工有限公司",
 		hf_p = flt(it.get("hf_person_total"))
 		tax = flt(it.get("tax_amount"))
 		total_ded = round(ss_p + hf_p + tax, 2)
+		net = round(gross - total_ded, 2)
 		return {
 			"employee_no": it.get("employee_no"),
 			"employee_name": it.get("employee_name"),
@@ -2246,12 +2249,22 @@ def get_accounting_payroll_sheet(company="天津祺富机械加工有限公司",
 			"ss_person_total": ss_p,
 			"tax_amount": tax,
 			"total_deduction": total_ded,
-			"net_salary": flt(it.get("net_salary")),
+			# Use pre-computed net_salary to avoid Excel formula dependency issues
+			"net_salary": net,
 		}
 
+	def _is_temp(row):
+		"""临时工不入账记账工资表，严格排除。"""
+		return "临时" in str(row.get("employee_type") or "")
+
+	def _is_foreign(row):
+		return "外籍" in str(row.get("employee_type") or "")
+
 	all_rows = [make_row(it) for it in items]
-	rows = [r for r in all_rows if "外籍" not in str(r.get("employee_type") or "")]
-	foreign_rows = [r for r in all_rows if "外籍" in str(r.get("employee_type") or "")]
+	# 临时工彻底排除（不入账）
+	eligible_rows = [r for r in all_rows if not _is_temp(r)]
+	rows = [r for r in eligible_rows if not _is_foreign(r)]
+	foreign_rows = [r for r in eligible_rows if _is_foreign(r)]
 	for idx, row in enumerate(rows, start=1):
 		row["seq"] = idx
 	for idx, row in enumerate(foreign_rows, start=1):
@@ -2273,10 +2286,10 @@ def get_accounting_payroll_sheet(company="天津祺富机械加工有限公司",
 		"period_month": period_month,
 		"rows": rows,
 		"foreign_rows": foreign_rows,
-		"all_rows": all_rows,
+		"all_rows": eligible_rows,
 		"totals": make_totals(rows),
 		"foreign_totals": make_totals(foreign_rows),
-		"all_totals": make_totals(all_rows),
+		"all_totals": make_totals(eligible_rows),
 	}
 
 
@@ -3455,11 +3468,12 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 		data_res = get_accounting_payroll_sheet(company, period_month)
 		rows = data_res.get("foreign_rows" if foreign else "rows", [])
 		totals = data_res.get("foreign_totals" if foreign else "totals", {})
-		ws.title = "记账工资表外籍" if foreign else "2.记账工资表(11列)"
+		# Sheet 名按用户要求命名
+		ws.title = "记账工资表-外籍" if foreign else "记账工资表-普通"
 
 		# 第 1 行：主标题（加粗，无背景色，跨度 A1:K1）
 		ws.merge_cells("A1:K1")
-		ws["A1"] = f"{company} {period_month} {'记账工资表外籍' if foreign else '记账工资表'}"
+		ws["A1"] = f"{company} {period_month} {'记账工资表-外籍' if foreign else '记账工资表-普通'}"
 		ws["A1"].font = font_title
 		ws["A1"].alignment = align_center
 		ws.row_dimensions[1].height = 42
@@ -3475,21 +3489,30 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 			cell.font = font_header
 			cell.alignment = align_center
 
-		# 第 3 行起：员工数据行
+		# 第 3 行起：员工数据行（全部使用预计算值，避免 xlsx 打开未计算的问题）
 		for row_idx, r in enumerate(rows, start=3):
 			ws.row_dimensions[row_idx].height = 22
+			gross = flt(r.get("gross_salary", 0))
+			post_all = flt(r.get("post_allowance", 0))
+			house_all = flt(r.get("house_rent_allowance", 0))
+			base_perf = flt(r.get("base_perf_salary", 0))
+			hf_p = flt(r.get("hf_person_total", 0))
+			ss_p = flt(r.get("ss_person_total", 0))
+			tax = flt(r.get("tax_amount", 0))
+			total_ded = round(hf_p + ss_p + tax, 2)
+			net = round(gross - total_ded, 2)
 			vals = [
 				r.get("employee_no"),
 				r.get("employee_name"),
-				f"=F{row_idx}-D{row_idx}-E{row_idx}",
-				r.get("post_allowance", 0) or None,
-				r.get("house_rent_allowance", 0) or None,
-				r.get("gross_salary", 0) or 0,
-				r.get("hf_person_total", 0) or None,
-				r.get("ss_person_total", 0) or None,
-				r.get("tax_amount", 0) or 0,
-				f"=SUM(G{row_idx}:I{row_idx})",
-				f"=F{row_idx}-J{row_idx}",
+				round(base_perf, 2),
+				post_all if post_all else None,
+				house_all if house_all else None,
+				gross,
+				hf_p if hf_p else None,
+				ss_p if ss_p else None,
+				tax,
+				total_ded,   # 合计扣除：预计算值
+				net,         # 税后工资合计：预计算值
 			]
 			for col_idx, val in enumerate(vals, start=1):
 				cell = ws.cell(row=row_idx, column=col_idx, value=val)
@@ -3500,20 +3523,24 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 					cell.alignment = align_left
 				else:
 					cell.alignment = align_right
-				if isinstance(val, (int, float)) or (isinstance(val, str) and val.startswith("=")):
+				if isinstance(val, (int, float)):
 					cell.number_format = "#,##0.00"
 
 		tot_row = len(rows) + 3
 		ws.row_dimensions[tot_row].height = 24
 		ws.cell(row=tot_row, column=1, value="合计").alignment = align_center
 		ws.cell(row=tot_row, column=2, value=f"共 {len(rows)} 人").alignment = align_center
-		if rows:
-			for col_idx in range(3, 12):
-				col_letter = get_column_letter(col_idx)
-				ws.cell(row=tot_row, column=col_idx, value=f"=SUM({col_letter}3:{col_letter}{tot_row - 1})")
-		else:
-			for col_idx in range(3, 12):
-				ws.cell(row=tot_row, column=col_idx, value=0)
+		# 合计行使用后端预计算的真实数值（不使用 Excel SUM 公式，避免空数组或未计算问题）
+		tot_col_keys = [
+			None, None,
+			"base_perf_salary", "post_allowance", "house_rent_allowance", "gross_salary",
+			"hf_person_total", "ss_person_total", "tax_amount", "total_deduction", "net_salary",
+		]
+		for col_idx, key in enumerate(tot_col_keys, start=1):
+			if key is None:
+				continue
+			cell = ws.cell(row=tot_row, column=col_idx, value=flt(totals.get(key, 0)))
+			cell.number_format = "#,##0.00"
 
 		for col_idx in range(1, 12):
 			c = ws.cell(row=tot_row, column=col_idx)
@@ -4212,14 +4239,15 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 		filename = f"{filename_prefix}_现金点钞核定表.xlsx"
 	elif sheet_type == "accounting":
 		build_accounting_sheet(ws_default)
-		filename = f"{filename_prefix}_11列记账工资表.xlsx"
+		filename = f"{filename_prefix}_记账工资表.xlsx"
 	elif sheet_type == "accounting_xlsm":
+		# 普通员工 sheet（第一个，已是 ws_default）
 		build_accounting_sheet(ws_default)
-		acc_data = get_accounting_payroll_sheet(company, period_month)
-		if acc_data.get("foreign_rows"):
-			ws_foreign = wb.create_sheet()
-			build_accounting_sheet(ws_foreign, foreign=True)
-		filename = f"{filename_prefix}_记账工资表_XLSM参考版.xlsx"
+		# 外籍员工 sheet（始终创建，无外籍则显示空表）
+		ws_foreign = wb.create_sheet()
+		build_accounting_sheet(ws_foreign, foreign=True)
+		# 文件名：去掉 _XLSM参考版 后缀，统一命名
+		filename = f"{filename_prefix}_记账工资表.xlsx"
 	elif sheet_type == "insurance":
 		build_insurance_sheet(ws_default)
 		filename = f"{filename_prefix}_社保缴费明细表.xlsx"
@@ -4284,7 +4312,7 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 			for idx, width in enumerate(widths, start=1):
 				sheet.column_dimensions[get_column_letter(idx)].width = width
 				sheet.column_dimensions[get_column_letter(idx)].hidden = False
-		elif sheet.title in {"2.记账工资表(11列)", "记账工资表外籍"}:
+		elif sheet.title in {"记账工资表-普通", "记账工资表-外籍"}:
 			# 严格对齐参考 XLSM：姓名列加宽至 14.0，适配中长姓名与外籍姓名，适合整表缩小填充打印
 			widths = [8.625, 14.0, 11.625, 8.625, 13.0, 11.625, 9.5, 10.5, 9.5, 10.5, 11.625]
 			for idx, width in enumerate(widths, start=1):
