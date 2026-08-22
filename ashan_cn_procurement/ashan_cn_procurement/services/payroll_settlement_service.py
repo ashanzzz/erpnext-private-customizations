@@ -3102,29 +3102,33 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 	wb = openpyxl.Workbook()
 	ws_default = wb.active
 
-	# 通用专业样式定义
-	font_title = Font(name="Microsoft YaHei", size=14, bold=True, color="0F172A")
-	font_sub = Font(name="Microsoft YaHei", size=9.5, italic=True, color="475569")
-	font_header = Font(name="Microsoft YaHei", size=10, bold=True, color="1E293B")
-	font_data = Font(name="Microsoft YaHei", size=9.5, color="334155")
-	font_total = Font(name="Microsoft YaHei", size=10, bold=True, color="0F172A")
+	# 通用极简专业样式定义：无背景色、标题行加粗、外框加粗、内部细边框
+	font_title = Font(name="Microsoft YaHei", size=15, bold=True, color="000000")
+	font_header = Font(name="Microsoft YaHei", size=11, bold=True, color="000000")
+	font_data = Font(name="Microsoft YaHei", size=10, color="000000")
+	font_total = Font(name="Microsoft YaHei", size=10.5, bold=True, color="000000")
 
-	fill_header = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
-	fill_accent = PatternFill(start_color="E0E7FF", end_color="E0E7FF", fill_type="solid")
-	fill_success = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
-	fill_warning = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
-	fill_info = PatternFill(start_color="E0F2FE", end_color="E0F2FE", fill_type="solid")
-	fill_purple = PatternFill(start_color="EDE9FE", end_color="EDE9FE", fill_type="solid")
-	fill_danger = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
-	fill_total = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
-
-	thin_side = Side(border_style="thin", color="CBD5E1")
-	border_cell = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
-	double_bottom = Border(left=thin_side, right=thin_side, top=thin_side, bottom=Side(border_style="double", color="334155"))
+	side_thin = Side(border_style="thin", color="000000")
+	side_medium = Side(border_style="medium", color="000000")
+	side_double = Side(border_style="double", color="000000")
 
 	align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
 	align_left = Alignment(horizontal="left", vertical="center")
 	align_right = Alignment(horizontal="right", vertical="center")
+
+	def apply_clean_table_borders(ws, start_row, end_row, start_col, end_col, split_col=None, total_row=None):
+		"""标题行和工资行外框加粗，内部边框普通，合计行底部双细线。"""
+		for r in range(start_row, end_row + 1):
+			is_header = (r == start_row)
+			is_total = (total_row is not None and r == total_row)
+			for c in range(start_col, end_col + 1):
+				top = side_medium if is_header else side_thin
+				if is_total:
+					top = side_thin
+				bottom = side_medium if is_header else (side_double if is_total else (side_medium if r == end_row else side_thin))
+				left = side_medium if (c == start_col or (split_col and c == split_col + 1)) else side_thin
+				right = side_medium if (c == end_col or (split_col and c == split_col)) else side_thin
+				ws.cell(row=r, column=c).border = Border(left=left, right=right, top=top, bottom=bottom)
 
 	# -------------------------------------------------------------
 	# 1. 24 列薪资发放表 (车间实发 + 考勤工时 + 备考后直接呈现现金点钞辅助列)
@@ -3136,18 +3140,14 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 		rows = data_res.get("rows", [])
 		totals = data_res.get("totals", {})
 
+		# 第 1 行：主标题（加粗，无背景色，跨度匹配打印区域 A1:X1）
 		ws.merge_cells("A1:X1")
 		ws["A1"] = f"{company} {period_month} 薪资发放表"
 		ws["A1"].font = font_title
 		ws["A1"].alignment = align_center
-		ws.row_dimensions[1].height = 32
+		ws.row_dimensions[1].height = 42
 
-		ws.merge_cells("A2:X2")
-		ws["A2"] = f"发薪月份: {period_month}  |  生成日期: {date.today().strftime('%Y-%m-%d')}  |  员工人数: {len(rows)} 人  |  单位: 元"
-		ws["A2"].font = font_sub
-		ws["A2"].alignment = align_center
-		ws.row_dimensions[2].height = 20
-
+		# 第 2 行：表头（加粗，无背景色，删去原统计副标题行）
 		headers = [
 			"序号", "工号", "姓名", "作业天数", "作业小时", "天工资", "小时工资",
 			"全勤费", "加班小时", "加班费", "国勤天数", "国勤工资", "达标率",
@@ -3155,21 +3155,18 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 			"补贴工资合计", "应发工资合计", "工资调整", "实发工资合计", "签字", "备考",
 		]
 		cash_headers = ["100 元", "50 元", "10 元", "5 元", "1 元", "现金合计", "核定"]
-		ws.row_dimensions[3].height = 26
+		ws.row_dimensions[2].height = 26
 		for col_idx, h in enumerate(headers, start=1):
-			cell = ws.cell(row=3, column=col_idx, value=h)
+			cell = ws.cell(row=2, column=col_idx, value=h)
 			cell.font = font_header
-			cell.fill = fill_warning if "补贴" in h or "补" in h else (fill_success if "实发" in h else fill_header)
 			cell.alignment = align_center
-			cell.border = border_cell
 		for col_idx, h in enumerate(cash_headers, start=25):
-			cell = ws.cell(row=3, column=col_idx, value=h)
+			cell = ws.cell(row=2, column=col_idx, value=h)
 			cell.font = font_header
-			cell.fill = fill_info if h != "核定" else fill_success
 			cell.alignment = align_center
-			cell.border = border_cell
 
-		for row_idx, r in enumerate(rows, start=4):
+		# 第 3 行起：员工数据行（无背景色，公式计算）
+		for row_idx, r in enumerate(rows, start=3):
 			ws.row_dimensions[row_idx].height = 22
 			vals = [
 				r.get("seq"), r.get("employee_no"), r.get("employee_name"),
@@ -3191,7 +3188,6 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 			for col_idx, val in enumerate(vals, start=1):
 				cell = ws.cell(row=row_idx, column=col_idx, value=val)
 				cell.font = font_data
-				cell.border = border_cell
 				if col_idx in [1, 2, 13, 23, 25, 26, 27, 28, 29, 31]:
 					cell.alignment = align_center
 				elif col_idx in [3, 24]:
@@ -3209,17 +3205,17 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 					if isinstance(val, (int, float)) or (isinstance(val, str) and val.startswith("=")):
 						cell.number_format = "#,##0.00"
 
-		tot_row = len(rows) + 4
+		tot_row = len(rows) + 3
 		ws.row_dimensions[tot_row].height = 24
 		ws.cell(row=tot_row, column=1, value="合计").alignment = align_center
 		ws.cell(row=tot_row, column=2, value=f"共 {len(rows)} 人").alignment = align_center
 		if rows:
 			for col_idx in (4, 5, 8, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22):
 				col_letter = get_column_letter(col_idx)
-				ws.cell(row=tot_row, column=col_idx, value=f"=SUM({col_letter}4:{col_letter}{tot_row - 1})")
+				ws.cell(row=tot_row, column=col_idx, value=f"=SUM({col_letter}3:{col_letter}{tot_row - 1})")
 			for col_idx in (25, 26, 27, 28, 29, 30, 31):
 				col_letter = get_column_letter(col_idx)
-				ws.cell(row=tot_row, column=col_idx, value=f"=SUM({col_letter}4:{col_letter}{tot_row - 1})")
+				ws.cell(row=tot_row, column=col_idx, value=f"=SUM({col_letter}3:{col_letter}{tot_row - 1})")
 		else:
 			for col_idx in range(4, 32):
 				ws.cell(row=tot_row, column=col_idx, value=0)
@@ -3227,8 +3223,6 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 		for col_idx in range(1, 32):
 			c = ws.cell(row=tot_row, column=col_idx)
 			c.font = font_total
-			c.fill = fill_total
-			c.border = double_bottom
 			if col_idx in [25, 26, 27, 28, 29, 31]:
 				c.alignment = align_center
 				c.number_format = "0"
@@ -3238,23 +3232,26 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 				c.alignment = align_right
 				c.number_format = "#,##0.00"
 
-		# 设置列宽（参照参考工作簿，姓名列加宽）
+		# 设置列宽（姓名列加宽）
 		dist_widths = [5.625, 8.625, 13.5, 8.625, 13.0, 9.125, 13.0, 13.0, 13.0, 13.0, 13.0, 13.0, 8.625, 13.0, 9.125, 12.625, 8.625, 13.0, 12.625, 13.0, 9.125, 13.625, 16.625, 14.625, 10.625, 9.0, 9.0, 9.0, 9.0, 12.0, 10.625]
 		for idx, w in enumerate(dist_widths, start=1):
 			ws.column_dimensions[get_column_letter(idx)].width = w
 			ws.column_dimensions[get_column_letter(idx)].hidden = False
 
-		ws.freeze_panes = "D4"
+		# 应用外框加粗、内部普通边框设计
+		apply_clean_table_borders(ws, start_row=2, end_row=tot_row, start_col=1, end_col=31, split_col=24, total_row=tot_row)
 
-		# 顶端标题行重复（第 1~3 行），打印每页均显示表头
-		ws.print_title_rows = "1:3"
+		ws.freeze_panes = "D3"
+
+		# 顶端标题行重复（第 1~2 行），打印每页均显示主标题与表头
+		ws.print_title_rows = "1:2"
 
 		# 打印范围严格限定为第 1 列（序号）至备考列（A:X）
 		ws.print_area = f"A1:X{tot_row}"
 
 		# 每个人员独立分页：在每名员工数据行后插入分页符
 		if rows:
-			for r_break_idx in range(4, len(rows) + 4):
+			for r_break_idx in range(3, len(rows) + 3):
 				ws.row_breaks.append(Break(id=r_break_idx))
 
 		ws.page_setup.paperSize = ws.PAPERSIZE_A4
@@ -3271,7 +3268,7 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 		ws.sheet_view.showGridLines = True
 
 	# -------------------------------------------------------------
-	# 2. 11 列记账工资表 (严格参照 XLSM；表格全部缩小以填充，姓名加宽)
+	# 2. 11 列记账工资表 (严格参照 XLSM；表格全部缩小以填充，姓名加宽，极简无背景)
 	# -------------------------------------------------------------
 	def build_accounting_sheet(ws, foreign=False):
 		data_res = get_accounting_payroll_sheet(company, period_month)
@@ -3279,24 +3276,25 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 		totals = data_res.get("foreign_totals" if foreign else "totals", {})
 		ws.title = "记账工资表外籍" if foreign else "2.记账工资表(11列)"
 
+		# 第 1 行：主标题（加粗，无背景色，跨度 A1:K1）
 		ws.merge_cells("A1:K1")
 		ws["A1"] = f"{company} {period_month} {'记账工资表外籍' if foreign else '记账工资表'}"
 		ws["A1"].font = font_title
 		ws["A1"].alignment = align_center
-		ws.row_dimensions[1].height = 32
+		ws.row_dimensions[1].height = 42
 
+		# 第 2 行：表头（加粗，无背景色）
 		headers = [
 			"工号", "姓名", "基本绩效工资", "职位补贴", "房/车补", "税前工资",
 			"公积金", "社保", "应补/退税额", "合计扣除", "税后工资合计",
 		]
-		ws.row_dimensions[2].height = 24
+		ws.row_dimensions[2].height = 26
 		for col_idx, h in enumerate(headers, start=1):
 			cell = ws.cell(row=2, column=col_idx, value=h)
 			cell.font = font_header
-			cell.fill = fill_success if h == "税后工资合计" else (fill_danger if h == "应补/退税额" else fill_header)
 			cell.alignment = align_center
-			cell.border = border_cell
 
+		# 第 3 行起：员工数据行
 		for row_idx, r in enumerate(rows, start=3):
 			ws.row_dimensions[row_idx].height = 22
 			vals = [
@@ -3315,7 +3313,6 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 			for col_idx, val in enumerate(vals, start=1):
 				cell = ws.cell(row=row_idx, column=col_idx, value=val)
 				cell.font = font_data
-				cell.border = border_cell
 				if col_idx == 1:
 					cell.alignment = align_center
 				elif col_idx == 2:
@@ -3340,8 +3337,6 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 		for col_idx in range(1, 12):
 			c = ws.cell(row=tot_row, column=col_idx)
 			c.font = font_total
-			c.fill = fill_total
-			c.border = double_bottom
 			if col_idx in [1, 2]:
 				c.alignment = align_center
 			else:
@@ -3353,7 +3348,13 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 		for idx, w in enumerate(acc_widths, start=1):
 			ws.column_dimensions[get_column_letter(idx)].width = w
 
+		# 应用外框加粗、内部普通边框设计
+		apply_clean_table_borders(ws, start_row=2, end_row=tot_row, start_col=1, end_col=11, total_row=tot_row)
+
 		ws.freeze_panes = "C3"
+
+		# 顶端标题行重复（第 1~2 行）
+		ws.print_title_rows = "1:2"
 		ws.print_area = f"A1:K{tot_row}"
 		ws.page_setup.paperSize = ws.PAPERSIZE_A4
 		ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
