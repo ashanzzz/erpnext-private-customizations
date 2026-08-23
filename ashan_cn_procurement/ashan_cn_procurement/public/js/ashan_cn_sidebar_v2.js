@@ -80,6 +80,22 @@
 
     function handleRootRoute() {
         if (!window.frappe || !frappe.get_route || !frappe.set_route) return;
+
+        // 严格检查浏览器真实地址：只有直接访问根路径时才执行首页重定向
+        const pathname = (window.location.pathname || "").toLowerCase().replace(/\/+$/, "");
+        const hash = (window.location.hash || "").toLowerCase();
+
+        const isTrueRootUrl = (
+            pathname === "" ||
+            pathname === "/" ||
+            pathname === "/desk" ||
+            pathname === "/app"
+        ) && (hash === "" || hash === "#" || hash === "#desk" || hash === "#app");
+
+        if (!isTrueRootUrl) {
+            return;
+        }
+
         const route = frappe.get_route() || [];
         const joined = Array.isArray(route) ? route.join("/").toLowerCase() : "";
 

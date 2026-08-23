@@ -937,10 +937,21 @@ def make_purchase_orders_from_mr_items(
         if this_qty <= 0 or this_qty > flt(db_row.pending_qty):
             this_qty = flt(db_row.pending_qty)
 
+        amount = flt(user_row.get("amount")) or flt(this_qty * (flt(user_row.get("rate")) or flt(db_row.rate)), 2)
+        tax_rate = flt(user_row.get("tax_rate") or 13.0, 2)
+        tax_amount = flt(user_row.get("tax_amount") or (amount * (tax_rate / 100.0)), 2)
+        total_amount = flt(user_row.get("total_amount") or (amount + tax_amount), 2)
+
         supplier_groups[(row_company, target_supplier)].append({
             "db_row": db_row,
             "this_qty": this_qty,
             "rate": flt(user_row.get("rate")) or flt(db_row.rate),
+            "amount": amount,
+            "tax_rate": tax_rate,
+            "tax_amount": tax_amount,
+            "total_amount": total_amount,
+            "spec": user_row.get("spec") or "",
+            "description": user_row.get("description") or "",
         })
 
     created_orders = []
@@ -955,22 +966,46 @@ def make_purchase_orders_from_mr_items(
             db_row = item_data["db_row"]
             this_qty = item_data["this_qty"]
             rate = item_data["rate"]
+            amount = item_data["amount"]
+            tax_rate = item_data["tax_rate"]
+            tax_amount = item_data["tax_amount"]
+            total_amount = item_data["total_amount"]
+            item_spec = item_data["spec"]
+            item_desc = item_data["description"]
 
-            po.append("items", {
+            desc_parts = []
+            if db_row.item_name:
+                desc_parts.append(db_row.item_name)
+            if item_spec:
+                desc_parts.append(f"规格:{item_spec}")
+            if item_desc and item_desc != db_row.item_name:
+                desc_parts.append(item_desc)
+            final_desc = " | ".join(desc_parts) if desc_parts else (db_row.description or db_row.item_name)
+
+            row_dict = {
                 "item_code": db_row.item_code,
                 "item_name": db_row.item_name,
-                "description": db_row.description or db_row.item_name,
+                "description": final_desc,
                 "item_group": db_row.item_group,
                 "uom": db_row.uom or db_row.stock_uom,
                 "stock_uom": db_row.stock_uom,
                 "qty": this_qty,
                 "rate": rate,
-                "amount": flt(this_qty * rate, 2),
+                "amount": amount,
                 "schedule_date": po.schedule_date,
                 "warehouse": db_row.warehouse or frappe.db.get_value("Warehouse", {"company": comp, "is_group": 0}, "name"),
                 "material_request": db_row.mr_name,
                 "material_request_item": db_row.name,
-            })
+            }
+
+            if _meta_has("Purchase Order Item", "custom_tax_rate"):
+                row_dict["custom_tax_rate"] = tax_rate
+            if _meta_has("Purchase Order Item", "custom_tax_amount"):
+                row_dict["custom_tax_amount"] = tax_amount
+            if _meta_has("Purchase Order Item", "custom_total_amount"):
+                row_dict["custom_total_amount"] = total_amount
+
+            po.append("items", row_dict)
 
         po.flags.ignore_permissions = True
         po.insert()
