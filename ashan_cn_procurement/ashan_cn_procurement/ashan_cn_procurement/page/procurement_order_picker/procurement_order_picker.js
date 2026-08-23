@@ -94,7 +94,7 @@ class ProcurementOrderPickerCenter {
                 <div class="picker-top-bar">
                     <div class="picker-title-group">
                         <h2>🛒 采购全流程选单生单中心</h2>
-                        <div class="picker-subtitle">自然采购全生命周期明细池：物料主数据 ➔ 采购申请 ➔ 采购订货 ➔ 采购入库 ➔ 采购开票 ➔ 报销付款</div>
+                        <div class="picker-subtitle">普通采购流程</div>
                     </div>
                     <div class="picker-company-group">
                         <label class="picker-company-label" for="picker-company-select">所属公司:</label>
