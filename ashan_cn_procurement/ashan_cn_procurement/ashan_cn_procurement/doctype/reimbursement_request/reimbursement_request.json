@@ -9,7 +9,7 @@
   "read_only": 0,
   "in_create": 0,
   "protect_attached_files": 0,
-  "autoname": "format:BX-.YYYY.-.#####",
+  "autoname": "BX-.YYYY.-.#####",
   "title_field": "title",
   "allow_rename": 1,
   "module": "Ashan CN Procurement",

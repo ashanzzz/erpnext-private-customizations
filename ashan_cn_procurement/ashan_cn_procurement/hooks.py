@@ -9,10 +9,10 @@ app_license = "mit"
 # ------------------
 
 app_include_css = [
-    "/assets/ashan_cn_procurement/css/ashan_cn_procurement.css?v=20260823.3",
+    "/assets/ashan_cn_procurement/css/ashan_cn_procurement.css?v=20260823.4",
     # Versioned so Desk never keeps an obsolete global component definition
     # after a UI-kit deployment.  The file itself remains a shared static asset.
-    "/assets/ashan_cn_procurement/css/ashan_ui_kit.css?v=20260823.3",
+    "/assets/ashan_cn_procurement/css/ashan_ui_kit.css?v=20260823.4",
 ]
 
 # 全局仅加载真正的全站能力。
@@ -21,7 +21,7 @@ app_include_css = [
 app_include_js = [
     "/assets/ashan_cn_procurement/js/ashan_ui_kit.js",
     "/assets/ashan_cn_procurement/js/ashan_cn_translations.js",
-    "/assets/ashan_cn_procurement/js/ashan_cn_sidebar_v2.js?v=20260823.3",
+    "/assets/ashan_cn_procurement/js/ashan_cn_sidebar_v2.js?v=20260823.4",
     "/assets/ashan_cn_procurement/js/doc_details_list.js",
 ]
 
@@ -75,6 +75,7 @@ doctype_list_js = {
     "Material Request": "public/js/material_request_list.js",
     "Purchase Order": "public/js/purchase_order_list.js",
     "Purchase Receipt": "public/js/purchase_receipt_list.js",
+    "Purchase Invoice": "public/js/purchase_invoice_list.js",
     "Reimbursement Request": "public/js/reimbursement_request_list.js"
 }
 

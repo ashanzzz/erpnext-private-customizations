@@ -44,6 +44,18 @@
       "doctype": "Workspace Sidebar Item"
     },
     {
+      "label": "🛒 采购选单中心",
+      "link_type": "Page",
+      "type": "Link",
+      "link_to": "procurement-order-picker",
+      "child": 1,
+      "collapsible": 0,
+      "indent": 0,
+      "keep_closed": 0,
+      "show_arrow": 0,
+      "doctype": "Workspace Sidebar Item"
+    },
+    {
       "label": "① 采购申请",
       "link_type": "DocType",
       "type": "Link",

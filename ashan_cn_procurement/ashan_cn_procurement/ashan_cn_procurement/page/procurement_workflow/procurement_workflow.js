@@ -33,6 +33,7 @@ frappe.pages["procurement-workflow"].on_page_load = function (wrapper) {
             <div class="pw-pipeline" style="display:none;"></div>
 
             <div class="pw-actions">
+                <button class="btn btn-success btn-sm btn-open-picker">🛒 采购选单生单中心</button>
                 <button class="btn btn-default btn-sm" data-route="Supplier">供应商档案</button>
                 <button class="btn btn-default btn-sm" data-route="Item">物料主数据</button>
                 <button class="btn btn-default btn-sm" data-route="Stock Entry">物料收发</button>
@@ -170,6 +171,10 @@ frappe.pages["procurement-workflow"].on_page_load = function (wrapper) {
 
     $main.on("click", ".pw-actions [data-route]", function () {
         frappe.set_route("List", $(this).data("route"), "List");
+    });
+
+    $main.on("click", ".btn-open-picker", function () {
+        frappe.set_route("procurement-order-picker");
     });
 
     $main.on("click", ".pw-retry", loadSummary);

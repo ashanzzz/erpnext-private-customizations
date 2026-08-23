@@ -83,7 +83,15 @@ run_cmd(client, "docker exec erpnext16 chown -R frappe:frappe /home/frappe/frapp
 
 # 4. 执行 bench migrate
 print("Running bench migrate...")
-run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench --site site1.local migrate")
+for attempt in range(1, 4):
+    run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 rm -f sites/site1.local/locks/bench_migrate.lock")
+    out, err = run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench --site site1.local migrate")
+    combined = (out or "") + (err or "")
+    if "LockTimeoutError" not in combined and "QueryDeadlockError" not in combined and "OperationalError" not in combined and "Traceback" not in combined:
+        break
+    print(f"[WARN] Migrate attempt {attempt} failed, retrying in 3s...")
+    import time
+    time.sleep(3)
 
 # 5. 构建前端静态资源
 print("Building frontend assets...")
