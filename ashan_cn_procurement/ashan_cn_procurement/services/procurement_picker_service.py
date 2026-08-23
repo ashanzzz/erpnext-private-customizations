@@ -445,20 +445,26 @@ def get_pending_material_request_items(
     company: str | None = None,
     filters: dict | str | None = None,
 ) -> dict:
-    """Query unfulfilled Material Request Items for Step 2 Detail View."""
+    """Query Material Request Items for Step 2 Detail View with match_status and linked POs."""
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
     filters = dict(filters or {})
+
+    match_status = filters.get("match_status") or "pending"
 
     conditions = [
         "mr.docstatus = 1",
         "mr.material_request_type = 'Purchase'",
         "mr.company IN %(companies)s",
         "mr.status NOT IN ('Stopped', 'Cancelled', 'Transfer')",
-        "(mri.qty - COALESCE(mri.ordered_qty, 0)) > 0.0001",
     ]
     params: dict[str, Any] = {"companies": companies}
+
+    if match_status == "pending":
+        conditions.append("(mri.qty - COALESCE(mri.ordered_qty, 0)) > 0.0001")
+    elif match_status == "linked":
+        conditions.append("COALESCE(mri.ordered_qty, 0) > 0.0001")
 
     has_mr_dept = _meta_has("Material Request", "department")
     has_mri_dept = _meta_has("Material Request Item", "department")
@@ -491,6 +497,10 @@ def get_pending_material_request_items(
         conditions.append("mr.transaction_date <= %(to_date)s")
         params["to_date"] = filters["to_date"]
 
+    if filters.get("linked_doc"):
+        conditions.append("EXISTS (SELECT 1 FROM `tabPurchase Order Item` poi_flt WHERE poi_flt.material_request_item = mri.name AND poi_flt.parent LIKE %(linked_doc)s)")
+        params["linked_doc"] = f"%{filters['linked_doc']}%"
+
     where_clause = " AND ".join(conditions)
 
     dept_col = "COALESCE(mr.department, '')" if has_mr_dept else "''"
@@ -510,11 +520,17 @@ def get_pending_material_request_items(
             COALESCE(mri.uom, mri.stock_uom, '') AS uom,
             COALESCE(mri.qty, 0) AS qty,
             COALESCE(mri.ordered_qty, 0) AS ordered_qty,
-            (COALESCE(mri.qty, 0) - COALESCE(mri.ordered_qty, 0)) AS pending_qty,
+            GREATEST(COALESCE(mri.qty, 0) - COALESCE(mri.ordered_qty, 0), 0) AS pending_qty,
             COALESCE(mri.rate, item.standard_rate, 0) AS rate,
-            ((COALESCE(mri.qty, 0) - COALESCE(mri.ordered_qty, 0)) * COALESCE(mri.rate, item.standard_rate, 0)) AS estimated_amount,
+            (GREATEST(COALESCE(mri.qty, 0) - COALESCE(mri.ordered_qty, 0), 0) * COALESCE(mri.rate, item.standard_rate, 0)) AS estimated_amount,
             COALESCE(item_def.default_supplier, item_sup.supplier, '') AS default_supplier,
-            COALESCE(mri.warehouse, item_def.default_warehouse, '') AS warehouse
+            COALESCE(mri.warehouse, item_def.default_warehouse, '') AS warehouse,
+            (
+                SELECT GROUP_CONCAT(DISTINCT poi.parent ORDER BY poi.parent DESC SEPARATOR '、')
+                FROM `tabPurchase Order Item` poi
+                INNER JOIN `tabPurchase Order` po_inner ON po_inner.name = poi.parent
+                WHERE poi.material_request_item = mri.name AND po_inner.docstatus < 2
+            ) AS linked_po_names
         FROM `tabMaterial Request Item` mri
         INNER JOIN `tabMaterial Request` mr ON mr.name = mri.parent
         LEFT JOIN `tabItem` item ON item.name = mri.item_code
@@ -555,6 +571,7 @@ def get_pending_material_request_items(
             "estimated_amount": flt(r.estimated_amount, 2),
             "supplier": r.default_supplier or "",
             "warehouse": r.warehouse or "",
+            "linked_po_names": r.linked_po_names or "",
         })
 
     return {
@@ -569,11 +586,13 @@ def get_pending_material_request_docs(
     company: str | None = None,
     filters: dict | str | None = None,
 ) -> dict:
-    """Query Material Request Documents with unfulfilled items for Step 2 Doc View."""
+    """Query Material Request Documents for Step 2 Doc View with match_status and linked POs."""
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
     filters = dict(filters or {})
+
+    match_status = filters.get("match_status") or "pending"
 
     has_mr_dept = _meta_has("Material Request", "department")
     dept_col = "COALESCE(mr.department, '')" if has_mr_dept else "''"
@@ -585,9 +604,13 @@ def get_pending_material_request_docs(
         "mr.material_request_type = 'Purchase'",
         "mr.company IN %(companies)s",
         "mr.status NOT IN ('Stopped', 'Cancelled', 'Transfer')",
-        "(mri.qty - COALESCE(mri.ordered_qty, 0)) > 0.0001",
     ]
     params: dict[str, Any] = {"companies": companies}
+
+    if match_status == "pending":
+        conditions.append("EXISTS (SELECT 1 FROM `tabMaterial Request Item` mri_chk WHERE mri_chk.parent = mr.name AND (mri_chk.qty - COALESCE(mri_chk.ordered_qty, 0)) > 0.0001)")
+    elif match_status == "linked":
+        conditions.append("EXISTS (SELECT 1 FROM `tabPurchase Order Item` poi_chk INNER JOIN `tabPurchase Order` po_chk ON po_chk.name = poi_chk.parent WHERE poi_chk.material_request = mr.name AND po_chk.docstatus < 2)")
 
     if filters.get("mr_name"):
         conditions.append("mr.name LIKE %(mr_name)s")
@@ -605,6 +628,10 @@ def get_pending_material_request_docs(
         conditions.append("mr.transaction_date <= %(to_date)s")
         params["to_date"] = filters["to_date"]
 
+    if filters.get("linked_doc"):
+        conditions.append("EXISTS (SELECT 1 FROM `tabPurchase Order Item` poi_flt WHERE poi_flt.material_request = mr.name AND poi_flt.parent LIKE %(linked_doc)s)")
+        params["linked_doc"] = f"%{filters['linked_doc']}%"
+
     where_clause = " AND ".join(conditions)
 
     sql = f"""
@@ -619,10 +646,16 @@ def get_pending_material_request_docs(
             mr.status,
             mr.owner,
             COUNT(DISTINCT mri.name) AS pending_item_count,
-            COALESCE(SUM(mri.qty - COALESCE(mri.ordered_qty, 0)), 0) AS pending_qty,
-            COALESCE(SUM((mri.qty - COALESCE(mri.ordered_qty, 0)) * COALESCE(mri.rate, item.standard_rate, 0)), 0) AS estimated_amount,
+            COALESCE(SUM(GREATEST(mri.qty - COALESCE(mri.ordered_qty, 0), 0)), 0) AS pending_qty,
+            COALESCE(SUM(GREATEST(mri.qty - COALESCE(mri.ordered_qty, 0), 0) * COALESCE(mri.rate, item.standard_rate, 0)), 0) AS estimated_amount,
             GROUP_CONCAT(DISTINCT COALESCE(item_def.default_supplier, item_sup.supplier, '') SEPARATOR '、') AS suppliers,
-            GROUP_CONCAT(DISTINCT CONCAT(mri.item_name, ' (', ROUND(mri.qty - COALESCE(mri.ordered_qty, 0), 2), ' ', COALESCE(mri.uom, mri.stock_uom, ''), ')') SEPARATOR '、') AS synthesized_details
+            GROUP_CONCAT(DISTINCT CONCAT(mri.item_name, ' (', ROUND(GREATEST(mri.qty - COALESCE(mri.ordered_qty, 0), 0), 2), ' ', COALESCE(mri.uom, mri.stock_uom, ''), ')') SEPARATOR '、') AS synthesized_details,
+            (
+                SELECT GROUP_CONCAT(DISTINCT poi.parent ORDER BY poi.parent DESC SEPARATOR '、')
+                FROM `tabPurchase Order Item` poi
+                INNER JOIN `tabPurchase Order` po_inner ON po_inner.name = poi.parent
+                WHERE poi.material_request = mr.name AND po_inner.docstatus < 2
+            ) AS linked_po_names
         FROM `tabMaterial Request` mr
         INNER JOIN `tabMaterial Request Item` mri ON mri.parent = mr.name
         LEFT JOIN `tabItem` item ON item.name = mri.item_code
@@ -641,6 +674,7 @@ def get_pending_material_request_docs(
         d["pending_qty"] = flt(d.get("pending_qty"), 2)
         d["estimated_amount"] = flt(d.get("estimated_amount"), 2)
         d["supplier"] = (d.get("suppliers") or "").strip("、")
+        d["linked_po_names"] = d.get("linked_po_names") or ""
 
     return {
         "companies": companies,
@@ -796,19 +830,25 @@ def get_pending_purchase_order_items(
     company: str | None = None,
     filters: dict | str | None = None,
 ) -> dict:
-    """Query unreceived Purchase Order Items for Step 3 Detail View."""
+    """Query Purchase Order Items for Step 3 Detail View with match_status and linked PRs."""
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
     filters = dict(filters or {})
 
+    match_status = filters.get("match_status") or "pending"
+
     conditions = [
         "po.docstatus = 1",
         "po.company IN %(companies)s",
         "po.status NOT IN ('Closed', 'Cancelled', 'Delivered')",
-        "(poi.qty - COALESCE(poi.received_qty, 0)) > 0.0001",
     ]
     params: dict[str, Any] = {"companies": companies}
+
+    if match_status == "pending":
+        conditions.append("(poi.qty - COALESCE(poi.received_qty, 0)) > 0.0001")
+    elif match_status == "linked":
+        conditions.append("COALESCE(poi.received_qty, 0) > 0.0001")
 
     if filters.get("supplier"):
         conditions.append("po.supplier LIKE %(supplier)s")
@@ -825,6 +865,10 @@ def get_pending_purchase_order_items(
     if filters.get("warehouse"):
         conditions.append("poi.warehouse LIKE %(warehouse)s")
         params["warehouse"] = f"%{filters['warehouse']}%"
+
+    if filters.get("linked_doc"):
+        conditions.append("EXISTS (SELECT 1 FROM `tabPurchase Receipt Item` pri_flt WHERE pri_flt.purchase_order_item = poi.name AND pri_flt.parent LIKE %(linked_doc)s)")
+        params["linked_doc"] = f"%{filters['linked_doc']}%"
 
     where_clause = " AND ".join(conditions)
 
@@ -843,10 +887,16 @@ def get_pending_purchase_order_items(
             poi.stock_uom,
             COALESCE(poi.qty, 0) AS qty,
             COALESCE(poi.received_qty, 0) AS received_qty,
-            (COALESCE(poi.qty, 0) - COALESCE(poi.received_qty, 0)) AS pending_qty,
+            GREATEST(COALESCE(poi.qty, 0) - COALESCE(poi.received_qty, 0), 0) AS pending_qty,
             COALESCE(poi.rate, 0) AS rate,
-            ((COALESCE(poi.qty, 0) - COALESCE(poi.received_qty, 0)) * COALESCE(poi.rate, 0)) AS pending_amount,
-            COALESCE(poi.warehouse, '') AS warehouse
+            (GREATEST(COALESCE(poi.qty, 0) - COALESCE(poi.received_qty, 0), 0) * COALESCE(poi.rate, 0)) AS pending_amount,
+            COALESCE(poi.warehouse, '') AS warehouse,
+            (
+                SELECT GROUP_CONCAT(DISTINCT pri.parent ORDER BY pri.parent DESC SEPARATOR '、')
+                FROM `tabPurchase Receipt Item` pri
+                INNER JOIN `tabPurchase Receipt` pr_inner ON pr_inner.name = pri.parent
+                WHERE pri.purchase_order_item = poi.name AND pr_inner.docstatus < 2
+            ) AS linked_pr_names
         FROM `tabPurchase Order Item` poi
         INNER JOIN `tabPurchase Order` po ON po.name = poi.parent
         WHERE {where_clause}
@@ -876,6 +926,7 @@ def get_pending_purchase_order_items(
             "rate": flt(r.rate, 2),
             "pending_amount": flt(r.pending_amount, 2),
             "warehouse": r.warehouse or "",
+            "linked_pr_names": r.linked_pr_names or "",
         })
 
     return {
@@ -890,11 +941,13 @@ def get_pending_purchase_order_docs(
     company: str | None = None,
     filters: dict | str | None = None,
 ) -> dict:
-    """Query Purchase Order Documents with unreceived items for Step 3 Doc View."""
+    """Query Purchase Order Documents for Step 3 Doc View with match_status and linked PRs."""
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
     filters = dict(filters or {})
+
+    match_status = filters.get("match_status") or "pending"
 
     has_custom_doc_details = _meta_has("Purchase Order", "custom_doc_details")
     doc_details_col = "COALESCE(po.custom_doc_details, '')" if has_custom_doc_details else "''"
@@ -903,9 +956,13 @@ def get_pending_purchase_order_docs(
         "po.docstatus = 1",
         "po.company IN %(companies)s",
         "po.status NOT IN ('Closed', 'Cancelled', 'Delivered')",
-        "(poi.qty - COALESCE(poi.received_qty, 0)) > 0.0001",
     ]
     params: dict[str, Any] = {"companies": companies}
+
+    if match_status == "pending":
+        conditions.append("EXISTS (SELECT 1 FROM `tabPurchase Order Item` poi_chk WHERE poi_chk.parent = po.name AND (poi_chk.qty - COALESCE(poi_chk.received_qty, 0)) > 0.0001)")
+    elif match_status == "linked":
+        conditions.append("EXISTS (SELECT 1 FROM `tabPurchase Receipt Item` pri_chk INNER JOIN `tabPurchase Receipt` pr_chk ON pr_chk.name = pri_chk.parent WHERE pri_chk.purchase_order = po.name AND pr_chk.docstatus < 2)")
 
     if filters.get("supplier"):
         conditions.append("po.supplier LIKE %(supplier)s")
@@ -914,6 +971,10 @@ def get_pending_purchase_order_docs(
     if filters.get("po_name"):
         conditions.append("po.name LIKE %(po_name)s")
         params["po_name"] = f"%{filters['po_name']}%"
+
+    if filters.get("linked_doc"):
+        conditions.append("EXISTS (SELECT 1 FROM `tabPurchase Receipt Item` pri_flt WHERE pri_flt.purchase_order = po.name AND pri_flt.parent LIKE %(linked_doc)s)")
+        params["linked_doc"] = f"%{filters['linked_doc']}%"
 
     where_clause = " AND ".join(conditions)
 
@@ -929,10 +990,16 @@ def get_pending_purchase_order_docs(
             po.currency,
             po.grand_total,
             COUNT(DISTINCT poi.name) AS pending_item_count,
-            COALESCE(SUM(poi.qty - COALESCE(poi.received_qty, 0)), 0) AS pending_qty,
-            COALESCE(SUM((poi.qty - COALESCE(poi.received_qty, 0)) * poi.rate), 0) AS pending_amount,
+            COALESCE(SUM(GREATEST(poi.qty - COALESCE(poi.received_qty, 0), 0)), 0) AS pending_qty,
+            COALESCE(SUM(GREATEST(poi.qty - COALESCE(poi.received_qty, 0), 0) * poi.rate), 0) AS pending_amount,
             GROUP_CONCAT(DISTINCT COALESCE(poi.warehouse, '') SEPARATOR '、') AS warehouses,
-            GROUP_CONCAT(DISTINCT CONCAT(poi.item_name, ' (', ROUND(poi.qty - COALESCE(poi.received_qty, 0), 2), ' ', COALESCE(poi.uom, poi.stock_uom, ''), ')') SEPARATOR '、') AS synthesized_details
+            GROUP_CONCAT(DISTINCT CONCAT(poi.item_name, ' (', ROUND(GREATEST(poi.qty - COALESCE(poi.received_qty, 0), 0), 2), ' ', COALESCE(poi.uom, poi.stock_uom, ''), ')') SEPARATOR '、') AS synthesized_details,
+            (
+                SELECT GROUP_CONCAT(DISTINCT pri.parent ORDER BY pri.parent DESC SEPARATOR '、')
+                FROM `tabPurchase Receipt Item` pri
+                INNER JOIN `tabPurchase Receipt` pr_inner ON pr_inner.name = pri.parent
+                WHERE pri.purchase_order = po.name AND pr_inner.docstatus < 2
+            ) AS linked_pr_names
         FROM `tabPurchase Order` po
         INNER JOIN `tabPurchase Order Item` poi ON poi.parent = po.name
         WHERE {where_clause}
@@ -949,6 +1016,7 @@ def get_pending_purchase_order_docs(
         d["pending_amount"] = flt(d.get("pending_amount"), 2)
         d["grand_total"] = flt(d.get("grand_total"), 2)
         d["warehouse"] = (d.get("warehouses") or "").strip("、")
+        d["linked_pr_names"] = d.get("linked_pr_names") or ""
 
     return {
         "companies": companies,
@@ -1095,19 +1163,25 @@ def get_pending_purchase_receipt_items(
     company: str | None = None,
     filters: dict | str | None = None,
 ) -> dict:
-    """Query unbilled Purchase Receipt Items for Step 4 Detail View."""
+    """Query Purchase Receipt Items for Step 4 Detail View with match_status and linked PIs."""
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
     filters = dict(filters or {})
 
+    match_status = filters.get("match_status") or "pending"
+
     conditions = [
         "pr.docstatus = 1",
         "pr.company IN %(companies)s",
         "pr.status NOT IN ('Closed', 'Cancelled', 'Return Issued')",
-        "(pri.amount - COALESCE(pri.billed_amt, 0)) > 0.01",
     ]
     params: dict[str, Any] = {"companies": companies}
+
+    if match_status == "pending":
+        conditions.append("(pri.amount - COALESCE(pri.billed_amt, 0)) > 0.01")
+    elif match_status == "linked":
+        conditions.append("COALESCE(pri.billed_amt, 0) > 0.01")
 
     if filters.get("supplier"):
         conditions.append("pr.supplier LIKE %(supplier)s")
@@ -1120,6 +1194,10 @@ def get_pending_purchase_receipt_items(
     if filters.get("item_code"):
         conditions.append("(pri.item_code LIKE %(item_code)s OR pri.item_name LIKE %(item_code)s)")
         params["item_code"] = f"%{filters['item_code']}%"
+
+    if filters.get("linked_doc"):
+        conditions.append("EXISTS (SELECT 1 FROM `tabPurchase Invoice Item` pii_flt WHERE pii_flt.pr_detail = pri.name AND pii_flt.parent LIKE %(linked_doc)s)")
+        params["linked_doc"] = f"%{filters['linked_doc']}%"
 
     where_clause = " AND ".join(conditions)
 
@@ -1138,11 +1216,17 @@ def get_pending_purchase_receipt_items(
             COALESCE(pri.qty, 0) AS qty,
             COALESCE(pri.amount, 0) AS amount,
             COALESCE(pri.billed_amt, 0) AS billed_amt,
-            (COALESCE(pri.amount, 0) - COALESCE(pri.billed_amt, 0)) AS pending_amount,
+            GREATEST(COALESCE(pri.amount, 0) - COALESCE(pri.billed_amt, 0), 0) AS pending_amount,
             COALESCE(pri.rate, 0) AS rate,
             COALESCE(pri.warehouse, '') AS warehouse,
             COALESCE(pri.purchase_order, '') AS purchase_order,
-            COALESCE(pri.purchase_order_item, '') AS purchase_order_item
+            COALESCE(pri.purchase_order_item, '') AS purchase_order_item,
+            (
+                SELECT GROUP_CONCAT(DISTINCT pii.parent ORDER BY pii.parent DESC SEPARATOR '、')
+                FROM `tabPurchase Invoice Item` pii
+                INNER JOIN `tabPurchase Invoice` pi_inner ON pi_inner.name = pii.parent
+                WHERE pii.pr_detail = pri.name AND pi_inner.docstatus < 2
+            ) AS linked_pi_names
         FROM `tabPurchase Receipt Item` pri
         INNER JOIN `tabPurchase Receipt` pr ON pr.name = pri.parent
         WHERE {where_clause}
@@ -1175,6 +1259,7 @@ def get_pending_purchase_receipt_items(
             "rate": flt(r.rate, 2),
             "pending_amount": flt(r.pending_amount, 2),
             "purchase_order": r.purchase_order or "",
+            "linked_pi_names": r.linked_pi_names or "",
         })
 
     return {
@@ -1189,11 +1274,13 @@ def get_pending_purchase_receipt_docs(
     company: str | None = None,
     filters: dict | str | None = None,
 ) -> dict:
-    """Query Purchase Receipt Documents with unbilled items for Step 4 Doc View."""
+    """Query Purchase Receipt Documents for Step 4 Doc View with match_status and linked PIs."""
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
     filters = dict(filters or {})
+
+    match_status = filters.get("match_status") or "pending"
 
     has_custom_doc_details = _meta_has("Purchase Receipt", "custom_doc_details")
     doc_details_col = "COALESCE(pr.custom_doc_details, '')" if has_custom_doc_details else "''"
@@ -1202,9 +1289,13 @@ def get_pending_purchase_receipt_docs(
         "pr.docstatus = 1",
         "pr.company IN %(companies)s",
         "pr.status NOT IN ('Closed', 'Cancelled', 'Return Issued')",
-        "(pri.amount - COALESCE(pri.billed_amt, 0)) > 0.01",
     ]
     params: dict[str, Any] = {"companies": companies}
+
+    if match_status == "pending":
+        conditions.append("EXISTS (SELECT 1 FROM `tabPurchase Receipt Item` pri_chk WHERE pri_chk.parent = pr.name AND (pri_chk.amount - COALESCE(pri_chk.billed_amt, 0)) > 0.01)")
+    elif match_status == "linked":
+        conditions.append("EXISTS (SELECT 1 FROM `tabPurchase Invoice Item` pii_chk INNER JOIN `tabPurchase Invoice` pi_chk ON pi_chk.name = pii_chk.parent WHERE pii_chk.purchase_receipt = pr.name AND pi_chk.docstatus < 2)")
 
     if filters.get("supplier"):
         conditions.append("pr.supplier LIKE %(supplier)s")
@@ -1213,6 +1304,10 @@ def get_pending_purchase_receipt_docs(
     if filters.get("pr_name"):
         conditions.append("pr.name LIKE %(pr_name)s")
         params["pr_name"] = f"%{filters['pr_name']}%"
+
+    if filters.get("linked_doc"):
+        conditions.append("EXISTS (SELECT 1 FROM `tabPurchase Invoice Item` pii_flt WHERE pii_flt.purchase_receipt = pr.name AND pii_flt.parent LIKE %(linked_doc)s)")
+        params["linked_doc"] = f"%{filters['linked_doc']}%"
 
     where_clause = " AND ".join(conditions)
 
@@ -1228,9 +1323,15 @@ def get_pending_purchase_receipt_docs(
             pr.grand_total,
             COUNT(DISTINCT pri.name) AS unbilled_item_count,
             COALESCE(SUM(pri.qty * (1.0 - COALESCE(pri.billed_amt, 0) / NULLIF(pri.amount, 0))), 0) AS pending_qty,
-            COALESCE(SUM(pri.amount - COALESCE(pri.billed_amt, 0)), 0) AS pending_amount,
+            COALESCE(SUM(GREATEST(pri.amount - COALESCE(pri.billed_amt, 0), 0)), 0) AS pending_amount,
             GROUP_CONCAT(DISTINCT COALESCE(pri.purchase_order, '') SEPARATOR '、') AS purchase_orders,
-            GROUP_CONCAT(DISTINCT CONCAT(pri.item_name, ' (', ROUND(pri.qty, 2), ' ', COALESCE(pri.uom, pri.stock_uom, ''), ')') SEPARATOR '、') AS synthesized_details
+            GROUP_CONCAT(DISTINCT CONCAT(pri.item_name, ' (', ROUND(pri.qty, 2), ' ', COALESCE(pri.uom, pri.stock_uom, ''), ')') SEPARATOR '、') AS synthesized_details,
+            (
+                SELECT GROUP_CONCAT(DISTINCT pii.parent ORDER BY pii.parent DESC SEPARATOR '、')
+                FROM `tabPurchase Invoice Item` pii
+                INNER JOIN `tabPurchase Invoice` pi_inner ON pi_inner.name = pii.parent
+                WHERE pii.purchase_receipt = pr.name AND pi_inner.docstatus < 2
+            ) AS linked_pi_names
         FROM `tabPurchase Receipt` pr
         INNER JOIN `tabPurchase Receipt Item` pri ON pri.parent = pr.name
         WHERE {where_clause}
@@ -1247,6 +1348,7 @@ def get_pending_purchase_receipt_docs(
         d["pending_amount"] = flt(d.get("pending_amount"), 2)
         d["grand_total"] = flt(d.get("grand_total"), 2)
         d["purchase_order"] = (d.get("purchase_orders") or "").strip("、")
+        d["linked_pi_names"] = d.get("linked_pi_names") or ""
 
     return {
         "companies": companies,
@@ -1396,18 +1498,22 @@ def get_pending_reimbursement_invoice_items(
     company: str | None = None,
     filters: dict | str | None = None,
 ) -> dict:
-    """Query unpaid Purchase Invoice Line Items for Step 5 Detail View."""
+    """Query Purchase Invoice Line Items for Step 5 Detail View with match_status and linked RRs."""
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
     filters = dict(filters or {})
 
+    match_status = filters.get("match_status") or "pending"
+
     conditions = [
         "pi.docstatus = 1",
         "pi.company IN %(companies)s",
-        "pi.outstanding_amount > 0",
     ]
     params: dict[str, Any] = {"companies": companies}
+
+    if match_status == "pending":
+        conditions.append("pi.outstanding_amount > 0")
 
     if filters.get("supplier"):
         conditions.append("pi.supplier LIKE %(supplier)s")
@@ -1420,6 +1526,10 @@ def get_pending_reimbursement_invoice_items(
     if filters.get("owner"):
         conditions.append("pi.owner LIKE %(owner)s")
         params["owner"] = f"%{filters['owner']}%"
+
+    if filters.get("linked_doc"):
+        conditions.append("EXISTS (SELECT 1 FROM `tabReimbursement Invoice Item` rii_flt WHERE rii_flt.source_pi = pi.name AND rii_flt.parent LIKE %(linked_doc)s)")
+        params["linked_doc"] = f"%{filters['linked_doc']}%"
 
     where_clause = " AND ".join(conditions)
 
@@ -1440,7 +1550,13 @@ def get_pending_reimbursement_invoice_items(
             COALESCE(pii.qty, 1) AS qty,
             COALESCE(pii.rate, 0) AS rate,
             COALESCE(pii.amount, 0) AS amount,
-            COALESCE(pii.net_amount, pii.amount, 0) AS net_amount
+            COALESCE(pii.net_amount, pii.amount, 0) AS net_amount,
+            (
+                SELECT GROUP_CONCAT(DISTINCT rii.parent ORDER BY rii.parent DESC SEPARATOR '、')
+                FROM `tabReimbursement Invoice Item` rii
+                INNER JOIN `tabReimbursement Request` rr_inner ON rr_inner.name = rii.parent
+                WHERE rii.source_pi = pi.name AND rr_inner.docstatus < 2
+            ) AS linked_rr_names
         FROM `tabPurchase Invoice Item` pii
         INNER JOIN `tabPurchase Invoice` pi ON pi.name = pii.parent
         WHERE {where_clause}
@@ -1465,7 +1581,11 @@ def get_pending_reimbursement_invoice_items(
     for it in raw_items:
         reserved = reserved_by_pi.get(it.pi_name, 0.0)
         net_outstanding = max(0.0, flt(it.outstanding_amount) - reserved)
-        if net_outstanding <= 0.0001:
+        has_link = bool(it.linked_rr_names)
+
+        if match_status == "pending" and net_outstanding <= 0.0001:
+            continue
+        if match_status == "linked" and not has_link and net_outstanding > 0.0001:
             continue
 
         rows.append({
@@ -1484,6 +1604,7 @@ def get_pending_reimbursement_invoice_items(
             "amount": flt(it.amount, 2),
             "net_available_amount": flt(net_outstanding, 2),
             "owner": it.owner or "",
+            "linked_rr_names": it.linked_rr_names or "",
         })
 
     return {
@@ -1498,11 +1619,13 @@ def get_pending_reimbursement_invoices(
     company: str | None = None,
     filters: dict | str | None = None,
 ) -> dict:
-    """Query unpaid Purchase Invoices for Step 5 Doc View."""
+    """Query Purchase Invoices for Step 5 Doc View with match_status and linked RRs."""
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
     filters = dict(filters or {})
+
+    match_status = filters.get("match_status") or "pending"
 
     has_custom_doc_details = _meta_has("Purchase Invoice", "custom_doc_details")
     doc_details_col = "COALESCE(pi.custom_doc_details, '')" if has_custom_doc_details else "''"
@@ -1512,9 +1635,11 @@ def get_pending_reimbursement_invoices(
     conditions = [
         "pi.company IN %(companies)s",
         "pi.docstatus = 1",
-        "pi.outstanding_amount > 0",
     ]
     params: dict[str, Any] = {"companies": companies}
+
+    if match_status == "pending":
+        conditions.append("pi.outstanding_amount > 0")
 
     if filters.get("supplier"):
         conditions.append("pi.supplier LIKE %(supplier)s")
@@ -1527,6 +1652,10 @@ def get_pending_reimbursement_invoices(
     if filters.get("owner"):
         conditions.append("pi.owner LIKE %(owner)s")
         params["owner"] = f"%{filters['owner']}%"
+
+    if filters.get("linked_doc"):
+        conditions.append("EXISTS (SELECT 1 FROM `tabReimbursement Invoice Item` rii_flt WHERE rii_flt.source_pi = pi.name AND rii_flt.parent LIKE %(linked_doc)s)")
+        params["linked_doc"] = f"%{filters['linked_doc']}%"
 
     where_clause = " AND ".join(conditions)
 
@@ -1544,7 +1673,13 @@ def get_pending_reimbursement_invoices(
             pi.currency,
             {doc_details_col} AS custom_doc_details,
             {type_col} AS invoice_type,
-            GROUP_CONCAT(DISTINCT CONCAT(pii.item_name, ' (', ROUND(pii.qty, 2), ' ', COALESCE(pii.uom, pii.stock_uom, ''), ')') SEPARATOR '、') AS synthesized_details
+            GROUP_CONCAT(DISTINCT CONCAT(pii.item_name, ' (', ROUND(pii.qty, 2), ' ', COALESCE(pii.uom, pii.stock_uom, ''), ')') SEPARATOR '、') AS synthesized_details,
+            (
+                SELECT GROUP_CONCAT(DISTINCT rii.parent ORDER BY rii.parent DESC SEPARATOR '、')
+                FROM `tabReimbursement Invoice Item` rii
+                INNER JOIN `tabReimbursement Request` rr_inner ON rr_inner.name = rii.parent
+                WHERE rii.source_pi = pi.name AND rr_inner.docstatus < 2
+            ) AS linked_rr_names
         FROM `tabPurchase Invoice` pi
         LEFT JOIN `tabPurchase Invoice Item` pii ON pii.parent = pi.name
         WHERE {where_clause}
@@ -1572,7 +1707,11 @@ def get_pending_reimbursement_invoices(
     for inv in invoices:
         reserved = reserved_by_pi.get(inv.pi_name, 0.0)
         net_outstanding = max(0.0, flt(inv.outstanding_amount) - reserved)
-        if net_outstanding <= 0.0001:
+        has_link = bool(inv.linked_rr_names)
+
+        if match_status == "pending" and net_outstanding <= 0.0001:
+            continue
+        if match_status == "linked" and not has_link and net_outstanding > 0.0001:
             continue
 
         rows.append({
@@ -1590,6 +1729,7 @@ def get_pending_reimbursement_invoices(
             "invoice_type": inv.invoice_type or "普通发票",
             "currency": inv.currency or "CNY",
             "custom_doc_details": inv.custom_doc_details or inv.synthesized_details or "",
+            "linked_rr_names": inv.linked_rr_names or "",
         })
         total_outstanding += net_outstanding
 

@@ -29,10 +29,10 @@ class ProcurementOrderPickerCenter {
         this.selected_map = new Map(); // key -> row object
         this.filters = {
             item_to_mr: { mr_name: "", item_code: "", item_group: "", department: "", supplier: "" },
-            mr_to_po: { supplier: "", department: "", item_code: "", from_date: "", to_date: "" },
-            po_to_pr: { supplier: "", warehouse: "", po_name: "", item_code: "" },
-            pr_to_pi: { supplier: "", pr_name: "", item_code: "" },
-            pi_to_rr: { supplier: "", bill_no: "", owner: "" },
+            mr_to_po: { match_status: "pending", linked_doc: "", supplier: "", department: "", item_code: "", from_date: "", to_date: "" },
+            po_to_pr: { match_status: "pending", linked_doc: "", supplier: "", warehouse: "", po_name: "", item_code: "" },
+            pr_to_pi: { match_status: "pending", linked_doc: "", supplier: "", pr_name: "", item_code: "" },
+            pi_to_rr: { match_status: "pending", linked_doc: "", supplier: "", bill_no: "", owner: "" },
         };
 
         this.stages_config = {
@@ -427,12 +427,25 @@ class ProcurementOrderPickerCenter {
                     <input type="text" class="picker-filter-input" data-filter="item_code" placeholder="物料代码/名称..." value="${this.filters[stage].item_code || ''}">
                 </div>
                 <div class="picker-filter-group">
-                    <label>需求部门:</label>
-                    <input type="text" class="picker-filter-input" data-filter="department" placeholder="部门..." value="${this.filters[stage].department || ''}">
+                    <label>建议供应商:</label>
+                    <input type="text" class="picker-filter-input" data-filter="supplier" placeholder="供应商名称..." value="${this.filters[stage].supplier || ''}">
                 </div>
             `;
         } else if (stage === "mr_to_po") {
+            const ms = this.filters[stage].match_status || "pending";
             filters_html = `
+                <div class="picker-filter-group">
+                    <label>关联状态:</label>
+                    <select class="picker-filter-select" data-filter="match_status">
+                        <option value="pending" ${ms === 'pending' ? 'selected' : ''}>🟡 仅待订需求 (未关联/待订)</option>
+                        <option value="linked" ${ms === 'linked' ? 'selected' : ''}>🟢 仅已订需求 (已关联PO)</option>
+                        <option value="all" ${ms === 'all' ? 'selected' : ''}>🌐 全部需求单据 (全量追溯)</option>
+                    </select>
+                </div>
+                <div class="picker-filter-group">
+                    <label>关联订单号:</label>
+                    <input type="text" class="picker-filter-input" data-filter="linked_doc" placeholder="搜索关联PO单号..." value="${this.filters[stage].linked_doc || ''}">
+                </div>
                 <div class="picker-filter-group">
                     <label>物料编码/名称:</label>
                     <input type="text" class="picker-filter-input" data-filter="item_code" placeholder="搜索物料..." value="${this.filters[stage].item_code || ''}">
@@ -442,10 +455,6 @@ class ProcurementOrderPickerCenter {
                     <input type="text" class="picker-filter-input" data-filter="supplier" placeholder="供应商名称..." value="${this.filters[stage].supplier || ''}">
                 </div>
                 <div class="picker-filter-group">
-                    <label>申请部门:</label>
-                    <input type="text" class="picker-filter-input" data-filter="department" placeholder="部门..." value="${this.filters[stage].department || ''}">
-                </div>
-                <div class="picker-filter-group">
                     <label>申请日期:</label>
                     <input type="date" class="picker-filter-input" data-filter="from_date" value="${this.filters[stage].from_date || ''}">
                     <span>至</span>
@@ -453,7 +462,20 @@ class ProcurementOrderPickerCenter {
                 </div>
             `;
         } else if (stage === "po_to_pr") {
+            const ms = this.filters[stage].match_status || "pending";
             filters_html = `
+                <div class="picker-filter-group">
+                    <label>关联状态:</label>
+                    <select class="picker-filter-select" data-filter="match_status">
+                        <option value="pending" ${ms === 'pending' ? 'selected' : ''}>🟡 仅待收订单 (未关联/待收)</option>
+                        <option value="linked" ${ms === 'linked' ? 'selected' : ''}>🟢 仅已收订单 (已关联PR)</option>
+                        <option value="all" ${ms === 'all' ? 'selected' : ''}>🌐 全部采购订单 (全量追溯)</option>
+                    </select>
+                </div>
+                <div class="picker-filter-group">
+                    <label>关联入库单:</label>
+                    <input type="text" class="picker-filter-input" data-filter="linked_doc" placeholder="搜索关联PR单号..." value="${this.filters[stage].linked_doc || ''}">
+                </div>
                 <div class="picker-filter-group">
                     <label>供应商:</label>
                     <input type="text" class="picker-filter-input" data-filter="supplier" placeholder="搜索供应商..." value="${this.filters[stage].supplier || ''}">
@@ -468,7 +490,20 @@ class ProcurementOrderPickerCenter {
                 </div>
             `;
         } else if (stage === "pr_to_pi") {
+            const ms = this.filters[stage].match_status || "pending";
             filters_html = `
+                <div class="picker-filter-group">
+                    <label>关联状态:</label>
+                    <select class="picker-filter-select" data-filter="match_status">
+                        <option value="pending" ${ms === 'pending' ? 'selected' : ''}>🟡 仅待开票 (未关联/待开)</option>
+                        <option value="linked" ${ms === 'linked' ? 'selected' : ''}>🟢 仅已开票 (已关联PI)</option>
+                        <option value="all" ${ms === 'all' ? 'selected' : ''}>🌐 全部入库单据 (全量追溯)</option>
+                    </select>
+                </div>
+                <div class="picker-filter-group">
+                    <label>关联发票号:</label>
+                    <input type="text" class="picker-filter-input" data-filter="linked_doc" placeholder="搜索关联PI发票号..." value="${this.filters[stage].linked_doc || ''}">
+                </div>
                 <div class="picker-filter-group">
                     <label>供应商:</label>
                     <input type="text" class="picker-filter-input" data-filter="supplier" placeholder="搜索供应商..." value="${this.filters[stage].supplier || ''}">
@@ -483,7 +518,20 @@ class ProcurementOrderPickerCenter {
                 </div>
             `;
         } else if (stage === "pi_to_rr") {
+            const ms = this.filters[stage].match_status || "pending";
             filters_html = `
+                <div class="picker-filter-group">
+                    <label>关联状态:</label>
+                    <select class="picker-filter-select" data-filter="match_status">
+                        <option value="pending" ${ms === 'pending' ? 'selected' : ''}>🟡 仅待报销发票 (未关联/未付清)</option>
+                        <option value="linked" ${ms === 'linked' ? 'selected' : ''}>🟢 仅已报销发票 (已关联RR)</option>
+                        <option value="all" ${ms === 'all' ? 'selected' : ''}>🌐 全部发票单据 (全量追溯)</option>
+                    </select>
+                </div>
+                <div class="picker-filter-group">
+                    <label>关联报销单:</label>
+                    <input type="text" class="picker-filter-input" data-filter="linked_doc" placeholder="搜索关联RR报销单号..." value="${this.filters[stage].linked_doc || ''}">
+                </div>
                 <div class="picker-filter-group">
                     <label>供应商:</label>
                     <input type="text" class="picker-filter-input" data-filter="supplier" placeholder="搜索供应商..." value="${this.filters[stage].supplier || ''}">
@@ -502,7 +550,7 @@ class ProcurementOrderPickerCenter {
         $bar.html(filters_html);
 
         const self = this;
-        $bar.find(".picker-filter-input").on("change input", function () {
+        $bar.find(".picker-filter-input, .picker-filter-select").on("change input", function () {
             const key = $(this).attr("data-filter");
             self.filters[stage][key] = $(this).val();
             self.debounce_reload();
@@ -637,19 +685,18 @@ class ProcurementOrderPickerCenter {
                     <th>采购申请单号</th>
                     <th>申请日期</th>
                     <th>期望到货日</th>
-                    <th>需求部门</th>
                     <th>单据明细</th>
                     <th>待订项数</th>
                     <th>待订总数</th>
                     <th>预估金额</th>
                     <th>建议供应商</th>
+                    <th>🔗 关联采购订单</th>
                     <th>制单人</th>
                 `;
             } else {
                 ths += `
                     <th>采购申请单号</th>
                     <th>期望到货日</th>
-                    <th>需求部门</th>
                     <th>物料代码</th>
                     <th>物料名称/规格</th>
                     <th>单位</th>
@@ -660,6 +707,7 @@ class ProcurementOrderPickerCenter {
                     <th>参考单价</th>
                     <th>预估金额</th>
                     <th>建议供应商</th>
+                    <th>🔗 关联采购订单</th>
                 `;
             }
         } else if (stage === "po_to_pr") {
@@ -675,6 +723,7 @@ class ProcurementOrderPickerCenter {
                     <th>待收总数</th>
                     <th>待收金额</th>
                     <th>订单总额</th>
+                    <th>🔗 关联入库单</th>
                     <th>订单状态</th>
                 `;
             } else {
@@ -691,6 +740,7 @@ class ProcurementOrderPickerCenter {
                     <th>本次实收数</th>
                     <th>采购单价</th>
                     <th>待收金额</th>
+                    <th>🔗 关联入库单</th>
                 `;
             }
         } else if (stage === "pr_to_pi") {
@@ -705,6 +755,7 @@ class ProcurementOrderPickerCenter {
                     <th>待开票金额</th>
                     <th>入库单总额</th>
                     <th>关联订单</th>
+                    <th>🔗 关联采购发票</th>
                 `;
             } else {
                 ths += `
@@ -720,6 +771,7 @@ class ProcurementOrderPickerCenter {
                     <th>入库单价</th>
                     <th>待开票金额</th>
                     <th>关联订单</th>
+                    <th>🔗 关联采购发票</th>
                 `;
             }
         } else if (stage === "pi_to_rr") {
@@ -735,6 +787,7 @@ class ProcurementOrderPickerCenter {
                     <th>发票总额</th>
                     <th>已付金额</th>
                     <th>待报销余额</th>
+                    <th>🔗 关联报销单</th>
                 `;
             } else {
                 ths += `
@@ -748,6 +801,7 @@ class ProcurementOrderPickerCenter {
                     <th>明细金额</th>
                     <th>开票日期</th>
                     <th>待报销余额</th>
+                    <th>🔗 关联报销单</th>
                 `;
             }
         }
@@ -766,7 +820,7 @@ class ProcurementOrderPickerCenter {
                     <td colspan="${col_span}">
                         <div class="picker-empty-state">
                             <div class="picker-empty-icon">🎉</div>
-                            <div>当前没有待处理的记录</div>
+                            <div>当前没有符合条件的记录</div>
                         </div>
                     </td>
                 </tr>
@@ -778,16 +832,36 @@ class ProcurementOrderPickerCenter {
         const mode = this.view_modes[stage] || "detail";
         const is_all_company = this.active_company === "All";
 
+        const render_linked_badges = (names_str, slug) => {
+            if (!names_str || !names_str.trim()) {
+                return `<span class="picker-no-link">-</span>`;
+            }
+            const names = names_str.split(/[、,]/).map(s => s.trim()).filter(Boolean);
+            if (!names.length) return `<span class="picker-no-link">-</span>`;
+            return names.map(n => `<a href="/desk/${slug}/${encodeURIComponent(n)}" target="_blank" class="picker-linked-badge" title="点击查看单据 ${frappe.utils.escape_html(n)}">🔗 ${frappe.utils.escape_html(n)}</a>`).join(" ");
+        };
+
         this.table_data.forEach((r, idx) => {
             const key = this.get_row_key(r);
             const is_selected = this.selected_map.has(key);
             const is_hidden_by_lock = this.locked_company && r.company !== this.locked_company;
 
+            let is_completed = false;
+            if (stage === "mr_to_po" || stage === "po_to_pr" || stage === "pr_to_pi") {
+                is_completed = flt(r.pending_qty) <= 0.0001;
+            } else if (stage === "pi_to_rr") {
+                is_completed = flt(r.net_available_amount) <= 0.0001;
+            }
+
+            const checkbox_attr = is_completed
+                ? `disabled title="该单据/明细已全部处理完成"`
+                : `${is_selected ? 'checked' : ''}`;
+
             let tr_html = `
-                <tr class="${is_selected ? 'row-selected' : ''} ${is_hidden_by_lock ? 'picker-row-company-hidden' : ''}" data-key="${key}" data-company="${frappe.utils.escape_html(r.company || '')}">
+                <tr class="${is_selected ? 'row-selected' : ''} ${is_completed ? 'picker-row-completed' : ''} ${is_hidden_by_lock ? 'picker-row-company-hidden' : ''}" data-key="${key}" data-company="${frappe.utils.escape_html(r.company || '')}">
                     <td class="picker-col-sticky-1">${idx + 1}</td>
                     <td class="picker-col-sticky-2">
-                        <input type="checkbox" class="picker-row-checkbox" data-key="${key}" ${is_selected ? 'checked' : ''}>
+                        <input type="checkbox" class="picker-row-checkbox" data-key="${key}" ${checkbox_attr}>
                     </td>
             `;
 
@@ -811,7 +885,7 @@ class ProcurementOrderPickerCenter {
             if (stage === "item_to_mr") {
                 if (mode === "doc") {
                     tr_html += `
-                        <td><a href="/desk/material-request/${r.mr_name}">${frappe.utils.escape_html(r.mr_name)}</a></td>
+                        <td><a href="/desk/material-request/${r.mr_name}" target="_blank" class="picker-linked-badge">${frappe.utils.escape_html(r.mr_name)}</a></td>
                         <td>${r.transaction_date || "-"}</td>
                         <td>${frappe.utils.escape_html(r.department || "-")}</td>
                         <td>${doc_badges(r.custom_doc_details)}</td>
@@ -822,7 +896,7 @@ class ProcurementOrderPickerCenter {
                     `;
                 } else {
                     tr_html += `
-                        <td><a href="/desk/material-request/${r.mr_name}">${frappe.utils.escape_html(r.mr_name)}</a></td>
+                        <td><a href="/desk/material-request/${r.mr_name}" target="_blank" class="picker-linked-badge">${frappe.utils.escape_html(r.mr_name)}</a></td>
                         <td><strong>${frappe.utils.escape_html(r.item_code)}</strong></td>
                         <td>${frappe.utils.escape_html(r.item_name || r.item_code)}</td>
                         <td>${frappe.utils.escape_html(r.item_group || "")}</td>
@@ -836,23 +910,23 @@ class ProcurementOrderPickerCenter {
             } else if (stage === "mr_to_po") {
                 if (mode === "doc") {
                     tr_html += `
-                        <td><a href="/desk/material-request/${r.mr_name}">${frappe.utils.escape_html(r.mr_name)}</a></td>
+                        <td><span class="picker-source-docname">${frappe.utils.escape_html(r.mr_name)}</span></td>
                         <td>${r.transaction_date || "-"}</td>
                         <td>${r.schedule_date || "-"}</td>
-                        <td>${frappe.utils.escape_html(r.department || "-")}</td>
                         <td>${doc_badges(r.custom_doc_details)}</td>
                         <td class="picker-qty-cell">${r.pending_item_count || 0}</td>
                         <td class="picker-qty-cell"><strong>${flt(r.pending_qty).toFixed(2)}</strong></td>
                         <td class="picker-money-cell cell-row-amt">${this.fmt_money(r.estimated_amount)}</td>
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
+                        <td>${render_linked_badges(r.linked_po_names, "purchase-order")}</td>
                         <td>${frappe.utils.escape_html(r.owner || "-")}</td>
                     `;
                 } else {
                     const urgent_tag = r.is_overdue ? `<span class="picker-badge-urgent">逾期</span>` : (r.is_urgent ? `<span class="picker-badge-urgent">紧急</span>` : "");
+                    const input_val = is_completed ? 0 : (r.this_qty || r.pending_qty);
                     tr_html += `
-                        <td><a href="/desk/material-request/${r.mr_name}">${frappe.utils.escape_html(r.mr_name)}</a></td>
+                        <td><span class="picker-source-docname">${frappe.utils.escape_html(r.mr_name)}</span></td>
                         <td>${r.schedule_date || "-"} ${urgent_tag}</td>
-                        <td>${frappe.utils.escape_html(r.department || r.requested_by || "-")}</td>
                         <td><strong>${frappe.utils.escape_html(r.item_code)}</strong></td>
                         <td>${frappe.utils.escape_html(r.item_name || "")}</td>
                         <td>${frappe.utils.escape_html(r.uom || "")}</td>
@@ -860,18 +934,19 @@ class ProcurementOrderPickerCenter {
                         <td class="picker-qty-cell">${r.ordered_qty}</td>
                         <td class="picker-qty-cell"><strong>${r.pending_qty}</strong></td>
                         <td>
-                            <input type="number" class="picker-input-qty" step="0.01" min="0.01" max="${r.pending_qty}" value="${r.this_qty}">
+                            <input type="number" class="picker-input-qty" step="0.01" min="0.01" max="${r.pending_qty}" value="${input_val}" ${is_completed ? 'disabled' : ''}>
                         </td>
                         <td class="picker-money-cell">${this.fmt_money(r.rate)}</td>
                         <td class="picker-money-cell cell-row-amt">${this.fmt_money(r.estimated_amount)}</td>
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
+                        <td>${render_linked_badges(r.linked_po_names, "purchase-order")}</td>
                     `;
                 }
             } else if (stage === "po_to_pr") {
                 if (mode === "doc") {
                     tr_html += `
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
-                        <td><a href="/desk/purchase-order/${r.po_name}">${frappe.utils.escape_html(r.po_name)}</a></td>
+                        <td><span class="picker-source-docname">${frappe.utils.escape_html(r.po_name)}</span></td>
                         <td>${r.po_date || "-"}</td>
                         <td>${r.schedule_date || "-"}</td>
                         <td>${frappe.utils.escape_html(r.warehouse || "-")}</td>
@@ -880,12 +955,14 @@ class ProcurementOrderPickerCenter {
                         <td class="picker-qty-cell"><strong>${flt(r.pending_qty).toFixed(2)}</strong></td>
                         <td class="picker-money-cell cell-row-amt">${this.fmt_money(r.pending_amount)}</td>
                         <td class="picker-money-cell">${this.fmt_money(r.grand_total)}</td>
+                        <td>${render_linked_badges(r.linked_pr_names, "purchase-receipt")}</td>
                         <td><span class="ashan-status-badge ashan-status-blue">${frappe.utils.escape_html(r.status || "")}</span></td>
                     `;
                 } else {
+                    const input_val = is_completed ? 0 : (r.this_qty || r.pending_qty);
                     tr_html += `
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
-                        <td><a href="/desk/purchase-order/${r.po_name}">${frappe.utils.escape_html(r.po_name)}</a></td>
+                        <td><span class="picker-source-docname">${frappe.utils.escape_html(r.po_name)}</span></td>
                         <td>${r.po_date || "-"}</td>
                         <td>${r.schedule_date || "-"}</td>
                         <td><span class="ashan-tag-badge">${frappe.utils.escape_html(r.item_code)}</span> ${frappe.utils.escape_html(r.item_name || "")}</td>
@@ -894,17 +971,18 @@ class ProcurementOrderPickerCenter {
                         <td class="picker-qty-cell">${r.received_qty}</td>
                         <td class="picker-qty-cell"><strong>${r.pending_qty}</strong></td>
                         <td>
-                            <input type="number" class="picker-input-qty" step="0.01" min="0.01" max="${r.pending_qty}" value="${r.this_qty}">
+                            <input type="number" class="picker-input-qty" step="0.01" min="0.01" max="${r.pending_qty}" value="${input_val}" ${is_completed ? 'disabled' : ''}>
                         </td>
                         <td class="picker-money-cell">${this.fmt_money(r.rate)}</td>
                         <td class="picker-money-cell cell-row-amt">${this.fmt_money(r.pending_amount)}</td>
+                        <td>${render_linked_badges(r.linked_pr_names, "purchase-receipt")}</td>
                     `;
                 }
             } else if (stage === "pr_to_pi") {
                 if (mode === "doc") {
                     tr_html += `
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
-                        <td><a href="/desk/purchase-receipt/${r.pr_name}">${frappe.utils.escape_html(r.pr_name)}</a></td>
+                        <td><span class="picker-source-docname">${frappe.utils.escape_html(r.pr_name)}</span></td>
                         <td>${r.pr_date || "-"}</td>
                         <td>${doc_badges(r.custom_doc_details)}</td>
                         <td class="picker-qty-cell">${r.unbilled_item_count || 0}</td>
@@ -912,11 +990,13 @@ class ProcurementOrderPickerCenter {
                         <td class="picker-money-cell cell-row-amt">${this.fmt_money(r.pending_amount)}</td>
                         <td class="picker-money-cell">${this.fmt_money(r.grand_total)}</td>
                         <td>${frappe.utils.escape_html(r.purchase_order || "-")}</td>
+                        <td>${render_linked_badges(r.linked_pi_names, "purchase-invoice")}</td>
                     `;
                 } else {
+                    const input_val = is_completed ? 0 : (r.this_qty || r.pending_qty);
                     tr_html += `
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
-                        <td><a href="/desk/purchase-receipt/${r.pr_name}">${frappe.utils.escape_html(r.pr_name)}</a></td>
+                        <td><span class="picker-source-docname">${frappe.utils.escape_html(r.pr_name)}</span></td>
                         <td>${r.pr_date || "-"}</td>
                         <td><span class="ashan-tag-badge">${frappe.utils.escape_html(r.item_code)}</span> ${frappe.utils.escape_html(r.item_name || "")}</td>
                         <td>${frappe.utils.escape_html(r.uom || "")}</td>
@@ -924,17 +1004,18 @@ class ProcurementOrderPickerCenter {
                         <td class="picker-qty-cell">${r.billed_qty}</td>
                         <td class="picker-qty-cell"><strong>${r.pending_qty}</strong></td>
                         <td>
-                            <input type="number" class="picker-input-qty" step="0.01" min="0.01" max="${r.pending_qty}" value="${r.this_qty}">
+                            <input type="number" class="picker-input-qty" step="0.01" min="0.01" max="${r.pending_qty}" value="${input_val}" ${is_completed ? 'disabled' : ''}>
                         </td>
                         <td class="picker-money-cell">${this.fmt_money(r.rate)}</td>
                         <td class="picker-money-cell cell-row-amt">${this.fmt_money(r.pending_amount)}</td>
                         <td>${frappe.utils.escape_html(r.purchase_order || "-")}</td>
+                        <td>${render_linked_badges(r.linked_pi_names, "purchase-invoice")}</td>
                     `;
                 }
             } else if (stage === "pi_to_rr") {
                 if (mode === "doc") {
                     tr_html += `
-                        <td><a href="/desk/purchase-invoice/${r.pi_name}">${frappe.utils.escape_html(r.pi_name)}</a></td>
+                        <td><span class="picker-source-docname">${frappe.utils.escape_html(r.pi_name)}</span></td>
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
                         <td><span class="picker-badge-invoice-type">${frappe.utils.escape_html(r.bill_no || "未填")}</span></td>
                         <td><span class="ashan-status-badge ashan-status-blue">${frappe.utils.escape_html(r.invoice_type || "普通发票")}</span></td>
@@ -944,10 +1025,11 @@ class ProcurementOrderPickerCenter {
                         <td class="picker-money-cell">${this.fmt_money(r.grand_total)}</td>
                         <td class="picker-money-cell">${this.fmt_money(r.grand_total - r.outstanding_amount)}</td>
                         <td class="picker-money-cell cell-row-amt"><strong>${this.fmt_money(r.net_available_amount)}</strong></td>
+                        <td>${render_linked_badges(r.linked_rr_names, "reimbursement-request")}</td>
                     `;
                 } else {
                     tr_html += `
-                        <td><a href="/desk/purchase-invoice/${r.pi_name}">${frappe.utils.escape_html(r.pi_name)}</a></td>
+                        <td><span class="picker-source-docname">${frappe.utils.escape_html(r.pi_name)}</span></td>
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
                         <td><span class="picker-badge-invoice-type">${frappe.utils.escape_html(r.bill_no || "未填")}</span></td>
                         <td><strong>${frappe.utils.escape_html(r.item_code)}</strong> ${frappe.utils.escape_html(r.item_name || "")}</td>
@@ -957,6 +1039,7 @@ class ProcurementOrderPickerCenter {
                         <td class="picker-money-cell">${this.fmt_money(r.amount)}</td>
                         <td>${r.bill_date || r.posting_date || "-"}</td>
                         <td class="picker-money-cell cell-row-amt"><strong>${this.fmt_money(r.net_available_amount)}</strong></td>
+                        <td>${render_linked_badges(r.linked_rr_names, "reimbursement-request")}</td>
                     `;
                 }
             }

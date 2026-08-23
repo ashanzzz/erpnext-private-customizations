@@ -886,3 +886,76 @@
     cursor: pointer;
 }
 
+/* Source Docname Non-Clickable Style */
+.picker-source-docname {
+    font-weight: 600;
+    color: #1e293b;
+    letter-spacing: 0.2px;
+}
+
+/* Downstream Linked Doc Badge Style (Clickable Link) */
+.picker-linked-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 7px;
+    background: #eff6ff;
+    color: #1d4ed8 !important;
+    border: 1px solid #bfdbfe;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-decoration: none !important;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+
+.picker-linked-badge:hover {
+    background: #dbeafe;
+    border-color: #93c5fd;
+    color: #1e40af !important;
+    box-shadow: 0 1px 3px rgba(37, 99, 235, 0.12);
+}
+
+.picker-no-link {
+    color: #94a3b8;
+    font-weight: normal;
+}
+
+/* Completed Row Styling (Fulfilled / Disabled) */
+tr.picker-row-completed {
+    background-color: #f8fafc !important;
+    opacity: 0.72;
+}
+
+tr.picker-row-completed:hover {
+    background-color: #f1f5f9 !important;
+    opacity: 0.9;
+}
+
+tr.picker-row-completed input.picker-row-checkbox {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+/* Filter Select Control */
+.picker-filter-select {
+    height: 28px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #1e293b;
+    background-color: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+}
+
+.picker-filter-select:focus {
+    border-color: #0284c7;
+    box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+}
+
+
