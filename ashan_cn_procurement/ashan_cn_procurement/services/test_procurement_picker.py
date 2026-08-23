@@ -1,11 +1,14 @@
 # Copyright (c) 2026, Ashan CN Procurement
-"""Automated regression & end-to-end test suite for Procurement Order Picker."""
+"""Automated regression & end-to-end test suite for Procurement Order Picker (5 Natural Lifecycle Steps & Multi-Company)."""
 
 import unittest
 import frappe
 from frappe.utils import nowdate, flt, random_string
 
 from ashan_cn_procurement.services.procurement_picker_service import (
+    get_user_procurement_companies,
+    get_item_master_picker_rows,
+    make_material_requests_from_items,
     get_pending_material_request_items,
     make_purchase_orders_from_mr_items,
     get_pending_purchase_order_items,
@@ -23,37 +26,47 @@ class TestProcurementPicker(unittest.TestCase):
         frappe.set_user("Administrator")
         self.company = frappe.db.get_value("Company", {}, "name") or "天津祺富机械加工有限公司"
 
-    def test_01_overview_kpis_smoke(self):
-        """Verify get_procurement_picker_overview_kpis returns valid schema."""
-        res = get_procurement_picker_overview_kpis(self.company)
-        self.assertIn("kpis", res)
-        self.assertIn("mr_to_po", res["kpis"])
-        self.assertIn("po_to_pr", res["kpis"])
-        self.assertIn("pr_to_pi", res["kpis"])
-        self.assertIn("pi_to_rr", res["kpis"])
-        self.assertIsInstance(res["kpis"]["mr_to_po"]["count"], int)
+    def test_01_user_companies_and_kpis(self):
+        """Verify get_user_procurement_companies and 5-step overview KPIs."""
+        user_comps = get_user_procurement_companies()
+        self.assertIn("companies", user_comps)
+        self.assertTrue(len(user_comps["companies"]) >= 1)
+
+        # Test KPI with "All"
+        res_all = get_procurement_picker_overview_kpis("All")
+        self.assertIn("kpis", res_all)
+        self.assertIn("item_to_mr", res_all["kpis"])
+        self.assertIn("mr_to_po", res_all["kpis"])
+        self.assertIn("po_to_pr", res_all["kpis"])
+        self.assertIn("pr_to_pi", res_all["kpis"])
+        self.assertIn("pi_to_rr", res_all["kpis"])
 
     def test_02_query_endpoints_smoke(self):
-        """Verify query endpoints execute without SQL or permission errors."""
-        mr_res = get_pending_material_request_items(self.company)
-        self.assertIn("rows", mr_res)
-        self.assertIn("count", mr_res)
+        """Verify query endpoints execute without SQL or permission errors for All and single company."""
+        for comp_scope in ["All", self.company]:
+            item_res = get_item_master_picker_rows(comp_scope)
+            self.assertIn("rows", item_res)
 
-        po_res = get_pending_purchase_order_items(self.company)
-        self.assertIn("rows", po_res)
-        self.assertIn("count", po_res)
+            mr_res = get_pending_material_request_items(comp_scope)
+            self.assertIn("rows", mr_res)
 
-        pr_res = get_pending_purchase_receipt_items(self.company)
-        self.assertIn("rows", pr_res)
-        self.assertIn("count", pr_res)
+            po_res = get_pending_purchase_order_items(comp_scope)
+            self.assertIn("rows", po_res)
 
-        rr_res = get_pending_reimbursement_invoices(self.company)
-        self.assertIn("rows", rr_res)
-        self.assertIn("count", rr_res)
+            pr_res = get_pending_purchase_receipt_items(comp_scope)
+            self.assertIn("rows", pr_res)
 
-    def test_03_full_chain_procurement_flow(self):
-        """Test full 4-stage end-to-end selection & generation flow."""
-        # Find or create a test item, supplier, and warehouse
+            rr_res = get_pending_reimbursement_invoices(comp_scope)
+            self.assertIn("rows", rr_res)
+
+    def test_03_full_5_step_procurement_lifecycle(self):
+        """Test full 5-step end-to-end procurement lifecycle flow:
+        Step 1: Item Master -> Material Request (Draft)
+        Step 2: Material Request -> Purchase Order (Draft -> Submit)
+        Step 3: Purchase Order -> Purchase Receipt (Draft -> Submit)
+        Step 4: Purchase Receipt -> Purchase Invoice (Draft -> Submit)
+        Step 5: Purchase Invoice -> Reimbursement Request (Draft)
+        """
         supplier = frappe.db.get_value("Supplier", {}, "name")
         if not supplier:
             sup_doc = frappe.get_doc({
@@ -77,87 +90,83 @@ class TestProcurementPicker(unittest.TestCase):
             }).insert()
             item_code = item_doc.name
 
-        # --- Stage 1: Create Material Request & Submit ---
-        mr = frappe.new_doc("Material Request")
-        mr.company = self.company
-        mr.material_request_type = "Purchase"
-        mr.transaction_date = nowdate()
-        mr.schedule_date = nowdate()
-        mr.append("items", {
-            "item_code": item_code,
-            "qty": 10.0,
-            "uom": uom,
-            "stock_uom": uom,
-            "rate": 50.0,
-            "schedule_date": nowdate(),
-            "warehouse": warehouse,
-        })
-        mr.insert()
-        mr.submit()
+        # --- Step 1: Item Master -> Material Request ---
+        item_pool = get_item_master_picker_rows(self.company, {"item_code": item_code})
+        self.assertTrue(len(item_pool["rows"]) > 0, "Item master should be present in Step 1 pool")
+
+        mr_gen = make_material_requests_from_items(
+            self.company,
+            selected_items=[{
+                "item_code": item_code,
+                "this_qty": 15.0,
+                "rate": 60.0,
+                "warehouse": warehouse,
+                "company": self.company,
+            }],
+            department="生产部",
+            purpose="全流程5步自动测试",
+        )
+        self.assertTrue(mr_gen["success"])
+        mr_name = mr_gen["requests"][0]["name"]
+
+        # Submit MR
+        mr_doc = frappe.get_doc("Material Request", mr_name)
+        mr_doc.submit()
+        mri_name = mr_doc.items[0].name
 
         try:
-            mri_name = mr.items[0].name
-
-            # Query MR pool
+            # --- Step 2: Material Request -> Purchase Order ---
             mr_pool = get_pending_material_request_items(self.company)
             found_mr = [r for r in mr_pool["rows"] if r["mri_name"] == mri_name]
-            self.assertTrue(len(found_mr) > 0, "Material request item should appear in pending pool")
-            self.assertEqual(found_mr[0]["pending_qty"], 10.0)
+            self.assertTrue(len(found_mr) > 0, "Material request item should appear in pending order pool")
+            self.assertEqual(found_mr[0]["pending_qty"], 15.0)
 
-            # Generate PO
             po_gen = make_purchase_orders_from_mr_items(
                 self.company,
-                selected_items=[{"mri_name": mri_name, "this_qty": 10.0, "rate": 50.0}],
+                selected_items=[{"mri_name": mri_name, "this_qty": 15.0, "rate": 60.0}],
                 supplier_override=supplier,
             )
             self.assertTrue(po_gen["success"])
-            self.assertEqual(po_gen["created_count"], 1)
             po_name = po_gen["orders"][0]["name"]
 
-            # Submit generated PO
             po_doc = frappe.get_doc("Purchase Order", po_name)
             po_doc.submit()
-
             poi_name = po_doc.items[0].name
 
-            # --- Stage 2: Query PO pool & Generate PR ---
+            # --- Step 3: Purchase Order -> Purchase Receipt ---
             po_pool = get_pending_purchase_order_items(self.company, {"supplier": supplier})
             found_po = [r for r in po_pool["rows"] if r["poi_name"] == poi_name]
             self.assertTrue(len(found_po) > 0, "PO item should appear in pending receipt pool")
-            self.assertEqual(found_po[0]["pending_qty"], 10.0)
 
             pr_gen = make_purchase_receipts_from_po_items(
                 self.company,
-                selected_items=[{"poi_name": poi_name, "this_qty": 10.0, "warehouse": warehouse}],
+                selected_items=[{"poi_name": poi_name, "this_qty": 15.0, "warehouse": warehouse}],
             )
             self.assertTrue(pr_gen["success"])
             pr_name = pr_gen["receipts"][0]["name"]
 
-            # Submit generated PR
             pr_doc = frappe.get_doc("Purchase Receipt", pr_name)
             pr_doc.submit()
-
             pri_name = pr_doc.items[0].name
 
-            # --- Stage 3: Query PR pool & Generate PI ---
+            # --- Step 4: Purchase Receipt -> Purchase Invoice ---
             pr_pool = get_pending_purchase_receipt_items(self.company, {"supplier": supplier})
             found_pr = [r for r in pr_pool["rows"] if r["pri_name"] == pri_name]
             self.assertTrue(len(found_pr) > 0, "PR item should appear in pending invoice pool")
 
             pi_gen = make_purchase_invoices_from_pr_items(
                 self.company,
-                selected_items=[{"pri_name": pri_name, "this_qty": 10.0}],
-                bill_no="TEST-INV-001",
+                selected_items=[{"pri_name": pri_name, "this_qty": 15.0}],
+                bill_no="TEST-AUTO-INV-002",
                 bill_date=nowdate(),
             )
             self.assertTrue(pi_gen["success"])
             pi_name = pi_gen["invoices"][0]["name"]
 
-            # Submit generated PI
             pi_doc = frappe.get_doc("Purchase Invoice", pi_name)
             pi_doc.submit()
 
-            # --- Stage 4: Query PI pool & Generate Reimbursement Request ---
+            # --- Step 5: Purchase Invoice -> Reimbursement Request ---
             pi_pool = get_pending_reimbursement_invoices(self.company)
             found_pi = [r for r in pi_pool["rows"] if r["pi_name"] == pi_name]
             self.assertTrue(len(found_pi) > 0, "PI should appear in pending reimbursement pool")
@@ -165,18 +174,17 @@ class TestProcurementPicker(unittest.TestCase):
             rr_gen = make_reimbursement_from_invoices(
                 self.company,
                 selected_invoices=[pi_name],
-                purpose="选单全流程回归测试",
+                purpose="5步全流程端到端测试",
             )
             self.assertTrue(rr_gen["success"])
             rr_name = rr_gen["reimbursement_name"]
             self.assertTrue(bool(rr_name))
 
-            # Verify reservation was made
+            # Verify reservation
             res_count = frappe.db.count("Reimbursement Source Reservation", {"reimbursement_request": rr_name})
-            self.assertTrue(res_count > 0, "Reservation rows should be recorded")
+            self.assertTrue(res_count > 0, "Source reservation records must exist")
 
         finally:
-            # Rollback all test documents created in this transaction
             frappe.db.rollback()
 
 

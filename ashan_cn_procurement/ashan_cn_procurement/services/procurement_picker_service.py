@@ -1,11 +1,12 @@
 """Procurement order picker and downstream document generation domain services.
 
 Provides permission-aware candidate pooling and transactional draft document
-generation across the four procurement flow stages:
-1. Material Request Item -> Purchase Order
-2. Purchase Order Item -> Purchase Receipt
-3. Purchase Receipt Item -> Purchase Invoice
-4. Purchase Invoice / Item -> Reimbursement Request
+generation across the full 5-step procurement business lifecycle:
+1. Item Master -> Material Request (采购需求/申请)
+2. Material Request Item -> Purchase Order (采购订货)
+3. Purchase Order Item -> Purchase Receipt (采购入库)
+4. Purchase Receipt Item -> Purchase Invoice (采购开票)
+5. Purchase Invoice / Item -> Reimbursement Request (报销付款)
 """
 
 from __future__ import annotations
@@ -22,30 +23,57 @@ from ashan_cn_procurement.reimbursement.service import (
     get_purchase_invoice_item_candidates,
     normalize_names,
 )
-from ashan_cn_procurement.services.authorization_service import assert_company_access
+from ashan_cn_procurement.services.authorization_service import (
+    assert_company_access,
+    get_allowed_companies,
+)
 
 
-def _resolve_company(company: str | None) -> str:
-    """Resolve and validate active company context with permission check."""
-    company = (company or "").strip()
-    if not company:
-        default_company = frappe.defaults.get_user_default("Company")
-        if default_company and frappe.db.exists("Company", default_company):
-            company = default_company
-        else:
-            companies = frappe.get_list(
-                "Company",
-                fields=["name"],
-                order_by="name asc",
-                page_length=1,
-            )
-            company = companies[0].name if companies else ""
+@frappe.whitelist()
+def get_user_procurement_companies() -> dict:
+    """Return the list of companies the current user is authorized to access."""
+    user = frappe.session.user
+    allowed = get_allowed_companies(user)
+    if allowed is None:
+        all_companies = frappe.get_all("Company", fields=["name"], order_by="name asc")
+        company_names = [c.name for c in all_companies]
+    else:
+        company_names = sorted(list(allowed))
 
-    if not company or not frappe.db.exists("Company", company):
-        frappe.throw(_("请先选择有效公司。"))
+    default_company = frappe.defaults.get_user_default("Company")
+    if not default_company and company_names:
+        default_company = company_names[0]
 
-    assert_company_access(company)
-    return company
+    return {
+        "companies": company_names,
+        "default_company": default_company,
+        "is_all_allowed": allowed is None or len(company_names) > 1,
+    }
+
+
+def _resolve_companies(company: str | list[str] | None) -> list[str]:
+    """Resolve active company scope list with server-side permission checks."""
+    user_comps = get_user_procurement_companies()["companies"]
+    if not user_comps:
+        frappe.throw(_("当前账号未获得任何公司的访问权限。"))
+
+    if not company or company == "All" or company == "全部公司":
+        return user_comps
+
+    if isinstance(company, str):
+        target_comps = [c.strip() for c in company.split(",") if c.strip()]
+    elif isinstance(company, list):
+        target_comps = [str(c).strip() for c in company if str(c).strip()]
+    else:
+        target_comps = []
+
+    if not target_comps or "All" in target_comps:
+        return user_comps
+
+    for comp in target_comps:
+        assert_company_access(comp)
+
+    return target_comps
 
 
 def _meta_has(doctype: str, fieldname: str) -> bool:
@@ -56,7 +84,209 @@ def _meta_has(doctype: str, fieldname: str) -> bool:
 
 
 # =========================================================================
-# Stage 1: Material Request (Item) -> Purchase Order
+# Step 1: Item Master -> Material Request (采购申请/采购需求)
+# =========================================================================
+
+@frappe.whitelist()
+def get_item_master_picker_rows(
+    company: str | None = None,
+    filters: dict | str | None = None,
+) -> dict:
+    """Query purchasable item master records with stock balance for Material Request."""
+    companies = _resolve_companies(company)
+    if isinstance(filters, str):
+        filters = frappe.parse_json(filters) or {}
+    filters = dict(filters or {})
+
+    conditions = ["item.disabled = 0"]
+    params: dict[str, Any] = {"companies": companies}
+
+    if filters.get("item_code"):
+        conditions.append("(item.item_code LIKE %(item_code)s OR item.item_name LIKE %(item_code)s)")
+        params["item_code"] = f"%{filters['item_code']}%"
+
+    if filters.get("item_group"):
+        conditions.append("item.item_group = %(item_group)s")
+        params["item_group"] = filters["item_group"]
+
+    if filters.get("supplier"):
+        conditions.append("(COALESCE(item_def.default_supplier, '') = %(supplier)s OR COALESCE(item_sup.supplier, '') = %(supplier)s)")
+        params["supplier"] = filters["supplier"]
+
+    where_clause = " AND ".join(conditions)
+
+    sql = f"""
+        SELECT
+            item.name AS item_code,
+            item.item_name,
+            item.item_group,
+            item.stock_uom,
+            COALESCE(item.standard_rate, 0) AS standard_rate,
+            COALESCE(item_def.default_supplier, item_sup.supplier, '') AS default_supplier,
+            COALESCE(item_def.default_warehouse, '') AS default_warehouse,
+            item_def.company AS item_company
+        FROM `tabItem` item
+        LEFT JOIN `tabItem Default` item_def ON (item_def.parent = item.name AND item_def.company IN %(companies)s)
+        LEFT JOIN `tabItem Supplier` item_sup ON item_sup.parent = item.name
+        WHERE {where_clause}
+        GROUP BY item.name, item_def.company
+        ORDER BY item.item_name ASC, item.name ASC
+        LIMIT 1000
+    """
+
+    raw_items = frappe.db.sql(sql, params, as_dict=True)
+
+    # Get stock balances across companies
+    item_codes = list({r.item_code for r in raw_items})
+    stock_map = defaultdict(float)
+    if item_codes:
+        bins = frappe.db.sql("""
+            SELECT b.item_code, b.warehouse, w.company, SUM(b.actual_qty) AS total_actual_qty
+            FROM `tabBin` b
+            INNER JOIN `tabWarehouse` w ON w.name = b.warehouse
+            WHERE b.item_code IN %s AND w.company IN %s
+            GROUP BY b.item_code, w.company
+        """, (item_codes, companies), as_dict=True)
+        for b in bins:
+            stock_map[(b.item_code, b.company)] = flt(b.total_actual_qty, 2)
+
+    rows = []
+    seen = set()
+    for r in raw_items:
+        # Determine company for row
+        comp = r.item_company or (companies[0] if len(companies) == 1 else companies[0])
+        key = (r.item_code, comp)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        current_stock = stock_map.get((r.item_code, comp), 0.0)
+
+        rows.append({
+            "item_code": r.item_code,
+            "item_name": r.item_name or r.item_code,
+            "item_group": r.item_group or "",
+            "uom": r.stock_uom or "",
+            "stock_uom": r.stock_uom or "",
+            "rate": flt(r.standard_rate, 2),
+            "current_stock": current_stock,
+            "this_qty": 1.0,
+            "supplier": r.default_supplier or "",
+            "warehouse": r.default_warehouse or "",
+            "company": comp,
+        })
+
+    return {
+        "companies": companies,
+        "count": len(rows),
+        "rows": rows,
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def make_material_requests_from_items(
+    company: str | None,
+    selected_items: list[dict] | str,
+    schedule_date: str | None = None,
+    department: str | None = None,
+    purpose: str | None = None,
+) -> dict:
+    """Generate Draft Material Request(s) from selected Item Master rows."""
+    if isinstance(selected_items, str):
+        selected_items = frappe.parse_json(selected_items) or []
+
+    if not selected_items:
+        frappe.throw(_("请至少选择一种物料。"))
+
+    # Group by company
+    company_groups = defaultdict(list)
+    for item in selected_items:
+        item_code = item.get("item_code")
+        if not item_code:
+            continue
+        row_company = (item.get("company") or company or "").strip()
+        if not row_company or row_company == "All" or row_company == "全部公司":
+            row_company = _resolve_companies(None)[0]
+        assert_company_access(row_company)
+
+        qty = flt(item.get("this_qty"), 4)
+        if qty <= 0:
+            qty = 1.0
+
+        company_groups[row_company].append({
+            "item_code": item_code,
+            "qty": qty,
+            "rate": flt(item.get("rate")),
+            "warehouse": item.get("warehouse"),
+            "schedule_date": item.get("schedule_date") or schedule_date or nowdate(),
+            "department": item.get("department") or department,
+        })
+
+    created_requests = []
+    for comp, items_list in company_groups.items():
+        mr = frappe.new_doc("Material Request")
+        mr.company = comp
+        mr.material_request_type = "Purchase"
+        mr.transaction_date = nowdate()
+        mr.schedule_date = schedule_date or nowdate()
+
+        has_mr_dept = _meta_has("Material Request", "department")
+        if department and has_mr_dept:
+            mr.department = department
+
+        for item_data in items_list:
+            item_doc = frappe.get_cached_value(
+                "Item",
+                item_data["item_code"],
+                ["item_name", "description", "item_group", "stock_uom"],
+                as_dict=True,
+            ) or {}
+
+            target_warehouse = item_data["warehouse"]
+            if not target_warehouse:
+                target_warehouse = frappe.db.get_value(
+                    "Warehouse",
+                    {"company": comp, "is_group": 0},
+                    "name",
+                )
+
+            item_row = {
+                "item_code": item_data["item_code"],
+                "item_name": item_doc.get("item_name") or item_data["item_code"],
+                "description": item_doc.get("description") or "",
+                "item_group": item_doc.get("item_group") or "",
+                "uom": item_doc.get("stock_uom") or "Nos",
+                "stock_uom": item_doc.get("stock_uom") or "Nos",
+                "qty": item_data["qty"],
+                "rate": item_data["rate"],
+                "schedule_date": item_data["schedule_date"],
+                "warehouse": target_warehouse,
+            }
+            if item_data.get("department") and _meta_has("Material Request Item", "department"):
+                item_row["department"] = item_data["department"]
+
+            mr.append("items", item_row)
+
+        mr.flags.ignore_permissions = False
+        mr.insert()
+
+        created_requests.append({
+            "name": mr.name,
+            "company": mr.company,
+            "total_qty": sum(it["qty"] for it in items_list),
+            "item_count": len(items_list),
+        })
+
+    return {
+        "success": True,
+        "created_count": len(created_requests),
+        "requests": created_requests,
+        "message": _("成功生成 {0} 张采购申请草稿。").format(len(created_requests)),
+    }
+
+
+# =========================================================================
+# Step 2: Material Request (Item) -> Purchase Order (采购订货)
 # =========================================================================
 
 @frappe.whitelist()
@@ -65,13 +295,13 @@ def get_pending_material_request_items(
     filters: dict | str | None = None,
 ) -> dict:
     """Query unfulfilled Material Request Items for Purchase Order creation."""
-    company = _resolve_company(company)
+    companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
     filters = dict(filters or {})
 
-    conditions = ["mr.docstatus = 1", "mr.material_request_type = 'Purchase'", "mr.company = %(company)s"]
-    params: dict[str, Any] = {"company": company}
+    conditions = ["mr.docstatus = 1", "mr.material_request_type = 'Purchase'", "mr.company IN %(companies)s"]
+    params: dict[str, Any] = {"companies": companies}
 
     conditions.append("mr.status NOT IN ('Stopped', 'Cancelled', 'Transfer')")
     conditions.append("(mri.qty - COALESCE(mri.ordered_qty, 0)) > 0.0001")
@@ -119,7 +349,6 @@ def get_pending_material_request_items(
         params["project"] = filters["project"]
 
     where_clause = " AND ".join(conditions)
-
     dept_select = "mr.department" if has_mr_dept else ("mri.department" if has_mri_dept else "''")
 
     sql = f"""
@@ -143,10 +372,11 @@ def get_pending_material_request_items(
             {dept_select} AS department,
             mr.transaction_date AS mr_date,
             mr.owner AS requested_by,
+            mr.company AS company,
             COALESCE(item_def.default_supplier, item_sup.supplier, '') AS default_supplier
         FROM `tabMaterial Request Item` mri
         INNER JOIN `tabMaterial Request` mr ON mr.name = mri.parent
-        LEFT JOIN `tabItem Default` item_def ON (item_def.parent = mri.item_code AND item_def.company = %(company)s)
+        LEFT JOIN `tabItem Default` item_def ON (item_def.parent = mri.item_code AND item_def.company = mr.company)
         LEFT JOIN `tabItem Supplier` item_sup ON item_sup.parent = mri.item_code
         WHERE {where_clause}
         GROUP BY mri.name
@@ -168,9 +398,10 @@ def get_pending_material_request_items(
         is_overdue = bool(sch_date and sch_date < today)
         is_urgent = bool(sch_date and not is_overdue and (sch_date - today).days <= 3)
 
-        row_dict = {
+        rows.append({
             "mri_name": r.mri_name,
             "mr_name": r.mr_name,
+            "company": r.company,
             "idx": r.idx,
             "item_code": r.item_code,
             "item_name": r.item_name or r.item_code,
@@ -193,13 +424,12 @@ def get_pending_material_request_items(
             "supplier": r.default_supplier or "",
             "is_overdue": is_overdue,
             "is_urgent": is_urgent,
-        }
-        rows.append(row_dict)
+        })
         total_pending_qty += pending_qty
         total_estimated_amount += est_amt
 
     return {
-        "company": company,
+        "companies": companies,
         "count": len(rows),
         "total_pending_qty": total_pending_qty,
         "total_estimated_amount": total_estimated_amount,
@@ -209,13 +439,12 @@ def get_pending_material_request_items(
 
 @frappe.whitelist(methods=["POST"])
 def make_purchase_orders_from_mr_items(
-    company: str,
+    company: str | None,
     selected_items: list[dict] | str,
     supplier_override: str | None = None,
     schedule_date: str | None = None,
 ) -> dict:
     """Generate Draft Purchase Order(s) from selected Material Request Items."""
-    company = _resolve_company(company)
     if isinstance(selected_items, str):
         selected_items = frappe.parse_json(selected_items) or []
 
@@ -238,9 +467,21 @@ def make_purchase_orders_from_mr_items(
     db_item_map = {row.name: row for row in db_items}
     input_item_map = {item["mri_name"]: item for item in selected_items}
 
-    supplier_groups = defaultdict(list)
+    # Fetch parent company for each item
+    mr_parents = frappe.get_all(
+        "Material Request",
+        filters={"name": ["in", list({row.parent for row in db_items})]},
+        fields=["name", "company"],
+    )
+    mr_company_map = {mr.name: mr.company for mr in mr_parents}
+
+    # Group by (company, supplier)
+    company_supplier_groups = defaultdict(list)
 
     for mri_name, db_row in db_item_map.items():
+        row_company = mr_company_map.get(db_row.parent) or company
+        assert_company_access(row_company)
+
         req = input_item_map.get(mri_name, {})
         this_qty = flt(req.get("this_qty"), 4)
         if this_qty <= 0:
@@ -260,7 +501,7 @@ def make_purchase_orders_from_mr_items(
         row_supplier = (supplier_override or req.get("supplier") or "").strip()
         if not row_supplier:
             row_supplier = (
-                frappe.db.get_value("Item Default", {"parent": db_row.item_code, "company": company}, "default_supplier")
+                frappe.db.get_value("Item Default", {"parent": db_row.item_code, "company": row_company}, "default_supplier")
                 or frappe.db.get_value("Item Supplier", {"parent": db_row.item_code}, "supplier")
                 or ""
             )
@@ -272,23 +513,23 @@ def make_purchase_orders_from_mr_items(
                 )
             )
 
-        supplier_groups[row_supplier].append({
+        company_supplier_groups[(row_company, row_supplier)].append({
             "db_row": db_row,
             "this_qty": this_qty,
             "rate": flt(req.get("rate")) if req.get("rate") is not None else flt(db_row.rate),
         })
 
-    if not supplier_groups:
+    if not company_supplier_groups:
         frappe.throw(_("未能识别有效的待订购明细。"))
 
     created_orders = []
 
-    for sup, items_to_order in supplier_groups.items():
+    for (comp, sup), items_to_order in company_supplier_groups.items():
         if not frappe.db.exists("Supplier", sup):
             frappe.throw(_("供应商【{0}】在系统中不存在。").format(sup))
 
         po = frappe.new_doc("Purchase Order")
-        po.company = company
+        po.company = comp
         po.supplier = sup
         po.transaction_date = nowdate()
         if schedule_date:
@@ -320,6 +561,7 @@ def make_purchase_orders_from_mr_items(
 
         created_orders.append({
             "name": po.name,
+            "company": po.company,
             "supplier": po.supplier,
             "total_qty": sum(item_data["this_qty"] for item_data in items_to_order),
             "grand_total": flt(po.grand_total or po.total),
@@ -335,7 +577,7 @@ def make_purchase_orders_from_mr_items(
 
 
 # =========================================================================
-# Stage 2: Purchase Order (Item) -> Purchase Receipt
+# Step 3: Purchase Order (Item) -> Purchase Receipt (采购入库)
 # =========================================================================
 
 @frappe.whitelist()
@@ -344,13 +586,13 @@ def get_pending_purchase_order_items(
     filters: dict | str | None = None,
 ) -> dict:
     """Query unfulfilled Purchase Order Items for Purchase Receipt creation."""
-    company = _resolve_company(company)
+    companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
     filters = dict(filters or {})
 
-    conditions = ["po.docstatus = 1", "po.company = %(company)s"]
-    params: dict[str, Any] = {"company": company}
+    conditions = ["po.docstatus = 1", "po.company IN %(companies)s"]
+    params: dict[str, Any] = {"companies": companies}
 
     conditions.append("po.status NOT IN ('Closed', 'Cancelled', 'Delivered')")
     conditions.append("(poi.qty - COALESCE(poi.received_qty, 0)) > 0.0001")
@@ -400,11 +642,12 @@ def get_pending_purchase_order_items(
             poi.warehouse,
             po.supplier,
             po.transaction_date AS po_date,
-            po.currency
+            po.currency,
+            po.company
         FROM `tabPurchase Order Item` poi
         INNER JOIN `tabPurchase Order` po ON po.name = poi.parent
         WHERE {where_clause}
-        ORDER BY po.supplier ASC, poi.schedule_date ASC, po.transaction_date DESC, po.name DESC, poi.idx ASC
+        ORDER BY po.company ASC, po.supplier ASC, poi.schedule_date ASC, po.transaction_date DESC, po.name DESC, poi.idx ASC
         LIMIT 2000
     """
 
@@ -424,6 +667,7 @@ def get_pending_purchase_order_items(
         rows.append({
             "poi_name": r.poi_name,
             "po_name": r.po_name,
+            "company": r.company,
             "idx": r.idx,
             "supplier": r.supplier or "",
             "item_code": r.item_code,
@@ -448,7 +692,7 @@ def get_pending_purchase_order_items(
         total_pending_amount += pending_amt
 
     return {
-        "company": company,
+        "companies": companies,
         "count": len(rows),
         "total_pending_qty": total_pending_qty,
         "total_pending_amount": total_pending_amount,
@@ -458,13 +702,12 @@ def get_pending_purchase_order_items(
 
 @frappe.whitelist(methods=["POST"])
 def make_purchase_receipts_from_po_items(
-    company: str,
+    company: str | None,
     selected_items: list[dict] | str,
     warehouse_override: str | None = None,
     posting_date: str | None = None,
 ) -> dict:
     """Generate Draft Purchase Receipt(s) from selected Purchase Order Items."""
-    company = _resolve_company(company)
     if isinstance(selected_items, str):
         selected_items = frappe.parse_json(selected_items) or []
 
@@ -490,16 +733,19 @@ def make_purchase_receipts_from_po_items(
     po_parents = frappe.get_all(
         "Purchase Order",
         filters={"name": ["in", list({row.parent for row in db_items})]},
-        fields=["name", "supplier", "currency", "buying_price_list"],
+        fields=["name", "company", "supplier", "currency", "buying_price_list"],
     )
     po_parent_map = {po.name: po for po in po_parents}
 
-    supplier_groups = defaultdict(list)
+    # Group by (company, supplier)
+    company_supplier_groups = defaultdict(list)
 
     for poi_name, db_row in db_item_map.items():
         po_header = po_parent_map.get(db_row.parent)
         if not po_header:
             continue
+
+        assert_company_access(po_header.company)
 
         req = input_item_map.get(poi_name, {})
         this_qty = flt(req.get("this_qty"), 4)
@@ -519,9 +765,12 @@ def make_purchase_receipts_from_po_items(
 
         target_warehouse = (warehouse_override or req.get("warehouse") or db_row.warehouse or "").strip()
         if not target_warehouse:
+            target_warehouse = frappe.db.get_value("Warehouse", {"company": po_header.company, "is_group": 0}, "name")
+
+        if not target_warehouse:
             frappe.throw(_("请为物料【{0}】指定入库仓库。").format(db_row.item_name or db_row.item_code))
 
-        supplier_groups[po_header.supplier].append({
+        company_supplier_groups[(po_header.company, po_header.supplier)].append({
             "db_row": db_row,
             "po_header": po_header,
             "this_qty": this_qty,
@@ -531,9 +780,9 @@ def make_purchase_receipts_from_po_items(
 
     created_receipts = []
 
-    for sup, items_to_receive in supplier_groups.items():
+    for (comp, sup), items_to_receive in company_supplier_groups.items():
         pr = frappe.new_doc("Purchase Receipt")
-        pr.company = company
+        pr.company = comp
         pr.supplier = sup
         pr.posting_date = posting_date or nowdate()
 
@@ -561,6 +810,7 @@ def make_purchase_receipts_from_po_items(
 
         created_receipts.append({
             "name": pr.name,
+            "company": pr.company,
             "supplier": pr.supplier,
             "total_qty": sum(item_data["this_qty"] for item_data in items_to_receive),
             "grand_total": flt(pr.grand_total or pr.total),
@@ -576,7 +826,7 @@ def make_purchase_receipts_from_po_items(
 
 
 # =========================================================================
-# Stage 3: Purchase Receipt (Item) -> Purchase Invoice
+# Step 4: Purchase Receipt (Item) -> Purchase Invoice (采购开票)
 # =========================================================================
 
 @frappe.whitelist()
@@ -585,13 +835,13 @@ def get_pending_purchase_receipt_items(
     filters: dict | str | None = None,
 ) -> dict:
     """Query unfulfilled Purchase Receipt Items for Purchase Invoice creation."""
-    company = _resolve_company(company)
+    companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
     filters = dict(filters or {})
 
-    conditions = ["pr.docstatus = 1", "pr.company = %(company)s"]
-    params: dict[str, Any] = {"company": company}
+    conditions = ["pr.docstatus = 1", "pr.company IN %(companies)s"]
+    params: dict[str, Any] = {"companies": companies}
 
     conditions.append("pr.status NOT IN ('Closed', 'Cancelled', 'Return Issued')")
     conditions.append("(pri.amount - COALESCE(pri.billed_amt, 0)) > 0.01")
@@ -638,11 +888,12 @@ def get_pending_purchase_receipt_items(
             pri.warehouse,
             pr.supplier,
             pr.posting_date AS pr_date,
-            pr.currency
+            pr.currency,
+            pr.company
         FROM `tabPurchase Receipt Item` pri
         INNER JOIN `tabPurchase Receipt` pr ON pr.name = pri.parent
         WHERE {where_clause}
-        ORDER BY pr.supplier ASC, pr.posting_date DESC, pr.name DESC, pri.idx ASC
+        ORDER BY pr.company ASC, pr.supplier ASC, pr.posting_date DESC, pr.name DESC, pri.idx ASC
         LIMIT 2000
     """
 
@@ -657,7 +908,6 @@ def get_pending_purchase_receipt_items(
         qty = flt(r.qty, 4)
         amt = flt(r.amount, 2)
 
-        # Calculate pending quantity proportionally
         if amt > 0.0001:
             pending_qty = round(qty * (pending_amt / amt), 4)
             billed_qty = round(qty - pending_qty, 4)
@@ -671,6 +921,7 @@ def get_pending_purchase_receipt_items(
         rows.append({
             "pri_name": r.pri_name,
             "pr_name": r.pr_name,
+            "company": r.company,
             "idx": r.idx,
             "supplier": r.supplier or "",
             "item_code": r.item_code,
@@ -695,7 +946,7 @@ def get_pending_purchase_receipt_items(
         total_pending_amount += pending_amt
 
     return {
-        "company": company,
+        "companies": companies,
         "count": len(rows),
         "total_pending_qty": total_pending_qty,
         "total_pending_amount": total_pending_amount,
@@ -705,14 +956,13 @@ def get_pending_purchase_receipt_items(
 
 @frappe.whitelist(methods=["POST"])
 def make_purchase_invoices_from_pr_items(
-    company: str,
+    company: str | None,
     selected_items: list[dict] | str,
     bill_no: str | None = None,
     bill_date: str | None = None,
     posting_date: str | None = None,
 ) -> dict:
     """Generate Draft Purchase Invoice(s) from selected Purchase Receipt Items."""
-    company = _resolve_company(company)
     if isinstance(selected_items, str):
         selected_items = frappe.parse_json(selected_items) or []
 
@@ -739,16 +989,19 @@ def make_purchase_invoices_from_pr_items(
     pr_parents = frappe.get_all(
         "Purchase Receipt",
         filters={"name": ["in", list({row.parent for row in db_items})]},
-        fields=["name", "supplier", "currency", "buying_price_list"],
+        fields=["name", "company", "supplier", "currency", "buying_price_list"],
     )
     pr_parent_map = {pr.name: pr for pr in pr_parents}
 
-    supplier_groups = defaultdict(list)
+    # Group by (company, supplier)
+    company_supplier_groups = defaultdict(list)
 
     for pri_name, db_row in db_item_map.items():
         pr_header = pr_parent_map.get(db_row.parent)
         if not pr_header:
             continue
+
+        assert_company_access(pr_header.company)
 
         req = input_item_map.get(pri_name, {})
         this_qty = flt(req.get("this_qty"), 4)
@@ -758,7 +1011,7 @@ def make_purchase_invoices_from_pr_items(
         if this_qty <= 0:
             continue
 
-        supplier_groups[pr_header.supplier].append({
+        company_supplier_groups[(pr_header.company, pr_header.supplier)].append({
             "db_row": db_row,
             "pr_header": pr_header,
             "this_qty": this_qty,
@@ -767,9 +1020,9 @@ def make_purchase_invoices_from_pr_items(
 
     created_invoices = []
 
-    for sup, items_to_invoice in supplier_groups.items():
+    for (comp, sup), items_to_invoice in company_supplier_groups.items():
         pi = frappe.new_doc("Purchase Invoice")
-        pi.company = company
+        pi.company = comp
         pi.supplier = sup
         pi.posting_date = posting_date or nowdate()
         if bill_no:
@@ -801,6 +1054,7 @@ def make_purchase_invoices_from_pr_items(
 
         created_invoices.append({
             "name": pi.name,
+            "company": pi.company,
             "supplier": pi.supplier,
             "total_qty": sum(item_data["this_qty"] for item_data in items_to_invoice),
             "grand_total": flt(pi.grand_total or pi.total),
@@ -816,7 +1070,7 @@ def make_purchase_invoices_from_pr_items(
 
 
 # =========================================================================
-# Stage 4: Purchase Invoice -> Reimbursement Request
+# Step 5: Purchase Invoice -> Reimbursement Request (报销付款)
 # =========================================================================
 
 @frappe.whitelist()
@@ -825,13 +1079,13 @@ def get_pending_reimbursement_invoices(
     filters: dict | str | None = None,
 ) -> dict:
     """Query unpaid Purchase Invoices for Reimbursement Request creation."""
-    company = _resolve_company(company)
+    companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
     filters = dict(filters or {})
 
     inv_filters = {
-        "company": company,
+        "company": ["in", companies],
         "docstatus": 1,
         "outstanding_amount": [">", 0],
     }
@@ -846,7 +1100,7 @@ def get_pending_reimbursement_invoices(
         inv_filters["owner"] = ["like", f"%{filters['owner']}%"]
 
     fields = [
-        "name", "supplier", "bill_no", "bill_date", "posting_date",
+        "name", "company", "supplier", "bill_no", "bill_date", "posting_date",
         "grand_total", "outstanding_amount", "owner", "currency"
     ]
     if _meta_has("Purchase Invoice", "custom_invoice_type"):
@@ -856,7 +1110,7 @@ def get_pending_reimbursement_invoices(
         "Purchase Invoice",
         filters=inv_filters,
         fields=fields,
-        order_by="posting_date desc, name desc",
+        order_by="company asc, posting_date desc, name desc",
         page_length=1000,
     )
 
@@ -882,6 +1136,7 @@ def get_pending_reimbursement_invoices(
 
         rows.append({
             "pi_name": inv.name,
+            "company": inv.company,
             "supplier": inv.supplier,
             "bill_no": inv.bill_no or "",
             "bill_date": str(inv.bill_date) if inv.bill_date else "",
@@ -897,7 +1152,7 @@ def get_pending_reimbursement_invoices(
         total_outstanding += net_outstanding
 
     return {
-        "company": company,
+        "companies": companies,
         "count": len(rows),
         "total_outstanding": total_outstanding,
         "rows": rows,
@@ -906,21 +1161,33 @@ def get_pending_reimbursement_invoices(
 
 @frappe.whitelist(methods=["POST"])
 def make_reimbursement_from_invoices(
-    company: str,
+    company: str | None,
     selected_invoices: list[str] | str,
     applicant: str | None = None,
     purpose: str | None = None,
 ) -> dict:
     """Generate Draft Reimbursement Request from selected unpaid Purchase Invoices."""
-    company = _resolve_company(company)
     invoice_names = normalize_names(selected_invoices)
     if not invoice_names:
         frappe.throw(_("请选择至少一张采购发票。"))
 
+    # Check companies of invoices
+    invoices = frappe.get_all("Purchase Invoice", filters={"name": ["in", invoice_names]}, fields=["name", "company"])
+    if not invoices:
+        frappe.throw(_("未找到所选采购发票。"))
+
+    distinct_companies = list({inv.company for inv in invoices})
+    if len(distinct_companies) > 1:
+        frappe.throw(_("单次报销申请仅支持同一公司的采购发票。所选发票跨越了多个公司：{0}").format(", ".join(distinct_companies)))
+
+    target_company = distinct_companies[0]
+    assert_company_access(target_company)
+
     rr = frappe.new_doc("Reimbursement Request")
-    rr.company = company
+    rr.company = target_company
     rr.posting_date = nowdate()
     rr.title = (purpose or "").strip() or f"采购发票报销_{nowdate()}"
+
     if applicant:
         if _meta_has("Reimbursement Request", "applicant"):
             rr.applicant = applicant
@@ -932,11 +1199,12 @@ def make_reimbursement_from_invoices(
             rr.applicant = current_emp or frappe.session.user
         elif _meta_has("Reimbursement Request", "employee"):
             rr.employee = current_emp
+
     if purpose and _meta_has("Reimbursement Request", "purpose"):
         rr.purpose = purpose
 
     candidates = get_purchase_invoice_item_candidates(
-        company,
+        target_company,
         purchase_invoice_names=invoice_names,
     )
 
@@ -949,19 +1217,24 @@ def make_reimbursement_from_invoices(
     return {
         "success": True,
         "reimbursement_name": rr.name,
+        "company": target_company,
         "total_amount": flt(rr.get("total_amount") or sum(flt(c["row"]["amount"]) for c in candidates)),
         "message": _("成功生成报销申请单草稿：{0}").format(rr.name),
     }
 
 
 # =========================================================================
-# Overall Summary KPI Endpoint
+# Overall Summary KPI Endpoint (5-Step Flow)
 # =========================================================================
 
 @frappe.whitelist()
 def get_procurement_picker_overview_kpis(company: str | None = None) -> dict:
-    """Return aggregated KPI counts for all 4 procurement stages."""
-    company = _resolve_company(company)
+    """Return aggregated KPI counts for all 5 procurement steps."""
+    companies = _resolve_companies(company)
+
+    item_count = frappe.db.sql("""
+        SELECT COUNT(name) FROM `tabItem` WHERE disabled = 0
+    """)[0][0] or 0
 
     mr_count = frappe.db.sql("""
         SELECT COUNT(DISTINCT mri.name)
@@ -969,48 +1242,49 @@ def get_procurement_picker_overview_kpis(company: str | None = None) -> dict:
         INNER JOIN `tabMaterial Request` mr ON mr.name = mri.parent
         WHERE mr.docstatus = 1
           AND mr.material_request_type = 'Purchase'
-          AND mr.company = %s
+          AND mr.company IN %s
           AND mr.status NOT IN ('Stopped', 'Cancelled')
           AND (mri.qty - COALESCE(mri.ordered_qty, 0)) > 0.0001
-    """, (company,))[0][0] or 0
+    """, (companies,))[0][0] or 0
 
     po_count = frappe.db.sql("""
         SELECT COUNT(DISTINCT poi.name)
         FROM `tabPurchase Order Item` poi
         INNER JOIN `tabPurchase Order` po ON po.name = poi.parent
         WHERE po.docstatus = 1
-          AND po.company = %s
+          AND po.company IN %s
           AND po.status NOT IN ('Closed', 'Cancelled', 'Delivered')
           AND (poi.qty - COALESCE(poi.received_qty, 0)) > 0.0001
-    """, (company,))[0][0] or 0
+    """, (companies,))[0][0] or 0
 
     pr_count = frappe.db.sql("""
         SELECT COUNT(DISTINCT pri.name)
         FROM `tabPurchase Receipt Item` pri
         INNER JOIN `tabPurchase Receipt` pr ON pr.name = pri.parent
         WHERE pr.docstatus = 1
-          AND pr.company = %s
+          AND pr.company IN %s
           AND pr.status NOT IN ('Closed', 'Cancelled', 'Return Issued')
           AND (pri.amount - COALESCE(pri.billed_amt, 0)) > 0.01
-    """, (company,))[0][0] or 0
+    """, (companies,))[0][0] or 0
 
     pi_stats = frappe.db.sql("""
         SELECT COUNT(name), COALESCE(SUM(outstanding_amount), 0)
         FROM `tabPurchase Invoice`
         WHERE docstatus = 1
-          AND company = %s
+          AND company IN %s
           AND outstanding_amount > 0
-    """, (company,))[0]
+    """, (companies,))[0]
 
     pi_count = pi_stats[0] or 0
     pi_amount = flt(pi_stats[1] or 0)
 
     return {
-        "company": company,
+        "companies": companies,
         "kpis": {
+            "item_to_mr": {"count": item_count, "label": "物料主数据/待申请物料"},
             "mr_to_po": {"count": mr_count, "label": "待订货需求明细"},
             "po_to_pr": {"count": po_count, "label": "待收货订单明细"},
             "pr_to_pi": {"count": pr_count, "label": "待开票入库明细"},
-            "pi_to_rr": {"count": pi_count, "amount": pi_amount, "label": "待报销/付款发票"},
+            "pi_to_rr": {"count": pi_count, "amount": pi_amount, "label": "待报销付款发票"},
         }
     }

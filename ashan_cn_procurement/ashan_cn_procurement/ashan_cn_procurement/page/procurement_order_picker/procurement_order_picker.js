@@ -4,7 +4,7 @@
 frappe.pages["procurement-order-picker"].on_page_load = function (wrapper) {
     const page = frappe.ui.make_app_page({
         parent: wrapper,
-        title: __("采购选单生单中心"),
+        title: __("采购全流程选单中心"),
         single_column: true,
     });
     new ProcurementOrderPickerCenter(page);
@@ -13,1040 +13,1169 @@ frappe.pages["procurement-order-picker"].on_page_load = function (wrapper) {
 class ProcurementOrderPickerCenter {
     constructor(page) {
         this.page = page;
-        this.active_stage = "mr_to_po"; // mr_to_po, po_to_pr, pr_to_pi, pi_to_rr
-        this.company = frappe.defaults.get_user_default("Company") || "";
+        this.active_stage = "mr_to_po"; // item_to_mr, mr_to_po, po_to_pr, pr_to_pi, pi_to_rr
+        this.active_company = "All"; // "All" or specific company name
         this.companies = [];
+        this.locked_company = null; // Dynamically set when first row is checked in "All" mode
         this.kpis = {};
         this.table_data = [];
-        this.selected_map = new Map(); // key -> row object with current input qty
+        this.selected_map = new Map(); // key -> row object
         this.filters = {
+            item_to_mr: { item_code: "", item_group: "", supplier: "" },
             mr_to_po: { supplier: "", department: "", item_code: "", from_date: "", to_date: "" },
             po_to_pr: { supplier: "", warehouse: "", po_name: "", item_code: "" },
             pr_to_pi: { supplier: "", pr_name: "", item_code: "" },
             pi_to_rr: { supplier: "", bill_no: "", owner: "" },
         };
-        this.loading = false;
 
-        this.init_dom();
-        this.bind_events();
-        this.parse_route_params();
-        this.load_companies();
-    }
-
-    parse_route_params() {
-        const route = frappe.get_route();
-        const stage_map = {
-            "mr_to_po": "mr_to_po",
-            "po": "mr_to_po",
-            "po_to_pr": "po_to_pr",
-            "pr": "po_to_pr",
-            "pr_to_pi": "pr_to_pi",
-            "pi": "pr_to_pi",
-            "pi_to_rr": "pi_to_rr",
-            "rr": "pi_to_rr",
-            "reimbursement": "pi_to_rr",
+        this.stages_config = {
+            item_to_mr: {
+                id: "item_to_mr",
+                name: "采购申请 (选物料)",
+                kpi_title: "物料主数据/采购申请",
+                sub_label: "可采购物料底册",
+                icon: "📋",
+                btn_label: "⚡ 生成采购申请草稿",
+            },
+            mr_to_po: {
+                id: "mr_to_po",
+                name: "采购订货 (选需求)",
+                kpi_title: "待订货需求明细",
+                sub_label: "已审批待采购物料",
+                icon: "🛒",
+                btn_label: "⚡ 生成采购订单草稿",
+            },
+            po_to_pr: {
+                id: "po_to_pr",
+                name: "采购入库 (选订单)",
+                kpi_title: "待收货订单明细",
+                sub_label: "已下达待入库订单",
+                icon: "📦",
+                btn_label: "⚡ 生成采购入库单草稿",
+            },
+            pr_to_pi: {
+                id: "pr_to_pi",
+                name: "采购开票 (选入库)",
+                kpi_title: "待开票入库明细",
+                sub_label: "已收货待结算发票",
+                icon: "🧾",
+                btn_label: "⚡ 生成采购发票草稿",
+            },
+            pi_to_rr: {
+                id: "pi_to_rr",
+                name: "报销付款 (选发票)",
+                kpi_title: "待报销付款发票",
+                sub_label: "待报销发票明细",
+                icon: "💰",
+                btn_label: "⚡ 生成报销申请单草稿",
+            },
         };
-        if (route && route.length > 1 && stage_map[route[1]]) {
-            this.active_stage = stage_map[route[1]];
-        }
-        const query_params = frappe.utils.get_query_params();
-        if (query_params && query_params.stage && stage_map[query_params.stage]) {
-            this.active_stage = stage_map[query_params.stage];
-        }
+
+        this.init();
     }
 
-    init_dom() {
-        const $main = $(this.page.main);
-        $main.html(`
+    async init() {
+        this.setup_ui_skeleton();
+        await this.load_companies();
+        this.bind_global_events();
+        this.sync_route_params();
+        this.refresh_all();
+    }
+
+    setup_ui_skeleton() {
+        const html = `
             <div class="picker-page-container">
-                <!-- Top Toolbar & Company Chips -->
+                <!-- Top Header & Company Bar -->
                 <div class="picker-top-bar">
                     <div class="picker-title-group">
-                        <h2>🛒 采购选单生单中心</h2>
-                        <div class="picker-subtitle">全链路待办明细池：采购需求 ➔ 采购订单 ➔ 采购入库 ➔ 采购发票 ➔ 报销申请</div>
+                        <h2>🛒 采购全流程选单生单中心</h2>
+                        <div class="picker-subtitle">自然采购全生命周期明细池：物料选单 ➔ 采购需求 ➔ 采购订单 ➔ 采购入库 ➔ 采购发票 ➔ 报销申请</div>
                     </div>
                     <div class="picker-company-group">
-                        <span class="picker-company-label">公司:</span>
-                        <div class="picker-company-options"></div>
+                        <span class="picker-company-label">公司范围:</span>
+                        <div class="picker-company-chips-container" id="picker-company-chips"></div>
                     </div>
                 </div>
 
-                <!-- KPI Summary 4-Cards Grid -->
-                <div class="picker-kpi-grid">
-                    <div class="picker-kpi-card" data-stage="mr_to_po">
-                        <div class="picker-kpi-info">
-                            <div class="picker-kpi-stage-tag">阶段 1 · 需求转订单</div>
-                            <div class="picker-kpi-name">待订货需求明细</div>
-                            <div class="picker-kpi-value" id="kpi-mr-count">-</div>
-                            <div class="picker-kpi-extra">已审批待采购物料</div>
-                        </div>
-                        <div class="picker-kpi-icon">📋</div>
+                <!-- Company Exclusive Lock Notice Banner -->
+                <div class="picker-company-lock-banner" id="picker-company-lock-banner">
+                    <div class="picker-company-lock-text">
+                        <span>💡</span>
+                        <span id="picker-lock-banner-text">已锁定公司范围，其他公司明细已自动隐藏</span>
                     </div>
-                    <div class="picker-kpi-card" data-stage="po_to_pr">
-                        <div class="picker-kpi-info">
-                            <div class="picker-kpi-stage-tag">阶段 2 · 订单转入库</div>
-                            <div class="picker-kpi-name">待收货订单明细</div>
-                            <div class="picker-kpi-value" id="kpi-po-count">-</div>
-                            <div class="picker-kpi-extra">已下达待入库订单</div>
-                        </div>
-                        <div class="picker-kpi-icon">📦</div>
-                    </div>
-                    <div class="picker-kpi-card" data-stage="pr_to_pi">
-                        <div class="picker-kpi-info">
-                            <div class="picker-kpi-stage-tag">阶段 3 · 入库转开票</div>
-                            <div class="picker-kpi-name">待开票入库明细</div>
-                            <div class="picker-kpi-value" id="kpi-pr-count">-</div>
-                            <div class="picker-kpi-extra">已收货待结算发票</div>
-                        </div>
-                        <div class="picker-kpi-icon">🧾</div>
-                    </div>
-                    <div class="picker-kpi-card" data-stage="pi_to_rr">
-                        <div class="picker-kpi-info">
-                            <div class="picker-kpi-stage-tag">阶段 4 · 发票转报销</div>
-                            <div class="picker-kpi-name">待报销付款发票</div>
-                            <div class="picker-kpi-value" id="kpi-pi-count">-</div>
-                            <div class="picker-kpi-extra" id="kpi-pi-amount">-</div>
-                        </div>
-                        <div class="picker-kpi-icon">💰</div>
-                    </div>
+                    <button class="picker-unlock-btn" id="picker-unlock-btn">清空已选并恢复全量</button>
                 </div>
 
-                <!-- Stage Nav Tabs -->
-                <div class="picker-nav-tabs">
-                    <button type="button" class="picker-tab-btn" data-stage="mr_to_po">
-                        <span>📋 采购订货选单 (需求 ➔ 订单)</span>
-                        <span class="badge-pill" id="tab-badge-mr">0</span>
-                    </button>
-                    <button type="button" class="picker-tab-btn" data-stage="po_to_pr">
-                        <span>📦 采购入库选单 (订单 ➔ 入库)</span>
-                        <span class="badge-pill" id="tab-badge-po">0</span>
-                    </button>
-                    <button type="button" class="picker-tab-btn" data-stage="pr_to_pi">
-                        <span>🧾 采购开票选单 (入库 ➔ 发票)</span>
-                        <span class="badge-pill" id="tab-badge-pr">0</span>
-                    </button>
-                    <button type="button" class="picker-tab-btn" data-stage="pi_to_rr">
-                        <span>💰 报销申请选单 (发票 ➔ 报销)</span>
-                        <span class="badge-pill" id="tab-badge-pi">0</span>
-                    </button>
-                </div>
+                <!-- 5-Step KPI Cards Grid -->
+                <div class="picker-kpi-grid" id="picker-kpi-grid"></div>
 
-                <!-- Stage Filter Toolbar -->
-                <div class="picker-filter-panel"></div>
+                <!-- Natural Flow Tab Bar -->
+                <div class="picker-nav-tabs" id="picker-nav-tabs"></div>
 
-                <!-- Batch Action Toolbar -->
-                <div class="picker-action-bar">
-                    <div class="picker-selection-stats">
-                        <span>已选 <strong id="stat-selected-count">0</strong> 行明细</span>
-                        <span id="stat-selected-sum-wrap">| 本次总计: <strong id="stat-selected-amount">¥ 0.00</strong></span>
-                    </div>
-                    <div class="picker-batch-controls">
-                        <button type="button" class="picker-btn picker-btn-default btn-select-all">全选本页</button>
-                        <button type="button" class="picker-btn picker-btn-default btn-deselect-all">清空选择</button>
-                        <button type="button" class="picker-btn picker-btn-default btn-fill-max">填充最大待办数</button>
-                        <div class="picker-stage-extra-inputs"></div>
-                        <button type="button" class="picker-btn picker-btn-success btn-generate">
-                            <span>⚡ 一键生单</span>
-                        </button>
-                    </div>
-                </div>
+                <!-- Dynamic Filter Bar -->
+                <div class="picker-filter-bar" id="picker-filter-bar"></div>
 
-                <!-- Data Table Card with Dual Scrollbar & Freeze Panes -->
-                <div class="picker-grid-card">
-                    <div class="picker-top-scrollbar-track">
-                        <div class="picker-top-scrollbar-thumb"></div>
+                <!-- Action Bar -->
+                <div class="picker-action-bar" id="picker-action-bar"></div>
+
+                <!-- Table Wrapper with Dual Scrollbars -->
+                <div class="picker-table-wrapper">
+                    <div class="picker-top-scrollbar-wrap" id="picker-top-scrollbar">
+                        <div class="picker-top-scrollbar-inner" id="picker-top-scrollbar-inner"></div>
                     </div>
-                    <div class="picker-table-wrapper">
-                        <table class="picker-data-table">
-                            <thead></thead>
-                            <tbody></tbody>
-                            <tfoot></tfoot>
+                    <div class="picker-main-table-scroll" id="picker-main-table-scroll">
+                        <table class="picker-data-table" id="picker-data-table">
+                            <thead id="picker-table-thead"></thead>
+                            <tbody id="picker-table-tbody"></tbody>
+                            <tfoot id="picker-table-tfoot"></tfoot>
                         </table>
                     </div>
                 </div>
             </div>
-        `);
-
-        this.$wrapper = $main.find(".picker-page-container");
+        `;
+        $(this.page.body).html(html);
     }
 
-    bind_events() {
+    async load_companies() {
+        try {
+            const r = await frappe.call({
+                method: "ashan_cn_procurement.services.procurement_picker_service.get_user_procurement_companies",
+            });
+            if (r && r.message) {
+                this.companies = r.message.companies || [];
+                this.render_company_chips();
+            }
+        } catch (e) {
+            console.error("Failed to load user companies", e);
+        }
+    }
+
+    render_company_chips() {
+        const $container = $("#picker-company-chips");
+        $container.empty();
+
+        // "全部公司" chip
+        const is_all_active = this.active_company === "All";
+        const $all_chip = $(`
+            <div class="picker-company-chip ${is_all_active ? 'active' : ''}" data-company="All">
+                🌐 全部公司 (汇聚视图)
+            </div>
+        `);
+        $container.append($all_chip);
+
+        // Individual companies
+        this.companies.forEach((comp) => {
+            const is_active = this.active_company === comp;
+            const $chip = $(`
+                <div class="picker-company-chip ${is_active ? 'active' : ''}" data-company="${frappe.utils.escape_html(comp)}">
+                    ${frappe.utils.escape_html(comp)}
+                </div>
+            `);
+            $container.append($chip);
+        });
+    }
+
+    bind_global_events() {
         const self = this;
 
-        // KPI card click & tab switch
-        this.$wrapper.on("click", ".picker-kpi-card, .picker-tab-btn", function () {
-            const stage = $(this).data("stage");
-            if (stage && stage !== self.active_stage) {
+        // Company Chip Click
+        $(this.page.body).on("click", ".picker-company-chip", function () {
+            const comp = $(this).attr("data-company");
+            if (self.active_company === comp) return;
+            self.active_company = comp;
+            self.locked_company = null;
+            self.selected_map.clear();
+            self.render_company_chips();
+            self.refresh_all();
+        });
+
+        // Unlock Button Click
+        $(this.page.body).on("click", "#picker-unlock-btn", function () {
+            self.locked_company = null;
+            self.selected_map.clear();
+            self.update_company_lock_ui();
+            self.render_table_rows();
+            self.update_action_summary();
+        });
+
+        // KPI Card Click
+        $(this.page.body).on("click", ".picker-kpi-card", function () {
+            const stage = $(this).attr("data-stage");
+            if (stage && self.active_stage !== stage) {
                 self.switch_stage(stage);
             }
         });
 
-        // Company chip click
-        this.$wrapper.on("click", ".picker-company-chip", function () {
-            if (self.loading) return;
-            self.company = $(this).data("company");
-            self.render_companies();
-            self.load_all();
+        // Tab Click
+        $(this.page.body).on("click", ".picker-tab-btn", function () {
+            const stage = $(this).attr("data-stage");
+            if (stage && self.active_stage !== stage) {
+                self.switch_stage(stage);
+            }
         });
 
-        // Filter inputs change
-        this.$wrapper.on("input change", ".picker-filter-control", function () {
-            const field = $(this).data("field");
-            self.filters[self.active_stage][field] = $(this).val();
-            clearTimeout(self._filter_debounce);
-            self._filter_debounce = setTimeout(() => self.load_stage_data(), 300);
+        // Dual Scrollbar Sync
+        const $top_scroll = $("#picker-top-scrollbar");
+        const $table_scroll = $("#picker-main-table-scroll");
+        let is_syncing_top = false;
+        let is_syncing_main = false;
+
+        $top_scroll.on("scroll", function () {
+            if (!is_syncing_top) {
+                is_syncing_main = true;
+                $table_scroll.scrollLeft($(this).scrollLeft());
+            }
+            is_syncing_top = false;
         });
 
-        // Row checkbox click
-        this.$wrapper.on("change", ".picker-row-checkbox", function () {
-            const rowKey = $(this).data("key");
-            const checked = $(this).prop("checked");
-            const $tr = $(this).closest("tr");
-            if (checked) {
-                $tr.addClass("is-selected");
-                const rowData = self.get_row_by_key(rowKey);
-                if (rowData) {
-                    const inputQty = flt($tr.find(".picker-qty-input").val()) || rowData.pending_qty || rowData.net_available_amount || 0;
-                    self.selected_map.set(rowKey, { ...rowData, this_qty: inputQty, this_amount: inputQty });
+        $table_scroll.on("scroll", function () {
+            if (!is_syncing_main) {
+                is_syncing_top = true;
+                $top_scroll.scrollLeft($(this).scrollLeft());
+            }
+            is_syncing_main = false;
+        });
+
+        // Row Checkbox Click
+        $(this.page.body).on("change", ".picker-row-checkbox", function () {
+            const key = $(this).attr("data-key");
+            const is_checked = $(this).is(":checked");
+            const row = self.table_data.find((r) => self.get_row_key(r) === key);
+            if (!row) return;
+
+            if (is_checked) {
+                // If in "All" mode and not locked yet, lock to this company
+                if (self.active_company === "All" && !self.locked_company) {
+                    self.locked_company = row.company;
+                    self.update_company_lock_ui();
                 }
+
+                // If locked and row is from another company, ignore
+                if (self.locked_company && row.company !== self.locked_company) {
+                    $(this).prop("checked", false);
+                    return;
+                }
+
+                const $tr = $(this).closest("tr");
+                const input_qty = flt($tr.find(".picker-input-qty").val()) || row.pending_qty || row.this_qty || 1;
+                row.this_qty = input_qty;
+                self.selected_map.set(key, row);
+                $tr.addClass("row-selected");
             } else {
-                $tr.removeClass("is-selected");
-                self.selected_map.delete(rowKey);
-            }
-            self.update_selection_stats();
-        });
+                self.selected_map.delete(key);
+                $(this).closest("tr").removeClass("row-selected");
 
-        // Editable input change in row
-        this.$wrapper.on("input change", ".picker-qty-input", function () {
-            const rowKey = $(this).data("key");
-            const val = flt($(this).val());
-            const $tr = $(this).closest("tr");
-            const rowData = self.get_row_by_key(rowKey);
-            if (rowData) {
-                rowData.this_qty = val;
-                rowData.this_amount = val;
-                if (self.selected_map.has(rowKey)) {
-                    const sel = self.selected_map.get(rowKey);
-                    sel.this_qty = val;
-                    sel.this_amount = val;
+                // If no rows selected, release lock
+                if (self.selected_map.size === 0) {
+                    self.locked_company = null;
+                    self.update_company_lock_ui();
                 }
             }
-            self.update_selection_stats();
+
+            self.update_table_visibility_by_lock();
+            self.update_action_summary();
         });
 
-        // Select all / Deselect all
-        this.$wrapper.on("click", ".btn-select-all", () => self.select_all_rows(true));
-        this.$wrapper.on("click", ".btn-deselect-all", () => self.select_all_rows(false));
-
-        // Fill max pending qty
-        this.$wrapper.on("click", ".btn-fill-max", () => self.fill_max_quantities());
-
-        // Generate Action Button
-        this.$wrapper.on("click", ".btn-generate", () => self.handle_generate_action());
-
-        // Dual Scrollbars Sync
-        const $topScroll = this.$wrapper.find(".picker-top-scrollbar-track");
-        const $tableWrapper = this.$wrapper.find(".picker-table-wrapper");
-
-        $topScroll.on("scroll", function () {
-            if (!self._syncing_scroll) {
-                self._syncing_scroll = true;
-                $tableWrapper.scrollLeft($(this).scrollLeft());
-                self._syncing_scroll = false;
+        // Row Qty Input Change
+        $(this.page.body).on("input change", ".picker-input-qty", function () {
+            const $tr = $(this).closest("tr");
+            const key = $tr.attr("data-key");
+            const val = flt($(this).val());
+            const row = self.table_data.find((r) => self.get_row_key(r) === key);
+            if (row) {
+                row.this_qty = val;
+                if (self.selected_map.has(key)) {
+                    self.selected_map.get(key).this_qty = val;
+                }
             }
+            self.update_row_amount_display($tr, row);
+            self.update_action_summary();
         });
 
-        $tableWrapper.on("scroll", function () {
-            if (!self._syncing_scroll) {
-                self._syncing_scroll = true;
-                $topScroll.scrollLeft($(this).scrollLeft());
-                self._syncing_scroll = false;
-            }
-        });
+        // Select All / Clear Selection
+        $(this.page.body).on("click", "#picker-select-all-btn", () => this.select_all_visible());
+        $(this.page.body).on("click", "#picker-clear-sel-btn", () => this.clear_selection());
+        $(this.page.body).on("click", "#picker-fill-max-btn", () => this.fill_max_quantities());
 
-        $(window).on("resize", () => self.adjust_table_height());
-        this.page.set_secondary_action(__("刷新"), () => self.load_all(), "refresh");
+        // Primary Action Submit
+        $(this.page.body).on("click", "#picker-submit-btn", () => this.execute_primary_action());
     }
 
-    load_companies() {
-        frappe.db.get_list("Company", {
-            fields: ["name"],
-            order_by: "name asc",
-            limit: 50,
-        }).then((rows) => {
-            this.companies = rows || [];
-            if (!this.company && this.companies.length) {
-                this.company = this.companies[0].name;
+    sync_route_params() {
+        const route = frappe.get_route();
+        if (route && route.length > 1) {
+            const param = route[1];
+            if (this.stages_config[param]) {
+                this.active_stage = param;
             }
-            this.render_companies();
-            this.load_all();
-        }).catch(() => {
-            this.load_all();
-        });
-    }
-
-    render_companies() {
-        const $opts = this.$wrapper.find(".picker-company-options").empty();
-        this.companies.forEach((c) => {
-            const active = c.name === this.company ? "active" : "";
-            $opts.append(`
-                <button type="button" class="picker-company-chip ${active}" data-company="${frappe.utils.escape_html(c.name)}">
-                    ${frappe.utils.escape_html(c.name)}
-                </button>
-            `);
-        });
+        }
     }
 
     switch_stage(stage) {
         this.active_stage = stage;
+        this.locked_company = null;
         this.selected_map.clear();
-        this.update_stage_ui();
-        this.render_filters();
-        this.render_stage_extra_controls();
-        this.load_stage_data();
+        this.update_company_lock_ui();
+        this.render_kpis();
+        this.render_tabs();
+        this.render_filter_bar();
+        this.load_table_data();
     }
 
-    update_stage_ui() {
-        this.$wrapper.find(".picker-kpi-card").removeClass("active");
-        this.$wrapper.find(`.picker-kpi-card[data-stage="${this.active_stage}"]`).addClass("active");
-
-        this.$wrapper.find(".picker-tab-btn").removeClass("active");
-        this.$wrapper.find(`.picker-tab-btn[data-stage="${this.active_stage}"]`).addClass("active");
-
-        const stage_titles = {
-            mr_to_po: "⚡ 生成采购订单草稿",
-            po_to_pr: "⚡ 生成采购入库单草稿",
-            pr_to_pi: "⚡ 生成采购发票草稿",
-            pi_to_rr: "⚡ 生成报销申请单草稿",
-        };
-        this.$wrapper.find(".btn-generate span").text(stage_titles[this.active_stage] || "⚡ 一键生单");
+    async refresh_all() {
+        await this.load_kpis();
+        this.render_kpis();
+        this.render_tabs();
+        this.render_filter_bar();
+        await this.load_table_data();
     }
 
-    render_filters() {
-        const $panel = this.$wrapper.find(".picker-filter-panel").empty();
-        const f = this.filters[this.active_stage];
+    async load_kpis() {
+        try {
+            const r = await frappe.call({
+                method: "ashan_cn_procurement.services.procurement_picker_service.get_procurement_picker_overview_kpis",
+                args: { company: this.active_company },
+            });
+            if (r && r.message) {
+                this.kpis = r.message.kpis || {};
+            }
+        } catch (e) {
+            console.error("Failed to load KPIs", e);
+        }
+    }
 
-        if (this.active_stage === "mr_to_po") {
-            $panel.html(`
-                <div class="picker-filter-item">
-                    <label>物料编码/名称:</label>
-                    <input type="text" class="picker-input picker-filter-control" data-field="item_code" value="${frappe.utils.escape_html(f.item_code || "")}" placeholder="搜索物料…">
+    render_kpis() {
+        const $container = $("#picker-kpi-grid");
+        $container.empty();
+
+        const stage_keys = ["item_to_mr", "mr_to_po", "po_to_pr", "pr_to_pi", "pi_to_rr"];
+        stage_keys.forEach((key) => {
+            const cfg = this.stages_config[key];
+            const data = this.kpis[key] || { count: 0 };
+            const is_active = this.active_stage === key;
+
+            let num_text = data.count || 0;
+            let sub_text = cfg.sub_label;
+            if (key === "pi_to_rr" && data.amount !== undefined) {
+                sub_text = `待报销: ${this.fmt_money(data.amount)}`;
+            }
+
+            const html = `
+                <div class="picker-kpi-card ${is_active ? 'active' : ''}" data-stage="${key}">
+                    <div class="picker-kpi-header">
+                        <div class="picker-kpi-title">${cfg.kpi_title}</div>
+                        <div class="picker-kpi-icon">${cfg.icon}</div>
+                    </div>
+                    <div class="picker-kpi-body">
+                        <div class="picker-kpi-number">${num_text}</div>
+                        <div class="picker-kpi-sub">${sub_text}</div>
+                    </div>
                 </div>
-                <div class="picker-filter-item">
+            `;
+            $container.append(html);
+        });
+    }
+
+    render_tabs() {
+        const $container = $("#picker-nav-tabs");
+        $container.empty();
+
+        const stage_keys = ["item_to_mr", "mr_to_po", "po_to_pr", "pr_to_pi", "pi_to_rr"];
+        stage_keys.forEach((key) => {
+            const cfg = this.stages_config[key];
+            const is_active = this.active_stage === key;
+            const data = this.kpis[key] || { count: 0 };
+            const badge_cnt = data.count || 0;
+
+            const html = `
+                <button class="picker-tab-btn ${is_active ? 'active' : ''}" data-stage="${key}">
+                    <span>${cfg.icon}</span>
+                    <span>${cfg.name}</span>
+                    <span class="picker-tab-badge">${badge_cnt}</span>
+                </button>
+            `;
+            $container.append(html);
+        });
+    }
+
+    render_filter_bar() {
+        const $bar = $("#picker-filter-bar");
+        $bar.empty();
+        const stage = this.active_stage;
+
+        let filters_html = "";
+        if (stage === "item_to_mr") {
+            filters_html = `
+                <div class="picker-filter-group">
+                    <label>物料编码/名称:</label>
+                    <input type="text" class="picker-filter-input" data-filter="item_code" placeholder="搜索物料..." value="${this.filters[stage].item_code || ''}">
+                </div>
+                <div class="picker-filter-group">
+                    <label>物料分组:</label>
+                    <input type="text" class="picker-filter-input" data-filter="item_group" placeholder="物料分类..." value="${this.filters[stage].item_group || ''}">
+                </div>
+                <div class="picker-filter-group">
+                    <label>供应商:</label>
+                    <input type="text" class="picker-filter-input" data-filter="supplier" placeholder="供应商..." value="${this.filters[stage].supplier || ''}">
+                </div>
+            `;
+        } else if (stage === "mr_to_po") {
+            filters_html = `
+                <div class="picker-filter-group">
+                    <label>物料编码/名称:</label>
+                    <input type="text" class="picker-filter-input" data-filter="item_code" placeholder="搜索物料..." value="${this.filters[stage].item_code || ''}">
+                </div>
+                <div class="picker-filter-group">
                     <label>建议供应商:</label>
-                    <input type="text" class="picker-input picker-filter-control" data-field="supplier" value="${frappe.utils.escape_html(f.supplier || "")}" placeholder="供应商名称…">
+                    <input type="text" class="picker-filter-input" data-filter="supplier" placeholder="供应商名称..." value="${this.filters[stage].supplier || ''}">
                 </div>
-                <div class="picker-filter-item">
+                <div class="picker-filter-group">
                     <label>申请部门:</label>
-                    <input type="text" class="picker-input picker-filter-control" data-field="department" value="${frappe.utils.escape_html(f.department || "")}" placeholder="部门…">
+                    <input type="text" class="picker-filter-input" data-filter="department" placeholder="部门..." value="${this.filters[stage].department || ''}">
                 </div>
-                <div class="picker-filter-item">
+                <div class="picker-filter-group">
                     <label>申请日期:</label>
-                    <input type="date" class="picker-input picker-filter-control" data-field="from_date" value="${f.from_date || ""}">
+                    <input type="date" class="picker-filter-input" data-filter="from_date" value="${this.filters[stage].from_date || ''}">
                     <span>至</span>
-                    <input type="date" class="picker-input picker-filter-control" data-field="to_date" value="${f.to_date || ""}">
+                    <input type="date" class="picker-filter-input" data-filter="to_date" value="${this.filters[stage].to_date || ''}">
                 </div>
-            `);
-        } else if (this.active_stage === "po_to_pr") {
-            $panel.html(`
-                <div class="picker-filter-item">
+            `;
+        } else if (stage === "po_to_pr") {
+            filters_html = `
+                <div class="picker-filter-group">
                     <label>供应商:</label>
-                    <input type="text" class="picker-input picker-filter-control" data-field="supplier" value="${frappe.utils.escape_html(f.supplier || "")}" placeholder="搜索供应商…">
+                    <input type="text" class="picker-filter-input" data-filter="supplier" placeholder="搜索供应商..." value="${this.filters[stage].supplier || ''}">
                 </div>
-                <div class="picker-filter-item">
+                <div class="picker-filter-group">
                     <label>采购订单号:</label>
-                    <input type="text" class="picker-input picker-filter-control" data-field="po_name" value="${frappe.utils.escape_html(f.po_name || "")}" placeholder="PO-...">
+                    <input type="text" class="picker-filter-input" data-filter="po_name" placeholder="PO-..." value="${this.filters[stage].po_name || ''}">
                 </div>
-                <div class="picker-filter-item">
+                <div class="picker-filter-group">
                     <label>物料编码/名称:</label>
-                    <input type="text" class="picker-input picker-filter-control" data-field="item_code" value="${frappe.utils.escape_html(f.item_code || "")}" placeholder="物料…">
+                    <input type="text" class="picker-filter-input" data-filter="item_code" placeholder="物料..." value="${this.filters[stage].item_code || ''}">
                 </div>
-                <div class="picker-filter-item">
+                <div class="picker-filter-group">
                     <label>收货仓库:</label>
-                    <input type="text" class="picker-input picker-filter-control" data-field="warehouse" value="${frappe.utils.escape_html(f.warehouse || "")}" placeholder="仓库名称…">
+                    <input type="text" class="picker-filter-input" data-filter="warehouse" placeholder="仓库名称..." value="${this.filters[stage].warehouse || ''}">
                 </div>
-            `);
-        } else if (this.active_stage === "pr_to_pi") {
-            $panel.html(`
-                <div class="picker-filter-item">
+            `;
+        } else if (stage === "pr_to_pi") {
+            filters_html = `
+                <div class="picker-filter-group">
                     <label>供应商:</label>
-                    <input type="text" class="picker-input picker-filter-control" data-field="supplier" value="${frappe.utils.escape_html(f.supplier || "")}" placeholder="搜索供应商…">
+                    <input type="text" class="picker-filter-input" data-filter="supplier" placeholder="搜索供应商..." value="${this.filters[stage].supplier || ''}">
                 </div>
-                <div class="picker-filter-item">
-                    <label>入库单号:</label>
-                    <input type="text" class="picker-input picker-filter-control" data-field="pr_name" value="${frappe.utils.escape_html(f.pr_name || "")}" placeholder="MAT-PRE-...">
+                <div class="picker-filter-group">
+                    <label>采购入库单号:</label>
+                    <input type="text" class="picker-filter-input" data-filter="pr_name" placeholder="PR-..." value="${this.filters[stage].pr_name || ''}">
                 </div>
-                <div class="picker-filter-item">
-                    <label>物料搜索:</label>
-                    <input type="text" class="picker-input picker-filter-control" data-field="item_code" value="${frappe.utils.escape_html(f.item_code || "")}" placeholder="物料编码/描述…">
+                <div class="picker-filter-group">
+                    <label>物料编码/名称:</label>
+                    <input type="text" class="picker-filter-input" data-filter="item_code" placeholder="物料..." value="${this.filters[stage].item_code || ''}">
                 </div>
-            `);
-        } else if (this.active_stage === "pi_to_rr") {
-            $panel.html(`
-                <div class="picker-filter-item">
+            `;
+        } else if (stage === "pi_to_rr") {
+            filters_html = `
+                <div class="picker-filter-group">
                     <label>供应商:</label>
-                    <input type="text" class="picker-input picker-filter-control" data-field="supplier" value="${frappe.utils.escape_html(f.supplier || "")}" placeholder="搜索供应商…">
+                    <input type="text" class="picker-filter-input" data-filter="supplier" placeholder="搜索供应商..." value="${this.filters[stage].supplier || ''}">
                 </div>
-                <div class="picker-filter-item">
+                <div class="picker-filter-group">
                     <label>发票号码:</label>
-                    <input type="text" class="picker-input picker-filter-control" data-field="bill_no" value="${frappe.utils.escape_html(f.bill_no || "")}" placeholder="发票代码/号码…">
+                    <input type="text" class="picker-filter-input" data-filter="bill_no" placeholder="发票代码/号码..." value="${this.filters[stage].bill_no || ''}">
                 </div>
-                <div class="picker-filter-item">
+                <div class="picker-filter-group">
                     <label>经手人:</label>
-                    <input type="text" class="picker-input picker-filter-control" data-field="owner" value="${frappe.utils.escape_html(f.owner || "")}" placeholder="录单人…">
+                    <input type="text" class="picker-filter-input" data-filter="owner" placeholder="录单人..." value="${this.filters[stage].owner || ''}">
                 </div>
-            `);
+            `;
         }
-    }
 
-    render_stage_extra_controls() {
-        const $extra = this.$wrapper.find(".picker-stage-extra-inputs").empty();
-        if (this.active_stage === "mr_to_po") {
-            $extra.html(`
-                <input type="text" class="picker-input extra-supplier-override" placeholder="统一指定供应商(可选)">
-            `);
-        } else if (this.active_stage === "po_to_pr") {
-            $extra.html(`
-                <input type="text" class="picker-input extra-warehouse-override" placeholder="统一指定入库仓库(可选)">
-            `);
-        } else if (this.active_stage === "pr_to_pi") {
-            $extra.html(`
-                <input type="text" class="picker-input extra-bill-no" placeholder="输入发票号码">
-                <input type="date" class="picker-input extra-bill-date">
-            `);
-        } else if (this.active_stage === "pi_to_rr") {
-            $extra.html(`
-                <input type="text" class="picker-input extra-applicant" placeholder="报销申请人(邮箱/员工)">
-            `);
-        }
-    }
+        $bar.html(filters_html);
 
-    load_all() {
-        this.load_kpis();
-        this.update_stage_ui();
-        this.render_filters();
-        this.render_stage_extra_controls();
-        this.load_stage_data();
-    }
-
-    load_kpis() {
-        frappe.call({
-            method: "ashan_cn_procurement.services.procurement_picker_service.get_procurement_picker_overview_kpis",
-            args: { company: this.company },
-            callback: (r) => {
-                const kpis = (r.message || {}).kpis || {};
-                this.kpis = kpis;
-                $("#kpi-mr-count").text(kpis.mr_to_po?.count ?? 0);
-                $("#kpi-po-count").text(kpis.po_to_pr?.count ?? 0);
-                $("#kpi-pr-count").text(kpis.pr_to_pi?.count ?? 0);
-                $("#kpi-pi-count").text(kpis.pi_to_rr?.count ?? 0);
-                $("#kpi-pi-amount").text("待报销: " + format_currency(kpis.pi_to_rr?.amount || 0, "CNY"));
-
-                $("#tab-badge-mr").text(kpis.mr_to_po?.count ?? 0);
-                $("#tab-badge-po").text(kpis.po_to_pr?.count ?? 0);
-                $("#tab-badge-pr").text(kpis.pr_to_pi?.count ?? 0);
-                $("#tab-badge-pi").text(kpis.pi_to_rr?.count ?? 0);
-            }
+        // Bind filter change
+        const self = this;
+        $bar.find(".picker-filter-input").on("change input", function () {
+            const key = $(this).attr("data-filter");
+            self.filters[stage][key] = $(this).val();
+            self.debounce_reload();
         });
     }
 
-    load_stage_data() {
-        this.loading = true;
-        const method_map = {
-            mr_to_po: "ashan_cn_procurement.services.procurement_picker_service.get_pending_material_request_items",
-            po_to_pr: "ashan_cn_procurement.services.procurement_picker_service.get_pending_purchase_order_items",
-            pr_to_pi: "ashan_cn_procurement.services.procurement_picker_service.get_pending_purchase_receipt_items",
-            pi_to_rr: "ashan_cn_procurement.services.procurement_picker_service.get_pending_reimbursement_invoices",
-        };
+    debounce_reload() {
+        clearTimeout(this._debounce_timer);
+        this._debounce_timer = setTimeout(() => {
+            this.load_table_data();
+        }, 300);
+    }
 
-        const current_method = method_map[this.active_stage];
-        const current_filters = this.filters[this.active_stage];
+    async load_table_data() {
+        const stage = this.active_stage;
+        let method = "";
+        if (stage === "item_to_mr") {
+            method = "ashan_cn_procurement.services.procurement_picker_service.get_item_master_picker_rows";
+        } else if (stage === "mr_to_po") {
+            method = "ashan_cn_procurement.services.procurement_picker_service.get_pending_material_request_items";
+        } else if (stage === "po_to_pr") {
+            method = "ashan_cn_procurement.services.procurement_picker_service.get_pending_purchase_order_items";
+        } else if (stage === "pr_to_pi") {
+            method = "ashan_cn_procurement.services.procurement_picker_service.get_pending_purchase_receipt_items";
+        } else if (stage === "pi_to_rr") {
+            method = "ashan_cn_procurement.services.procurement_picker_service.get_pending_reimbursement_invoices";
+        }
 
-        const $tbody = this.$wrapper.find(".picker-data-table tbody");
-        $tbody.html(`<tr><td colspan="15" class="picker-empty-state">⏳ 正在加载待办选单明细池…</td></tr>`);
-
-        frappe.call({
-            method: current_method,
-            args: {
-                company: this.company,
-                filters: current_filters,
-            },
-            callback: (r) => {
-                this.loading = false;
-                const data = r.message || {};
-                this.table_data = data.rows || [];
+        try {
+            const r = await frappe.call({
+                method: method,
+                args: {
+                    company: this.active_company,
+                    filters: this.filters[stage],
+                },
+            });
+            if (r && r.message) {
+                this.table_data = r.message.rows || [];
+                this.selected_map.clear();
+                this.locked_company = null;
+                this.update_company_lock_ui();
                 this.render_table();
-                this.update_selection_stats();
-                this.adjust_table_height();
-            },
-            error: () => {
-                this.loading = false;
-                $tbody.html(`<tr><td colspan="15" class="picker-empty-state">❌ 数据加载失败，请重试。</td></tr>`);
+                this.update_action_summary();
             }
-        });
+        } catch (e) {
+            console.error("Failed to load picker rows", e);
+        }
     }
 
     get_row_key(row) {
+        if (this.active_stage === "item_to_mr") return `${row.item_code}::${row.company}`;
         if (this.active_stage === "mr_to_po") return row.mri_name;
         if (this.active_stage === "po_to_pr") return row.poi_name;
         if (this.active_stage === "pr_to_pi") return row.pri_name;
         if (this.active_stage === "pi_to_rr") return row.pi_name;
-        return row.name;
-    }
-
-    get_row_by_key(key) {
-        return this.table_data.find((r) => this.get_row_key(r) === key);
+        return row.name || String(Math.random());
     }
 
     render_table() {
-        const $thead = this.$wrapper.find(".picker-data-table thead").empty();
-        const $tbody = this.$wrapper.find(".picker-data-table tbody").empty();
-        const $tfoot = this.$wrapper.find(".picker-data-table tfoot").empty();
-
-        if (this.active_stage === "mr_to_po") {
-            this.render_mr_to_po_table($thead, $tbody, $tfoot);
-        } else if (this.active_stage === "po_to_pr") {
-            this.render_po_to_pr_table($thead, $tbody, $tfoot);
-        } else if (this.active_stage === "pr_to_pi") {
-            this.render_pr_to_pi_table($thead, $tbody, $tfoot);
-        } else if (this.active_stage === "pi_to_rr") {
-            this.render_pi_to_rr_table($thead, $tbody, $tfoot);
-        }
-
-        // Adjust top scrollbar track width
-        const tableWidth = this.$wrapper.find(".picker-data-table").outerWidth();
-        this.$wrapper.find(".picker-top-scrollbar-thumb").css("width", tableWidth + "px");
+        this.render_table_header();
+        this.render_table_rows();
+        this.render_table_footer();
+        this.sync_scroll_widths();
     }
 
-    render_mr_to_po_table($thead, $tbody, $tfoot) {
-        $thead.html(`
-            <tr>
-                <th class="picker-sticky-1"><span class="picker-th-pill">序号</span><span class="picker-th-title">#</span></th>
-                <th class="picker-sticky-2"><span class="picker-th-pill">选择</span><span class="picker-th-title">勾选</span></th>
-                <th class="picker-sticky-3"><span class="picker-th-pill">申请单号</span><span class="picker-th-title">采购需求单</span></th>
-                <th><span class="picker-th-pill">需求交期</span><span class="picker-th-title">期望到货</span></th>
-                <th><span class="picker-th-pill">部门/申请人</span><span class="picker-th-title">需求部门</span></th>
-                <th><span class="picker-th-pill">物料编码</span><span class="picker-th-title">物料代码</span></th>
-                <th><span class="picker-th-pill">物料名称/规格</span><span class="picker-th-title">名称规格</span></th>
-                <th><span class="picker-th-pill">单位</span><span class="picker-th-title">单位</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">申请数</span><span class="picker-th-title">总数量</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">已订数</span><span class="picker-th-title">已订</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">待订数</span><span class="picker-th-title">未订数量</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">本次订购</span><span class="picker-th-title">本次下单数</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">参考单价</span><span class="picker-th-title">单价</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">预估金额</span><span class="picker-th-title">金额</span></th>
-                <th><span class="picker-th-pill">建议供应商</span><span class="picker-th-title">供应商</span></th>
-            </tr>
-        `);
+    render_table_header() {
+        const stage = this.active_stage;
+        let ths = `
+            <th class="picker-col-sticky-1"><span class="picker-th-badge">序号</span><span class="picker-th-title">#</span></th>
+            <th class="picker-col-sticky-2"><span class="picker-th-badge">选择</span><span class="picker-th-title">勾选</span></th>
+        `;
 
-        if (!this.table_data.length) {
-            $tbody.html(`<tr><td colspan="15" class="picker-empty-state"><div class="picker-empty-icon">🎉</div>没有待订货的采购申请明细</td></tr>`);
+        if (this.active_company === "All") {
+            ths += `<th class="picker-col-sticky-3"><span class="picker-th-badge">主体</span><span class="picker-th-title">所属公司</span></th>`;
+        }
+
+        if (stage === "item_to_mr") {
+            ths += `
+                <th><span class="picker-th-badge">物料编码</span><span class="picker-th-title">物料代码</span></th>
+                <th><span class="picker-th-badge">物料名称/规格</span><span class="picker-th-title">物料描述</span></th>
+                <th><span class="picker-th-badge">分类</span><span class="picker-th-title">物料分组</span></th>
+                <th><span class="picker-th-badge">单位</span><span class="picker-th-title">单位</span></th>
+                <th><span class="picker-th-badge">结存</span><span class="picker-th-title">当前库存</span></th>
+                <th><span class="picker-th-badge">申请数</span><span class="picker-th-title">本次申请</span></th>
+                <th><span class="picker-th-badge">建议供应商</span><span class="picker-th-title">默认供应商</span></th>
+                <th><span class="picker-th-badge">参考单价</span><span class="picker-th-title">标准进价</span></th>
+            `;
+        } else if (stage === "mr_to_po") {
+            ths += `
+                <th><span class="picker-th-badge">申请单号</span><span class="picker-th-title">采购需求单</span></th>
+                <th><span class="picker-th-badge">需求交期</span><span class="picker-th-title">期望到货</span></th>
+                <th><span class="picker-th-badge">部门/申请人</span><span class="picker-th-title">需求部门</span></th>
+                <th><span class="picker-th-badge">物料编码</span><span class="picker-th-title">物料代码</span></th>
+                <th><span class="picker-th-badge">物料名称/规格</span><span class="picker-th-title">名称规格</span></th>
+                <th><span class="picker-th-badge">单位</span><span class="picker-th-title">单位</span></th>
+                <th><span class="picker-th-badge">申请数</span><span class="picker-th-title">总数量</span></th>
+                <th><span class="picker-th-badge">已订数</span><span class="picker-th-title">已订</span></th>
+                <th><span class="picker-th-badge">待订数</span><span class="picker-th-title">未订数量</span></th>
+                <th><span class="picker-th-badge">本次订购</span><span class="picker-th-title">本次下单数</span></th>
+                <th><span class="picker-th-badge">参考单价</span><span class="picker-th-title">单价</span></th>
+                <th><span class="picker-th-badge">预估金额</span><span class="picker-th-title">金额</span></th>
+                <th><span class="picker-th-badge">建议供应商</span><span class="picker-th-title">供应商</span></th>
+            `;
+        } else if (stage === "po_to_pr") {
+            ths += `
+                <th><span class="picker-th-badge">供应商</span><span class="picker-th-title">供应商</span></th>
+                <th><span class="picker-th-badge">采购订单</span><span class="picker-th-title">订单单号</span></th>
+                <th><span class="picker-th-badge">下单日期</span><span class="picker-th-title">订单日期</span></th>
+                <th><span class="picker-th-badge">交期状态</span><span class="picker-th-title">承诺交期</span></th>
+                <th><span class="picker-th-badge">物料编码/名称</span><span class="picker-th-title">物料描述</span></th>
+                <th><span class="picker-th-badge">目的仓库</span><span class="picker-th-title">默认仓库</span></th>
+                <th><span class="picker-th-badge">订单数量</span><span class="picker-th-title">订购总数</span></th>
+                <th><span class="picker-th-badge">已收数量</span><span class="picker-th-title">已收</span></th>
+                <th><span class="picker-th-badge">待收数量</span><span class="picker-th-title">未收数量</span></th>
+                <th><span class="picker-th-badge">本次实收</span><span class="picker-th-title">本次到货数</span></th>
+                <th><span class="picker-th-badge">单价</span><span class="picker-th-title">采购单价</span></th>
+                <th><span class="picker-th-badge">待收金额</span><span class="picker-th-title">未收金额</span></th>
+            `;
+        } else if (stage === "pr_to_pi") {
+            ths += `
+                <th><span class="picker-th-badge">供应商</span><span class="picker-th-title">供应商</span></th>
+                <th><span class="picker-th-badge">采购入库单</span><span class="picker-th-title">入库单号</span></th>
+                <th><span class="picker-th-badge">入库日期</span><span class="picker-th-title">过账日期</span></th>
+                <th><span class="picker-th-badge">物料编码/名称</span><span class="picker-th-title">物料描述</span></th>
+                <th><span class="picker-th-badge">单位</span><span class="picker-th-title">单位</span></th>
+                <th><span class="picker-th-badge">入库数</span><span class="picker-th-title">实收总数</span></th>
+                <th><span class="picker-th-badge">已开票数</span><span class="picker-th-title">已结数</span></th>
+                <th><span class="picker-th-badge">待开票数</span><span class="picker-th-title">未结数量</span></th>
+                <th><span class="picker-th-badge">本次开票</span><span class="picker-th-title">本次结算数</span></th>
+                <th><span class="picker-th-badge">单价</span><span class="picker-th-title">入库单价</span></th>
+                <th><span class="picker-th-badge">待开票金额</span><span class="picker-th-title">待结金额</span></th>
+                <th><span class="picker-th-badge">关联订单</span><span class="picker-th-title">源采购订单</span></th>
+            `;
+        } else if (stage === "pi_to_rr") {
+            ths += `
+                <th><span class="picker-th-badge">发票单号</span><span class="picker-th-title">ERP发票号</span></th>
+                <th><span class="picker-th-badge">供应商/销售方</span><span class="picker-th-title">供应商</span></th>
+                <th><span class="picker-th-badge">纸质/金税发票号</span><span class="picker-th-title">发票号码</span></th>
+                <th><span class="picker-th-badge">发票类型</span><span class="picker-th-title">票据类别</span></th>
+                <th><span class="picker-th-badge">开票日期</span><span class="picker-th-title">开票日期</span></th>
+                <th><span class="picker-th-badge">经办人</span><span class="picker-th-title">录单人</span></th>
+                <th><span class="picker-th-badge">发票总额</span><span class="picker-th-title">含税总额</span></th>
+                <th><span class="picker-th-badge">已付/已报额</span><span class="picker-th-title">已核销</span></th>
+                <th><span class="picker-th-badge">待报销余额</span><span class="picker-th-title">可报销应付</span></th>
+            `;
+        }
+
+        $("#picker-table-thead").html(`<tr>${ths}</tr>`);
+    }
+
+    render_table_rows() {
+        const $tbody = $("#picker-table-tbody");
+        $tbody.empty();
+
+        if (!this.table_data || this.table_data.length === 0) {
+            const col_span = 14;
+            $tbody.html(`
+                <tr>
+                    <td colspan="${col_span}">
+                        <div class="picker-empty-state">
+                            <div class="picker-empty-icon">🎉</div>
+                            <div>当前没有待处理的明细记录</div>
+                        </div>
+                    </td>
+                </tr>
+            `);
             return;
         }
 
-        let sum_pending_qty = 0;
-        let sum_amount = 0;
+        const stage = this.active_stage;
+        const is_all_company = this.active_company === "All";
 
-        this.table_data.forEach((row, idx) => {
-            const key = row.mri_name;
-            const isSelected = this.selected_map.has(key);
-            const thisQty = isSelected ? this.selected_map.get(key).this_qty : row.pending_qty;
+        this.table_data.forEach((r, idx) => {
+            const key = this.get_row_key(r);
+            const is_selected = this.selected_map.has(key);
+            const is_hidden_by_lock = this.locked_company && r.company !== this.locked_company;
 
-            sum_pending_qty += row.pending_qty;
-            sum_amount += row.estimated_amount;
+            let tr_html = `
+                <tr class="${is_selected ? 'row-selected' : ''} ${is_hidden_by_lock ? 'picker-row-company-hidden' : ''}" data-key="${key}" data-company="${frappe.utils.escape_html(r.company || '')}">
+                    <td class="picker-col-sticky-1">${idx + 1}</td>
+                    <td class="picker-col-sticky-2">
+                        <input type="checkbox" class="picker-row-checkbox" data-key="${key}" ${is_selected ? 'checked' : ''}>
+                    </td>
+            `;
 
-            let badgeHtml = "";
-            if (row.is_overdue) {
-                badgeHtml = `<span class="picker-badge-overdue">已超期</span> `;
-            } else if (row.is_urgent) {
-                badgeHtml = `<span class="picker-badge-urgent">急需</span> `;
+            if (is_all_company) {
+                const comp_short = (r.company || "").includes("祺富") ? "祺富" : ((r.company || "").includes("吉众") ? "吉众" : (r.company || ""));
+                const comp_cls = (r.company || "").includes("祺富") ? "picker-company-badge-qifu" : "picker-company-badge-jizhong";
+                tr_html += `
+                    <td class="picker-col-sticky-3">
+                        <span class="picker-company-badge ${comp_cls}">${frappe.utils.escape_html(comp_short)}</span>
+                    </td>
+                `;
             }
 
-            $tbody.append(`
-                <tr class="${isSelected ? "is-selected" : ""}" data-key="${key}">
-                    <td class="picker-sticky-1">${idx + 1}</td>
-                    <td class="picker-sticky-2">
-                        <input type="checkbox" class="picker-row-checkbox" data-key="${key}" ${isSelected ? "checked" : ""}>
+            if (stage === "item_to_mr") {
+                tr_html += `
+                    <td><strong>${frappe.utils.escape_html(r.item_code)}</strong></td>
+                    <td>${frappe.utils.escape_html(r.item_name || r.item_code)}</td>
+                    <td>${frappe.utils.escape_html(r.item_group || "")}</td>
+                    <td>${frappe.utils.escape_html(r.uom || "")}</td>
+                    <td class="picker-qty-cell">${r.current_stock || 0}</td>
+                    <td>
+                        <input type="number" class="picker-input-qty" step="1" min="1" value="${r.this_qty || 1}">
                     </td>
-                    <td class="picker-sticky-3">
-                        <a href="/app/material-request/${encodeURIComponent(row.mr_name)}" target="_blank"><strong>${row.mr_name}</strong></a>
-                        <div class="picker-subtitle">第 ${row.idx} 行</div>
+                    <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
+                    <td class="picker-money-cell">${this.fmt_money(r.rate)}</td>
+                `;
+            } else if (stage === "mr_to_po") {
+                const urgent_tag = r.is_overdue ? `<span class="picker-badge-urgent">逾期</span>` : (r.is_urgent ? `<span class="picker-badge-urgent">紧急</span>` : "");
+                tr_html += `
+                    <td><a href="/desk/material-request/${r.mr_name}">${frappe.utils.escape_html(r.mr_name)}</a></td>
+                    <td>${r.schedule_date || "-"} ${urgent_tag}</td>
+                    <td>${frappe.utils.escape_html(r.department || r.requested_by || "-")}</td>
+                    <td><strong>${frappe.utils.escape_html(r.item_code)}</strong></td>
+                    <td>${frappe.utils.escape_html(r.item_name || "")}</td>
+                    <td>${frappe.utils.escape_html(r.uom || "")}</td>
+                    <td class="picker-qty-cell">${r.qty}</td>
+                    <td class="picker-qty-cell">${r.ordered_qty}</td>
+                    <td class="picker-qty-cell"><strong>${r.pending_qty}</strong></td>
+                    <td>
+                        <input type="number" class="picker-input-qty" step="0.01" min="0.01" max="${r.pending_qty}" value="${r.this_qty}">
                     </td>
-                    <td>${badgeHtml}${row.schedule_date || "-"}</td>
-                    <td>${row.department || "-"} / ${row.requested_by || "-"}</td>
-                    <td><code>${row.item_code}</code></td>
-                    <td><strong>${row.item_name}</strong><br><small class="text-muted">${row.description || ""}</small></td>
-                    <td>${row.uom || "-"}</td>
-                    <td class="ashan-money-cell">${row.qty}</td>
-                    <td class="ashan-money-cell">${row.ordered_qty}</td>
-                    <td class="ashan-money-cell"><strong>${row.pending_qty}</strong></td>
-                    <td class="ashan-money-cell">
-                        <input type="number" step="any" class="picker-cell-input picker-qty-input" data-key="${key}" value="${thisQty}" max="${row.pending_qty}" min="0.001">
+                    <td class="picker-money-cell">${this.fmt_money(r.rate)}</td>
+                    <td class="picker-money-cell cell-row-amt">${this.fmt_money(r.estimated_amount)}</td>
+                    <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
+                `;
+            } else if (stage === "po_to_pr") {
+                tr_html += `
+                    <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
+                    <td><a href="/desk/purchase-order/${r.po_name}">${frappe.utils.escape_html(r.po_name)}</a></td>
+                    <td>${r.po_date || "-"}</td>
+                    <td>${r.schedule_date || "-"}</td>
+                    <td><span class="ashan-tag-badge">${frappe.utils.escape_html(r.item_code)}</span> ${frappe.utils.escape_html(r.item_name || "")}</td>
+                    <td>${frappe.utils.escape_html(r.warehouse || "-")}</td>
+                    <td class="picker-qty-cell">${r.qty}</td>
+                    <td class="picker-qty-cell">${r.received_qty}</td>
+                    <td class="picker-qty-cell"><strong>${r.pending_qty}</strong></td>
+                    <td>
+                        <input type="number" class="picker-input-qty" step="0.01" min="0.01" max="${r.pending_qty}" value="${r.this_qty}">
                     </td>
-                    <td class="ashan-money-cell">${format_currency(row.rate, "CNY")}</td>
-                    <td class="ashan-money-cell">${format_currency(row.estimated_amount, "CNY")}</td>
-                    <td>${row.supplier ? `<strong>${row.supplier}</strong>` : `<span class="text-muted">待指定</span>`}</td>
-                </tr>
-            `);
+                    <td class="picker-money-cell">${this.fmt_money(r.rate)}</td>
+                    <td class="picker-money-cell cell-row-amt">${this.fmt_money(r.pending_amount)}</td>
+                `;
+            } else if (stage === "pr_to_pi") {
+                tr_html += `
+                    <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
+                    <td><a href="/desk/purchase-receipt/${r.pr_name}">${frappe.utils.escape_html(r.pr_name)}</a></td>
+                    <td>${r.pr_date || "-"}</td>
+                    <td><span class="ashan-tag-badge">${frappe.utils.escape_html(r.item_code)}</span> ${frappe.utils.escape_html(r.item_name || "")}</td>
+                    <td>${frappe.utils.escape_html(r.uom || "")}</td>
+                    <td class="picker-qty-cell">${r.qty}</td>
+                    <td class="picker-qty-cell">${r.billed_qty}</td>
+                    <td class="picker-qty-cell"><strong>${r.pending_qty}</strong></td>
+                    <td>
+                        <input type="number" class="picker-input-qty" step="0.01" min="0.01" max="${r.pending_qty}" value="${r.this_qty}">
+                    </td>
+                    <td class="picker-money-cell">${this.fmt_money(r.rate)}</td>
+                    <td class="picker-money-cell cell-row-amt">${this.fmt_money(r.pending_amount)}</td>
+                    <td>${frappe.utils.escape_html(r.purchase_order || "-")}</td>
+                `;
+            } else if (stage === "pi_to_rr") {
+                tr_html += `
+                    <td><a href="/desk/purchase-invoice/${r.pi_name}">${frappe.utils.escape_html(r.pi_name)}</a></td>
+                    <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
+                    <td><span class="picker-badge-invoice-type">${frappe.utils.escape_html(r.bill_no || "未填")}</span></td>
+                    <td><span class="ashan-status-badge ashan-status-blue">${frappe.utils.escape_html(r.invoice_type || "普通发票")}</span></td>
+                    <td>${r.bill_date || r.posting_date || "-"}</td>
+                    <td>${frappe.utils.escape_html(r.owner || "-")}</td>
+                    <td class="picker-money-cell">${this.fmt_money(r.grand_total)}</td>
+                    <td class="picker-money-cell">${this.fmt_money(r.grand_total - r.outstanding_amount)}</td>
+                    <td class="picker-money-cell cell-row-amt"><strong>${this.fmt_money(r.net_available_amount)}</strong></td>
+                `;
+            }
+
+            tr_html += `</tr>`;
+            $tbody.append(tr_html);
+        });
+    }
+
+    render_table_footer() {
+        const stage = this.active_stage;
+        const is_all_company = this.active_company === "All";
+        let total_qty = 0;
+        let total_amt = 0;
+
+        this.table_data.forEach((r) => {
+            if (this.locked_company && r.company !== this.locked_company) return;
+            total_qty += flt(r.pending_qty || r.qty || 0);
+            total_amt += flt(r.estimated_amount || r.pending_amount || r.net_available_amount || 0);
         });
 
-        $tfoot.html(`
-            <tr class="picker-sticky-foot">
-                <td colspan="8" class="text-right"><strong>合计 (共 ${this.table_data.length} 行)</strong></td>
-                <td>-</td>
-                <td>-</td>
-                <td class="ashan-money-cell"><strong>${sum_pending_qty.toFixed(2)}</strong></td>
-                <td>-</td>
-                <td>-</td>
-                <td class="ashan-money-cell"><strong>${format_currency(sum_amount, "CNY")}</strong></td>
+        let prefix_cols = is_all_company ? 3 : 2;
+        let foot_html = `
+            <tr>
+                <td colspan="${prefix_cols}" class="picker-col-sticky-foot">
+                    合计 (共 ${this.table_data.length} 条)
+                </td>
+        `;
+
+        if (stage === "item_to_mr") {
+            foot_html += `<td colspan="8"></td>`;
+        } else if (stage === "mr_to_po") {
+            foot_html += `
+                <td colspan="6"></td>
+                <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
+                <td colspan="2"></td>
+                <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
                 <td></td>
-            </tr>
-        `);
-    }
-
-    render_po_to_pr_table($thead, $tbody, $tfoot) {
-        $thead.html(`
-            <tr>
-                <th class="picker-sticky-1"><span class="picker-th-pill">序号</span><span class="picker-th-title">#</span></th>
-                <th class="picker-sticky-2"><span class="picker-th-pill">选择</span><span class="picker-th-title">勾选</span></th>
-                <th class="picker-sticky-3"><span class="picker-th-pill">供应商</span><span class="picker-th-title">供应商</span></th>
-                <th><span class="picker-th-pill">采购订单</span><span class="picker-th-title">订单单号</span></th>
-                <th><span class="picker-th-pill">下单日期</span><span class="picker-th-title">订单日期</span></th>
-                <th><span class="picker-th-pill">交期状态</span><span class="picker-th-title">承诺交期</span></th>
-                <th><span class="picker-th-pill">物料编码/名称</span><span class="picker-th-title">物料描述</span></th>
-                <th><span class="picker-th-pill">目的仓库</span><span class="picker-th-title">默认仓库</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">订单数量</span><span class="picker-th-title">订购总数</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">已收数量</span><span class="picker-th-title">已收</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">待收数量</span><span class="picker-th-title">未收数量</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">本次实收</span><span class="picker-th-title">本次到货数</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">单价</span><span class="picker-th-title">采购单价</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">待收金额</span><span class="picker-th-title">未收金额</span></th>
-            </tr>
-        `);
-
-        if (!this.table_data.length) {
-            $tbody.html(`<tr><td colspan="14" class="picker-empty-state"><div class="picker-empty-icon">📦</div>没有待收货的采购订单明细</td></tr>`);
-            return;
+            `;
+        } else if (stage === "po_to_pr") {
+            foot_html += `
+                <td colspan="6"></td>
+                <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
+                <td colspan="2"></td>
+                <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
+            `;
+        } else if (stage === "pr_to_pi") {
+            foot_html += `
+                <td colspan="5"></td>
+                <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
+                <td colspan="2"></td>
+                <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
+                <td></td>
+            `;
+        } else if (stage === "pi_to_rr") {
+            foot_html += `
+                <td colspan="5"></td>
+                <td colspan="2"></td>
+                <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
+            `;
         }
 
-        let sum_pending_qty = 0;
-        let sum_amount = 0;
-
-        this.table_data.forEach((row, idx) => {
-            const key = row.poi_name;
-            const isSelected = this.selected_map.has(key);
-            const thisQty = isSelected ? this.selected_map.get(key).this_qty : row.pending_qty;
-
-            sum_pending_qty += row.pending_qty;
-            sum_amount += row.pending_amount;
-
-            $tbody.append(`
-                <tr class="${isSelected ? "is-selected" : ""}" data-key="${key}">
-                    <td class="picker-sticky-1">${idx + 1}</td>
-                    <td class="picker-sticky-2">
-                        <input type="checkbox" class="picker-row-checkbox" data-key="${key}" ${isSelected ? "checked" : ""}>
-                    </td>
-                    <td class="picker-sticky-3"><strong>${row.supplier}</strong></td>
-                    <td><a href="/app/purchase-order/${encodeURIComponent(row.po_name)}" target="_blank">${row.po_name}</a></td>
-                    <td>${row.po_date || "-"}</td>
-                    <td>${row.is_overdue ? `<span class="picker-badge-overdue">已超期</span> ` : ""}${row.schedule_date || "-"}</td>
-                    <td><code>${row.item_code}</code> <strong>${row.item_name}</strong></td>
-                    <td>${row.warehouse || "-"}</td>
-                    <td class="ashan-money-cell">${row.qty}</td>
-                    <td class="ashan-money-cell">${row.received_qty}</td>
-                    <td class="ashan-money-cell"><strong>${row.pending_qty}</strong></td>
-                    <td class="ashan-money-cell">
-                        <input type="number" step="any" class="picker-cell-input picker-qty-input" data-key="${key}" value="${thisQty}" max="${row.pending_qty}" min="0.001">
-                    </td>
-                    <td class="ashan-money-cell">${format_currency(row.rate, "CNY")}</td>
-                    <td class="ashan-money-cell">${format_currency(row.pending_amount, "CNY")}</td>
-                </tr>
-            `);
-        });
-
-        $tfoot.html(`
-            <tr class="picker-sticky-foot">
-                <td colspan="8" class="text-right"><strong>合计 (共 ${this.table_data.length} 行)</strong></td>
-                <td>-</td>
-                <td>-</td>
-                <td class="ashan-money-cell"><strong>${sum_pending_qty.toFixed(2)}</strong></td>
-                <td>-</td>
-                <td>-</td>
-                <td class="ashan-money-cell"><strong>${format_currency(sum_amount, "CNY")}</strong></td>
-            </tr>
-        `);
+        foot_html += `</tr>`;
+        $("#picker-table-tfoot").html(foot_html);
     }
 
-    render_pr_to_pi_table($thead, $tbody, $tfoot) {
-        $thead.html(`
-            <tr>
-                <th class="picker-sticky-1"><span class="picker-th-pill">序号</span><span class="picker-th-title">#</span></th>
-                <th class="picker-sticky-2"><span class="picker-th-pill">选择</span><span class="picker-th-title">勾选</span></th>
-                <th class="picker-sticky-3"><span class="picker-th-pill">供应商</span><span class="picker-th-title">供应商</span></th>
-                <th><span class="picker-th-pill">采购入库单</span><span class="picker-th-title">入库单号</span></th>
-                <th><span class="picker-th-pill">入库日期</span><span class="picker-th-title">过账日期</span></th>
-                <th><span class="picker-th-pill">物料编码/名称</span><span class="picker-th-title">物料描述</span></th>
-                <th><span class="picker-th-pill">关联合同/订单</span><span class="picker-th-title">源采购订单</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">入库总数</span><span class="picker-th-title">收货数量</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">已开票数</span><span class="picker-th-title">已开票</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">待开票数</span><span class="picker-th-title">未开票数量</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">本次开票</span><span class="picker-th-title">本次开票数</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">单价</span><span class="picker-th-title">入库单价</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">待开票金额</span><span class="picker-th-title">暂估待开金额</span></th>
-            </tr>
-        `);
+    update_company_lock_ui() {
+        const $banner = $("#picker-company-lock-banner");
+        const $text = $("#picker-lock-banner-text");
 
-        if (!this.table_data.length) {
-            $tbody.html(`<tr><td colspan="13" class="picker-empty-state"><div class="picker-empty-icon">🧾</div>没有待开票的采购入库明细</td></tr>`);
-            return;
-        }
-
-        let sum_pending_qty = 0;
-        let sum_amount = 0;
-
-        this.table_data.forEach((row, idx) => {
-            const key = row.pri_name;
-            const isSelected = this.selected_map.has(key);
-            const thisQty = isSelected ? this.selected_map.get(key).this_qty : row.pending_qty;
-
-            sum_pending_qty += row.pending_qty;
-            sum_amount += row.pending_amount;
-
-            $tbody.append(`
-                <tr class="${isSelected ? "is-selected" : ""}" data-key="${key}">
-                    <td class="picker-sticky-1">${idx + 1}</td>
-                    <td class="picker-sticky-2">
-                        <input type="checkbox" class="picker-row-checkbox" data-key="${key}" ${isSelected ? "checked" : ""}>
-                    </td>
-                    <td class="picker-sticky-3"><strong>${row.supplier}</strong></td>
-                    <td><a href="/app/purchase-receipt/${encodeURIComponent(row.pr_name)}" target="_blank">${row.pr_name}</a></td>
-                    <td>${row.pr_date || "-"}</td>
-                    <td><code>${row.item_code}</code> <strong>${row.item_name}</strong></td>
-                    <td>${row.purchase_order ? `<a href="/app/purchase-order/${encodeURIComponent(row.purchase_order)}" target="_blank">${row.purchase_order}</a>` : "-"}</td>
-                    <td class="ashan-money-cell">${row.qty}</td>
-                    <td class="ashan-money-cell">${row.billed_qty}</td>
-                    <td class="ashan-money-cell"><strong>${row.pending_qty}</strong></td>
-                    <td class="ashan-money-cell">
-                        <input type="number" step="any" class="picker-cell-input picker-qty-input" data-key="${key}" value="${thisQty}" max="${row.pending_qty}" min="0.001">
-                    </td>
-                    <td class="ashan-money-cell">${format_currency(row.rate, "CNY")}</td>
-                    <td class="ashan-money-cell">${format_currency(row.pending_amount, "CNY")}</td>
-                </tr>
-            `);
-        });
-
-        $tfoot.html(`
-            <tr class="picker-sticky-foot">
-                <td colspan="7" class="text-right"><strong>合计 (共 ${this.table_data.length} 行)</strong></td>
-                <td>-</td>
-                <td>-</td>
-                <td class="ashan-money-cell"><strong>${sum_pending_qty.toFixed(2)}</strong></td>
-                <td>-</td>
-                <td>-</td>
-                <td class="ashan-money-cell"><strong>${format_currency(sum_amount, "CNY")}</strong></td>
-            </tr>
-        `);
-    }
-
-    render_pi_to_rr_table($thead, $tbody, $tfoot) {
-        $thead.html(`
-            <tr>
-                <th class="picker-sticky-1"><span class="picker-th-pill">序号</span><span class="picker-th-title">#</span></th>
-                <th class="picker-sticky-2"><span class="picker-th-pill">选择</span><span class="picker-th-title">勾选</span></th>
-                <th class="picker-sticky-3"><span class="picker-th-pill">发票单号</span><span class="picker-th-title">ERP发票号</span></th>
-                <th><span class="picker-th-pill">供应商/销售方</span><span class="picker-th-title">供应商</span></th>
-                <th><span class="picker-th-pill">纸质/金税发票号</span><span class="picker-th-title">发票号码</span></th>
-                <th><span class="picker-th-pill">发票类型</span><span class="picker-th-title">票据类别</span></th>
-                <th><span class="picker-th-pill">开票日期</span><span class="picker-th-title">开票日期</span></th>
-                <th><span class="picker-th-pill">经办人</span><span class="picker-th-title">录单人</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">发票总额</span><span class="picker-th-title">含税总额</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">已付/已报额</span><span class="picker-th-title">已核销</span></th>
-                <th class="ashan-money-cell"><span class="picker-th-pill">待报销余额</span><span class="picker-th-title">可报销应付</span></th>
-            </tr>
-        `);
-
-        if (!this.table_data.length) {
-            $tbody.html(`<tr><td colspan="11" class="picker-empty-state"><div class="picker-empty-icon">💰</div>没有待报销的采购发票</td></tr>`);
-            return;
-        }
-
-        let sum_outstanding = 0;
-
-        this.table_data.forEach((row, idx) => {
-            const key = row.pi_name;
-            const isSelected = this.selected_map.has(key);
-            sum_outstanding += row.net_available_amount;
-
-            $tbody.append(`
-                <tr class="${isSelected ? "is-selected" : ""}" data-key="${key}">
-                    <td class="picker-sticky-1">${idx + 1}</td>
-                    <td class="picker-sticky-2">
-                        <input type="checkbox" class="picker-row-checkbox" data-key="${key}" ${isSelected ? "checked" : ""}>
-                    </td>
-                    <td class="picker-sticky-3">
-                        <a href="/app/purchase-invoice/${encodeURIComponent(row.pi_name)}" target="_blank"><strong>${row.pi_name}</strong></a>
-                    </td>
-                    <td><strong>${row.supplier}</strong></td>
-                    <td><code>${row.bill_no || "未填"}</code></td>
-                    <td><span class="badge badge-info">${row.invoice_type}</span></td>
-                    <td>${row.bill_date || row.posting_date || "-"}</td>
-                    <td>${row.owner || "-"}</td>
-                    <td class="ashan-money-cell">${format_currency(row.grand_total, "CNY")}</td>
-                    <td class="ashan-money-cell">${format_currency(row.grand_total - row.outstanding_amount, "CNY")}</td>
-                    <td class="ashan-money-cell"><strong>${format_currency(row.net_available_amount, "CNY")}</strong></td>
-                </tr>
-            `);
-        });
-
-        $tfoot.html(`
-            <tr class="picker-sticky-foot">
-                <td colspan="8" class="text-right"><strong>合计 (共 ${this.table_data.length} 张发票)</strong></td>
-                <td>-</td>
-                <td>-</td>
-                <td class="ashan-money-cell"><strong>${format_currency(sum_outstanding, "CNY")}</strong></td>
-            </tr>
-        `);
-    }
-
-    select_all_rows(selectAll) {
-        this.selected_map.clear();
-        const $trs = this.$wrapper.find(".picker-data-table tbody tr");
-        if (selectAll) {
-            this.table_data.forEach((row) => {
-                const key = this.get_row_key(row);
-                const qty = row.pending_qty || row.net_available_amount || 0;
-                this.selected_map.set(key, { ...row, this_qty: qty, this_amount: qty });
-            });
-            $trs.addClass("is-selected").find(".picker-row-checkbox").prop("checked", true);
+        if (this.locked_company && this.active_company === "All") {
+            $banner.addClass("is-active");
+            $text.html(`当前已按【<strong>${frappe.utils.escape_html(this.locked_company)}</strong>】锁定选单生单范围（已自动隐藏其他公司明细，取消勾选后恢复全量视图）`);
         } else {
-            $trs.removeClass("is-selected").find(".picker-row-checkbox").prop("checked", false);
+            $banner.removeClass("is-active");
         }
-        this.update_selection_stats();
+    }
+
+    update_table_visibility_by_lock() {
+        const self = this;
+        $("#picker-table-tbody tr").each(function () {
+            const comp = $(this).attr("data-company");
+            if (self.locked_company && comp !== self.locked_company) {
+                $(this).addClass("picker-row-company-hidden");
+            } else {
+                $(this).removeClass("picker-row-company-hidden");
+            }
+        });
+        this.render_table_footer();
+    }
+
+    update_row_amount_display($tr, row) {
+        if (!row) return;
+        const rate = flt(row.rate);
+        const this_qty = flt(row.this_qty);
+        const new_amt = flt(rate * this_qty, 2);
+        if (row.estimated_amount !== undefined) row.estimated_amount = new_amt;
+        if (row.pending_amount !== undefined) row.pending_amount = new_amt;
+        $tr.find(".cell-row-amt").text(this.fmt_money(new_amt));
+    }
+
+    update_action_summary() {
+        const $bar = $("#picker-action-bar");
+        const stage = this.active_stage;
+        const cfg = this.stages_config[stage];
+        const sel_count = this.selected_map.size;
+
+        let total_sel_amt = 0;
+        this.selected_map.forEach((item) => {
+            const rate = flt(item.rate);
+            const qty = flt(item.this_qty || item.pending_qty || 1);
+            if (item.net_available_amount !== undefined) {
+                total_sel_amt += flt(item.net_available_amount);
+            } else {
+                total_sel_amt += flt(rate * qty, 2);
+            }
+        });
+
+        let target_comp_suffix = "";
+        if (this.locked_company) {
+            target_comp_suffix = `【${this.locked_company}】`;
+        } else if (this.active_company !== "All") {
+            target_comp_suffix = `【${this.active_company}】`;
+        }
+
+        let stage_inputs = "";
+        if (stage === "item_to_mr") {
+            stage_inputs = `
+                <div class="picker-filter-group">
+                    <input type="text" class="picker-filter-input" id="picker-opt-dept" placeholder="需求部门/用途(可选)">
+                </div>
+            `;
+        } else if (stage === "mr_to_po") {
+            stage_inputs = `
+                <div class="picker-filter-group">
+                    <input type="text" class="picker-filter-input" id="picker-opt-supplier" placeholder="统一指定供应商(可选)">
+                </div>
+            `;
+        } else if (stage === "po_to_pr") {
+            stage_inputs = `
+                <div class="picker-filter-group">
+                    <input type="text" class="picker-filter-input" id="picker-opt-warehouse" placeholder="统一指定入库仓库(可选)">
+                </div>
+            `;
+        } else if (stage === "pr_to_pi") {
+            stage_inputs = `
+                <div class="picker-filter-group">
+                    <input type="text" class="picker-filter-input" id="picker-opt-bill-no" placeholder="发票号码(纸质/金税)">
+                </div>
+            `;
+        } else if (stage === "pi_to_rr") {
+            stage_inputs = `
+                <div class="picker-filter-group">
+                    <input type="text" class="picker-filter-input" id="picker-opt-applicant" placeholder="报销申请人(邮箱/员工)">
+                </div>
+            `;
+        }
+
+        const html = `
+            <div class="picker-summary-text">
+                <span>已选 <strong class="picker-summary-highlight">${sel_count}</strong> 行明细</span>
+                <span>本次总计: <strong class="picker-summary-highlight">${this.fmt_money(total_sel_amt)}</strong></span>
+            </div>
+            <div class="picker-btn-group">
+                <button class="picker-btn-secondary" id="picker-select-all-btn">全选本页</button>
+                <button class="picker-btn-secondary" id="picker-clear-sel-btn">清空选择</button>
+                ${stage !== 'item_to_mr' ? '<button class="picker-btn-secondary" id="picker-fill-max-btn">填充最大待办数</button>' : ''}
+                ${stage_inputs}
+                <button class="picker-btn-primary" id="picker-submit-btn" ${sel_count === 0 ? 'disabled' : ''}>
+                    ${cfg.btn_label}${target_comp_suffix}
+                </button>
+            </div>
+        `;
+        $bar.html(html);
+    }
+
+    select_all_visible() {
+        const self = this;
+        let first_comp = null;
+
+        // If not locked and in All mode, check the first visible row's company
+        if (this.active_company === "All" && !this.locked_company) {
+            const first_visible = this.table_data.find((r) => !self.locked_company || r.company === self.locked_company);
+            if (first_visible) {
+                this.locked_company = first_visible.company;
+                this.update_company_lock_ui();
+            }
+        }
+
+        this.table_data.forEach((r) => {
+            if (self.locked_company && r.company !== self.locked_company) return;
+            const key = self.get_row_key(r);
+            self.selected_map.set(key, r);
+        });
+
+        this.render_table_rows();
+        this.update_table_visibility_by_lock();
+        this.update_action_summary();
+    }
+
+    clear_selection() {
+        this.selected_map.clear();
+        this.locked_company = null;
+        this.update_company_lock_ui();
+        this.render_table_rows();
+        this.update_table_visibility_by_lock();
+        this.update_action_summary();
     }
 
     fill_max_quantities() {
-        this.table_data.forEach((row) => {
-            const key = this.get_row_key(row);
-            const maxVal = row.pending_qty || row.net_available_amount || 0;
-            row.this_qty = maxVal;
-            row.this_amount = maxVal;
-            this.$wrapper.find(`.picker-qty-input[data-key="${key}"]`).val(maxVal);
-            if (this.selected_map.has(key)) {
-                const sel = this.selected_map.get(key);
-                sel.this_qty = maxVal;
-                sel.this_amount = maxVal;
+        const self = this;
+        this.table_data.forEach((r) => {
+            if (self.locked_company && r.company !== self.locked_company) return;
+            const max_qty = flt(r.pending_qty || r.qty);
+            r.this_qty = max_qty;
+            const key = self.get_row_key(r);
+            if (self.selected_map.has(key)) {
+                self.selected_map.get(key).this_qty = max_qty;
             }
         });
-        this.update_selection_stats();
-        frappe.show_alert({ message: __("已填充全部待办最大数量"), indicator: "green" });
+        this.render_table_rows();
+        this.update_action_summary();
     }
 
-    update_selection_stats() {
-        const count = this.selected_map.size;
-        $("#stat-selected-count").text(count);
-
-        let totalAmt = 0;
-        this.selected_map.forEach((item) => {
-            if (this.active_stage === "mr_to_po") {
-                totalAmt += (flt(item.this_qty) * flt(item.rate)) || 0;
-            } else if (this.active_stage === "po_to_pr") {
-                totalAmt += (flt(item.this_qty) * flt(item.rate)) || 0;
-            } else if (this.active_stage === "pr_to_pi") {
-                totalAmt += (flt(item.this_qty) * flt(item.rate)) || 0;
-            } else if (this.active_stage === "pi_to_rr") {
-                totalAmt += flt(item.net_available_amount) || 0;
-            }
-        });
-
-        $("#stat-selected-amount").text(format_currency(totalAmt, "CNY"));
+    sync_scroll_widths() {
+        const table_width = $("#picker-data-table").outerWidth() || 1200;
+        $("#picker-top-scrollbar-inner").width(table_width);
     }
 
-    adjust_table_height() {
-        const topOffset = this.$wrapper.find(".picker-grid-card").offset()?.top || 300;
-        const windowHeight = $(window).height();
-        const availableHeight = Math.max(300, windowHeight - topOffset - 60);
-        this.$wrapper.find(".picker-table-wrapper").css("max-height", availableHeight + "px");
+    fmt_money(val) {
+        return `¥ ${flt(val || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
 
-    handle_generate_action() {
-        if (!this.selected_map.size) {
-            frappe.msgprint(__("请至少勾选一行明细进行生单。"));
+    async execute_primary_action() {
+        const stage = this.active_stage;
+        const selected_items = Array.from(this.selected_map.values());
+        if (!selected_items.length) {
+            frappe.msgprint(__("请至少选择一行明细。"));
             return;
         }
 
-        const selected_list = Array.from(this.selected_map.values());
+        const target_comp = this.locked_company || (this.active_company !== "All" ? this.active_company : selected_items[0].company);
 
-        if (this.active_stage === "mr_to_po") {
-            this.generate_po(selected_list);
-        } else if (this.active_stage === "po_to_pr") {
-            this.generate_pr(selected_list);
-        } else if (this.active_stage === "pr_to_pi") {
-            this.generate_pi(selected_list);
-        } else if (this.active_stage === "pi_to_rr") {
-            this.generate_rr(selected_list);
+        if (stage === "item_to_mr") {
+            const dept = $("#picker-opt-dept").val();
+            frappe.confirm(__("确定将选中的 {0} 种物料生成采购申请草稿吗？", [selected_items.length]), async () => {
+                try {
+                    frappe.dom.freeze(__("正在生成采购申请..."));
+                    const r = await frappe.call({
+                        method: "ashan_cn_procurement.services.procurement_picker_service.make_material_requests_from_items",
+                        args: {
+                            company: target_comp,
+                            selected_items: selected_items,
+                            department: dept,
+                        },
+                    });
+                    frappe.dom.unfreeze();
+                    if (r && r.message && r.message.success) {
+                        this.show_generation_success_dialog("采购申请", r.message.requests, "material-request");
+                        this.refresh_all();
+                    }
+                } catch (e) {
+                    frappe.dom.unfreeze();
+                    frappe.msgprint(e.message || __("生成采购申请失败"));
+                }
+            });
+        } else if (stage === "mr_to_po") {
+            const sup_override = $("#picker-opt-supplier").val();
+            frappe.confirm(__("确定将选中的 {0} 行需求生成采购订单草稿吗？", [selected_items.length]), async () => {
+                try {
+                    frappe.dom.freeze(__("正在生成采购订单..."));
+                    const r = await frappe.call({
+                        method: "ashan_cn_procurement.services.procurement_picker_service.make_purchase_orders_from_mr_items",
+                        args: {
+                            company: target_comp,
+                            selected_items: selected_items,
+                            supplier_override: sup_override,
+                        },
+                    });
+                    frappe.dom.unfreeze();
+                    if (r && r.message && r.message.success) {
+                        this.show_generation_success_dialog("采购订单", r.message.orders, "purchase-order");
+                        this.refresh_all();
+                    }
+                } catch (e) {
+                    frappe.dom.unfreeze();
+                    frappe.msgprint(e.message || __("生成采购订单失败"));
+                }
+            });
+        } else if (stage === "po_to_pr") {
+            const wh_override = $("#picker-opt-warehouse").val();
+            frappe.confirm(__("确定将选中的 {0} 行订单明细生成采购入库单草稿吗？", [selected_items.length]), async () => {
+                try {
+                    frappe.dom.freeze(__("正在生成采购入库单..."));
+                    const r = await frappe.call({
+                        method: "ashan_cn_procurement.services.procurement_picker_service.make_purchase_receipts_from_po_items",
+                        args: {
+                            company: target_comp,
+                            selected_items: selected_items,
+                            warehouse_override: wh_override,
+                        },
+                    });
+                    frappe.dom.unfreeze();
+                    if (r && r.message && r.message.success) {
+                        this.show_generation_success_dialog("采购入库单", r.message.receipts, "purchase-receipt");
+                        this.refresh_all();
+                    }
+                } catch (e) {
+                    frappe.dom.unfreeze();
+                    frappe.msgprint(e.message || __("生成采购入库单失败"));
+                }
+            });
+        } else if (stage === "pr_to_pi") {
+            const bill_no = $("#picker-opt-bill-no").val();
+            frappe.confirm(__("确定将选中的 {0} 行入库明细生成采购发票草稿吗？", [selected_items.length]), async () => {
+                try {
+                    frappe.dom.freeze(__("正在生成采购发票..."));
+                    const r = await frappe.call({
+                        method: "ashan_cn_procurement.services.procurement_picker_service.make_purchase_invoices_from_pr_items",
+                        args: {
+                            company: target_comp,
+                            selected_items: selected_items,
+                            bill_no: bill_no,
+                        },
+                    });
+                    frappe.dom.unfreeze();
+                    if (r && r.message && r.message.success) {
+                        this.show_generation_success_dialog("采购发票", r.message.invoices, "purchase-invoice");
+                        this.refresh_all();
+                    }
+                } catch (e) {
+                    frappe.dom.unfreeze();
+                    frappe.msgprint(e.message || __("生成采购发票失败"));
+                }
+            });
+        } else if (stage === "pi_to_rr") {
+            const applicant = $("#picker-opt-applicant").val();
+            const inv_names = selected_items.map((i) => i.pi_name);
+            frappe.confirm(__("确定将选中的 {0} 张采购发票生成报销申请单草稿吗？", [inv_names.length]), async () => {
+                try {
+                    frappe.dom.freeze(__("正在生成报销申请..."));
+                    const r = await frappe.call({
+                        method: "ashan_cn_procurement.services.procurement_picker_service.make_reimbursement_from_invoices",
+                        args: {
+                            company: target_comp,
+                            selected_invoices: inv_names,
+                            applicant: applicant,
+                            purpose: `采购发票选单报销 (${inv_names.length}张)`,
+                        },
+                    });
+                    frappe.dom.unfreeze();
+                    if (r && r.message && r.message.success) {
+                        frappe.show_alert({
+                            message: __("成功生成报销申请单：{0}", [r.message.reimbursement_name]),
+                            indicator: "green",
+                        });
+                        frappe.set_route("reimbursement-request", r.message.reimbursement_name);
+                    }
+                } catch (e) {
+                    frappe.dom.unfreeze();
+                    frappe.msgprint(e.message || __("生成报销申请单失败"));
+                }
+            });
         }
     }
 
-    generate_po(selected_list) {
-        const supplier_override = this.$wrapper.find(".extra-supplier-override").val();
-        frappe.confirm(__("确定将选中的 {0} 行采购需求生成采购订单？", [selected_list.length]), () => {
-            frappe.call({
-                method: "ashan_cn_procurement.services.procurement_picker_service.make_purchase_orders_from_mr_items",
-                args: {
-                    company: this.company,
-                    selected_items: selected_list,
-                    supplier_override: supplier_override || null,
-                },
-                freeze: true,
-                freeze_message: __("正在生成采购订单草稿…"),
-                callback: (r) => {
-                    if (r.message && r.message.success) {
-                        this.show_generation_success_dialog("采购订单", r.message.orders || []);
-                        this.load_all();
-                    }
-                }
-            });
-        });
-    }
+    show_generation_success_dialog(doc_title, docs_created, route_prefix) {
+        if (!docs_created || !docs_created.length) return;
 
-    generate_pr(selected_list) {
-        const warehouse_override = this.$wrapper.find(".extra-warehouse-override").val();
-        frappe.confirm(__("确定将选中的 {0} 行采购订单明细生成采购入库单？", [selected_list.length]), () => {
-            frappe.call({
-                method: "ashan_cn_procurement.services.procurement_picker_service.make_purchase_receipts_from_po_items",
-                args: {
-                    company: this.company,
-                    selected_items: selected_list,
-                    warehouse_override: warehouse_override || null,
-                },
-                freeze: true,
-                freeze_message: __("正在生成采购入库单草稿…"),
-                callback: (r) => {
-                    if (r.message && r.message.success) {
-                        this.show_generation_success_dialog("采购入库单", r.message.receipts || []);
-                        this.load_all();
-                    }
-                }
-            });
-        });
-    }
-
-    generate_pi(selected_list) {
-        const bill_no = this.$wrapper.find(".extra-bill-no").val();
-        const bill_date = this.$wrapper.find(".extra-bill-date").val();
-        frappe.confirm(__("确定将选中的 {0} 行采购入库明细生成采购发票？", [selected_list.length]), () => {
-            frappe.call({
-                method: "ashan_cn_procurement.services.procurement_picker_service.make_purchase_invoices_from_pr_items",
-                args: {
-                    company: this.company,
-                    selected_items: selected_list,
-                    bill_no: bill_no || null,
-                    bill_date: bill_date || null,
-                },
-                freeze: true,
-                freeze_message: __("正在生成采购发票草稿…"),
-                callback: (r) => {
-                    if (r.message && r.message.success) {
-                        this.show_generation_success_dialog("采购发票", r.message.invoices || []);
-                        this.load_all();
-                    }
-                }
-            });
-        });
-    }
-
-    generate_rr(selected_list) {
-        const applicant = this.$wrapper.find(".extra-applicant").val();
-        const pi_names = selected_list.map((r) => r.pi_name);
-        frappe.confirm(__("确定将选中的 {0} 张采购发票生成报销申请单？", [pi_names.length]), () => {
-            frappe.call({
-                method: "ashan_cn_procurement.services.procurement_picker_service.make_reimbursement_from_invoices",
-                args: {
-                    company: this.company,
-                    selected_invoices: pi_names,
-                    applicant: applicant || null,
-                },
-                freeze: true,
-                freeze_message: __("正在生成报销申请单草稿…"),
-                callback: (r) => {
-                    if (r.message && r.message.success) {
-                        const d = new frappe.ui.Dialog({
-                            title: __("🎉 生单成功"),
-                            fields: [{
-                                fieldtype: "HTML",
-                                fieldname: "html",
-                                options: `
-                                    <div class="picker-dialog-body">
-                                        <p>已成功生成报销申请单草稿：</p>
-                                        <div class="picker-dialog-highlight">
-                                            <a href="/app/reimbursement-request/${encodeURIComponent(r.message.reimbursement_name)}">
-                                                ${r.message.reimbursement_name} (金额: ${format_currency(r.message.total_amount, "CNY")})
-                                            </a>
-                                        </div>
-                                    </div>
-                                `
-                            }],
-                            primary_action_label: __("立即打开"),
-                            primary_action: () => {
-                                d.hide();
-                                frappe.set_route("reimbursement-request", r.message.reimbursement_name);
-                            }
-                        });
-                        d.show();
-                        this.load_all();
-                    }
-                }
-            });
-        });
-    }
-
-    show_generation_success_dialog(docTypeLabel, docs) {
-        const doctype_routes = {
-            "采购订单": "purchase-order",
-            "采购入库单": "purchase-receipt",
-            "采购发票": "purchase-invoice",
-        };
-        const route_name = doctype_routes[docTypeLabel] || "purchase-order";
-
-        const itemsHtml = docs.map((doc) => `
-            <div class="picker-result-item">
-                <div>
-                    <span class="picker-result-link" data-route="${route_name}" data-name="${doc.name}">
-                        ${doc.name}
-                    </span>
-                    <span class="text-muted">（供应商: ${doc.supplier || "-"} ｜ 共 ${doc.item_count || 0} 行明细）</span>
+        let items_html = docs_created
+            .map(
+                (d) => `
+            <div class="picker-dialog-doc-item">
+                <div class="picker-dialog-doc-main">
+                    <strong><a href="/desk/${route_prefix}/${d.name}" target="_blank">${frappe.utils.escape_html(d.name)}</a></strong>
+                    ${d.supplier ? `<span class="picker-summary-highlight">(${frappe.utils.escape_html(d.supplier)})</span>` : ''}
+                    ${d.company ? `<span class="picker-company-badge">[${frappe.utils.escape_html(d.company)}]</span>` : ''}
                 </div>
-                <div class="ashan-money-cell">
-                    <strong>${format_currency(doc.grand_total || 0, "CNY")}</strong>
+                <div class="picker-dialog-doc-stats">
+                    <span>数量: <strong>${d.total_qty || d.item_count}</strong></span>
+                    ${d.grand_total ? `<span>金额: <strong>${this.fmt_money(d.grand_total)}</strong></span>` : ''}
                 </div>
             </div>
-        `).join("");
+        `
+            )
+            .join("");
 
         const d = new frappe.ui.Dialog({
-            title: __("🎉 批量生单成功 (共 {0} 张{1})", [docs.length, docTypeLabel]),
-            fields: [{
-                fieldtype: "HTML",
-                fieldname: "html",
-                options: `
-                    <div class="picker-dialog-body">
-                        <p class="picker-dialog-success-tip">已成功在系统中建立草稿单据，可直接点击单号进入查看并审核：</p>
-                        <div class="picker-dialog-scroll-list">
-                            ${itemsHtml}
+            title: __("🎉 成功生成 {0} 张{1}草稿", [docs_created.length, doc_title]),
+            fields: [
+                {
+                    fieldtype: "HTML",
+                    fieldname: "result_html",
+                    options: `
+                        <div class="picker-dialog-desc">
+                            已成功为您生成以下草稿单据，您可以点击单号进入查看或审批：
                         </div>
-                    </div>
-                `
-            }],
-            primary_action_label: __("完成"),
-            primary_action: () => d.hide(),
+                        <div class="picker-dialog-list">
+                            ${items_html}
+                        </div>
+                    `,
+                },
+            ],
+            primary_action_label: __("查看第一张单据"),
+            primary_action: () => {
+                d.hide();
+                frappe.set_route(route_prefix, docs_created[0].name);
+            },
         });
-
-        d.$wrapper.on("click", ".picker-result-link", function () {
-            const dt = $(this).data("route");
-            const nm = $(this).data("name");
-            d.hide();
-            frappe.set_route(dt, nm);
-        });
-
         d.show();
     }
 }
