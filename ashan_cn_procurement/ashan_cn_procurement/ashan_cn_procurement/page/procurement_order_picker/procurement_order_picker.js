@@ -1603,10 +1603,26 @@ class ProcurementOrderPickerCenter {
                     `;
 
                     $dd.html(dd_html).addClass("is-open");
+
+                    // Direct Fixed positioning on top of the viewport
+                    const input_el = $input[0];
+                    if (input_el) {
+                        const rect = input_el.getBoundingClientRect();
+                        $dd.css({
+                            top: (rect.bottom + 2) + "px",
+                            left: rect.left + "px",
+                            width: Math.max(rect.width, 380) + "px",
+                        });
+                    }
                 } catch (err) {
                     console.error("Autocomplete search error", err);
                 }
             }, 250);
+        });
+
+        // Close dropdown when scrolling modal body
+        $wrap.closest(".modal-body").off("scroll.picker_suggest").on("scroll.picker_suggest", () => {
+            $wrap.find(".picker-suggest-dropdown.is-open").removeClass("is-open");
         });
 
         // Select an item from dropdown
@@ -1634,8 +1650,8 @@ class ProcurementOrderPickerCenter {
         });
 
         // Close dropdown when clicking outside
-        $(document).on("click.picker_suggest", (e) => {
-            if (!$(e.target).closest(".picker-suggest-wrapper").length) {
+        $(document).off("click.picker_suggest").on("click.picker_suggest", (e) => {
+            if (!$(e.target).closest(".picker-suggest-wrapper").length && !$(e.target).closest(".picker-suggest-dropdown").length) {
                 $wrap.find(".picker-suggest-dropdown").removeClass("is-open");
             }
         });
@@ -2321,10 +2337,26 @@ class ProcurementOrderPickerCenter {
                     `;
 
                     $dd.html(dd_html).addClass("is-open");
+
+                    // Direct Fixed positioning on top of the viewport
+                    const input_el = $input[0];
+                    if (input_el) {
+                        const rect = input_el.getBoundingClientRect();
+                        $dd.css({
+                            top: (rect.bottom + 2) + "px",
+                            left: rect.left + "px",
+                            width: Math.max(rect.width, 380) + "px",
+                        });
+                    }
                 } catch (err) {
                     console.error("Autocomplete search error", err);
                 }
             }, 250);
+        });
+
+        // Close dropdown when scrolling modal body
+        $wrap.closest(".modal-body").off("scroll.picker_suggest_edit").on("scroll.picker_suggest_edit", () => {
+            $wrap.find(".picker-suggest-dropdown.is-open").removeClass("is-open");
         });
 
         // Select an item from dropdown
@@ -2352,8 +2384,8 @@ class ProcurementOrderPickerCenter {
         });
 
         // Close dropdown when clicking outside
-        $(document).on("click.picker_suggest_edit", (e) => {
-            if (!$(e.target).closest(".picker-suggest-wrapper").length) {
+        $(document).off("click.picker_suggest_edit").on("click.picker_suggest_edit", (e) => {
+            if (!$(e.target).closest(".picker-suggest-wrapper").length && !$(e.target).closest(".picker-suggest-dropdown").length) {
                 $wrap.find(".picker-suggest-dropdown").removeClass("is-open");
             }
         });
