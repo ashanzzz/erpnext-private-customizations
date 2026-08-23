@@ -304,6 +304,14 @@ class ProcurementOrderPickerCenter {
         });
 
         // Select All / Clear Selection / Fill Max
+        $(this.page.body).on("change", "#picker-select-all-header", function () {
+            const is_checked = $(this).prop("checked");
+            if (is_checked) {
+                self.select_all_visible();
+            } else {
+                self.clear_selection();
+            }
+        });
         $(this.page.body).on("click", "#picker-select-all-btn", () => this.select_all_visible());
         $(this.page.body).on("click", "#picker-clear-sel-btn", () => this.clear_selection());
         $(this.page.body).on("click", "#picker-fill-max-btn", () => this.fill_max_quantities());
@@ -664,7 +672,9 @@ class ProcurementOrderPickerCenter {
 
         let ths = `
             <th class="picker-col-sticky-1">#</th>
-            <th class="picker-col-sticky-2">勾选</th>
+            <th class="picker-col-sticky-2 picker-col-checkbox-th">
+                <input type="checkbox" id="picker-select-all-header" class="picker-header-checkbox" title="全选 / 全不选当前页">
+            </th>
         `;
 
         if (this.active_company === "All") {
@@ -1259,6 +1269,7 @@ class ProcurementOrderPickerCenter {
                 </div>
             `;
             $bar.html(html);
+            this.update_header_checkbox_state();
             return;
         }
 
@@ -1310,6 +1321,27 @@ class ProcurementOrderPickerCenter {
             </div>
         `;
         $bar.html(html);
+        this.update_header_checkbox_state();
+    }
+
+    update_header_checkbox_state() {
+        const $hdr_cb = $("#picker-select-all-header");
+        if (!$hdr_cb.length) return;
+        const visible_rows = (this.table_data || []).filter(r => !this.locked_company || r.company === this.locked_company);
+        const total_visible = visible_rows.length;
+        const sel_count = this.selected_map.size;
+        const el = $hdr_cb[0];
+
+        if (total_visible > 0 && sel_count >= total_visible) {
+            el.checked = true;
+            el.indeterminate = false;
+        } else if (sel_count > 0) {
+            el.checked = false;
+            el.indeterminate = true;
+        } else {
+            el.checked = false;
+            el.indeterminate = false;
+        }
     }
 
     select_all_visible() {

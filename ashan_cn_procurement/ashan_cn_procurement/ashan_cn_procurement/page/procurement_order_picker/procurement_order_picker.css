@@ -554,6 +554,23 @@
     text-align: center;
 }
 
+.picker-col-checkbox-th {
+    padding: 6px 8px !important;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.picker-header-checkbox,
+.picker-row-checkbox {
+    cursor: pointer;
+    width: 15px;
+    height: 15px;
+    accent-color: #2563eb;
+    vertical-align: middle;
+    margin: 0 auto;
+    display: inline-block;
+}
+
 .picker-col-sticky-3 {
     position: sticky;
     left: 88px;
