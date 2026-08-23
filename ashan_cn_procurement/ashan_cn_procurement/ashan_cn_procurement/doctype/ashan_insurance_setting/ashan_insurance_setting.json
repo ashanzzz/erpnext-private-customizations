@@ -119,6 +119,28 @@
    "default": "5.0"
   },
   {
+   "fieldname": "hf_auto_rule_enabled",
+   "fieldtype": "Check",
+   "label": "启用公积金自动月份规则",
+   "default": "1",
+   "description": "启用后，跟随公司规则的员工只在指定月份自动缴纳。"
+  },
+  {
+   "fieldname": "hf_contribution_months",
+   "fieldtype": "Data",
+   "label": "自动缴纳月份",
+   "default": "1,4,7,10",
+   "description": "用逗号分隔月份，例如 1,4,7,10。"
+  },
+  {
+   "fieldname": "hf_off_month_action",
+   "fieldtype": "Select",
+   "label": "非计划月份处理",
+   "options": "停缴\n继续缴纳",
+   "default": "停缴",
+   "description": "默认停缴。固定缴纳员工和本月强制缴纳例外不受此项影响。"
+  },
+  {
    "fieldname": "sec_base",
    "fieldtype": "Section Break",
    "label": "缴费基数与个税基础参数"
@@ -159,8 +181,18 @@
    "delete": 1
   },
   {
-   "role": "All",
-   "read": 1
+   "role": "HR Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Accounts Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
   }
  ]
 }

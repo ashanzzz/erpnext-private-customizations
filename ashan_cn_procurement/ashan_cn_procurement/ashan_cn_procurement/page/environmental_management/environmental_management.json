@@ -13,9 +13,9 @@
     {
       "role": "System Manager"
     },
-    {
-      "role": "All"
-    }
+    {"role": "Purchase Manager"},
+    {"role": "Compliance Manager"},
+    {"role": "Compliance Operator"}
   ],
   "standard": "Yes",
   "title": "环保管理"

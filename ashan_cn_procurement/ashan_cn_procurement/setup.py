@@ -3,16 +3,19 @@
 # For license information, please see license.txt
 
 import frappe
+from ashan_cn_procurement.services.authorization_service import MODULE_ACCESS_MODEL
 
 def after_migrate():
 	"""
 	系统迁移后初始化标准与自定义业务角色，并清理废弃角色
 	"""
-	cleanup_deprecated_roles()
 	create_custom_roles()
+	migrate_legacy_module_role_assignments()
+	cleanup_deprecated_roles()
 	setup_doctype_and_page_permissions()
 	setup_vehicle_custom_fields()
 	setup_document_details_custom_fields()
+	retire_purchase_invoice_items_summary_column()
 	optimize_all_list_view_columns()
 	setup_default_app_system_settings()
 	migrate_property_lease_and_rates()
@@ -53,6 +56,26 @@ def optimize_all_list_view_columns():
 		frappe.db.commit()
 	except Exception as e:
 		frappe.logger("setup").warning(f"Optimize list view columns failed: {e}")
+
+
+def retire_purchase_invoice_items_summary_column():
+	"""Hide the superseded Purchase Invoice summary column without deleting history."""
+	try:
+		name = "Purchase Invoice-custom_items_summary"
+		if not frappe.db.exists("Custom Field", name):
+			return
+
+		field = frappe.get_doc("Custom Field", name)
+		field.hidden = 1
+		field.in_list_view = 0
+		field.in_standard_filter = 0
+		field.in_global_search = 0
+		field.save(ignore_permissions=True)
+		frappe.db.commit()
+	except Exception as e:
+		frappe.logger("setup").warning(
+			f"Retire Purchase Invoice items summary column failed: {e}"
+		)
 
 
 def setup_document_details_custom_fields():
@@ -201,6 +224,10 @@ def sync_all_workspace_sidebars():
 			doc.set("items", [])
 			for idx, it in enumerate(items_template, 1):
 				it_copy = dict(it)
+				# The browser accordion restores exactly one section after render.
+				# Starting native sections closed prevents a brief "all expanded" state.
+				if it_copy.get("type") == "Section Break":
+					it_copy["keep_closed"] = 1
 				it_copy["idx"] = idx
 				it_copy["parent"] = sb_name
 				it_copy["parenttype"] = "Workspace Sidebar"
@@ -425,7 +452,7 @@ def cleanup_deprecated_roles():
 	"""
 	删除已废弃的业务授权人角色（管理员自身原生拥有全部授权与审核权限）
 	"""
-	for deprecated_role in ["Authorizer", "业务授权人"]:
+	for deprecated_role in ["Authorizer", "业务授权人", "油卡管理员", "油卡操作员"]:
 		if frappe.db.exists("Role", deprecated_role):
 			try:
 				frappe.delete_doc("Role", deprecated_role, ignore_permissions=True, force=True)
@@ -447,12 +474,36 @@ def create_custom_roles():
 			"description": "油卡操作员：具备加油录入、充值录入、新建车辆、本月核定与申请取消核定权限。"
 		},
 		{
-			"role_name": "油卡管理员",
-			"description": "油卡综合台账管理员（中文别名角色）"
+			"role_name": "Property Manager",
+			"description": "物业与租赁管理员：负责租赁档案、水电月结与反审核。"
 		},
 		{
-			"role_name": "油卡操作员",
-			"description": "油卡操作员（中文别名角色）"
+			"role_name": "Property Operator",
+			"description": "物业与租赁操作员：负责抄表、草稿维护和提交月结资料。"
+		},
+		{
+			"role_name": "Compliance Manager",
+			"description": "企业合规管理员：负责环保、特种设备与证照核验。"
+		},
+		{
+			"role_name": "Compliance Operator",
+			"description": "企业合规操作员：负责环保、设备与证照资料维护。"
+		},
+		{
+			"role_name": "Tax Invoice Manager",
+			"description": "税局发票管理员：负责发票规则、公司映射、作废清理与最终复核。"
+		},
+		{
+			"role_name": "Tax Invoice Operator",
+			"description": "税局发票操作员：负责日常导入、匹配、复核和台账维护。"
+		},
+		{
+			"role_name": "Payroll Manager",
+			"description": "薪酬管理员：负责封账、凭证核验、解锁审批和敏感薪酬配置。"
+		},
+		{
+			"role_name": "Payroll Operator",
+			"description": "薪酬操作员：负责日常资料维护、计算、导入导出和解锁申请。"
 		}
 	]
 
@@ -464,6 +515,42 @@ def create_custom_roles():
 			doc.desk_access = 1
 			doc.insert(ignore_permissions=True)
 			frappe.logger("setup").info(f"Created Role: {r['role_name']}")
+
+	frappe.db.commit()
+
+
+def migrate_legacy_module_role_assignments():
+	"""Move the small, known legacy role set into the canonical role pairs.
+
+	Chinese oil-card aliases are true duplicates, so their holders are migrated
+	and the aliases can be retired.  HR roles are mapped only into the payroll
+	pair to avoid interrupting the existing payroll team.  Broad ERP roles such
+	as Accounts, Purchase and Stock are intentionally not auto-mapped: doing so
+	would silently grant a custom-module role to dozens of unrelated users.
+	"""
+	role_mapping = {
+		"油卡管理员": "Oil Card Manager",
+		"油卡操作员": "Oil Card Operator",
+		"HR Manager": "Payroll Manager",
+		"HR User": "Payroll Operator",
+	}
+	for legacy_role, target_role in role_mapping.items():
+		if not frappe.db.exists("Role", target_role):
+			continue
+		assignments = frappe.get_all(
+			"Has Role",
+			filters={"role": legacy_role, "parenttype": "User"},
+			fields=["name", "parent"],
+			order_by="parent asc",
+		)
+		for assignment in assignments:
+			user_name = assignment.parent
+			if not frappe.db.exists("Has Role", {"parent": user_name, "role": target_role}):
+				user_doc = frappe.get_doc("User", user_name)
+				user_doc.append("roles", {"role": target_role})
+				user_doc.save(ignore_permissions=True)
+			if legacy_role in {"油卡管理员", "油卡操作员"}:
+				frappe.delete_doc("Has Role", assignment.name, ignore_permissions=True, force=True)
 
 	frappe.db.commit()
 
@@ -480,7 +567,12 @@ def setup_doctype_and_page_permissions():
 		"Dashboard Chart",
 		"Number Card"
 	]
-	ui_roles = ["System Manager", "Desk User", "All", "Oil Card Operator", "Oil Card Manager", "油卡操作员", "油卡管理员"]
+	module_roles = {
+		role
+		for role_pair in MODULE_ACCESS_MODEL.values()
+		for role in (role_pair["manager_role"], role_pair["operator_role"])
+	}
+	ui_roles = ["System Manager", "Desk User", "All", *sorted(module_roles)]
 	for udt in core_ui_doctypes:
 		if not frappe.db.exists("DocType", udt):
 			continue
@@ -504,85 +596,126 @@ def setup_doctype_and_page_permissions():
 				dp.delete = 1
 			dp.save(ignore_permissions=True)
 
-	# 2. 油卡与车用油、高速费业务 DocType 读写权限
-	oil_doctypes = [
-		"Oil Card",
-		"Oil Card Recharge",
-		"Oil Card Refuel Log",
-		"Oil Card Invoice Batch",
-		"Oil Card Invoice Batch Item",
-		"Oil Card Monthly Closing",
-		"Vehicle Toll Config",
-		"Vehicle Toll Monthly Sheet",
-		"Vehicle Toll Deposit",
-		"Vehicle",
-		"Environmental Compliance Item",
-		"Special Equipment",
-		"Special Equipment Inspection",
-		"Special Equipment Annual Inspection",
-		"Property Lease",
-		"Property Charge Rate",
-		"Utility Meter",
-		"Property Monthly Settlement",
-		"Tax Invoice",
-		"Tax Invoice Item",
-		"Tax Invoice Import Batch",
-		"Tax Invoice Settings",
-		"Tax Invoice Company Mapping"
-	]
-	target_roles = ["System Manager", "Accounts Manager", "Accounts User", "Fleet Manager", "Oil Card Manager", "油卡管理员", "Oil Card Operator", "油卡操作员", "Desk User", "All"]
+	# 2. Custom business objects always use their module's canonical two-role
+	#    model.  Generic Finance/Purchase/Stock roles must not become accidental
+	#    grants to unrelated workbenches merely because a migration is rerun.
+	def permission_row(role, *, writable=True, deletable=False):
+		return {
+			"role": role,
+			"permlevel": 0,
+			"select": 1,
+			"read": 1,
+			"report": 1,
+			"export": 1,
+			"create": 1 if writable else 0,
+			"write": 1 if writable else 0,
+			"delete": 1 if deletable else 0,
+		}
 
-	for dt in oil_doctypes:
-		if not frappe.db.exists("DocType", dt):
+	def set_module_permissions(doctypes, module_key, operator_readonly_doctypes=None):
+		"""Replace a custom DocType's permissions with one manager/operator pair."""
+		role_pair = MODULE_ACCESS_MODEL[module_key]
+		operator_readonly_doctypes = set(operator_readonly_doctypes or [])
+		for dt in doctypes:
+			if not frappe.db.exists("DocType", dt):
+				continue
+			# These are standard DocTypes in a production site, so ``DocType.save``
+			# is intentionally prohibited.  Rebuild only their permission child rows
+			# directly during migrate; the DocType schema itself is never altered.
+			frappe.db.delete("Custom DocPerm", {"parent": dt})
+			frappe.db.delete(
+				"DocPerm", {"parent": dt, "parenttype": "DocType", "parentfield": "permissions"}
+			)
+			permission_rows = [
+				permission_row("System Manager", writable=True, deletable=True),
+				permission_row(role_pair["manager_role"], writable=True, deletable=True),
+				permission_row(
+					role_pair["operator_role"],
+					writable=dt not in operator_readonly_doctypes,
+					deletable=False,
+				),
+			]
+			for idx, row in enumerate(permission_rows, start=1):
+				permission_doc = frappe.get_doc(
+					{
+						"doctype": "DocPerm",
+						"parent": dt,
+						"parenttype": "DocType",
+						"parentfield": "permissions",
+						"idx": idx,
+						**row,
+					}
+				)
+				permission_doc.db_insert()
+			frappe.clear_cache(doctype=dt)
+
+	set_module_permissions(
+		{
+			"Oil Card", "Oil Card Recharge", "Oil Card Refuel Log", "Oil Card Invoice Batch",
+			"Oil Card Invoice Batch Item", "Oil Card Monthly Closing", "Vehicle Toll Config",
+			"Vehicle Toll Monthly Sheet", "Vehicle Toll Deposit", "Vehicle", "Vehicle Fuel Settings",
+		},
+		"oil_card",
+		operator_readonly_doctypes={"Oil Card", "Vehicle Toll Config", "Vehicle Fuel Settings"},
+	)
+	set_module_permissions(
+		{
+			"Environmental Compliance Item", "Special Equipment", "Special Equipment Inspection",
+			"Special Equipment Annual Inspection",
+		},
+		"compliance",
+	)
+	set_module_permissions(
+		{
+			"Property Lease", "Property Lease Charge", "Property Charge Rate", "Property Meter Reading",
+			"Utility Meter", "Property Monthly Settlement", "Property Settlement Adjustment",
+			"Property Company Settlement Summary",
+		},
+		"property",
+		operator_readonly_doctypes={"Property Charge Rate"},
+	)
+	set_module_permissions(
+		{
+			"Tax Invoice", "Tax Invoice Item", "Tax Invoice Import Batch", "Tax Invoice Settings",
+			"Tax Invoice Company Mapping",
+		},
+		"tax_invoice",
+		operator_readonly_doctypes={"Tax Invoice Settings", "Tax Invoice Company Mapping"},
+	)
+	set_module_permissions(
+		{
+			"Ashan Employee Salary Profile", "Ashan Payroll Settlement", "Ashan Payroll Item",
+			"Ashan Monthly Payroll Settlement", "Ashan Monthly Payroll Item", "Ashan Monthly Attendance",
+			"Ashan Housing Fund Monthly Override", "Ashan Insurance Setting",
+			"Ashan Social Insurance Adjustment", "Ashan Payroll Recalculation Task",
+		},
+		"payroll",
+		operator_readonly_doctypes={"Ashan Insurance Setting"},
+	)
+
+	# 3. 页面入口同样遵循角色边界；清除旧迁移遗留的 All / Desk User 页面放行。
+	def page_role_pair(module_key):
+		role_pair = MODULE_ACCESS_MODEL[module_key]
+		return {"System Manager", role_pair["manager_role"], role_pair["operator_role"]}
+
+	page_roles = {
+		"oil-card-ledger": page_role_pair("oil_card"),
+		"vehicle-toll-ledger": page_role_pair("oil_card"),
+		"environmental-management": page_role_pair("compliance"),
+		"special-equipment-center": page_role_pair("compliance"),
+		"property-settlement-workbench": page_role_pair("property"),
+		"lease-settlement-workbench": page_role_pair("property"),
+		"tax-invoice-center": page_role_pair("tax_invoice"),
+		"employee-salary-workbench": page_role_pair("payroll"),
+		"payroll-settlement-workbench": page_role_pair("payroll"),
+		"qifu-hr-salary-workbench": page_role_pair("payroll"),
+		"jizhong-hr-salary-workbench": page_role_pair("payroll"),
+	}
+	for page_name, roles in page_roles.items():
+		if not frappe.db.exists("Page", page_name):
 			continue
-		for role in target_roles:
-			is_mgr = role in ["System Manager", "Accounts Manager", "Fleet Manager", "Oil Card Manager", "油卡管理员"]
-			existing = frappe.db.get_value("Custom DocPerm", {"parent": dt, "role": role, "permlevel": 0}, "name")
-			if existing:
-				dp = frappe.get_doc("Custom DocPerm", existing)
-			else:
-				dp = frappe.new_doc("Custom DocPerm")
-				dp.parent = dt
-				dp.parenttype = "DocType"
-				dp.parentfield = "permissions"
-				dp.role = role
-				dp.permlevel = 0
-
-			dp.read = 1
-			dp.report = 1
-			dp.export = 1
-
-			# 油卡档案（Oil Card）：操作员仅可读取选择，严禁新建、修改和删除；油卡管理员与系统管理员具备全部原始单据管理权限
-			if dt == "Oil Card":
-				dp.create = 1 if is_mgr else 0
-				dp.write = 1 if is_mgr else 0
-				dp.delete = 1 if is_mgr else 0
-			elif dt in ["Tax Invoice", "Tax Invoice Import Batch"]:
-				dp.create = 1 if is_mgr else 0
-				dp.write = 1 if is_mgr else 0
-				dp.delete = 1 if role == "System Manager" else 0
-			else:
-				dp.create = 1
-				dp.write = 1
-				dp.delete = 1 if is_mgr else 0
-
-			dp.save(ignore_permissions=True)
-
-	# 3. 确保 Pages 拥有这些角色的访问权限
-	for page_name in ["oil-card-ledger", "vehicle-toll-ledger", "special-equipment-center", "environmental-management", "property-settlement-workbench", "lease-settlement-workbench", "tax-invoice-center"]:
-		if frappe.db.exists("Page", page_name):
-			page_doc = frappe.get_doc("Page", page_name)
-			existing_roles = {r.role for r in page_doc.roles}
-			modified = False
-			for role in ["System Manager", "Accounts Manager", "Accounts User", "Fleet Manager", "Oil Card Manager", "油卡管理员", "Oil Card Operator", "油卡操作员", "Desk User", "All"]:
-				if role not in existing_roles:
-					page_doc.append("roles", {"role": role})
-					modified = True
-			if modified:
-				page_doc.save(ignore_permissions=True)
+		page_doc = frappe.get_doc("Page", page_name)
+		page_doc.set("roles", [{"role": role} for role in sorted(roles)])
+		page_doc.save(ignore_permissions=True)
 
 	frappe.db.commit()
-
-
-
-

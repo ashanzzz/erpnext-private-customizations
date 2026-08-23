@@ -5,6 +5,11 @@
 import calendar
 import frappe
 from frappe.utils import flt, getdate, nowdate, now_datetime
+from ashan_cn_procurement.services.authorization_service import (
+	assert_company_access,
+	assert_oil_ledger_access,
+	get_allowed_companies,
+)
 
 
 def is_oil_card_manager():
@@ -17,10 +22,6 @@ def is_oil_card_manager():
 	manager_roles = {
 		"System Manager",
 		"Oil Card Manager",
-		"油卡管理员",
-		"Purchase Manager",
-		"Accounts Manager",
-		"Stock Manager"
 	}
 	return bool(user_roles & manager_roles)
 
@@ -30,6 +31,7 @@ def get_all_oil_cards():
 	"""
 	获取所有有效油卡列表及其当前余额，包含供应商简称解析（优先显示供应商简称，无简称才显示全称）
 	"""
+	assert_oil_ledger_access("read")
 	cards = frappe.get_all(
 		"Oil Card",
 		fields=[
@@ -47,6 +49,9 @@ def get_all_oil_cards():
 		],
 		order_by="idx asc, modified desc",
 	)
+	allowed_companies = get_allowed_companies()
+	if allowed_companies is not None:
+		cards = [card for card in cards if str(card.get("company") or "") in allowed_companies]
 
 	# 预加载所有供应商的简称与全称映射
 	suppliers = frappe.get_all("Supplier", fields=["name", "supplier_name", "alias"])
@@ -110,12 +115,16 @@ def get_quick_entry_meta():
 	"""
 	获取行内快速补录与新建油卡所需的车辆档案、付款方式、公司及供应商元数据（自动过滤封存车辆）
 	"""
+	assert_oil_ledger_access("read")
 	# 仅获取“正常在用”车辆，封存车辆自动过滤隐藏
 	filters = {}
+	allowed_companies = get_allowed_companies()
+	if allowed_companies is not None:
+		filters["company"] = ["in", sorted(allowed_companies)]
 	if frappe.db.has_column("Vehicle", "custom_vehicle_status"):
 		filters["custom_vehicle_status"] = ["!=", "封存停用"]
 
-	fields = ["name", "license_plate", "model", "make", "fuel_type", "last_odometer"]
+	fields = ["name", "license_plate", "model", "make", "company", "fuel_type", "last_odometer"]
 	if frappe.db.has_column("Vehicle", "custom_vehicle_status"):
 		fields.append("custom_vehicle_status")
 	if frappe.db.has_column("Vehicle", "custom_primary_driver"):
@@ -137,7 +146,8 @@ def get_quick_entry_meta():
 	modes = frappe.get_all("Mode of Payment", fields=["name"], filters={"enabled": 1})
 	mode_names = [m.name for m in modes] if modes else ["Cheque", "Cash", "银行转账", "微信支付", "支付宝"]
 
-	companies = frappe.get_all("Company", fields=["name", "company_name"])
+	company_filters = {"name": ["in", sorted(allowed_companies)]} if allowed_companies is not None else {}
+	companies = frappe.get_all("Company", fields=["name", "company_name"], filters=company_filters)
 	suppliers = frappe.get_all("Supplier", fields=["name", "supplier_name"], order_by="name asc", limit=100)
 	default_company = frappe.defaults.get_user_default("Company") or (companies[0].name if companies else "")
 	default_supplier = suppliers[0].name if suppliers else ""
@@ -159,6 +169,7 @@ def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="�
 	"""
 	单页极速新建车辆档案（零跳转，纯中文，默认正常在用，完全同步至车辆主数据）
 	"""
+	assert_oil_ledger_access("write")
 	if not license_plate:
 		frappe.throw("车牌号码为必填项！")
 
@@ -171,6 +182,7 @@ def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="�
 		if not company or not frappe.db.exists("Company", company):
 			companies = frappe.get_all("Company", fields=["name"], limit=1)
 			company = companies[0].name if companies else None
+	assert_company_access(company)
 
 	# 规范化 ERPNext 标准 fuel_type 字段
 	fuel_norm = "Diesel"
@@ -259,6 +271,7 @@ def quick_create_oil_card(card_name, card_no, card_code=None, card_type="主卡"
 		if not company or not frappe.db.exists("Company", company):
 			companies = frappe.get_all("Company", fields=["name"], limit=1)
 			company = companies[0].name if companies else None
+	assert_company_access(company)
 
 	if not supplier or not frappe.db.exists("Supplier", supplier):
 		suppliers = frappe.get_all("Supplier", fields=["name"], limit=1)
@@ -303,11 +316,9 @@ def delete_oil_card(oil_card):
 	"""
 	单页极速删除油卡档案（管理员专用）
 	"""
-	if not is_oil_card_manager():
-		frappe.throw("权限不足：只有管理员可以删除油卡档案！")
-
 	if not oil_card or not frappe.db.exists("Oil Card", oil_card):
 		frappe.throw("指定的油卡不存在或已被删除！")
+	assert_oil_ledger_access("unlock_approve", oil_card)
 
 	card_name = frappe.db.get_value("Oil Card", oil_card, "card_name") or oil_card
 	frappe.delete_doc("Oil Card", oil_card, ignore_permissions=True)
@@ -327,6 +338,7 @@ def get_unified_ledger_data(oil_card, year=None, month=None):
 	"""
 	if not oil_card:
 		return {}
+	assert_oil_ledger_access("read", oil_card)
 
 	card = frappe.get_doc("Oil Card", oil_card)
 	today = getdate(nowdate())
@@ -560,6 +572,7 @@ def quick_add_refuel(oil_card, posting_date, vehicle, odometer, liters, amount, 
 	"""
 	if not oil_card or not posting_date or not vehicle:
 		frappe.throw("油卡、日期与车辆为必填项！")
+	assert_oil_ledger_access("write", oil_card)
 
 	dt = getdate(posting_date)
 	closing_name = f"{oil_card}-{dt.year}-{dt.month}"
@@ -646,6 +659,7 @@ def quick_add_recharge(oil_card, posting_date, recharge_amount, mode_of_payment=
 	"""
 	if not oil_card or not posting_date:
 		frappe.throw("油卡和日期为必填项！")
+	assert_oil_ledger_access("write", oil_card)
 
 	dt = getdate(posting_date)
 	closing_name = f"{oil_card}-{dt.year}-{dt.month}"
@@ -701,8 +715,9 @@ def quick_add_recharge(oil_card, posting_date, recharge_amount, mode_of_payment=
 def lock_monthly_ledger(oil_card, year, month, remark=None):
 	"""
 	【本月核定 / 锁定月度】：
-	操作员与管理员均可执行。核定后锁定该月所有加油与充值记录，进入保护状态。
+	仅油卡管理员可执行。核定后锁定该月所有加油与充值记录，进入保护状态。
 	"""
+	assert_oil_ledger_access("lock", oil_card)
 	y = int(year)
 	m = int(month)
 	closing_name = f"{oil_card}-{y}-{m}"
@@ -751,6 +766,7 @@ def request_unlock_monthly_ledger(oil_card, year, month, reason):
 	"""
 	if not reason or not str(reason).strip():
 		frappe.throw("请填写申请取消核定的具体原因！")
+	assert_oil_ledger_access("unlock_request", oil_card)
 
 	y = int(year)
 	m = int(month)
@@ -779,8 +795,7 @@ def approve_unlock_monthly_ledger(oil_card, year, month, approved=1):
 	【管理员审核取消核定申请 / 直接解锁】：
 	仅油卡管理员可执行。
 	"""
-	if not is_oil_card_manager():
-		frappe.throw("权限不足：只有【油卡管理员】才可以批准或直接解除月度锁定。")
+	assert_oil_ledger_access("unlock_approve", oil_card)
 
 	y = int(year)
 	m = int(month)
@@ -819,6 +834,7 @@ def delete_ledger_record(doc_type, name, oil_card, year, month, reason=None):
 	"""
 	删除单笔充值或加油流水（检查月度锁定与操作授权审计）
 	"""
+	assert_oil_ledger_access("unlock_approve", oil_card)
 	y = int(year)
 	m = int(month)
 	closing_name = f"{oil_card}-{y}-{m}"

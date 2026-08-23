@@ -1,8 +1,16 @@
 import os
+import sys
 import tarfile
 import tempfile
 import paramiko
 from dotenv import load_dotenv
+
+if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 load_dotenv()
 
@@ -18,9 +26,15 @@ def run_cmd(client, cmd):
     out = stdout.read().decode('utf-8', errors='replace')
     err = stderr.read().decode('utf-8', errors='replace')
     if out:
-        print(out)
+        try:
+            print(out)
+        except Exception:
+            print(out.encode('ascii', errors='replace').decode('ascii'))
     if err:
-        print("ERR:", err)
+        try:
+            print("ERR:", err)
+        except Exception:
+            print("ERR:", err.encode('ascii', errors='replace').decode('ascii'))
     return out, err
 
 def connect_ssh():
@@ -71,7 +85,11 @@ run_cmd(client, "docker exec erpnext16 chown -R frappe:frappe /home/frappe/frapp
 print("Running bench migrate...")
 run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench --site site1.local migrate")
 
-# 5. 清理缓存并重启容器重载 Python 模块
+# 5. 构建前端静态资源
+print("Building frontend assets...")
+run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench build --app ashan_cn_procurement")
+
+# 6. 清理缓存并重启容器重载 Python 模块
 print("Clearing cache & restarting container...")
 run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench --site site1.local clear-cache")
 run_cmd(client, "docker restart erpnext16")

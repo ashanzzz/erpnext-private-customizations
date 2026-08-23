@@ -156,7 +156,7 @@
       "import": 1
     },
     {
-      "role": "All",
+      "role": "Compliance Operator",
       "read": 1,
       "write": 1,
       "create": 1,

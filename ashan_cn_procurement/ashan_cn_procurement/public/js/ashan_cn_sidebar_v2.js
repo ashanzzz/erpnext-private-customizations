@@ -2,7 +2,7 @@
    ERPNext 16 业务扩展 - Sidebar V2
    Goals:
    1) Keep the business sidebar persistent on Buying/Stock/Accounts/Selling docs.
-   2) Keep Frappe's native Section Break behavior; do not rewrite toggle/listener internals.
+   2) Keep one smooth, deterministic accordion state for the two-level menu.
    3) Use role-aware root routing instead of sending unrelated users to oil-card-ledger.
    4) Keep the existing two-level visual hierarchy.
    ========================================================================== */
@@ -21,19 +21,6 @@
         "ashan_cn_procurement",
         "ashan cn procurement",
     ]);
-
-    const SECTION_ROUTES = {
-        "我的业务 (总控主页)": ["Workspaces", "Home"],
-        "采购与供应链": ["Workspaces", "Procurement Management"],
-        "采购协同": ["Workspaces", "Procurement Management"],
-        "仓库与库存": ["Workspaces", "Stock and Inventory"],
-        "销售与出库": ["List", "Sales Order", "List"],
-        "财税与发票中心": ["Workspaces", "Accounting and Finance"],
-        // 当前仓库没有独立 HR Workspace；该一级标题仅使用 Frappe 原生展开/收起。
-        "物业与租赁": ["Workspaces", "Property and Lease"],
-        "车辆和车用油管理": ["Workspaces", "Vehicle Fuel Hub"],
-        "企业合规中心": ["Workspaces", "Company Compliance Center"],
-    };
 
     const OIL_OPERATOR_ROLES = ["Oil Card Operator", "油卡操作员"];
     const OIL_MANAGER_ROLES = [
@@ -139,38 +126,6 @@
         return true;
     }
 
-    function injectStyles() {
-        if (document.getElementById("ashan-sidebar-v2-style")) return;
-
-        const style = document.createElement("style");
-        style.id = "ashan-sidebar-v2-style";
-        style.textContent = `
-            .body-sidebar .section-item > .standard-sidebar-item .sidebar-item-label {
-                font-weight: 700 !important;
-                font-size: 13.5px !important;
-            }
-            .body-sidebar .section-item > .standard-sidebar-item .sidebar-item-control,
-            .body-sidebar .section-item > .standard-sidebar-item .drop-icon {
-                min-width: 28px !important;
-                min-height: 28px !important;
-                cursor: pointer !important;
-            }
-            .body-sidebar .sidebar-child-item .sidebar-item-icon {
-                display: none !important;
-            }
-            .body-sidebar .sidebar-child-item .standard-sidebar-item .item-anchor {
-                padding-left: 24px !important;
-                font-size: 13px !important;
-                font-weight: 400 !important;
-            }
-            .body-sidebar .standard-sidebar-item.ashan-workbench-item .sidebar-item-label {
-                font-weight: 700 !important;
-                color: var(--text-color) !important;
-            }
-        `;
-        document.head.appendChild(style);
-    }
-
     function markWorkbenchItems() {
         const sidebar = document.querySelector(".body-sidebar");
         if (!sidebar) return;
@@ -226,46 +181,228 @@
         });
     }
 
-    function bindSectionNavigation() {
-        if (!window.jQuery) return;
-        const $doc = jQuery(document);
-        const selector = ".body-sidebar .section-item > .standard-sidebar-item .sidebar-item-label";
+    function getAccordionStorageKey() {
+        const user = window.frappe?.session?.user || "anonymous";
+        return `ashan.sidebar.v3.open-section.${user}`;
+    }
 
-        $doc.off("click.ashanSidebarV2", selector);
-        $doc.on("click.ashanSidebarV2", selector, function () {
-            const $section = jQuery(this).closest(".section-item");
-            const title = (
-                $section.attr("item-name") ||
-                $section.attr("title") ||
-                jQuery(this).text() ||
-                ""
-            ).trim();
-            const target = SECTION_ROUTES[title];
-            if (!target || !window.frappe || !frappe.set_route) return;
+    function getSectionId(section) {
+        return (
+            section.dataset.id ||
+            section.getAttribute("item-name") ||
+            section.getAttribute("title") ||
+            ""
+        ).trim();
+    }
 
-            // Do not cancel Frappe's native click. Let the native Section Break
-            // open/close first, then navigate to the related dashboard.
-            window.setTimeout(() => frappe.set_route(...target), 0);
+    function getSidebarSections(sidebar) {
+        return Array.from(sidebar.querySelectorAll(".sidebar-items > .section-item"));
+    }
+
+    function setAccordionState(sidebar, openId, persist = true) {
+        getSidebarSections(sidebar).forEach((section) => {
+            const isOpen = Boolean(openId) && getSectionId(section) === openId;
+            if (section.classList.contains("ashan-sidebar-section-expanded") !== isOpen) {
+                section.classList.toggle("ashan-sidebar-section-expanded", isOpen);
+            }
+            const trigger = section.querySelector(
+                ":scope > .standard-sidebar-item .item-anchor"
+            );
+            if (trigger) {
+                trigger.setAttribute("role", "button");
+                trigger.setAttribute("tabindex", "0");
+                trigger.setAttribute("aria-expanded", String(isOpen));
+            }
+        });
+
+        if (persist) {
+            try {
+                window.sessionStorage.setItem(getAccordionStorageKey(), openId || "");
+            } catch (error) {
+                // Storage can be unavailable in privacy-restricted browser sessions.
+            }
+        }
+    }
+
+    function getActiveSectionId(sidebar) {
+        const sections = getSidebarSections(sidebar);
+        const activeSection = sections.find((section) => section.querySelector(
+            ".sidebar-child-item.active, .sidebar-child-item.selected, " +
+            ".sidebar-child-item .active, .sidebar-child-item .selected"
+        ));
+        if (activeSection) return getSectionId(activeSection);
+
+        const route = window.frappe?.get_route?.() || [];
+        if (!route || !route.length) return "";
+
+        const routeTokens = [];
+        const joined = route.join("/").toLowerCase();
+        routeTokens.push(joined);
+
+        route.forEach((segment) => {
+            if (typeof segment === "string" && segment.trim()) {
+                const s = segment.trim().toLowerCase();
+                routeTokens.push(s);
+                routeTokens.push(s.replace(/[\s_]+/g, "-"));
+            }
+        });
+
+        const routeSection = sections.find((section) => Array.from(
+            section.querySelectorAll(":scope > .sidebar-child-item a[href]")
+        ).some((anchor) => {
+            const rawHref = (anchor.getAttribute("href") || "").toLowerCase();
+            const cleanHref = rawHref.replace(/^\/desk\//, "").replace(/^\//, "");
+            return routeTokens.some((token) => token && (cleanHref === token || cleanHref.includes(token) || token.includes(cleanHref)));
+        }));
+        return routeSection ? getSectionId(routeSection) : "";
+    }
+
+    function syncAccordionState() {
+        const sidebar = document.querySelector(".body-sidebar");
+        if (!sidebar) return;
+
+        const sections = getSidebarSections(sidebar);
+        if (!sections.length) return;
+
+        let savedId = "";
+        try {
+            savedId = window.sessionStorage.getItem(getAccordionStorageKey()) || "";
+        } catch (error) {
+            savedId = "";
+        }
+
+        const activeId = getActiveSectionId(sidebar);
+        const savedIdExists = sections.some((section) => getSectionId(section) === savedId);
+        // 当前路由的归属永远优先于历史记忆，直接打开链接、前进/后退时不迷路。
+        const openId = activeId || (savedIdExists ? savedId : "");
+        setAccordionState(sidebar, openId, false);
+        return openId;
+    }
+
+    let pendingHydrationFrame = null;
+    function hydrateAccordionState(sidebar) {
+        if (!sidebar || sidebar !== document.querySelector(".body-sidebar")) return;
+        sidebar.dataset.ashanSidebarHydrating = "true";
+        syncAccordionState();
+        window.requestAnimationFrame(() => {
+            if (sidebar === document.querySelector(".body-sidebar")) {
+                delete sidebar.dataset.ashanSidebarHydrating;
+            }
         });
     }
 
-    let refreshTimer = null;
-    function refreshSidebarEnhancements() {
-        window.clearTimeout(refreshTimer);
-        refreshTimer = window.setTimeout(() => {
-            injectStyles();
-            patchSidebarResolver();
-            bindSectionNavigation();
-            markWorkbenchItems();
-            applyOilOperatorView();
-        }, 30);
+    function scheduleAccordionHydration(sidebar) {
+        if (!sidebar) return;
+        if (pendingHydrationFrame) {
+            window.cancelAnimationFrame(pendingHydrationFrame);
+        }
+        pendingHydrationFrame = window.requestAnimationFrame(() => {
+            pendingHydrationFrame = null;
+            hydrateAccordionState(sidebar);
+        });
     }
 
+    function bindAccordionInteractions() {
+        if (window.__ashanSidebarV2AccordionBound) return;
+
+        const toggleSection = (target) => {
+            if (target.closest(".sidebar-item-edit-controls")) return false;
+
+            const trigger = target.closest(
+                ".body-sidebar .section-item > .standard-sidebar-item"
+            );
+            if (!trigger) return false;
+
+            const sidebar = trigger.closest(".body-sidebar");
+            const section = trigger.closest(".section-item");
+            if (
+                !sidebar ||
+                !section ||
+                !section.parentElement?.classList.contains("sidebar-items")
+            ) return false;
+
+            const sectionId = getSectionId(section);
+            const willOpen = !section.classList.contains(
+                "ashan-sidebar-section-expanded"
+            );
+            setAccordionState(sidebar, willOpen ? sectionId : "");
+            return true;
+        };
+
+        document.addEventListener("click", (event) => {
+            if (toggleSection(event.target)) {
+                // Section breaks are toggles, not navigation targets. Capturing the
+                // event prevents native/legacy handlers from applying a second,
+                // global toggle to every section.
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                return;
+            }
+
+            const childAnchor = event.target.closest(
+                ".body-sidebar .section-item > .sidebar-child-item .item-anchor"
+            );
+            if (!childAnchor) return;
+            const sidebar = childAnchor.closest(".body-sidebar");
+            const section = childAnchor.closest(".section-item");
+            const sectionId = section ? getSectionId(section) : "";
+            if (sidebar && sectionId) {
+                // 二级跳转只记住当前分组；不在这里折叠或重建任何其它分组。
+                setAccordionState(sidebar, sectionId);
+            }
+        }, true);
+
+        document.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            if (!toggleSection(event.target)) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }, true);
+
+        window.__ashanSidebarV2AccordionBound = true;
+    }
+
+    let refreshFrame = null;
+    let refreshNeedsHydration = false;
+    function refreshSidebarEnhancements(restoreState = false) {
+        refreshNeedsHydration = refreshNeedsHydration || restoreState;
+        if (refreshFrame) return;
+        refreshFrame = window.requestAnimationFrame(() => {
+            const shouldRestoreState = refreshNeedsHydration;
+            refreshFrame = null;
+            refreshNeedsHydration = false;
+            patchSidebarResolver();
+            bindAccordionInteractions();
+            markWorkbenchItems();
+            applyOilOperatorView();
+            observeSidebar();
+            if (shouldRestoreState) {
+                scheduleAccordionHydration(document.querySelector(".body-sidebar"));
+            }
+        });
+    }
+
+    let sidebarItemsObserver = null;
+    let observedSidebarItems = null;
     function observeSidebar() {
-        if (!document.body || window.__ashanSidebarV2Observer) return;
-        const observer = new MutationObserver(refreshSidebarEnhancements);
-        observer.observe(document.body, { childList: true, subtree: true });
-        window.__ashanSidebarV2Observer = observer;
+        const sidebar = document.querySelector(".body-sidebar");
+        const items = sidebar?.querySelector(".sidebar-items");
+        if (!items) {
+            sidebarItemsObserver?.disconnect();
+            sidebarItemsObserver = null;
+            observedSidebarItems = null;
+            return;
+        }
+        if (observedSidebarItems === items) return;
+
+        sidebarItemsObserver?.disconnect();
+        sidebarItemsObserver = new MutationObserver(() => {
+            // 只响应一级分组容器被 Frappe 重建，忽略二级项激活、内容加载等内部变动。
+            scheduleAccordionHydration(sidebar);
+        });
+        sidebarItemsObserver.observe(items, { childList: true });
+        observedSidebarItems = items;
+        scheduleAccordionHydration(sidebar);
     }
 
     function init() {
@@ -273,14 +410,14 @@
             window.setTimeout(init, 100);
             return;
         }
-        refreshSidebarEnhancements();
+        refreshSidebarEnhancements(true);
         handleRootRoute();
         observeSidebar();
 
         if (frappe.router && frappe.router.on && !window.__ashanSidebarV2RouteBound) {
             frappe.router.on("change", () => {
                 handleRootRoute();
-                refreshSidebarEnhancements();
+                refreshSidebarEnhancements(true);
             });
             window.__ashanSidebarV2RouteBound = true;
         }

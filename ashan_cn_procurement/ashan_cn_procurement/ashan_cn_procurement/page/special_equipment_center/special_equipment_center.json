@@ -18,8 +18,7 @@
     {
       "role": "System Manager"
     },
-    {
-      "role": "All"
-    }
+    {"role": "Compliance Manager"},
+    {"role": "Compliance Operator"}
   ]
 }

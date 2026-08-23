@@ -22,10 +22,10 @@ ACTIVE_STATUSES = ["待计算", "已入队", "计算中"]
 PENDING_ITEM_STATUSES = {"待计算", "排队中", "计算中"}
 
 
-def _check_permission(perm_type="write"):
+def _check_permission(perm_type="write", company=None):
     from ashan_cn_procurement.services.payroll_settlement_service import check_payroll_workbench_permission
 
-    return check_payroll_workbench_permission(perm_type)
+    return check_payroll_workbench_permission(perm_type, company)
 
 
 def _normalize_period(period_month: str) -> str:
@@ -79,7 +79,8 @@ def _build_employee_input_hash(company: str, period_month: str, employee_no: str
     profile_fields = [
         "employee_no", "employee_type", "salary_mode", "is_insured", "fixed_salary", "base_salary",
         "post_allowance", "performance_base", "meal_allowance", "traffic_allowance",
-        "communication_allowance", "other_allowance", "social_security_base", "housing_fund_base",
+        "communication_allowance", "other_allowance", "social_security_base", "social_security_base_mode", "custom_social_security_base",
+        "housing_fund_base", "housing_fund_policy",
         "deduction_child_education", "deduction_continuing_education", "deduction_serious_illness",
         "deduction_housing_loan", "deduction_housing_rent", "deduction_elderly_care", "deduction_infant_care",
         "employment_status", "relieving_date",
@@ -143,12 +144,21 @@ def _build_employee_input_hash(company: str, period_month: str, employee_no: str
             "ss_company_pension", "ss_company_unemployment", "ss_company_medical",
             "ss_company_other_medical", "ss_company_injury",
             "ss_person_pension", "ss_person_medical", "ss_person_unemployment",
-            "big_medical_amount_default", "big_medical_amount_special", "big_medical_special_months",
-            "hf_company_rate", "hf_person_rate",
+            "big_medical_amount_default", "big_medical_amount_special", "big_medical_special_months", "ss_min_base",
+            "hf_company_rate", "hf_person_rate", "hf_auto_rule_enabled", "hf_contribution_months", "hf_off_month_action",
             "tax_threshold", "tax_cycle_start_month", "modified",
         ],
         as_dict=True,
     ) or {}
+    housing_fund_override = {}
+    if frappe.db.exists("DocType", "Ashan Housing Fund Monthly Override"):
+        housing_fund_override = frappe.db.get_value(
+            "Ashan Housing Fund Monthly Override",
+            {"company": company, "period_month": period_month, "employee_no": employee_no},
+            ["override_mode", "reason", "modified"],
+            as_dict=True,
+        ) or {}
+
     payload = {
         "engine": ENGINE_VERSION,
         "company": company,
@@ -158,6 +168,7 @@ def _build_employee_input_hash(company: str, period_month: str, employee_no: str
         "current": current,
         "prior": prior,
         "settings": insurance,
+        "housing_fund_override": housing_fund_override,
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -374,7 +385,7 @@ def request_payroll_recalculation(
     force_recompute=0,
 ):
     """Manual entry point used by the calculation center."""
-    _check_permission("write")
+    _check_permission("write", company)
     period_month = _normalize_period(period_month)
     scope = str(scope or "dirty").strip()
     force = bool(cint(force_recompute))
@@ -473,7 +484,7 @@ def get_payroll_calculation_readiness(company: str, period_month: str) -> dict:
 @frappe.whitelist()
 def get_payroll_recalculation_status(company, period_month):
     """Compact status payload for the workbench calculation center."""
-    _check_permission("read")
+    _check_permission("read", company)
     period_month = _normalize_period(period_month)
     summary = get_payroll_calculation_readiness(company, period_month)
 
@@ -500,8 +511,8 @@ def get_payroll_recalculation_status(company, period_month):
 
 @frappe.whitelist(methods=["POST"])
 def retry_payroll_recalculation_task(task_name):
-    _check_permission("write")
     task = frappe.get_doc(TASK_DOCTYPE, task_name)
+    _check_permission("write", task.company)
     if task.status not in {"失败", "部分完成", "已跳过", "已取消"}:
         return {"success": True, "message": "该任务当前不需要重试。"}
     task.status = "待计算"

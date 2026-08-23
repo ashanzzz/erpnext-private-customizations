@@ -1,25 +1,44 @@
 # Copyright (c) 2026, Ashan CN Procurement and contributors
 # For license information, please see license.txt
 
+import json
+
 import frappe
 from frappe import _
 from frappe.utils import now_datetime, cint, flt
+from ashan_cn_procurement.services.authorization_service import (
+	assert_company_access,
+	assert_module_access,
+	can_module_access,
+)
 from ashan_cn_procurement.services.tax_invoice_matcher import update_tax_invoice_match_state
 from ashan_cn_procurement.services.tax_invoice_cleanup import delete_single_tax_invoice_pdf, run_cleanup_now as run_cleanup_service
 from ashan_cn_procurement.services.tax_invoice_import import process_import_batch
+from ashan_cn_procurement.services.tax_invoice_validation import (
+	BUYER_VALIDATION_ERROR_MARKER,
+	get_buyer_validation_error,
+)
 
 @frappe.whitelist()
 def get_tax_invoices(filters=None, start=0, page_length=50):
 	"""
-	获取税局发票列表及顶部 4 项 KPI 统计指标
+	获取税局发票列表及动态复核原因卡片统计。
 	"""
+	assert_module_access("tax_invoice", "read")
 	if isinstance(filters, str):
 		filters = frappe.parse_json(filters) or {}
-	filters = filters or {}
+	if filters is None:
+		filters = {}
+	if not isinstance(filters, dict):
+		frappe.throw(_("发票筛选条件格式无效"))
+
+	if filters.get("company"):
+		assert_company_access(filters["company"])
 
 	# 1. 统计 KPI 指标 (不受当前状态过滤器影响)
 	kpi_conditions = []
 	kpi_values = {}
+	buyer_error_pattern = f"%{BUYER_VALIDATION_ERROR_MARKER}%"
 
 	if filters.get("company"):
 		kpi_conditions.append("company = %(company)s")
@@ -35,15 +54,24 @@ def get_tax_invoices(filters=None, start=0, page_length=50):
 
 	kpi_query = f"""
 		SELECT
-			SUM(CASE WHEN business_status = '待录入' THEN 1 ELSE 0 END) AS pending_count,
-			SUM(CASE WHEN business_status = '已录入' THEN 1 ELSE 0 END) AS entered_count,
-			SUM(CASE WHEN business_status = '已对冲' THEN 1 ELSE 0 END) AS offset_count,
-			SUM(CASE WHEN business_status = '已废弃' THEN 1 ELSE 0 END) AS abandoned_count,
+			SUM(CASE WHEN business_status = '待录入'
+				AND COALESCE(parse_status, '已解析') = '已解析' THEN 1 ELSE 0 END) AS pending_count,
+			SUM(CASE WHEN business_status = '已录入'
+				AND COALESCE(parse_warning, '') NOT LIKE %(buyer_error_pattern)s THEN 1 ELSE 0 END) AS entered_count,
+			SUM(CASE WHEN business_status = '已对冲'
+				AND COALESCE(parse_warning, '') NOT LIKE %(buyer_error_pattern)s THEN 1 ELSE 0 END) AS offset_count,
+			SUM(CASE WHEN business_status = '已废弃'
+				AND COALESCE(parse_warning, '') NOT LIKE %(buyer_error_pattern)s THEN 1 ELSE 0 END) AS abandoned_count,
 			SUM(CASE WHEN parse_status = '需复核' THEN 1 ELSE 0 END) AS review_count,
+			SUM(CASE WHEN parse_warning LIKE %(buyer_error_pattern)s THEN 1 ELSE 0 END) AS buyer_error_count,
+			SUM(CASE WHEN parse_status = '需复核'
+				AND COALESCE(parse_warning, '') NOT LIKE %(buyer_error_pattern)s
+				THEN 1 ELSE 0 END) AS data_review_count,
 			COUNT(*) AS total_count
 		FROM `tabTax Invoice`
 		{kpi_where}
 	"""
+	kpi_values["buyer_error_pattern"] = buyer_error_pattern
 	kpi_res = frappe.db.sql(kpi_query, kpi_values, as_dict=True)[0]
 
 	# 2. 查询列表数据
@@ -59,6 +87,21 @@ def get_tax_invoices(filters=None, start=0, page_length=50):
 	if filters.get("parse_status"):
 		list_conditions.append("parse_status = %(parse_status)s")
 		list_values["parse_status"] = filters["parse_status"]
+	if filters.get("pending_mode") == "normal":
+		list_conditions.append("business_status = '待录入'")
+		list_conditions.append("COALESCE(parse_status, '已解析') = '已解析'")
+	if filters.get("workflow_only"):
+		list_conditions.append("COALESCE(parse_warning, '') NOT LIKE %(buyer_error_pattern)s")
+		list_values["buyer_error_pattern"] = buyer_error_pattern
+	if filters.get("review_category") == "buyer_error":
+		list_conditions.append("parse_warning LIKE %(buyer_error_pattern)s")
+		list_values["buyer_error_pattern"] = buyer_error_pattern
+	elif filters.get("review_category") == "data_issue":
+		list_conditions.append("parse_status = '需复核'")
+		list_conditions.append("COALESCE(parse_warning, '') NOT LIKE %(buyer_error_pattern)s")
+		list_values["buyer_error_pattern"] = buyer_error_pattern
+	elif filters.get("review_category"):
+		frappe.throw(_("未知的复核筛选类别"))
 	if filters.get("from_date"):
 		list_conditions.append("issue_date >= %(from_date)s")
 		list_values["from_date"] = filters["from_date"]
@@ -86,7 +129,7 @@ def get_tax_invoices(filters=None, start=0, page_length=50):
 			name, invoice_no, issue_date, invoice_type, company,
 			seller_name, seller_tax_id, buyer_name, buyer_tax_id, drawer,
 			amount_without_tax, tax_amount, invoice_grand_total,
-			vehicle_vessel_tax, late_fee, remark_total, payable_total,
+			remark_total, payable_total,
 			display_summary, business_status, matched_purchase_invoice,
 			purchase_invoice_docstatus, match_status, matched_at,
 			is_red_invoice, original_invoice_no, credit_note_no,
@@ -108,19 +151,113 @@ def get_tax_invoices(filters=None, start=0, page_length=50):
 			"offset_count": cint(kpi_res.offset_count or 0),
 			"abandoned_count": cint(kpi_res.abandoned_count or 0),
 			"review_count": cint(kpi_res.review_count or 0),
+			"buyer_error_count": cint(kpi_res.buyer_error_count or 0),
+			"data_review_count": cint(kpi_res.data_review_count or 0),
 			"total_count": cint(kpi_res.total_count or 0)
 		},
-		"invoices": invoices
+		"invoices": invoices,
+		"permissions": {
+			"can_delete_invalid_buyer": can_module_access("tax_invoice", "delete"),
+		},
 	}
 
 @frappe.whitelist()
 def get_tax_invoice_detail(invoice_no):
 	"""获取单张税局发票完整明细与子表"""
+	assert_module_access("tax_invoice", "read")
 	if not frappe.db.exists("Tax Invoice", invoice_no):
 		frappe.throw(_("税局发票不存在: {0}").format(invoice_no))
 
 	doc = frappe.get_doc("Tax Invoice", invoice_no)
+	if doc.company:
+		assert_company_access(doc.company)
 	return doc.as_dict()
+
+
+def _unlink_deleted_invoice_offset(invoice):
+	"""Remove a reciprocal red-offset link before its invalid source is deleted."""
+	partner_no = str(invoice.offset_invoice or "").strip()
+	if not partner_no or not frappe.db.exists("Tax Invoice", partner_no):
+		return False
+
+	partner = frappe.get_doc("Tax Invoice", partner_no)
+	if partner.offset_invoice != invoice.invoice_no:
+		return False
+
+	partner.offset_invoice = None
+	partner.offset_at = None
+	partner.offset_note = None
+	if not partner.matched_purchase_invoice and partner.business_status == "已对冲":
+		partner.business_status = "待录入"
+		partner.match_status = "未匹配"
+	partner.flags.ignore_links = True
+	partner.save(ignore_permissions=True)
+	return True
+
+
+def _delete_tax_invoice_files(invoice_name):
+	"""Delete files attached only to an invalid tax-invoice record."""
+	file_names = frappe.get_all(
+		"File",
+		filters={
+			"attached_to_doctype": "Tax Invoice",
+			"attached_to_name": invoice_name,
+		},
+		pluck="name",
+		order_by="creation ASC, name ASC",
+	)
+	for file_name in file_names:
+		frappe.delete_doc("File", file_name, force=True, ignore_permissions=True)
+	return len(file_names)
+
+
+@frappe.whitelist(methods=["POST"])
+def delete_invalid_buyer_tax_invoice(invoice_no, confirmed_invoice_no, deletion_reason):
+	"""Permanently delete an unposted invoice whose buyer violates the legal whitelist."""
+	assert_module_access("tax_invoice", "delete")
+	invoice_no = str(invoice_no or "").strip()
+	confirmed_invoice_no = str(confirmed_invoice_no or "").strip()
+	deletion_reason = str(deletion_reason or "").strip()
+	if not invoice_no or not confirmed_invoice_no or not deletion_reason:
+		frappe.throw(_("删除前必须填写发票号码确认和删除原因"))
+	if invoice_no != confirmed_invoice_no:
+		frappe.throw(_("确认发票号码不一致，未执行删除"))
+	if len(deletion_reason) > 500:
+		frappe.throw(_("删除原因不能超过 500 个字符"))
+	if not frappe.db.exists("Tax Invoice", invoice_no):
+		frappe.throw(_("税局发票不存在: {0}").format(invoice_no))
+
+	invoice = frappe.get_doc("Tax Invoice", invoice_no)
+	if invoice.company:
+		assert_company_access(invoice.company)
+	if not get_buyer_validation_error(invoice.buyer_name):
+		frappe.throw(_("仅允许删除购买方错误的税局发票，正常发票请使用废弃流程"))
+	if invoice.matched_purchase_invoice:
+		frappe.throw(_("该发票已关联 ERP 采购发票，不能删除；请先按财务流程解除关联"))
+
+	deleted_file_count = _delete_tax_invoice_files(invoice.name)
+	offset_unlinked = _unlink_deleted_invoice_offset(invoice)
+	audit_record = {
+		"invoice_no": invoice.invoice_no,
+		"buyer_name": invoice.buyer_name,
+		"deleted_by": frappe.session.user,
+		"deleted_at": str(now_datetime()),
+		"reason": deletion_reason,
+		"deleted_file_count": deleted_file_count,
+		"offset_unlinked": offset_unlinked,
+	}
+	frappe.delete_doc("Tax Invoice", invoice.name, force=True, ignore_permissions=True)
+	frappe.log_error(
+		title=f"Tax Invoice Invalid Buyer Deletion Audit: {invoice_no}",
+		message=json.dumps(audit_record, ensure_ascii=False, sort_keys=True),
+	)
+	frappe.db.commit()
+	return {
+		"ok": True,
+		"invoice_no": invoice_no,
+		"deleted_file_count": deleted_file_count,
+		"offset_unlinked": offset_unlinked,
+	}
 
 @frappe.whitelist()
 def upload_tax_invoice_file():
@@ -276,7 +413,7 @@ def get_recent_batches():
 		fields=[
 			"name", "source_type", "source_filename", "uploaded_by", "uploaded_at",
 			"batch_status", "progress_percent", "created_count", "duplicate_count",
-			"review_count", "failed_count", "current_message"
+			"review_count", "failed_count", "current_message", "error_log"
 		],
 		order_by="creation DESC",
 		limit=20

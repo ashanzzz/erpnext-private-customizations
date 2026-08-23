@@ -169,7 +169,7 @@
       "delete": 1
     },
     {
-      "role": "All",
+      "role": "Property Operator",
       "read": 1
     }
   ]

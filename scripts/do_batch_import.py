@@ -37,7 +37,7 @@ def run_import():
         doc.invoice_no = inv_no
         doc.issue_date = res.get('issue_date')
         doc.invoice_type = res.get('invoice_type')
-        doc.company = identify_company(res.get('buyer_name'), res.get('buyer_tax_id')) or '天津吉众机电设备有限公司'
+        doc.company = identify_company(res.get('buyer_name'), res.get('buyer_tax_id'))
         doc.seller_name = res.get('seller_name')
         doc.seller_tax_id = res.get('seller_tax_id')
         doc.buyer_name = res.get('buyer_name')
@@ -46,8 +46,6 @@ def run_import():
         doc.amount_without_tax = res.get('amount_without_tax')
         doc.tax_amount = res.get('tax_amount')
         doc.invoice_grand_total = res.get('invoice_grand_total')
-        doc.vehicle_vessel_tax = res.get('vehicle_vessel_tax') or 0.0
-        doc.late_fee = res.get('late_fee') or 0.0
         doc.remark_total = res.get('remark_total') or 0.0
         doc.payable_total = res.get('payable_total')
         doc.remark = res.get('remark')

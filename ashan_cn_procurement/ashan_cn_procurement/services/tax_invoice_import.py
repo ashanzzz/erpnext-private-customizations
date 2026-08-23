@@ -15,6 +15,11 @@ from ashan_cn_procurement.services.tax_invoice_matcher import (
 	update_tax_invoice_match_state,
 	auto_reconcile_all_red_invoices
 )
+from ashan_cn_procurement.services.tax_invoice_validation import (
+	append_unique_warning,
+	get_buyer_validation_error,
+	normalize_buyer_name,
+)
 
 def decode_zip_entry_name(info):
 	"""
@@ -60,68 +65,34 @@ def extract_invoice_key_from_filename(filename):
 
 def identify_company(buyer_name, buyer_tax_id):
 	"""
-	根据购买方名称与税号识别所属 ERP 公司
-	1. 规则表税号精准匹配 (Tax Invoice Settings)
-	2. 规则表名称包含匹配 (Tax Invoice Settings)
-	3. 系统 Company 档案税号与全称匹配 (tabCompany)
-	4. 核心商号/品牌关键词精准识别 (吉众 -> 天津吉众机电设备有限公司, 祺富 -> 天津祺富机械加工有限公司)
-	5. 核心词根智能模糊匹配 (去除区域/有限公司等停用词)
+	按精确购买方白名单及设置中的精确规则识别 ERP 公司。
+
+	税局发票仅可归属天津祺富机械加工有限公司或天津吉众科技有限公司；
+	不允许通过商号、词根或公司档案进行模糊兜底匹配。
 	"""
+	if get_buyer_validation_error(buyer_name):
+		return None
+
 	settings = frappe.get_single("Tax Invoice Settings")
 	mappings = settings.get("company_mappings") or []
+	clean_buyer_name = normalize_buyer_name(buyer_name)
+	clean_tax_id = (buyer_tax_id or "").strip()
 
-	# 1. 规则表精确税号匹配
-	if buyer_tax_id:
-		clean_tax_id = buyer_tax_id.strip()
-		for m in mappings:
-			if m.buyer_tax_id and m.buyer_tax_id.strip() == clean_tax_id:
-				return m.company
+	for mapping in mappings:
+		if normalize_buyer_name(mapping.buyer_name) != clean_buyer_name:
+			continue
+		if mapping.buyer_tax_id and mapping.buyer_tax_id.strip() != clean_tax_id:
+			continue
+		if mapping.company:
+			return mapping.company
 
-	# 2. 规则表名称包含/匹配
-	if buyer_name:
-		clean_bname = buyer_name.strip()
-		for m in mappings:
-			if m.buyer_name and (m.buyer_name.strip() in clean_bname or clean_bname in m.buyer_name.strip()):
-				return m.company
+	company_name = frappe.db.get_value(
+		"Company", {"company_name": clean_buyer_name}, "name"
+	)
+	if company_name:
+		return company_name
 
-	# 3. 系统 Company 档案税号与全称精确匹配
-	if buyer_tax_id:
-		c = frappe.db.get_value("Company", {"tax_id": buyer_tax_id.strip()}, "name")
-		if c:
-			return c
-
-	comps = frappe.get_all("Company", fields=["name", "company_name", "tax_id"])
-	comp_names = [c.name for c in comps]
-
-	if buyer_name:
-		clean_bname = buyer_name.strip()
-		for comp in comps:
-			c_name = (comp.company_name or comp.name).strip()
-			if c_name == clean_bname:
-				return comp.name
-
-		# 4. 核心商号特征词识别 (吉众 / 祺富)
-		if "吉众" in clean_bname:
-			for c_name in comp_names:
-				if "吉众" in c_name:
-					return c_name
-		if "祺富" in clean_bname:
-			for c_name in comp_names:
-				if "祺富" in c_name:
-					return c_name
-
-		# 5. 去除常见停用词后的核心子串匹配
-		stopwords = ["天津", "北京", "河北", "山东", "机械", "机电", "设备", "科技", "加工", "商贸", "贸易", "实业", "安装", "工程", "有限公司", "有限责任公司", "公司", "厂", "部"]
-		core_buyer = clean_bname
-		for sw in stopwords:
-			core_buyer = core_buyer.replace(sw, "")
-		core_buyer = core_buyer.strip()
-
-		if core_buyer and len(core_buyer) >= 2:
-			for comp in comps:
-				c_name = (comp.company_name or comp.name).strip()
-				if core_buyer in c_name:
-					return comp.name
+	return frappe.db.get_value("Company", clean_buyer_name, "name")
 
 	return None
 
@@ -169,6 +140,7 @@ def process_import_batch(batch_name):
 	created_nos = []
 	updated_nos = []
 	file_doc_name = None
+	ignored_non_invoice_count = 0
 
 	try:
 		# 1. 读取临时上传文件
@@ -216,6 +188,7 @@ def process_import_batch(batch_name):
 					basename = os.path.basename(decoded_name)
 					# 忽略统计汇总表格与非单票文件
 					if basename in ["合并发票.pdf", "全量发票查询导出结果.xlsx"] or basename.lower().endswith((".xlsx", ".xls", ".csv", ".txt")):
+						ignored_non_invoice_count += 1
 						continue
 
 					ext = os.path.splitext(basename)[1].lower()
@@ -254,7 +227,13 @@ def process_import_batch(batch_name):
 
 		batch.invoice_candidate_count = len(invoices_map)
 		batch.progress_percent = 15
-		batch.current_message = f"识别出 {len(invoices_map)} 份待处理发票，开始逐票智能解析..."
+		ignored_hint = (
+			f"，已忽略 {ignored_non_invoice_count} 个非发票表格/说明文件"
+			if ignored_non_invoice_count else ""
+		)
+		batch.current_message = (
+			f"识别出 {len(invoices_map)} 份待处理发票{ignored_hint}，开始逐票智能解析..."
+		)
 		batch.save(ignore_permissions=True)
 		frappe.db.commit()
 
@@ -306,12 +285,20 @@ def process_import_batch(batch_name):
 
 				batch.parsed_count += 1
 
-				# 识别所属公司
+				# 购买方必须属于两家法定主体；错误记录仅归档待复核，绝不参与匹配。
+				buyer_error = get_buyer_validation_error(parsed_data.get("buyer_name"))
 				comp = identify_company(parsed_data.get("buyer_name"), parsed_data.get("buyer_tax_id"))
-				if not comp:
+				if buyer_error:
+					parsed_data["parse_status"] = "需复核"
+					parsed_data["parse_warning"] = append_unique_warning(
+						parsed_data.get("parse_warning"), buyer_error
+					)
+				elif not comp:
 					if parsed_data.get("parse_status") == "已解析":
 						parsed_data["parse_status"] = "需复核"
-					parsed_data["parse_warning"] = (parsed_data.get("parse_warning") or "") + "; 购买方公司未能自动匹配"
+					parsed_data["parse_warning"] = append_unique_warning(
+						parsed_data.get("parse_warning"), "购买方已校验，但未配置所属 ERP 公司映射"
+					)
 
 				# 4. 去重与更新检查
 				if frappe.db.exists("Tax Invoice", inv_no):
@@ -354,8 +341,6 @@ def process_import_batch(batch_name):
 				doc.amount_without_tax = parsed_data.get("amount_without_tax")
 				doc.tax_amount = parsed_data.get("tax_amount")
 				doc.invoice_grand_total = parsed_data.get("invoice_grand_total")
-				doc.vehicle_vessel_tax = parsed_data.get("vehicle_vessel_tax") or 0.0
-				doc.late_fee = parsed_data.get("late_fee") or 0.0
 				doc.remark_total = parsed_data.get("remark_total") or 0.0
 				doc.payable_total = parsed_data.get("payable_total")
 				doc.remark = parsed_data.get("remark")
@@ -435,7 +420,14 @@ def process_import_batch(batch_name):
 		batch.batch_status = "已完成" if batch.failed_count == 0 else "部分失败"
 		batch.finished_at = now_datetime()
 		batch.progress_percent = 100
-		batch.current_message = f"导入完成！新增: {batch.created_count}, 略过重复: {batch.duplicate_count}, 需复核: {batch.review_count}, 失败: {batch.failed_count}"
+		ignored_hint = (
+			f", 已忽略非发票文件: {ignored_non_invoice_count}"
+			if ignored_non_invoice_count else ""
+		)
+		batch.current_message = (
+			f"导入完成！新增: {batch.created_count}, 略过重复: {batch.duplicate_count}, "
+			f"需复核: {batch.review_count}, 失败: {batch.failed_count}{ignored_hint}"
+		)
 		if error_logs:
 			batch.error_log = "\n---\n".join(error_logs)
 		batch.save(ignore_permissions=True)

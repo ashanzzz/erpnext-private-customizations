@@ -13,9 +13,10 @@
     {
       "role": "System Manager"
     },
-    {
-      "role": "All"
-    }
+    {"role": "Accounts Manager"},
+    {"role": "Accounts User"},
+    {"role": "Property Manager"},
+    {"role": "Property Operator"}
   ],
   "standard": "Yes",
   "title": "水电费月结"

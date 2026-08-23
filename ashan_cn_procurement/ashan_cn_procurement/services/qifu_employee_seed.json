@@ -24,7 +24,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0031",
@@ -51,7 +53,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0037",
@@ -78,7 +82,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 1500.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0006",
@@ -105,7 +111,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "固定缴纳",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0004",
@@ -132,7 +140,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 1500.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0013",
@@ -159,7 +169,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0014",
@@ -186,7 +198,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0005",
@@ -213,7 +227,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0038",
@@ -240,7 +256,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0003",
@@ -267,7 +285,15 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证",
+    "name_aliases": [
+      {
+        "alias_name": "刘海峰",
+        "alias_note": "外部实发表历史写法"
+      }
+    ]
   },
   {
     "employee_no": "A0021",
@@ -294,7 +320,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0025",
@@ -321,7 +349,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0012",
@@ -348,7 +378,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0011",
@@ -375,7 +407,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0010",
@@ -402,7 +436,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0051",
@@ -429,7 +465,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0064",
@@ -456,7 +494,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0065",
@@ -483,7 +523,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0066",
@@ -510,7 +552,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 1
+    "is_insured": 1,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0032",
@@ -537,7 +581,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 0
+    "is_insured": 0,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0016",
@@ -564,7 +610,15 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 0
+    "is_insured": 0,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证",
+    "name_aliases": [
+      {
+        "alias_name": "张引娣",
+        "alias_note": "外部实发表历史写法"
+      }
+    ]
   },
   {
     "employee_no": "A0009",
@@ -591,7 +645,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 0
+    "is_insured": 0,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0028",
@@ -618,7 +674,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 0
+    "is_insured": 0,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "A0035",
@@ -645,7 +703,9 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 0
+    "is_insured": 0,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证"
   },
   {
     "employee_no": "Y0001",
@@ -672,7 +732,9 @@
     "deduction_housing_rent": 1500.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 0
+    "is_insured": 0,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "护照"
   },
   {
     "employee_no": "Z0005",
@@ -699,6 +761,14 @@
     "deduction_housing_rent": 0.0,
     "deduction_elderly_care": 0.0,
     "deduction_infant_care": 0.0,
-    "is_insured": 0
+    "is_insured": 0,
+    "housing_fund_policy": "跟随公司规则",
+    "certificate_type": "中国居民身份证",
+    "name_aliases": [
+      {
+        "alias_name": "徐经理",
+        "alias_note": "外部实发表称谓"
+      }
+    ]
   }
 ]

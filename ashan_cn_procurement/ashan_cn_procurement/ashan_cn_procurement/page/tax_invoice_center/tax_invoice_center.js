@@ -19,9 +19,13 @@ class TaxInvoiceCenter {
             company: '',
             from_date: '',
             to_date: '',
-            search_text: ''
+            search_text: '',
+            pending_mode: '',
+            review_category: '',
+            workflow_only: ''
         };
         this.current_kpis = {};
+        this.permissions = {};
         this.expanded_invoices = new Set();
         this.init_dom();
         this.bind_events();
@@ -45,40 +49,47 @@ class TaxInvoiceCenter {
                     </div>
                 </div>
 
-                <!-- 5 项核心 KPI 卡片 -->
-                <div class="tax-kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
-                    <div class="tax-kpi-card card-pending" data-status="待录入">
+                <!-- 业务状态与复核原因卡片 -->
+                <div class="tax-kpi-grid">
+                    <div class="tax-kpi-card card-pending" data-filter-kind="normal_pending" title="仅显示可直接进入 ERP 录入流程的发票">
                         <div class="kpi-left">
-                            <div class="kpi-label">待录入发票</div>
+                            <div class="kpi-label">待录入（可直接处理）</div>
                             <div class="kpi-val" id="kpi-pending-val">-</div>
                         </div>
                         <div class="kpi-icon">⏳</div>
                     </div>
-                    <div class="tax-kpi-card card-entered" data-status="已录入">
+                    <div class="tax-kpi-card card-entered" data-status="已录入" data-workflow-only="1">
                         <div class="kpi-left">
                             <div class="kpi-label">已录入 ERP</div>
                             <div class="kpi-val" id="kpi-entered-val">-</div>
                         </div>
                         <div class="kpi-icon">✅</div>
                     </div>
-                    <div class="tax-kpi-card card-offset" data-status="已对冲" style="border-left: 4px solid #8b5cf6;">
+                    <div class="tax-kpi-card card-offset" data-status="已对冲" data-workflow-only="1">
                         <div class="kpi-left">
                             <div class="kpi-label">已红冲对冲 (无需录入)</div>
-                            <div class="kpi-val" id="kpi-offset-val" style="color: #7c3aed;">-</div>
+                            <div class="kpi-val" id="kpi-offset-val">-</div>
                         </div>
                         <div class="kpi-icon">🔄</div>
                     </div>
-                    <div class="tax-kpi-card card-abandoned" data-status="已废弃">
+                    <div class="tax-kpi-card card-abandoned" data-status="已废弃" data-workflow-only="1">
                         <div class="kpi-left">
                             <div class="kpi-label">已废弃</div>
                             <div class="kpi-val" id="kpi-abandoned-val">-</div>
                         </div>
                         <div class="kpi-icon">🗑️</div>
                     </div>
-                    <div class="tax-kpi-card card-review" data-status="需复核">
+                    <div class="tax-kpi-card card-buyer-error" data-filter-kind="buyer_error" title="购买方不是天津祺富机械加工有限公司或天津吉众科技有限公司；管理员可删除">
                         <div class="kpi-left">
-                            <div class="kpi-label">需复核发票</div>
-                            <div class="kpi-val" id="kpi-review-val">-</div>
+                            <div class="kpi-label">购买方错误（可删除）</div>
+                            <div class="kpi-val" id="kpi-buyer-error-val">-</div>
+                        </div>
+                        <div class="kpi-icon">⛔</div>
+                    </div>
+                    <div class="tax-kpi-card card-review" data-filter-kind="data_review" title="原始凭证、逐行明细或解析结果需要人工核对">
+                        <div class="kpi-left">
+                            <div class="kpi-label">资料/解析待复核</div>
+                            <div class="kpi-val" id="kpi-data-review-val">-</div>
                         </div>
                         <div class="kpi-icon">⚠️</div>
                     </div>
@@ -128,7 +139,6 @@ class TaxInvoiceCenter {
                                 <th style="min-width: 140px;">内容摘要</th>
                                 <th style="width: 95px; text-align: right;">不含税金额</th>
                                 <th style="width: 85px; text-align: right;">税额</th>
-                                <th style="width: 95px; text-align: right; background: #fffbeb; color: #b45309;">代收车船税</th>
                                 <th style="width: 110px; text-align: right; font-weight: 700;">应付合计</th>
                                 <th style="width: 125px;">ERP采购发票</th>
                                 <th style="width: 70px; text-align: center;">PDF</th>
@@ -136,7 +146,7 @@ class TaxInvoiceCenter {
                             </tr>
                         </thead>
                         <tbody id="tbody-tax-invoices">
-                            <tr><td colspan="14" style="text-align: center; padding: 40px; color: #94a3b8;">正在加载税局发票数据...</td></tr>
+                            <tr><td colspan="13" style="text-align: center; padding: 40px; color: #94a3b8;">正在加载税局发票数据...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -163,22 +173,42 @@ class TaxInvoiceCenter {
         // KPI 卡片点击快速过滤
         this.$wrapper.find('.tax-kpi-card').on('click', function() {
             const status = $(this).attr('data-status');
+            const filterKind = $(this).attr('data-filter-kind');
+            const workflowOnly = $(this).attr('data-workflow-only') === '1';
             const isActive = $(this).hasClass('active');
             self.$wrapper.find('.tax-kpi-card').removeClass('active');
 
             if (isActive) {
                 self.filters.business_status = '';
                 self.filters.parse_status = '';
+                self.filters.pending_mode = '';
+                self.filters.review_category = '';
+                self.filters.workflow_only = '';
                 self.$wrapper.find('#filter-status').val('');
             } else {
                 $(this).addClass('active');
-                if (status === '需复核') {
+                self.filters.pending_mode = '';
+                self.filters.review_category = '';
+                self.filters.workflow_only = '';
+                if (filterKind === 'normal_pending') {
+                    self.filters.business_status = '待录入';
+                    self.filters.parse_status = '';
+                    self.filters.pending_mode = 'normal';
+                    self.$wrapper.find('#filter-status').val('待录入');
+                } else if (filterKind === 'buyer_error') {
                     self.filters.business_status = '';
                     self.filters.parse_status = '需复核';
+                    self.filters.review_category = 'buyer_error';
+                    self.$wrapper.find('#filter-status').val('');
+                } else if (filterKind === 'data_review') {
+                    self.filters.business_status = '';
+                    self.filters.parse_status = '需复核';
+                    self.filters.review_category = 'data_issue';
                     self.$wrapper.find('#filter-status').val('');
                 } else {
                     self.filters.business_status = status;
                     self.filters.parse_status = '';
+                    self.filters.workflow_only = workflowOnly ? '1' : '';
                     self.$wrapper.find('#filter-status').val(status);
                 }
             }
@@ -201,6 +231,9 @@ class TaxInvoiceCenter {
         this.$wrapper.find('#filter-status').on('change', function() {
             self.filters.business_status = $(this).val();
             self.filters.parse_status = '';
+            self.filters.pending_mode = '';
+            self.filters.review_category = '';
+            self.filters.workflow_only = '';
             self.$wrapper.find('.tax-kpi-card').removeClass('active');
             if (self.filters.business_status) {
                 self.$wrapper.find(`.tax-kpi-card[data-status="${self.filters.business_status}"]`).addClass('active');
@@ -233,6 +266,7 @@ class TaxInvoiceCenter {
             callback: (r) => {
                 if (r.message) {
                     self.render_kpis(r.message.kpis || {});
+                    self.permissions = r.message.permissions || {};
                     self.render_table(r.message.invoices || []);
                 }
             }
@@ -244,7 +278,8 @@ class TaxInvoiceCenter {
         this.$wrapper.find('#kpi-entered-val').text(kpis.entered_count || 0);
         this.$wrapper.find('#kpi-offset-val').text(kpis.offset_count || 0);
         this.$wrapper.find('#kpi-abandoned-val').text(kpis.abandoned_count || 0);
-        this.$wrapper.find('#kpi-review-val').text(kpis.review_count || 0);
+        this.$wrapper.find('#kpi-buyer-error-val').text(kpis.buyer_error_count || 0);
+        this.$wrapper.find('#kpi-data-review-val').text(kpis.data_review_count || 0);
     }
 
     render_table(invoices) {
@@ -253,14 +288,17 @@ class TaxInvoiceCenter {
         $tbody.empty();
 
         if (!invoices.length) {
-            $tbody.html('<tr><td colspan="14" style="text-align: center; padding: 40px; color: #94a3b8;">暂无符合条件的税局发票记录</td></tr>');
+            $tbody.html('<tr><td colspan="13" style="text-align: center; padding: 40px; color: #94a3b8;">暂无符合条件的税局发票记录</td></tr>');
             return;
         }
 
         invoices.forEach(inv => {
             const isExpanded = self.expanded_invoices.has(inv.invoice_no);
             let badgeClass = 'badge-pending', badgeText = '待录入';
-            if (inv.business_status === '已对冲') {
+            if ((inv.parse_warning || '').includes('【购买方错误】')) {
+                badgeClass = 'badge-red';
+                badgeText = '⛔ 购买方错误';
+            } else if (inv.business_status === '已对冲') {
                 badgeClass = 'badge-offset';
                 badgeText = '🔄 已对冲';
             } else if (inv.match_status === '金额不符') {
@@ -295,18 +333,15 @@ class TaxInvoiceCenter {
             if (inv.pdf_removed) {
                 pdfHtml = '<span style="color: #94a3b8; font-size: 11px;">已清理</span>';
             } else if (inv.invoice_pdf) {
-                pdfHtml = `<a href="${inv.invoice_pdf}" target="_blank" class="tax-pdf-view" title="查看 PDF" style="font-size: 16px; text-decoration: none;">📄</a>`;
+                pdfHtml = `<a href="${inv.invoice_pdf}" target="_blank" class="tax-pdf-view" title="查看 PDF">查看</a>`;
             }
-
-            const vvTaxDisplay = flt(inv.vehicle_vessel_tax) > 0 ? `¥ ${format_currency(inv.vehicle_vessel_tax)}` : '<span style="color:#cbd5e1;">—</span>';
 
             const $tr = $(`
                 <tr class="data-row ${isExpanded ? 'expanded' : ''}" data-inv="${inv.invoice_no}">
                     <td><span class="tax-badge ${badgeClass}">${badgeText}</span></td>
                     <td>${inv.issue_date || '—'}</td>
                     <td>
-                        <strong style="font-family: monospace; font-size: 13px;">${inv.invoice_no}</strong>
-                        <button class="btn-copy-inv" style="border:none; background:transparent; cursor:pointer; font-size: 11px; padding: 0 2px;" title="复制发票号">📋</button>
+                        <button class="tax-invoice-number-copy" title="点击复制发票号码">${inv.invoice_no}</button>
                     </td>
                     <td title="${frappe.utils.escape_html(inv.seller_name || '')}">
                         <div style="max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
@@ -314,10 +349,9 @@ class TaxInvoiceCenter {
                         </div>
                     </td>
                     <td title="${frappe.utils.escape_html(inv.buyer_name || inv.company || '')}">
-                        <div style="max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #1e293b;">
+                        <div class="tax-buyer-name">
                             ${frappe.utils.escape_html(inv.buyer_name || '—')}
                         </div>
-                        ${inv.company ? `<div style="font-size: 11px; color: #2563eb; margin-top: 2px;">🏢 ${frappe.utils.escape_html(inv.company)}</div>` : ''}
                     </td>
                     <td><span style="font-size: 12px; color: #475569;">${inv.invoice_type || '电子发票'}</span></td>
                     <td title="${frappe.utils.escape_html(inv.display_summary || '')}">
@@ -327,7 +361,6 @@ class TaxInvoiceCenter {
                     </td>
                     <td style="text-align: right;">¥ ${format_currency(inv.amount_without_tax)}</td>
                     <td style="text-align: right; color: #c2410c;">¥ ${format_currency(inv.tax_amount)}</td>
-                    <td style="text-align: right; background: #fffbeb; font-weight: 600;">${vvTaxDisplay}</td>
                     <td style="text-align: right; font-weight: 700; color: #0f172a;">¥ ${format_currency(inv.payable_total)}</td>
                     <td>${piLink}</td>
                     <td style="text-align: center;">${pdfHtml}</td>
@@ -339,8 +372,8 @@ class TaxInvoiceCenter {
                 </tr>
             `);
 
-            // 复制发票号
-            $tr.find('.btn-copy-inv').on('click', function(e) {
+            // 点击发票号码直接复制，不再额外显示复制图标。
+            $tr.find('.tax-invoice-number-copy').on('click', function(e) {
                 e.stopPropagation();
                 frappe.utils.copy_to_clipboard(inv.invoice_no);
                 frappe.show_alert({ message: __('已复制发票号码: ') + inv.invoice_no, indicator: 'green' });
@@ -380,7 +413,7 @@ class TaxInvoiceCenter {
 
     render_expansion_drawer(invoice_no, $tr) {
         const self = this;
-        const $expandTr = $(`<tr class="tax-expand-row"><td colspan="14"><div class="drawer-loading" style="padding: 16px; text-align: center; color: #64748b;">正在加载发票明细与对账校验...</div></td></tr>`);
+        const $expandTr = $(`<tr class="tax-expand-row"><td colspan="13"><div class="drawer-loading" style="padding: 16px; text-align: center; color: #64748b;">正在加载发票明细与对账校验...</div></td></tr>`);
         $tr.after($expandTr);
 
         frappe.call({
@@ -391,7 +424,7 @@ class TaxInvoiceCenter {
                 const d = r.message;
                 let itemsHtml = '';
                 (d.items || []).forEach((it, idx) => {
-                    const isVv = (it.line_type === '车船税' || flt(it.vehicle_vessel_tax) > 0);
+                    const isVv = it.line_type === '车船税';
                     const isToll = (it.line_type === '通行费');
                     const rowClass = isVv ? 'row-vv-tax' : (isToll ? 'row-toll' : '');
 
@@ -412,7 +445,6 @@ class TaxInvoiceCenter {
                             <td style="text-align: right;">¥ ${format_currency(it.amount)}</td>
                             <td style="text-align: center;">${it.tax_rate_text || '—'}</td>
                             <td style="text-align: right; color: #c2410c;">¥ ${format_currency(it.tax_amount)}</td>
-                            <td style="text-align: right; font-weight: 600;">${flt(it.vehicle_vessel_tax) > 0 ? '¥ ' + format_currency(it.vehicle_vessel_tax) : '—'}</td>
                             <td style="text-align: right; font-weight: 700;">¥ ${format_currency(it.line_total)}</td>
                         </tr>
                     `;
@@ -443,8 +475,6 @@ class TaxInvoiceCenter {
                                     <span class="k">票面不含税:</span><span class="v">¥ ${format_currency(d.amount_without_tax)}</span>
                                     <span class="k">票面增值税:</span><span class="v" style="color:#c2410c;">+ ¥ ${format_currency(d.tax_amount)}</span>
                                     <span class="k">票面价税合计:</span><span class="v"><strong>= ¥ ${format_currency(d.invoice_grand_total)}</strong></span>
-                                    <span class="k" style="color:#b45309;">代收车船税:</span><span class="v" style="color:#b45309; font-weight:600;">+ ¥ ${format_currency(d.vehicle_vessel_tax)}</span>
-                                    ${flt(d.late_fee) > 0 ? `<span class="k">滞纳金:</span><span class="v">+ ¥ ${format_currency(d.late_fee)}</span>` : ''}
                                     ${flt(d.remark_total) > 0 ? `<span class="k">备注明确合计:</span><span class="v" style="color:#2563eb; font-weight:600;">¥ ${format_currency(d.remark_total)}</span>` : ''}
                                     <span class="k" style="font-weight:700; font-size:13px;">实际应付合计:</span><span class="v" style="font-weight:700; font-size:14px; color:#0f172a;">¥ ${format_currency(d.payable_total)}</span>
                                     <span class="k">ERP 录入状态:</span><span class="v">${d.matched_purchase_invoice ? `<span class="tax-badge badge-entered">已录入 (${d.matched_purchase_invoice})</span>` : `<span class="tax-badge badge-pending">待录入</span>`}</span>
@@ -467,11 +497,10 @@ class TaxInvoiceCenter {
                                     <th style="width: 95px; text-align: right;">不含税金额</th>
                                     <th style="width: 70px; text-align: center;">税率</th>
                                     <th style="width: 85px; text-align: right;">税额</th>
-                                    <th style="width: 90px; text-align: right;">车船税</th>
                                     <th style="width: 95px; text-align: right;">本行合计</th>
                                 </tr>
                             </thead>
-                            <tbody>${itemsHtml || '<tr><td colspan="12" style="text-align:center; color:#94a3b8;">暂无明细</td></tr>'}</tbody>
+                            <tbody>${itemsHtml || '<tr><td colspan="11" style="text-align:center; color:#94a3b8;">暂无明细</td></tr>'}</tbody>
                         </table>
                     </div>
                 `);
@@ -555,6 +584,13 @@ class TaxInvoiceCenter {
             });
         }
 
+        if (self.can_delete_invalid_buyer_invoice(inv)) {
+            menu.push({
+                label: '🗑️ 永久删除购买方错误发票',
+                action: () => { self.open_delete_invalid_buyer_invoice_dialog(inv); }
+            });
+        }
+
         if (inv.invoice_pdf && !inv.pdf_removed) {
             menu.push({
                 label: '🧹 清理 PDF 原始附件',
@@ -588,6 +624,65 @@ class TaxInvoiceCenter {
             });
         });
         d.show();
+    }
+
+    can_delete_invalid_buyer_invoice(inv) {
+        return Boolean(
+            this.permissions.can_delete_invalid_buyer
+            && (inv.parse_warning || '').includes('【购买方错误】')
+        );
+    }
+
+    open_delete_invalid_buyer_invoice_dialog(inv) {
+        const self = this;
+        frappe.prompt([
+            {
+                label: __('确认发票号码'),
+                fieldname: 'confirmed_invoice_no',
+                fieldtype: 'Data',
+                reqd: 1,
+                description: __('请完整输入 ') + inv.invoice_no
+            },
+            {
+                label: __('删除原因'),
+                fieldname: 'deletion_reason',
+                fieldtype: 'Small Text',
+                reqd: 1,
+                default: __('购买方不属于本公司，删除错误导入记录')
+            }
+        ], (values) => {
+            if ((values.confirmed_invoice_no || '').trim() !== inv.invoice_no) {
+                frappe.msgprint({
+                    title: __('未删除'),
+                    indicator: 'red',
+                    message: __('确认发票号码不一致。')
+                });
+                return;
+            }
+            frappe.confirm(
+                __('将永久删除此错误发票及其原始附件；如存在红冲对冲关联，系统会先解除关联。删除原因和操作人会写入审计记录。确认继续？'),
+                () => {
+                    frappe.call({
+                        method: 'ashan_cn_procurement.ashan_cn_procurement.page.tax_invoice_center.tax_invoice_center.delete_invalid_buyer_tax_invoice',
+                        args: {
+                            invoice_no: inv.invoice_no,
+                            confirmed_invoice_no: values.confirmed_invoice_no,
+                            deletion_reason: values.deletion_reason
+                        },
+                        callback: (r) => {
+                            if (r.message && r.message.ok) {
+                                frappe.show_alert({
+                                    message: __('购买方错误发票已永久删除'),
+                                    indicator: 'green'
+                                });
+                                self.expanded_invoices.delete(inv.invoice_no);
+                                self.load_data();
+                            }
+                        }
+                    });
+                }
+            );
+        }, __('永久删除购买方错误发票'), __('确认删除'));
     }
 
     open_abandon_dialog(invoice_no) {
@@ -962,6 +1057,16 @@ class TaxInvoiceCenter {
         });
     }
 
+    get_batch_failure_reason(batch) {
+        const errorLog = batch.error_log || '';
+        if (!batch.failed_count) return '—';
+        if (/\[Tax Invoice,[^\]]+\]:\s*issue_date/.test(errorLog)) {
+            return `缺少开票日期（${batch.failed_count} 张）`;
+        }
+        const firstError = errorLog.split('\n').find(line => line.includes('解析失败') || line.includes('处理异常'));
+        return firstError ? firstError.replace(/^发票\s+/, '') : '请查看该批次错误日志';
+    }
+
     open_batch_history_dialog() {
         frappe.call({
             method: 'ashan_cn_procurement.ashan_cn_procurement.page.tax_invoice_center.tax_invoice_center.get_recent_batches',
@@ -984,15 +1089,17 @@ class TaxInvoiceCenter {
                                     <th style="text-align: right;">略过</th>
                                     <th style="text-align: right;">复核</th>
                                     <th style="text-align: right;">失败</th>
+                                    <th>失败原因</th>
                                     <th>处理信息</th>
                                 </tr>
                             </thead>
                             <tbody>
                 `;
                 if (!batches.length) {
-                    html += '<tr><td colspan="9" style="text-align:center; padding: 20px; color:#94a3b8;">暂无批次记录</td></tr>';
+                    html += '<tr><td colspan="10" style="text-align:center; padding: 20px; color:#94a3b8;">暂无批次记录</td></tr>';
                 } else {
                     batches.forEach(b => {
+                        const failureReason = this.get_batch_failure_reason(b);
                         html += `
                             <tr>
                                 <td><strong>${b.name}</strong></td>
@@ -1003,6 +1110,7 @@ class TaxInvoiceCenter {
                                 <td style="text-align: right; color: #64748b;">${b.duplicate_count}</td>
                                 <td style="text-align: right; color: #b45309;">${b.review_count}</td>
                                 <td style="text-align: right; color: #b91c1c;">${b.failed_count}</td>
+                                <td><span class="tax-import-failure-reason">${frappe.utils.escape_html(failureReason)}</span></td>
                                 <td style="font-size: 11px; color: #64748b;">${frappe.utils.escape_html(b.current_message || '—')}</td>
                             </tr>
                         `;

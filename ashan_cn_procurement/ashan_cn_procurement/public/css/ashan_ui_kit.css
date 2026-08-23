@@ -1,6 +1,149 @@
 /* Copyright (c) 2026, Ashan CN Procurement and contributors */
 /* AshanUI Kit - 全局企业级标准交互与样式模块库 */
 
+/* ===========================================================================
+   Design tokens and reusable primitives
+
+   All new custom-page UI must use these variables/classes instead of adding
+   inline styles.  The values deliberately match the established Qifu visual
+   language, so gradual migrations do not change the live interface.
+   =========================================================================== */
+:root {
+    --ashan-color-slate-950: #0f172a;
+    --ashan-color-slate-700: #334155;
+    --ashan-color-slate-500: #64748b;
+    --ashan-color-slate-300: #cbd5e1;
+    --ashan-color-slate-200: #e2e8f0;
+    --ashan-color-slate-50: #f8fafc;
+    --ashan-color-blue-800: #1e40af;
+    --ashan-color-blue-700: #1d4ed8;
+    --ashan-color-blue-600: #2563eb;
+    --ashan-color-blue-200: #bfdbfe;
+    --ashan-color-blue-50: #eff6ff;
+    --ashan-color-green-800: #166534;
+    --ashan-color-green-700: #15803d;
+    --ashan-color-green-200: #bbf7d0;
+    --ashan-color-green-50: #f0fdf4;
+    --ashan-color-amber-700: #b45309;
+    --ashan-color-amber-200: #fde68a;
+    --ashan-color-amber-50: #fffbeb;
+    --ashan-color-red-700: #b91c1c;
+    --ashan-color-red-200: #fecaca;
+    --ashan-color-red-50: #fef2f2;
+    --ashan-radius-sm: 6px;
+    --ashan-radius-md: 8px;
+    --ashan-radius-pill: 999px;
+    --ashan-space-1: 4px;
+    --ashan-space-2: 8px;
+    --ashan-space-3: 12px;
+}
+
+.ashan-card {
+    background: #ffffff;
+    border: 1px solid var(--ashan-color-slate-200);
+    border-radius: var(--ashan-radius-md);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.ashan-status-badge,
+.ashan-table-header-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: normal;
+}
+
+.ashan-status-badge--success {
+    background: #dcfce7;
+    color: var(--ashan-color-green-700);
+}
+
+.ashan-status-badge--draft {
+    background: #fef3c7;
+    color: var(--ashan-color-amber-700);
+}
+
+.ashan-status-badge--muted {
+    background: var(--ashan-color-slate-50);
+    color: var(--ashan-color-slate-700);
+    border: 1px solid var(--ashan-color-slate-300);
+}
+
+.ashan-money-cell {
+    text-align: right !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+    font-variant-numeric: tabular-nums;
+}
+
+.ashan-money-cell--deduction { color: #dc2626; }
+.ashan-money-cell--allowance { color: var(--ashan-color-amber-700); }
+.ashan-money-cell--payable { color: var(--ashan-color-blue-600); }
+.ashan-money-cell--net { color: #16a34a; }
+
+.ashan-cell-auto-derived,
+.qifu-cell-auto-derived {
+    background-color: var(--ashan-color-slate-50, #f8fafc) !important;
+    background: #f1f5f9 !important;
+    color: var(--ashan-color-slate-700, #334155) !important;
+}
+
+.ashan-callout {
+    background: var(--ashan-color-blue-50);
+    border: 1px solid var(--ashan-color-blue-200);
+    color: var(--ashan-color-blue-800);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.ashan-callout--xs {
+    border-radius: var(--ashan-radius-sm);
+    padding: 8px 10px;
+}
+
+.ashan-callout--sm {
+    border-radius: 7px;
+    padding: 9px 11px;
+    line-height: 1.55;
+}
+
+.ashan-callout--md {
+    border-radius: var(--ashan-radius-md);
+    padding: 9px 12px;
+}
+
+.ashan-callout--dialog {
+    border-radius: var(--ashan-radius-sm);
+    padding: 10px 12px;
+}
+
+.ashan-mt-2 { margin-top: var(--ashan-space-2); }
+.ashan-mb-3 { margin-bottom: var(--ashan-space-3); }
+
+.ashan-file-badge {
+    display: none;
+    padding: 1px 6px;
+    border: 1px solid var(--ashan-color-blue-200);
+    border-radius: 10px;
+    background: var(--ashan-color-blue-50);
+    color: var(--ashan-color-blue-600);
+    font-size: 10.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ashan-inline-notice {
+    display: inline-block;
+    padding: 5px 9px;
+    border: 1px solid var(--ashan-color-blue-200);
+    border-radius: var(--ashan-radius-sm);
+    background: var(--ashan-color-blue-50);
+    color: #475569;
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
 /* ==========================================================================
    1. 零位移稳态自动保存指示器 (Zero-Jitter Save Capsule)
    ========================================================================== */

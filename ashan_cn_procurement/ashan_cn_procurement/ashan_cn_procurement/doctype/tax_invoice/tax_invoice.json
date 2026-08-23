@@ -35,8 +35,6 @@
   "tax_amount",
   "invoice_grand_total",
   "col_amounts_2",
-  "vehicle_vessel_tax",
-  "late_fee",
   "remark_total",
   "payable_total",
   "display_summary",
@@ -244,19 +242,6 @@
   {
    "fieldname": "col_amounts_2",
    "fieldtype": "Column Break"
-  },
-  {
-   "default": "0.00",
-   "fieldname": "vehicle_vessel_tax",
-   "fieldtype": "Currency",
-   "in_list_view": 1,
-   "label": "代收车船税"
-  },
-  {
-   "default": "0.00",
-   "fieldname": "late_fee",
-   "fieldtype": "Currency",
-   "label": "滞纳金"
   },
   {
    "fieldname": "remark_total",

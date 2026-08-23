@@ -2,6 +2,7 @@
 import frappe
 from frappe.utils import now_datetime, flt
 from ashan_cn_procurement.parser.common import normalize_invoice_no
+from ashan_cn_procurement.services.tax_invoice_validation import has_buyer_validation_error
 
 def get_matching_purchase_invoices(invoice_nos):
 	"""
@@ -44,6 +45,17 @@ def update_tax_invoice_match_state(tax_inv_name_or_doc, matched_pis=None):
 		doc = frappe.get_doc("Tax Invoice", tax_inv_name_or_doc)
 	else:
 		doc = tax_inv_name_or_doc
+
+	if has_buyer_validation_error(doc.parse_warning):
+		doc.matched_purchase_invoice = None
+		doc.purchase_invoice_docstatus = None
+		doc.matched_at = None
+		doc.match_status = "未匹配"
+		if doc.business_status != "已废弃":
+			doc.business_status = "待录入"
+		if hasattr(doc, "save") and not doc.flags.in_insert:
+			doc.save(ignore_permissions=True)
+		return doc
 
 	inv_no = normalize_invoice_no(doc.invoice_no)
 	if matched_pis is None:
@@ -133,6 +145,9 @@ def reconcile_single_red_invoice(red_inv_doc_or_name):
 		red_doc = frappe.get_doc("Tax Invoice", red_inv_doc_or_name)
 	else:
 		red_doc = red_inv_doc_or_name
+
+	if has_buyer_validation_error(red_doc.parse_warning):
+		return {"matched": False, "reason": "购买方不属于允许范围，禁止红冲自动对冲"}
 
 	# 仅对红字发票或负数发票执行对冲
 	is_red = red_doc.is_red_invoice or (flt(red_doc.payable_total) < 0)
@@ -250,6 +265,7 @@ def auto_reconcile_all_red_invoices():
 		SELECT name, invoice_no, original_invoice_no, payable_total, seller_name, buyer_name
 		FROM `tabTax Invoice`
 		WHERE (is_red_invoice = 1 OR payable_total < 0)
+		  AND (parse_warning IS NULL OR parse_warning NOT LIKE '%【购买方错误】%')
 		  AND business_status IN ('待录入', '已对冲')
 	""", as_dict=True)
 

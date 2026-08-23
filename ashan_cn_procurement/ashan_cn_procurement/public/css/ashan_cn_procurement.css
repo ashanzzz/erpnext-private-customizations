@@ -104,3 +104,92 @@ body:not(.full-width) [data-page-route="Workspaces"] .layout-main {
     font-weight: 600 !important;
     color: #000000 !important;
 }
+
+/* -------------------------------------------------------------
+   4. Sidebar V3：路由稳定的两级手风琴
+   - 仅当前一级分组参与展开动画；路由恢复阶段完全禁用动画，避免二级
+     菜单跳转时先闪回默认状态、再重新展开。
+   ------------------------------------------------------------- */
+.body-sidebar .section-item > .standard-sidebar-item .sidebar-item-label {
+    font-weight: 700 !important;
+    font-size: 13.5px !important;
+}
+
+.body-sidebar .section-item > .standard-sidebar-item .sidebar-item-control,
+.body-sidebar .section-item > .standard-sidebar-item .drop-icon {
+    min-width: 28px !important;
+    min-height: 28px !important;
+    cursor: pointer !important;
+}
+
+.body-sidebar .section-item > .standard-sidebar-item .item-anchor {
+    cursor: pointer !important;
+}
+
+.body-sidebar .section-item > .standard-sidebar-item [item-icon] {
+    transition: transform 160ms ease !important;
+}
+
+.body-sidebar .section-item.ashan-sidebar-section-expanded
+    > .standard-sidebar-item [item-icon] {
+    transform: rotate(90deg);
+}
+
+.body-sidebar .section-item > .sidebar-child-item {
+    display: block !important;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: max-height 200ms ease, opacity 150ms ease;
+}
+
+.body-sidebar .section-item.ashan-sidebar-section-expanded
+    > .sidebar-child-item {
+    max-height: 800px !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    overflow: visible !important;
+}
+
+.body-sidebar .section-item:not(.ashan-sidebar-section-expanded)
+    > .sidebar-child-item {
+    max-height: 0 !important;
+    min-height: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    overflow: hidden !important;
+}
+
+.body-sidebar .sidebar-child-item .standard-sidebar-item .item-anchor {
+    padding-left: 24px !important;
+    font-size: 13px !important;
+    font-weight: 400 !important;
+}
+
+.body-sidebar .standard-sidebar-item.ashan-workbench-item .sidebar-item-label {
+    font-weight: 700 !important;
+    color: var(--text-color) !important;
+}
+
+.body-sidebar[data-ashan-sidebar-hydrating="true"]
+    .section-item > .sidebar-child-item,
+.body-sidebar[data-ashan-sidebar-hydrating="true"]
+    .section-item > .standard-sidebar-item [item-icon] {
+    transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .body-sidebar .section-item > .sidebar-child-item,
+    .body-sidebar .section-item > .standard-sidebar-item [item-icon] {
+        transition: none !important;
+    }
+}
+
+/* 已由【单据明细】取代的旧采购发票摘要字段：在元数据和列表设置完成
+   前也不渲染，避免进入采购发票时短暂出现重复列。 */
+[data-fieldname="custom_items_summary"] {
+    display: none !important;
+}

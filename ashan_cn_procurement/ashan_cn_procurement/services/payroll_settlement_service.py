@@ -6,8 +6,10 @@ import re
 from decimal import Decimal, ROUND_HALF_UP
 
 import frappe
-from frappe.utils import flt, cint, now_datetime, getdate
-from ashan_cn_procurement.services.employee_salary_service import get_insurance_setting
+from frappe.utils import flt, cint, now_datetime, getdate, today
+from ashan_cn_procurement.services.employee_salary_service import get_insurance_setting, resolve_social_security_base
+from ashan_cn_procurement.services.housing_fund_policy_service import evaluate_housing_fund_policy, get_override_map, normalize_policy_setting
+from ashan_cn_procurement.services.payroll_proof_validation import expected_proof_period
 
 # 个税台账参与规则：临时工/零工不进入个税申报台账；返聘类（含“其他-返聘工”）参与个税。
 TAX_LEDGER_EXCLUDED_EMPLOYEE_TYPES = {"临时工", "零工"}
@@ -27,7 +29,7 @@ def _normalize_period_month(period_month):
     pm_str = str(period_month or "").strip()
     if len(pm_str) == 6 and pm_str.isdigit():
         return f"{pm_str[:4]}-{pm_str[4:]}"
-    return pm_str or "2026-07"
+    return pm_str or today()[:7]
 
 
 def _salary_profiles_for_period(company, period_month, fields=None, order_by="employee_no asc"):
@@ -51,6 +53,10 @@ def _salary_profiles_for_period(company, period_month, fields=None, order_by="em
 
     wanted = list(fields or ["name", "employee_no", "employee_name"])
     required = ["employment_status", "date_of_joining", "relieving_date"]
+    if "social_security_base" in wanted:
+        # A requested base is always effective, not the historical cache. This single
+        # boundary keeps every ledger and calculator linked to the annual minimum.
+        required.extend(["social_security_base_mode", "custom_social_security_base"])
     query_fields = list(dict.fromkeys(wanted + required))
     rows = frappe.get_all(
         "Ashan Employee Salary Profile",
@@ -58,6 +64,11 @@ def _salary_profiles_for_period(company, period_month, fields=None, order_by="em
         fields=query_fields,
         order_by=order_by,
     )
+    if "social_security_base" in wanted:
+        year = cint(pm_str[:4]) or cint(today()[:4])
+        insurance_setting = get_insurance_setting(company, year)
+        for row in rows:
+            row["social_security_base"] = resolve_social_security_base(row, insurance_setting)
 
     result = []
     for row in rows:
@@ -74,41 +85,43 @@ def _salary_profiles_for_period(company, period_month, fields=None, order_by="em
     return result
 
 
-def check_payroll_workbench_permission(perm_type="read"):
+def check_payroll_workbench_permission(perm_type="read", company=None):
+	"""Apply the central payroll role and company-scope policy.
+
+	Generic DocType permissions are not a payroll authorization fallback: list
+	rendering permissions must never grant calculation, locking, unlocking, or
+	exporting sensitive payroll data.
 	"""
-	检查当前登录用户是否具备人事薪酬工作台及凭证的访问/操作权限
-	"""
-	user = frappe.session.user
-	if user == "Administrator":
-		return True
-	
-	user_roles = set(frappe.get_roles(user))
-	allowed_roles = {"System Manager", "HR Manager", "HR User", "Accounts Manager", "Accounts User"}
-	if user_roles & allowed_roles:
-		return True
-	
-	if frappe.has_permission("Ashan Monthly Payroll Settlement", perm_type):
-		return True
-		
-	action_name = "上传或修改凭证数据" if perm_type in ["write", "create"] else "查看或下载凭证原件"
-	frappe.throw(f"【⛔ 权限拦截】您的账号 ({user}) 未被授予人事或财务权限，禁止{action_name}！", frappe.PermissionError)
+	from ashan_cn_procurement.services.authorization_service import assert_payroll_access
+
+	return assert_payroll_access(perm_type, company=company)
+
+
+def _set_payroll_workflow_stage(settlement_doc, stage):
+	"""Persist the shared payroll workflow stage when the schema is available."""
+	if settlement_doc.meta.has_field("workflow_stage"):
+		settlement_doc.workflow_stage = stage
+
+
+def _record_completed_proof_verification(settlement_doc):
+	"""Record the audit trail only after both statutory proofs verify together."""
+	_set_payroll_workflow_stage(settlement_doc, "凭证核验通过")
+	if settlement_doc.meta.has_field("proof_verified_by"):
+		settlement_doc.proof_verified_by = frappe.session.user
+	if settlement_doc.meta.has_field("proof_verified_at"):
+		settlement_doc.proof_verified_at = now_datetime()
+	if settlement_doc.meta.has_field("proof_verification_note"):
+		settlement_doc.proof_verification_note = "社保与住房公积金凭证所属期、金额均核验一致。"
 
 # 个税统一由累计预扣/税后反推引擎处理；不再保留旧“单月税率表”算法，避免后续入口误用。
 @frappe.whitelist()
 def get_payroll_settlement_detail(company, period_month):
-	check_payroll_workbench_permission("read")
-	# 缴纳期计算
-	parts = period_month.split("-")
-	year_int = int(parts[0]) if len(parts) > 0 else 2026
-	month_int = int(parts[1]) if len(parts) > 1 else 7
-	if month_int == 12:
-		payment_year = year_int + 1
-		payment_month = 1
-	else:
-		payment_year = year_int
-		payment_month = month_int + 1
+	check_payroll_workbench_permission("read", company)
+	period_month = _normalize_period_month(period_month)
+	payment_period_month = expected_proof_period(period_month)
+	payment_year, payment_month = [int(value) for value in payment_period_month.split("-")]
 	payment_month_name = f"{payment_year}年{payment_month}月"
-	period_month_str = period_month.replace("-", "")
+	period_month_str = payment_period_month.replace("-", "")
 
 	# 母表人员结构统计：按选择账期还原实际在册边界，避免今天的离职状态污染历史月份。
 	all_profiles = _salary_profiles_for_period(
@@ -303,7 +316,7 @@ def calculate_and_generate_payroll(company, period_month):
     - 临时工/零工：保留薪酬核算，但不进入个税台账，本月个税固定为 0；
     - 返聘工/退休返聘/其他-返聘工：参与个税累计预扣，但通常不缴社保公积金。
     """
-    check_payroll_workbench_permission("write")
+    check_payroll_workbench_permission("write", company)
     doc_name = f"{company}-{period_month}"
     if frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
         existing = frappe.get_doc("Ashan Monthly Payroll Settlement", doc_name)
@@ -351,7 +364,7 @@ def calculate_and_generate_payroll(company, period_month):
             "name", "employee_no", "employee_name", "id_card", "gender", "mobile", "birth_date",
             "department", "job_title", "employee_type", "salary_mode", "fixed_salary", "base_salary",
             "post_allowance", "performance_base", "meal_allowance", "traffic_allowance",
-            "communication_allowance", "other_allowance", "social_security_base", "housing_fund_base",
+            "communication_allowance", "other_allowance", "social_security_base", "housing_fund_base", "housing_fund_policy",
             "deduction_child_education", "deduction_continuing_education", "deduction_housing_loan",
             "deduction_housing_rent", "deduction_elderly_care", "deduction_infant_care",
             "deduction_serious_illness"
@@ -381,6 +394,8 @@ def calculate_and_generate_payroll(company, period_month):
     total_gross = total_net = total_ss_comp = total_ss_pers = 0.0
     total_hf_comp = total_hf_pers = total_tax = 0.0
     tax_participant_count = 0
+    hf_policy_setting = get_insurance_setting(company, year) or {}
+    hf_override_map = get_override_map(company, period_month)
 
     for emp in employees:
         emp_no = emp.employee_no
@@ -405,7 +420,11 @@ def calculate_and_generate_payroll(company, period_month):
         target_or_gross = round(fixed_sal if fixed_sal > 0 else structured_salary, 2)
 
         ss_base = flt(emp.social_security_base)
-        hf_base = flt(emp.housing_fund_base)
+        hf_override = hf_override_map.get(str(emp_no))
+        hf_decision = evaluate_housing_fund_policy(
+            emp, period_month, hf_policy_setting, hf_override.override_mode if hf_override else ""
+        )
+        hf_base = flt(hf_decision.get("effective_base"))
         # 返聘、临时、外籍、实习通常不在本模块缴纳五险一金；强制按现有业务边界归零，避免误设基数带入扣款。
         no_insurance_types = TAX_REHIRE_EMPLOYEE_TYPES | {"临时工", "零工", "外籍工", "实习生"}
         if emp_type in no_insurance_types:
@@ -548,6 +567,11 @@ def calculate_and_generate_payroll(company, period_month):
     doc.total_housing_fund_company = round(total_hf_comp, 2)
     doc.total_housing_fund_person = round(total_hf_pers, 2)
     doc.total_tax = round(total_tax, 2)
+    _set_payroll_workflow_stage(doc, "已计算")
+    if doc.meta.has_field("calculated_by"):
+        doc.calculated_by = frappe.session.user
+    if doc.meta.has_field("calculated_at"):
+        doc.calculated_at = now_datetime()
 
     frappe.flags.ignore_lock = True
     doc.save(ignore_permissions=True)
@@ -561,48 +585,13 @@ def calculate_and_generate_payroll(company, period_month):
 
 @frappe.whitelist(methods=["POST"])
 def confirm_and_lock_payroll(company, period_month):
-	check_payroll_workbench_permission("write")
-	doc_name = f"{company}-{period_month}"
-	if not frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
-		frappe.throw(f"请先生成【{company}】{period_month} 的月度薪酬测算表！")
-
-	doc = frappe.get_doc("Ashan Monthly Payroll Settlement", doc_name)
-	doc.status = "已核定锁定"
-	doc.locked = 1
-	doc.confirmed_by = frappe.session.user or "系统管理员"
-	doc.confirmed_date = now_datetime()
-	
-	frappe.flags.ignore_lock = True
-	doc.save(ignore_permissions=True)
-	frappe.db.commit()
-
-	return {
-		"success": True,
-		"message": f"🎉【{company}】{period_month} 月度薪酬已成功核定并锁定！参数已冻结，防止误修改。",
-		"doc": get_payroll_settlement_detail(company, period_month)
-	}
+	"""Compatibility endpoint delegating to the only validated lock path."""
+	return execute_monthly_settlement_lock(company, period_month)
 
 @frappe.whitelist(methods=["POST"])
 def unlock_payroll(company, period_month, reason=""):
-	check_payroll_workbench_permission("write")
-	doc_name = f"{company}-{period_month}"
-	if not frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
-		frappe.throw("单据不存在！")
-
-	doc = frappe.get_doc("Ashan Monthly Payroll Settlement", doc_name)
-	doc.status = "草稿"
-	doc.locked = 0
-	doc.unlock_reason = f"[{str(now_datetime())[:19]}] 由 {frappe.session.user} 反审核解锁。原因: {reason or '重新测算核对'}"
-
-	frappe.flags.ignore_lock = True
-	doc.save(ignore_permissions=True)
-	frappe.db.commit()
-
-	return {
-		"success": True,
-		"message": f"🔓【{company}】{period_month} 月度薪酬表已解锁为草稿状态，允许重新调整与测算！",
-		"doc": get_payroll_settlement_detail(company, period_month)
-	}
+	"""Compatibility endpoint delegating to the audited unlock path."""
+	return unlock_monthly_settlement(company, period_month, reason)
 
 
 # 7 级综合所得年度税率表 (严格还原中国税法与 VBA 个人所得税_税率表)
@@ -971,7 +960,7 @@ def get_payroll_periods_summary(company="天津祺富机械加工有限公司"):
 	"""
 	获取企业已核定/已创建的账期汇总列表，并计算当前最新账期与下一连续应导入账期
 	"""
-	check_payroll_workbench_permission("read")
+	check_payroll_workbench_permission("read", company)
 	records = frappe.get_all(
 		"Ashan Monthly Payroll Settlement",
 		filters={"company": company},
@@ -996,7 +985,7 @@ def create_blank_payroll_period(company, period_month):
 	为指定月份创建【空白/零工资核定账期】（用于停产月或跳过月份的自动补齐，确保账期连续）
 	在保人员正常代扣社保公积金并生成企业统筹，实发/应发为0
 	"""
-	check_payroll_workbench_permission("write")
+	check_payroll_workbench_permission("write", company)
 	doc_name = f"{company}-{period_month}"
 	year = period_month.split("-")[0] if "-" in period_month else "2026"
 	setting_name = f"{company}-{year}"
@@ -1041,7 +1030,7 @@ def create_blank_payroll_period(company, period_month):
 	employees = _salary_profiles_for_period(
 		company,
 		period_month,
-		fields=["employee_no", "employee_name", "department", "job_title", "employee_type", "social_security_base", "housing_fund_base"],
+		fields=["employee_no", "employee_name", "department", "job_title", "employee_type", "social_security_base", "housing_fund_base", "housing_fund_policy"],
 	)
 
 	items_data = []
@@ -1049,10 +1038,15 @@ def create_blank_payroll_period(company, period_month):
 	total_ss_pers = 0.0
 	total_hf_comp = 0.0
 	total_hf_pers = 0.0
+	hf_policy_setting = get_insurance_setting(company, year) or {}
+	hf_override_map = get_override_map(company, period_month)
 
 	for emp in employees:
 		ss_base = flt(emp.social_security_base)
-		hf_base = flt(emp.housing_fund_base)
+		hf_override = hf_override_map.get(str(emp.employee_no))
+		hf_base = flt(evaluate_housing_fund_policy(
+			emp, period_month, hf_policy_setting, hf_override.override_mode if hf_override else ""
+		).get("effective_base"))
 
 		ss_p = round(ss_base * (ss_pers_rate / 100.0) + (big_med_amount if ss_base > 0 else 0), 2)
 		ss_c = round(ss_base * (ss_comp_rate / 100.0), 2)
@@ -1151,17 +1145,21 @@ def create_blank_payroll_period(company, period_month):
 	}
 
 @frappe.whitelist()
-def detect_qifu_excel_info(file_data=None, file_url=None, server_file_path=None, filename=None):
+def detect_qifu_excel_info(
+	file_data=None,
+	file_url=None,
+	server_file_path=None,
+	filename=None,
+	company="天津祺富机械加工有限公司",
+):
 	"""
 	预检上传的 Excel 文件，返回智能识别的核定月份与连续性校验状态
 	"""
-	check_payroll_workbench_permission("read")
+	check_payroll_workbench_permission("read", company)
 	import io
 	import openpyxl
 	import base64
 	import os
-
-	company = "天津祺富机械加工有限公司"
 
 	wb = None
 	if server_file_path and os.path.exists(server_file_path):
@@ -1223,135 +1221,264 @@ def detect_qifu_excel_info(file_data=None, file_url=None, server_file_path=None,
 	}
 
 
+def _normalize_qifu_payroll_header(value):
+	"""Normalize external payroll headers before matching them."""
+	text = str(value or "").strip()
+	text = re.sub(r"[\s\r\n\t]+", "", text)
+	return (
+		text.replace("／", "/")
+		.replace("（", "(")
+		.replace("）", ")")
+		.replace("：", ":")
+	)
+
+
+def _build_qifu_payroll_col_map(row_values):
+	"""Build a non-overlapping column map for the external payroll main table.
+
+	Do not use broad checks such as ``"小时" in header`` or ``"天数" in
+	header`` here.  They cause ``小时工资``/``加班小时`` to overwrite the
+	real ``作业小时`` column and cause ``国勤天数`` to overwrite ``作业天数``.
+	"""
+	col_map = {}
+	for c_idx, raw_text in enumerate(row_values, start=1):
+		text = _normalize_qifu_payroll_header(raw_text)
+		if not text:
+			continue
+
+		# Specific hour/day fields first. These rules are intentionally narrow.
+		if text in {"加班小时", "加班工时"}:
+			col_map["overtime_hours"] = c_idx
+		elif text in {"小时工资", "时工资"}:
+			col_map["hour_salary"] = c_idx
+		elif text in {"国勤天数", "法定天数", "法定出勤天数"}:
+			col_map["national_days"] = c_idx
+		elif text in {"国勤工资", "法定工资", "法定出勤工资"}:
+			col_map["national_salary"] = c_idx
+		elif text in {"作业小时", "作业工时", "工作小时", "工作工时", "出勤小时", "出勤工时"}:
+			col_map["work_hours"] = c_idx
+		elif text in {"作业天数", "工作天数", "出勤天数"}:
+			col_map["work_days"] = c_idx
+		elif text in {"天工资", "日工资"}:
+			col_map["day_salary"] = c_idx
+		elif text in {"加班费", "加班工资"}:
+			col_map["overtime_salary"] = c_idx
+		elif "全勤" in text:
+			col_map["full_attendance"] = c_idx
+		elif text in {"达标率", "绩效达标率"}:
+			col_map["target_rate"] = c_idx
+		elif text in {"达标工资", "绩效达标工资"}:
+			col_map["target_salary"] = c_idx
+		elif text in {"扣除", "扣款", "其他扣除"}:
+			col_map["deduction"] = c_idx
+		elif text in {"实发工资", "实发", "实发合计", "实发工资合计"}:
+			col_map["net_salary"] = c_idx
+		elif text in {"姓名", "员工姓名"}:
+			col_map["name"] = c_idx
+		elif text in {"工号", "员工工号", "编号"}:
+			col_map["no"] = c_idx
+		elif text in {"是否社保", "社保", "是否参保"}:
+			col_map["is_insured"] = c_idx
+		elif text in {"备考", "备注", "备注说明"}:
+			col_map["remarks"] = c_idx
+	return col_map
+
+
+def _resolve_qifu_employee_name(raw_name, candidates):
+	"""Resolve one-character name variants only when the match is unique."""
+	name = str(raw_name or "").strip()
+	if not name:
+		return name
+	candidate_names = [str(x or "").strip() for x in candidates if str(x or "").strip()]
+	if name in candidate_names:
+		return name
+	matches = [
+		cand for cand in candidate_names
+		if len(cand) == len(name) and sum(a != b for a, b in zip(cand, name)) == 1
+	]
+	return matches[0] if len(matches) == 1 else name
+
+
+def _find_qifu_allowance_table(ws, start_row=1):
+	"""Locate the lower position/house-car allowance table."""
+	for r in range(max(1, start_row), ws.max_row + 1):
+		row_values = [ws.cell(r, c).value for c in range(1, ws.max_column + 1)]
+		row_texts = [_normalize_qifu_payroll_header(v) for v in row_values]
+		if not any("职位补贴" in t or "职务补贴" in t or "房/车补" in t or "车补" in t for t in row_texts):
+			continue
+		cols = {}
+		for c_idx, text in enumerate(row_texts, start=1):
+			if text in {"姓名", "员工姓名"}:
+				cols["name"] = c_idx
+			elif "职位补贴" in text or "职务补贴" in text:
+				cols["post_allowance"] = c_idx
+			elif "房/车补" in text or "车补" in text or "房补" in text:
+				cols["house_car_allowance"] = c_idx
+		if "name" in cols and ("post_allowance" in cols or "house_car_allowance" in cols):
+			return r, cols
+	return -1, {}
+
+
+
+def _normalize_external_employee_key(value):
+	return re.sub(r"\s+", "", str(value or "").strip()).lower()
+
+
+def _external_employee_aliases(value):
+	"""Parse comma/newline/Chinese-punctuation separated historical names."""
+	return [
+		_normalize_external_employee_key(x)
+		for x in re.split(r"[,，;；/、\n\r]+", str(value or ""))
+		if _normalize_external_employee_key(x)
+	]
+
+
+def _match_external_payroll_employee(source_row, master_employees):
+	"""Match one external source row to the employee master with auditable confidence.
+
+	Order: real employee number, exact current name, explicit historical alias, then a
+	unique one-character name variant.  Ambiguous fuzzy matches are never accepted.
+	"""
+	source_no = str(source_row.get("source_serial_no") or "").strip()
+	if source_row.get("source_no_kind") == "employee_no" and source_no:
+		matches = [emp for emp in master_employees if str(emp.get("employee_no") or "").strip() == source_no]
+		if len(matches) == 1:
+			return matches[0], "employee_no", 1.0
+
+	key = _normalize_external_employee_key(source_row.get("employee_name"))
+	if key:
+		exact = [emp for emp in master_employees if _normalize_external_employee_key(emp.get("employee_name")) == key]
+		if len(exact) == 1:
+			return exact[0], "exact_name", 1.0
+
+		alias = [emp for emp in master_employees if key in _external_employee_aliases(emp.get("external_name_aliases"))]
+		if len(alias) == 1:
+			return alias[0], "name_alias", 0.98
+
+		near = []
+		for emp in master_employees:
+			candidate_keys = [_normalize_external_employee_key(emp.get("employee_name"))] + _external_employee_aliases(emp.get("external_name_aliases"))
+			if any(len(cand) == len(key) and sum(a != b for a, b in zip(cand, key)) == 1 for cand in candidate_keys if cand):
+				near.append(emp)
+		if len({str(emp.get("name")) for emp in near}) == 1 and near:
+			return near[0], "unique_one_char_variant", 0.85
+
+	return None, "unmatched", 0.0
+
+
+def _semantic_preview_row(row, seq):
+	allowance = flt(row.get("post_allowance")) + flt(row.get("house_car_allowance"))
+	payable = flt(row.get("workshop_net")) + allowance
+	return {
+		"seq": seq,
+		"employee_name": row.get("employee_name") or "",
+		"work_days": flt(row.get("work_days")),
+		"work_hours": flt(row.get("work_hours")),
+		"day_salary": flt(row.get("day_salary")),
+		"hour_salary": flt(row.get("hour_salary")),
+		"full_attendance": flt(row.get("full_attendance")),
+		"overtime_hours": flt(row.get("overtime_hours")),
+		"overtime_salary": flt(row.get("overtime_salary")),
+		"national_days": flt(row.get("national_days")),
+		"national_salary": flt(row.get("national_salary")),
+		"target_rate": row.get("target_rate") or "",
+		"target_salary": flt(row.get("target_salary")),
+		"deduction": flt(row.get("deduction")),
+		"source_polishing_salary": flt(row.get("source_polishing_salary")),
+		"source_payable_salary": flt(row.get("source_payable_salary")),
+		"source_paid_salary": flt(row.get("source_paid_salary")),
+		"workshop_subtotal": flt(row.get("workshop_net")),
+		"post_allowance": flt(row.get("post_allowance")),
+		"house_rent_allowance": flt(row.get("house_car_allowance")),
+		"allowance_subtotal": allowance,
+		"payable_salary": payable,
+		"net_salary": payable,
+		"source_row_number": row.get("source_row_number"),
+	}
+
+
+@frappe.whitelist()
+def get_external_payroll_import_metadata(company="天津祺富机械加工有限公司"):
+	"""Return the declarative parser registry for UI, diagnostics and AI tooling."""
+	check_payroll_workbench_permission("read", company)
+	from ashan_cn_procurement.services.payroll_excel_import_service import (
+		PARSER_VERSION, FIELD_ALIASES, ALLOWANCE_ALIASES, AUDIT_ONLY_ALIASES,
+	)
+	return {
+		"parser_version": PARSER_VERSION,
+		"main_fields": {key: sorted(list(values)) for key, values in FIELD_ALIASES.items()},
+		"allowance_fields": {key: sorted(list(values)) for key, values in ALLOWANCE_ALIASES.items()},
+		"audit_only_fields": {key: sorted(list(values)) for key, values in AUDIT_ONLY_ALIASES.items()},
+		"supported_file_extensions": [".xlsx", ".xlsm"],
+		"matching_order": ["employee_no", "exact_name", "name_alias", "unique_one_char_variant"],
+		"cash_note_policy": {
+			"source_columns": "raw_audit_only",
+			"authoritative_source": "monthly_settlement_final_net_salary",
+			"generated_denominations": [100, 50, 10, 5, 1],
+		},
+	}
+
+
 @frappe.whitelist()
 def preview_import_excel_data(file_base64=None, file_name=None, file_data=None, filename=None, company="天津祺富机械加工有限公司", period_month=None):
-	"""
-	预检并解析上传的 Excel 文件，返回智能识别的账期、工资人数、考勤工资合计、考勤加补贴合计以及前 10 行预览数据
-	"""
-	check_payroll_workbench_permission("read")
-	import io
-	import openpyxl
+	"""Preview external payroll through the same semantic parser used by final import."""
+	check_payroll_workbench_permission("read", company)
 	import base64
+	from ashan_cn_procurement.services.payroll_excel_import_service import load_and_parse_external_payroll
 
 	raw_data = file_base64 or file_data
 	fname = file_name or filename or ""
-
 	if not raw_data:
 		frappe.throw("未提供有效的 Excel 文件数据！")
-
 	if "," in raw_data:
-		raw_data = raw_data.split(",")[1]
-
+		raw_data = raw_data.split(",", 1)[1]
 	try:
 		file_bytes = base64.b64decode(raw_data)
-		wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+		wb, parsed = load_and_parse_external_payroll(file_bytes, filename=fname)
 	except Exception as e:
 		err_str = str(e)
 		if "not a zip file" in err_str.lower() or "invalidfile" in err_str.lower() or (fname and fname.lower().endswith(".xls")):
-			frappe.throw(f"【❌ 文件格式不支持】系统仅支持标准 Office OpenXML 格式（.xlsx / .xlsm）。您上传的文件【{fname}】疑似为旧版二进制 .xls 或损坏文件，请使用 Excel 打开并【另存为 .xlsx 格式】后再上传！")
-		else:
-			frappe.throw(f"【❌ Excel 读取失败】解析文件【{fname}】时发生错误: {err_str}")
+			frappe.throw(f"【❌ 文件格式不支持】仅支持 .xlsx / .xlsm。文件【{fname}】如为旧版 .xls，请先在 Excel 中另存为 .xlsx 后再上传。")
+		frappe.throw(f"【❌ Excel 读取失败】解析文件【{fname}】时发生错误: {err_str}")
 
-	ws = wb.active
-
-	# 1. 智能探测与严格校准账期
 	detected_month, source = detect_payroll_period_month(wb, fname)
-	current_target_month = period_month or "2026-07"
-	is_period_matched = True
+	current_target_month = period_month or detected_month or today()[:7]
+	is_period_matched = not (detected_month and current_target_month and detected_month != current_target_month)
 	mismatch_message = ""
-
-	if detected_month:
-		if detected_month != current_target_month:
-			is_period_matched = False
-			mismatch_message = f"❌ 账期不匹配拦截！当前工作台发薪账期为【{current_target_month}】，但上传文件识别为【{detected_month}】（来源: {source}）。系统禁止将【{detected_month}】的实发表导入到【{current_target_month}】！请核对文件或在顶部切换发薪月份。"
-	else:
+	if not is_period_matched:
+		mismatch_message = (
+			f"❌ 账期不匹配拦截！当前工作台发薪账期为【{current_target_month}】，"
+			f"但上传文件识别为【{detected_month}】（来源: {source}）。请核对文件或切换发薪月份。"
+		)
+	if not detected_month:
 		detected_month = current_target_month
 
-	# 2. 表头定位；姓名不再硬编码个人别名，优先使用工号并要求姓名精确匹配。
-	name_alias_map = {}
+	rows = parsed.get("rows") or []
+	preview_rows = [_semantic_preview_row(row, idx) for idx, row in enumerate(rows, start=1)]
 
-	header_row = -1
-	col_map = {}
-	for r in range(1, min(10, ws.max_row + 1)):
-		row_texts = [str(ws.cell(r, c).value or "").strip().replace(" ", "") for c in range(1, ws.max_column + 1)]
-		if any("姓名" in t for t in row_texts) and any("实发" in t or "工资" in t for t in row_texts):
-			header_row = r
-			for c_idx, text in enumerate(row_texts, start=1):
-				if not text: continue
-				if "姓名" in text: col_map["name"] = c_idx
-				elif "工号" in text or "编号" in text: col_map["no"] = c_idx
-				elif "实发" in text: col_map["net_salary"] = c_idx
-				elif "作业天数" in text or "天数" in text: col_map["work_days"] = c_idx
-				elif "作业小时" in text or "小时" in text: col_map["work_hours"] = c_idx
-				elif "天工资" in text: col_map["day_salary"] = c_idx
-				elif "小时工资" in text: col_map["hour_salary"] = c_idx
-				elif "全勤" in text: col_map["full_attendance"] = c_idx
-				elif "加班小时" in text: col_map["overtime_hours"] = c_idx
-				elif "加班费" in text: col_map["overtime_salary"] = c_idx
-				elif "国勤天数" in text: col_map["national_days"] = c_idx
-				elif "国勤工资" in text: col_map["national_salary"] = c_idx
-				elif "达标率" in text: col_map["target_rate"] = c_idx
-				elif "达标工资" in text: col_map["target_salary"] = c_idx
-				elif "扣除" in text: col_map["deduction"] = c_idx
-				elif "职位补贴" in text: col_map["post_allowance"] = c_idx
-				elif "房" in text or "车补" in text: col_map["house_allowance"] = c_idx
-			break
+	# 预检阶段同步做员工母表匹配，但不修改任何数据。
+	master_employees = _salary_profiles_for_period(
+		company, detected_month,
+		fields=["name", "employee_no", "employee_name", "external_name_aliases"],
+	) if detected_month else []
+	matched_count = 0
+	fuzzy_matched_count = 0
+	unmatched_names = []
+	for idx, source_row in enumerate(rows):
+		emp, method, confidence = _match_external_payroll_employee(source_row, master_employees)
+		if emp:
+			matched_count += 1
+			if confidence < 0.999:
+				fuzzy_matched_count += 1
+			preview_rows[idx]["matched_employee_name"] = emp.get("employee_name")
+			preview_rows[idx]["match_method"] = method
+			preview_rows[idx]["match_confidence"] = confidence
+		else:
+			unmatched_names.append(source_row.get("employee_name") or "未命名")
+			preview_rows[idx]["matched_employee_name"] = ""
+			preview_rows[idx]["match_method"] = "unmatched"
+			preview_rows[idx]["match_confidence"] = 0
 
-	parsed_rows = []
-	tot_workshop = 0.0
-	tot_allowance = 0.0
-	tot_payable = 0.0
-	tot_net = 0.0
-
-	if header_row != -1 and "name" in col_map:
-		r = header_row + 1
-		idx = 1
-		while r <= ws.max_row:
-			raw_name = str(ws.cell(r, col_map["name"]).value or "").strip()
-			if not raw_name or raw_name in ["合计", "总计", "平均", "None"]:
-				break
-			std_name = name_alias_map.get(raw_name, raw_name)
-			net_val = flt(ws.cell(r, col_map["net_salary"]).value) if "net_salary" in col_map else 0.0
-			days = flt(ws.cell(r, col_map["work_days"]).value) if "work_days" in col_map else 0
-			hours = flt(ws.cell(r, col_map["work_hours"]).value) if "work_hours" in col_map else 0
-			day_sal = flt(ws.cell(r, col_map["day_salary"]).value) if "day_salary" in col_map else 0.0
-			full_att = flt(ws.cell(r, col_map["full_attendance"]).value) if "full_attendance" in col_map else 0.0
-			ot_sal = flt(ws.cell(r, col_map["overtime_salary"]).value) if "overtime_salary" in col_map else 0.0
-			nat_sal = flt(ws.cell(r, col_map["national_salary"]).value) if "national_salary" in col_map else 0.0
-			t_sal = flt(ws.cell(r, col_map["target_salary"]).value) if "target_salary" in col_map else 0.0
-			ded_val = flt(ws.cell(r, col_map["deduction"]).value) if "deduction" in col_map else 0.0
-			post_all = flt(ws.cell(r, col_map["post_allowance"]).value) if "post_allowance" in col_map else 0.0
-			house_all = flt(ws.cell(r, col_map["house_allowance"]).value) if "house_allowance" in col_map else 0.0
-
-			# 考勤绩效工资小计 = 天工资 + 小时工资 + 全勤 + 加班费 + 国勤 + 达标 - 扣除
-			workshop_sub = day_sal + full_att + ot_sal + nat_sal + t_sal - ded_val
-			if workshop_sub <= 0 and net_val > 0:
-				workshop_sub = net_val
-
-			allowance_sub = post_all + house_all
-			payable_sub = workshop_sub + allowance_sub
-
-			parsed_rows.append({
-				"seq": idx,
-				"employee_name": std_name,
-				"work_days": days,
-				"work_hours": hours,
-				"workshop_subtotal": workshop_sub,
-				"post_allowance": post_all,
-				"house_rent_allowance": house_all,
-				"allowance_subtotal": allowance_sub,
-				"payable_salary": payable_sub,
-				"net_salary": net_val
-			})
-
-			tot_workshop += workshop_sub
-			tot_allowance += allowance_sub
-			tot_payable += payable_sub
-			tot_net += net_val
-			idx += 1
-			r += 1
-
-	# 判断当前账期是否已经导入过
 	doc_name = f"{company}-{detected_month}"
 	is_already_imported = frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name)
 
@@ -1363,14 +1490,29 @@ def preview_import_excel_data(file_base64=None, file_name=None, file_data=None, 
 		"is_period_matched": is_period_matched,
 		"mismatch_message": mismatch_message,
 		"is_already_imported": bool(is_already_imported),
-		"employee_count": len(parsed_rows),
-		"attendance_salary_total": round(tot_workshop, 2),
-		"allowance_total": round(tot_allowance, 2),
-		"attendance_allowance_total": round(tot_payable, 2),
-		"net_salary_total": round(tot_net, 2),
-		"preview_rows": parsed_rows[:15],
+		"employee_count": len(rows),
+		"matched_count": matched_count,
+		"fuzzy_matched_count": fuzzy_matched_count,
+		"unmatched_count": len(unmatched_names),
+		"unmatched_names": unmatched_names[:30],
+		"attendance_salary_total": round(flt(parsed.get("main_net_total")), 2),
+		"allowance_total": round(flt(parsed.get("allowance_total")), 2),
+		"attendance_allowance_total": round(flt(parsed.get("grand_total")), 2),
+		"net_salary_total": round(flt(parsed.get("grand_total")), 2),
+		"preview_rows": preview_rows[:15],
 		"filename": fname,
-		"message": f"成功解析 Excel: 识别账期【{detected_month}】，共 {len(parsed_rows)} 位员工发放记录！"
+		"parser_version": parsed.get("parser_version"),
+		"schema_version": parsed.get("schema_version"),
+		"sheet_name": parsed.get("sheet_name"),
+		"header_row": parsed.get("header_row"),
+		"compatibility_score": parsed.get("compatibility_score"),
+		"recognized_fields": parsed.get("recognized_fields") or [],
+		"unknown_headers": parsed.get("unknown_headers") or [],
+		"allowance_table_found": parsed.get("allowance_table_found"),
+		"base_reconciliation_diff": parsed.get("base_reconciliation_diff"),
+		"grand_reconciliation_diff": parsed.get("grand_reconciliation_diff"),
+		"diagnostics": parsed.get("diagnostics") or [],
+		"message": f"成功解析 Excel：识别为 {parsed.get('schema_version')}，共 {len(rows)} 位员工发放记录。"
 	}
 
 
@@ -1380,26 +1522,32 @@ def import_and_calculate_payroll_excel(file_base64=None, file_name=None, file_da
 	导入外部实发表并执行融合计算：
 	如果当前账期已存在，自动清空旧数据并重新导入覆盖！
 	"""
-	check_payroll_workbench_permission("write")
+	check_payroll_workbench_permission("write", company)
 	return upload_and_import_qifu_salary(
 		file_data=file_base64 or file_data,
 		filename=file_name or filename,
-		period_month=period_month
+		period_month=period_month,
+		company=company,
 	)
 
 
 @frappe.whitelist(methods=["POST"])
-def upload_and_import_qifu_salary(file_url=None, file_data=None, filename=None, period_month=None, server_file_path=None):
+def upload_and_import_qifu_salary(
+	file_url=None,
+	file_data=None,
+	filename=None,
+	period_month=None,
+	server_file_path=None,
+	company="天津祺富机械加工有限公司",
+):
 	"""
 	上传/解析祺富外部实发工资表 Excel，智能核定月份与匹配人员信息，并执行【税后实发倒推税前应发与个税】
 	"""
-	check_payroll_workbench_permission("write")
+	check_payroll_workbench_permission("write", company)
 	import io
 	import openpyxl
 	import base64
 	import os
-
-	company = "天津祺富机械加工有限公司"
 
 	# 1. 加载工作簿并妥善保存原始凭证文件
 	wb = None
@@ -1432,142 +1580,48 @@ def upload_and_import_qifu_salary(file_url=None, file_data=None, filename=None, 
 		else:
 			frappe.throw(f"【❌ Excel 读取失败】解析文件【{filename or 'Excel'}】时发生错误: {err_str}")
 
-	ws = wb.active
+	from ashan_cn_procurement.services.payroll_excel_import_service import parse_external_payroll_workbook
+	try:
+		parsed_source = parse_external_payroll_workbook(
+			wb, file_bytes=raw_file_bytes, filename=filename or ""
+		)
+	except Exception as e:
+		frappe.throw(f"【❌ 工资表结构识别失败】{e}")
 
 	# 2. 智能核定与严格校准工资账期月份
 	detected_month, det_source = detect_payroll_period_month(wb, filename or "")
 	if period_month and period_month != "auto" and detected_month and detected_month != period_month:
-		frappe.throw(f"【❌ 账期校准拦截】当前发薪账期为【{period_month}】，但上传的 Excel 文件识别为【{detected_month}】（来源: {det_source}）。系统禁止将【{detected_month}】的外部工资表导入到【{period_month}】！请核对文件或在工作台顶部切换账期。")
-
+		frappe.throw(
+			f"【❌ 账期校准拦截】当前发薪账期为【{period_month}】，但上传文件识别为【{detected_month}】"
+			f"（来源: {det_source}）。请核对文件或在工作台顶部切换账期。"
+		)
 	if not period_month or period_month == "auto":
-		if detected_month:
-			period_month = detected_month
-		else:
-			period_month = "2026-07"
+		period_month = detected_month or today()[:7]
 
-	# 检查是否存在跳月：若存在中间未核定的月份，自动补齐空白零工资账期
+	# 源表若自带“工资表/合计”，必须先过金额勾稽。差额不能静默吞掉。
+	grand_diff = parsed_source.get("grand_reconciliation_diff")
+	base_diff = parsed_source.get("base_reconciliation_diff")
+	if grand_diff is not None and abs(flt(grand_diff)) > 1.00:
+		frappe.throw(
+			f"【❌ 源表金额勾稽失败】逐行解析总额与 Excel 总计相差 {flt(grand_diff):,.2f} 元。"
+			"系统已停止导入，请先在预检中核对未识别表头或源表公式。"
+		)
+	if base_diff is not None and abs(flt(base_diff)) > 1.00:
+		frappe.throw(
+			f"【❌ 源表工资主表勾稽失败】逐行实发与源表‘工资表’合计相差 {flt(base_diff):,.2f} 元。"
+		)
+
+	# 检查是否存在跳月，必要时补齐空白零工资账期。
 	summary = get_payroll_periods_summary(company)
-	latest_p = summary.get("latest_period") or "2026-06"
-	expected_next_p = summary.get("expected_next_period") or "2026-07"
-	if period_month > expected_next_p:
-		skipped = get_months_between(latest_p, period_month)
-		for sm in skipped:
+	latest_p = summary.get("latest_period") or ""
+	expected_next_p = summary.get("expected_next_period") or period_month
+	if latest_p and period_month > expected_next_p:
+		for sm in get_months_between(latest_p, period_month):
 			if not frappe.db.exists("Ashan Monthly Payroll Settlement", f"{company}-{sm}"):
 				create_blank_payroll_period(company, sm)
 
-	# 不在源码中硬编码具体员工别名。
-	name_alias_map = {}
-
-	# 3. 提取老板娘表中的【主表车间实发】
-	header_row = -1
-	col_map = {}
-	for r in range(1, min(10, ws.max_row + 1)):
-		row_texts = [str(ws.cell(r, c).value or "").strip().replace(" ", "") for c in range(1, ws.max_column + 1)]
-		if any("姓名" in t for t in row_texts) and any("实发" in t or "工资" in t for t in row_texts):
-			header_row = r
-			for c_idx, text in enumerate(row_texts, start=1):
-				if not text: continue
-				if "姓名" in text: col_map["name"] = c_idx
-				elif "工号" in text or "编号" in text: col_map["no"] = c_idx
-				elif "实发" in text: col_map["net_salary"] = c_idx
-				elif "作业天数" in text or "天数" in text: col_map["work_days"] = c_idx
-				elif "作业小时" in text or "小时" in text: col_map["work_hours"] = c_idx
-				elif "天工资" in text: col_map["day_salary"] = c_idx
-				elif "小时工资" in text: col_map["hour_salary"] = c_idx
-				elif "全勤" in text: col_map["full_attendance"] = c_idx
-				elif "加班小时" in text: col_map["overtime_hours"] = c_idx
-				elif "加班费" in text: col_map["overtime_salary"] = c_idx
-				elif "国勤天数" in text: col_map["national_days"] = c_idx
-				elif "国勤工资" in text: col_map["national_salary"] = c_idx
-				elif "达标率" in text: col_map["target_rate"] = c_idx
-				elif "达标工资" in text: col_map["target_salary"] = c_idx
-				elif "扣除" in text: col_map["deduction"] = c_idx
-				elif "是否社保" in text or "社保" in text: col_map["is_insured"] = c_idx
-				elif "备考" in text or "备注" in text: col_map["remarks"] = c_idx
-			break
-
-	wife_payroll_dict = {} # std_name -> data
-
-	if header_row != -1 and "name" in col_map and "net_salary" in col_map:
-		r = header_row + 1
-		while r <= ws.max_row:
-			raw_name = str(ws.cell(r, col_map["name"]).value or "").strip()
-			if not raw_name or raw_name in ["合计", "总计", "平均", "None"]:
-				break
-			std_name = name_alias_map.get(raw_name, raw_name)
-			net_val = flt(ws.cell(r, col_map["net_salary"]).value)
-			days = flt(ws.cell(r, col_map["work_days"]).value) if "work_days" in col_map else 0
-			hours = flt(ws.cell(r, col_map["work_hours"]).value) if "work_hours" in col_map else 0
-			day_sal = flt(ws.cell(r, col_map["day_salary"]).value) if "day_salary" in col_map else 0.0
-			hour_sal = flt(ws.cell(r, col_map["hour_salary"]).value) if "hour_salary" in col_map else 0.0
-			full_att = flt(ws.cell(r, col_map["full_attendance"]).value) if "full_attendance" in col_map else 0.0
-			ot_hours = flt(ws.cell(r, col_map["overtime_hours"]).value) if "overtime_hours" in col_map else 0.0
-			ot_sal = flt(ws.cell(r, col_map["overtime_salary"]).value) if "overtime_salary" in col_map else 0.0
-			nat_days = flt(ws.cell(r, col_map["national_days"]).value) if "national_days" in col_map else 0.0
-			nat_sal = flt(ws.cell(r, col_map["national_salary"]).value) if "national_salary" in col_map else 0.0
-			t_rate = str(ws.cell(r, col_map["target_rate"]).value or "") if "target_rate" in col_map else ""
-			t_sal = flt(ws.cell(r, col_map["target_salary"]).value) if "target_salary" in col_map else 0.0
-			ded_val = flt(ws.cell(r, col_map["deduction"]).value) if "deduction" in col_map else 0.0
-			is_ss = str(ws.cell(r, col_map["is_insured"]).value or "").strip() if "is_insured" in col_map else "是"
-			rem_val = str(ws.cell(r, col_map["remarks"]).value or "").strip() if "remarks" in col_map else ""
-
-			wife_payroll_dict[std_name] = {
-				"raw_name": raw_name,
-				"workshop_net": net_val,
-				"work_days": days,
-				"work_hours": hours,
-				"day_salary": day_sal,
-				"hour_salary": hour_sal,
-				"full_attendance": full_att,
-				"overtime_hours": ot_hours,
-				"overtime_salary": ot_sal,
-				"national_days": nat_days,
-				"national_salary": nat_sal,
-				"target_rate": t_rate,
-				"target_salary": t_sal,
-				"deduction": ded_val,
-				"is_insured": is_ss,
-				"remarks": rem_val,
-				"post_allowance": 0.0,
-				"house_car_allowance": 0.0
-			}
-			r += 1
-
-	# 4. 扫描老板娘表底部的【职位补贴与房/车补】
-	sub_header_row = -1
-	sub_cols = {}
-	for r in range((header_row if header_row != -1 else 1) + 5, ws.max_row + 1):
-		row_texts = [str(ws.cell(r, c).value or "").strip().replace(" ", "") for c in range(1, ws.max_column + 1)]
-		if any("职位补贴" in t for t in row_texts) or any("房/车补" in t for t in row_texts) or any("车补" in t for t in row_texts):
-			sub_header_row = r
-			for c_idx, text in enumerate(row_texts, start=1):
-				if "姓名" in text: sub_cols["name"] = c_idx
-				elif "职位补贴" in text or "职务补贴" in text: sub_cols["post_allowance"] = c_idx
-				elif "房/车补" in text or "车补" in text or "房补" in text: sub_cols["house_car_allowance"] = c_idx
-			break
-
-	if sub_header_row != -1:
-		for r in range(sub_header_row + 1, ws.max_row + 1):
-			raw_name = str(ws.cell(r, sub_cols.get("name", 13)).value or "").strip()
-			if not raw_name or raw_name in ["合计", "总计", "工资表", "None"]:
-				continue
-			std_name = name_alias_map.get(raw_name, raw_name)
-			post_all = flt(ws.cell(r, sub_cols["post_allowance"]).value) if "post_allowance" in sub_cols else 0.0
-			hc_all = flt(ws.cell(r, sub_cols["house_car_allowance"]).value) if "house_car_allowance" in sub_cols else 0.0
-
-			if std_name not in wife_payroll_dict:
-				wife_payroll_dict[std_name] = {
-					"raw_name": raw_name,
-					"workshop_net": 0.0,
-					"work_days": 0.0,
-					"work_hours": 0.0,
-					"is_insured": "是",
-					"post_allowance": post_all,
-					"house_car_allowance": hc_all
-				}
-			else:
-				wife_payroll_dict[std_name]["post_allowance"] = post_all
-				wife_payroll_dict[std_name]["house_car_allowance"] = hc_all
+	# 3-4. 主表、历史扩展字段、补贴区均已由语义解析器统一归一化。
+	source_payroll_rows = parsed_source.get("rows") or []
 
 	# 5. 加载社保公积金费率与规则
 	year = period_month.split("-")[0] if "-" in period_month else "2026"
@@ -1615,26 +1669,53 @@ def upload_and_import_qifu_salary(file_url=None, file_data=None, filename=None, 
 		company,
 		period_month,
 		fields=[
-			"name", "employee_no", "employee_name", "department", "job_title",
+			"name", "employee_no", "employee_name", "external_name_aliases", "department", "job_title",
 			"employee_type", "salary_mode", "fixed_salary", "social_security_base",
-			"housing_fund_base", "deduction_child_education", "deduction_continuing_education", "deduction_housing_loan",
+			"housing_fund_base", "housing_fund_policy", "deduction_child_education", "deduction_continuing_education", "deduction_housing_loan",
 			"deduction_housing_rent", "deduction_elderly_care", "deduction_infant_care",
 			"deduction_serious_illness"
 		],
 		order_by="employee_no asc",
 	)
 
-	master_by_name = {emp.employee_name.strip(): emp for emp in master_employees}
+	hf_policy_setting = get_insurance_setting(company, year) or {}
+	hf_override_map = get_override_map(company, period_month)
 
-	# 外部实发表是月度输入，不得反向猜测并创建权威员工母表。
-	# 如发现未建档人员，先在 Tab 1 完成人员属性/计薪方式/参保信息，再重新导入。
-	unknown_names = [name for name in wife_payroll_dict if name not in master_by_name]
+	# 外部月度输入只能匹配权威母表，不自动创建人员。匹配过程保留方式与置信度。
+	wife_payroll_dict = {}
+	unknown_names = []
+	duplicate_matches = []
+	for source_row in source_payroll_rows:
+		emp, match_method, confidence = _match_external_payroll_employee(source_row, master_employees)
+		if not emp:
+			unknown_names.append(source_row.get("employee_name") or "未命名")
+			continue
+		master_key = str(emp.get("employee_name") or "").strip()
+		if master_key in wife_payroll_dict:
+			duplicate_matches.append(
+				f"{source_row.get('employee_name')} → {master_key}"
+			)
+			continue
+		row = dict(source_row)
+		row["raw_name"] = source_row.get("employee_name") or ""
+		row["employee_name"] = master_key
+		row["source_match_method"] = match_method
+		row["source_match_confidence"] = confidence
+		row["is_insured"] = source_row.get("source_is_insured") or ""
+		wife_payroll_dict[master_key] = row
+
 	if unknown_names:
 		preview = "、".join(unknown_names[:8])
 		more = f" 等 {len(unknown_names)} 人" if len(unknown_names) > 8 else ""
 		frappe.throw(
-			f"外部实发表存在未录入【员工薪酬档案（母表底册）】的人员：{preview}{more}。"
-			"为避免系统自动猜测员工类型、工资类型或社保公积金基数，已停止导入。请先在 Tab 1 建档后再试。"
+			f"外部实发表存在无法匹配【员工薪酬档案（母表底册）】的人员：{preview}{more}。"
+			"系统支持工号、当前姓名、历史姓名别名，以及唯一的一字差异匹配。"
+			"请在员工档案中补充工号或【外部姓名别名】后重新预检。"
+		)
+	if duplicate_matches:
+		frappe.throw(
+			"外部工资表有多行被匹配到同一员工，系统为防止重复发薪已停止导入："
+			+ "；".join(duplicate_matches[:8])
 		)
 
 	# 7. 以母表为基准，融合老板娘表并全员执行【税后倒推税前】
@@ -1657,7 +1738,13 @@ def upload_and_import_qifu_salary(file_url=None, file_data=None, filename=None, 
 			hc_allowance = wdata["house_car_allowance"]
 			work_days = wdata["work_days"]
 			work_hours = wdata["work_hours"]
-			is_insured_flag = wdata["is_insured"]
+			source_insured = str(wdata.get("is_insured") or "").strip().lower()
+			if source_insured in {"否", "不参保", "无", "0", "no", "n"}:
+				is_insured_flag = "否"
+			elif source_insured in {"是", "参保", "有", "1", "yes", "y"}:
+				is_insured_flag = "是"
+			else:
+				is_insured_flag = "是" if flt(emp.social_security_base) > 0 else "否"
 		else:
 			# 未在老板娘表中出现 (管理/未出勤人员)
 			workshop_net = 0.0
@@ -1670,9 +1757,13 @@ def upload_and_import_qifu_salary(file_url=None, file_data=None, filename=None, 
 		# 当月实发总额 = 车间实发 + 职位补贴 + 房车补
 		net_salary = round(workshop_net + post_allowance + hc_allowance, 2)
 
-		# 社保与公积金基数
+		# 社保由当月参保事实控制；公积金独立按季度规则、长期策略和本月例外计算。
 		ss_base = flt(emp.social_security_base) if is_insured_flag != "否" else 0.0
-		hf_base = flt(emp.housing_fund_base) if is_insured_flag != "否" else 0.0
+		hf_override = hf_override_map.get(str(emp.employee_no))
+		hf_decision = evaluate_housing_fund_policy(
+			emp, period_month, hf_policy_setting, hf_override.override_mode if hf_override else ""
+		)
+		hf_base = flt(hf_decision.get("effective_base"))
 
 		ss_p = round(ss_base * (ss_pers_rate / 100.0) + (big_med_amount if ss_base > 0 else 0), 2)
 		ss_c = round(ss_base * (ss_comp_rate / 100.0), 2)
@@ -1774,7 +1865,24 @@ def upload_and_import_qifu_salary(file_url=None, file_data=None, filename=None, 
 			"taxable_income": round(gross_salary - ss_p - hf_p - spec_d - tax_thresh, 2),
 			"tax_amount": tax_amount,
 			"net_salary": net_salary,
-			"remarks": (str(wdata.get("remarks") or "").strip() if (wdata and wdata.get("remarks")) else "")
+			"source_schema_version": wdata.get("source_schema_version", "") if wdata else "",
+			"source_row_number": cint(wdata.get("source_row_number")) if wdata else 0,
+			"source_serial_no": wdata.get("source_serial_no", "") if wdata else "",
+			"source_joining_date": wdata.get("source_joining_date") or None if wdata else None,
+			"source_month_date": wdata.get("source_month_date") or None if wdata else None,
+			"source_tenure_days": flt(wdata.get("source_tenure_days")) if wdata else 0.0,
+			"source_polishing_salary": flt(wdata.get("source_polishing_salary")) if wdata else 0.0,
+			"source_payable_salary": flt(wdata.get("source_payable_salary")) if wdata else 0.0,
+			"source_paid_salary": flt(wdata.get("source_paid_salary")) if wdata else 0.0,
+			"source_is_insured": wdata.get("source_is_insured", "") if wdata else "",
+			"source_signature": wdata.get("source_signature", "") if wdata else "",
+			"source_match_method": wdata.get("source_match_method", "") if wdata else "",
+			"source_match_confidence": flt(wdata.get("source_match_confidence")) if wdata else 0.0,
+			"source_raw_json": wdata.get("source_raw_json", "") if wdata else "",
+			"remarks": (
+				str(wdata.get("remarks") or "").strip() if (wdata and wdata.get("remarks"))
+				else ("母表固定工资 · 无需外部实发表" if (not wdata and flt(emp.fixed_salary) > 0) else "")
+			)
 		})
 
 		# 同步考勤
@@ -1817,6 +1925,19 @@ def upload_and_import_qifu_salary(file_url=None, file_data=None, filename=None, 
 	settle_doc.total_housing_fund_company = round(total_hf_comp, 2)
 	settle_doc.total_housing_fund_person = round(total_hf_pers, 2)
 	settle_doc.total_tax = round(total_tax, 2)
+	settle_doc.import_parser_version = parsed_source.get("parser_version") or ""
+	settle_doc.import_schema_version = parsed_source.get("schema_version") or ""
+	settle_doc.import_compatibility_score = flt(parsed_source.get("compatibility_score"))
+	settle_doc.import_file_sha256 = parsed_source.get("file_sha256") or ""
+	settle_doc.import_diagnostics = json.dumps({
+		"sheet_name": parsed_source.get("sheet_name"),
+		"header_row": parsed_source.get("header_row"),
+		"recognized_fields": parsed_source.get("recognized_fields") or [],
+		"unknown_headers": parsed_source.get("unknown_headers") or [],
+		"diagnostics": parsed_source.get("diagnostics") or [],
+		"base_reconciliation_diff": parsed_source.get("base_reconciliation_diff"),
+		"grand_reconciliation_diff": parsed_source.get("grand_reconciliation_diff"),
+	}, ensure_ascii=False)
 
 	# 统一规范中文命名并私有化存储原始实发表 Excel
 	ext = ".xls" if (filename and filename.lower().endswith(".xls")) else ".xlsx"
@@ -1856,6 +1977,10 @@ def upload_and_import_qifu_salary(file_url=None, file_data=None, filename=None, 
 		"period_month": period_month,
 		"total_imported": len(items_data),
 		"wife_matched_count": len(wife_payroll_dict),
+		"parser_version": parsed_source.get("parser_version"),
+		"schema_version": parsed_source.get("schema_version"),
+		"compatibility_score": parsed_source.get("compatibility_score"),
+		"import_diagnostics": parsed_source.get("diagnostics") or [],
 		"count_workshop": count_workshop,
 		"count_non_workshop": count_non_workshop,
 		"total_workshop_net": round(tot_workshop, 2),
@@ -1868,7 +1993,7 @@ def upload_and_import_qifu_salary(file_url=None, file_data=None, filename=None, 
 		"total_hf_comp": round(total_hf_comp, 2),
 		"total_hf_pers": round(total_hf_pers, 2),
 		"total_comp_cost": round(total_ss_comp + total_hf_comp, 2),
-		"message": f"✅ 已以员工母表为基准导入 {len(items_data)} 人的24列外部实发数据，实发总盘 ¥{total_net:,.2f}。服务器后台任务已提交，将统一按 VBA 累计预扣/税后反推口径复核工资、社保、公积金与个税；计算中心可查看状态和完成时间。",
+		"message": f"✅ 已以员工母表为基准导入 {len(items_data)} 人的外部工资数据，实发总盘 ¥{total_net:,.2f}。服务器后台任务已提交，将统一按 VBA 累计预扣/税后反推口径复核工资、社保、公积金与个税；计算中心可查看状态和完成时间。",
 		"doc": get_payroll_settlement_detail(company, period_month)
 	}
 
@@ -1908,7 +2033,7 @@ def get_salary_distribution_sheet(company="天津祺富机械加工有限公司"
 	国勤天数, 国勤工资, 达标率, 达标工资, 扣除, 考勤绩效工资合计, 职位补贴, 房/车补,
 	补贴工资合计, 应发工资合计, 工资调整, 实发工资合计, 签字, 备考
 	"""
-	check_payroll_workbench_permission("read")
+	check_payroll_workbench_permission("read", company)
 	detail = get_payroll_settlement_detail(company, period_month)
 	items = detail.get("items", [])
 
@@ -1924,7 +2049,7 @@ def get_salary_distribution_sheet(company="天津祺富机械加工有限公司"
 	for it in items:
 		rem = it.get("remarks") or ""
 		# 过滤非车间出勤人员（如外籍工/非车间在册人员即便直接输入工资，也绝不混入车间24列实发表）
-		if "非车间出勤" in rem or it.get("employee_type") == "外籍工" or (flt(it.get("work_hours")) == 0 and flt(it.get("attendance_days")) == 0 and not str(it.get("employee_no", "")).startswith("A")):
+		if "母表固定工资" in rem or "非车间出勤" in rem or it.get("employee_type") == "外籍工" or (flt(it.get("work_hours")) == 0 and flt(it.get("attendance_days")) == 0 and not str(it.get("employee_no", "")).startswith("A")):
 			continue
 
 		workshop_net = flt(it.get("fixed_salary"))
@@ -1936,6 +2061,8 @@ def get_salary_distribution_sheet(company="天津祺富机械加工有限公司"
 		adjust_val = round(net_salary - payable_tot, 2)
 		if abs(adjust_val) < 0.01: adjust_val = 0.0
 
+		# 现金面额属于最终发放结果，不采信历史源表中的张数列。
+		# 统一由 Tab 6 最终实发工资生成，保证导入事实与结算结果职责分离。
 		cash = _cash_breakdown_from_net(net_salary)
 		row = {
 			"seq": seq_num,
@@ -1960,7 +2087,7 @@ def get_salary_distribution_sheet(company="天津祺富机械加工有限公司"
 			"payable_total": payable_tot,
 			"salary_adjust": adjust_val,
 			"net_salary": net_salary,
-			"sign": "",
+			"sign": it.get("source_signature") or "",
 			"remarks": it.get("remarks") or ""
 		}
 		row.update(cash)
@@ -2081,10 +2208,12 @@ def get_accounting_payroll_sheet(company="天津祺富机械加工有限公司",
 	"""Return the XLSM-aligned accounting payroll ledger.
 
 	The reference workbook has one 11-column sheet for domestic/rehired staff and a
-	separate ``记账工资表外籍`` sheet.  The API therefore returns ``rows`` and
+	separate ``记账工资表-外籍`` sheet.  The API therefore returns ``rows`` and
 	``foreign_rows`` separately so the UI/export can preserve that accounting boundary.
+
+	临时工（employee_type 含「临时」）依法不入账，严格过滤排除。
 	"""
-	check_payroll_workbench_permission("read")
+	check_payroll_workbench_permission("read", company)
 	detail = get_payroll_settlement_detail(company, period_month)
 	items = detail.get("items", [])
 
@@ -2097,6 +2226,7 @@ def get_accounting_payroll_sheet(company="天津祺富机械加工有限公司",
 		hf_p = flt(it.get("hf_person_total"))
 		tax = flt(it.get("tax_amount"))
 		total_ded = round(ss_p + hf_p + tax, 2)
+		net = round(gross - total_ded, 2)
 		return {
 			"employee_no": it.get("employee_no"),
 			"employee_name": it.get("employee_name"),
@@ -2111,12 +2241,22 @@ def get_accounting_payroll_sheet(company="天津祺富机械加工有限公司",
 			"ss_person_total": ss_p,
 			"tax_amount": tax,
 			"total_deduction": total_ded,
-			"net_salary": flt(it.get("net_salary")),
+			# Use pre-computed net_salary to avoid Excel formula dependency issues
+			"net_salary": net,
 		}
 
+	def _is_temp(row):
+		"""临时工不入账记账工资表，严格排除。"""
+		return "临时" in str(row.get("employee_type") or "")
+
+	def _is_foreign(row):
+		return "外籍" in str(row.get("employee_type") or "")
+
 	all_rows = [make_row(it) for it in items]
-	rows = [r for r in all_rows if "外籍" not in str(r.get("employee_type") or "")]
-	foreign_rows = [r for r in all_rows if "外籍" in str(r.get("employee_type") or "")]
+	# 临时工彻底排除（不入账）
+	eligible_rows = [r for r in all_rows if not _is_temp(r)]
+	rows = [r for r in eligible_rows if not _is_foreign(r)]
+	foreign_rows = [r for r in eligible_rows if _is_foreign(r)]
 	for idx, row in enumerate(rows, start=1):
 		row["seq"] = idx
 	for idx, row in enumerate(foreign_rows, start=1):
@@ -2138,10 +2278,10 @@ def get_accounting_payroll_sheet(company="天津祺富机械加工有限公司",
 		"period_month": period_month,
 		"rows": rows,
 		"foreign_rows": foreign_rows,
-		"all_rows": all_rows,
+		"all_rows": eligible_rows,
 		"totals": make_totals(rows),
 		"foreign_totals": make_totals(foreign_rows),
-		"all_totals": make_totals(all_rows),
+		"all_totals": make_totals(eligible_rows),
 	}
 
 
@@ -2151,7 +2291,9 @@ def get_accounting_payroll_sheet(company="天津祺富机械加工有限公司",
 # ==========================================
 @frappe.whitelist()
 def get_social_insurance_sheet(company="天津祺富机械加工有限公司", period_month="2026-07"):
-	check_payroll_workbench_permission("read")
+	check_payroll_workbench_permission("read", company)
+	period_month = _normalize_period_month(period_month)
+	payment_period_month = expected_proof_period(period_month)
 	parent_name = f"{company}-{period_month}"
 	locked_snapshot = False
 	if frappe.db.exists("Ashan Monthly Payroll Settlement", parent_name):
@@ -2187,8 +2329,8 @@ def get_social_insurance_sheet(company="天津祺富机械加工有限公司", p
 			pers_tot = flt(it.get("ss_person_total"))
 			rows.append({
 				"seq": seq_idx, "employee_no": it.get("employee_no"), "employee_name": it.get("employee_name"),
-				"id_card": it.get("id_card") or "-", "period_month_str": period_month.replace("-", ""),
-				"employee_type": it.get("employee_type") or "正式工", "ss_base": ss_base,
+				"id_card": it.get("id_card") or "-", "period_month_str": payment_period_month.replace("-", ""),
+				"employee_type": it.get("employee_type") or "正式工", "social_security_base_mode": "历史快照", "ss_base": ss_base,
 				"comp_pension": flt(it.get("pension_company")), "comp_unemp": flt(it.get("unemployment_company")),
 				"comp_med": flt(it.get("medical_company")), "comp_other_med": flt(it.get("other_medical_company")),
 				"comp_injury": flt(it.get("work_injury_company")), "comp_total": comp_tot,
@@ -2233,8 +2375,9 @@ def get_social_insurance_sheet(company="天津祺富机械加工有限公司", p
 			"employee_no": it.get("employee_no"),
 			"employee_name": it.get("employee_name"),
 			"id_card": it.get("id_card") or "-",
-			"period_month_str": period_month.replace("-", ""),
+			"period_month_str": payment_period_month.replace("-", ""),
 			"employee_type": emp_type,
+			"social_security_base_mode": it.get("social_security_base_mode") or "最低缴费基数",
 			"ss_base": ss_base,
 			"comp_pension": comp_pension,
 			"comp_unemp": comp_unemp,
@@ -2267,7 +2410,7 @@ def get_social_insurance_sheet(company="天津祺富机械加工有限公司", p
 			rows.append({
 				"seq": seq_idx, "adj_id": adj.name, "employee_no": adj.employee_no, "employee_name": adj.employee_name,
 				"id_card": adj.id_card or "-", "period_month_str": adj.adjustment_period, "employee_type": adj.employee_type or "调整项",
-				"biz_type": adj.biz_type, "ss_base": flt(adj.ss_base), "comp_pension": flt(adj.comp_pension),
+				"biz_type": adj.biz_type, "social_security_base_mode": "历史补缴", "ss_base": flt(adj.ss_base), "comp_pension": flt(adj.comp_pension),
 				"comp_unemp": flt(adj.comp_unemp), "comp_med": flt(adj.comp_med), "comp_other_med": flt(adj.comp_other_med),
 				"comp_injury": flt(adj.comp_injury), "comp_total": flt(adj.comp_total), "pers_pension": flt(adj.pers_pension),
 				"pers_unemp": flt(adj.pers_unemp), "pers_med": flt(adj.pers_med), "pers_large_med": flt(adj.pers_large_med),
@@ -2297,7 +2440,8 @@ def get_social_insurance_sheet(company="天津祺富机械加工有限公司", p
 	return {
 		"company": company,
 		"period_month": period_month,
-		"report_title": f"{period_month} 社会保险缴费明细表",
+		"payment_period_month": payment_period_month,
+		"report_title": f"{payment_period_month} 社会保险缴费明细表（工资核算 {period_month}）",
 		"rows": rows,
 		"totals": totals
 	}
@@ -2306,7 +2450,7 @@ def get_social_insurance_sheet(company="天津祺富机械加工有限公司", p
 @frappe.whitelist(methods=["POST"])
 def save_social_insurance_adjustment(company, period_month, adjustment_json):
 	"""保存社保特殊补缴/滞纳金快照。仅影响社保台账与凭证核验，不静默改写历史工资。"""
-	check_payroll_workbench_permission("write")
+	check_payroll_workbench_permission("write", company)
 	parent_name = f"{company}-{period_month}"
 	if frappe.db.exists("Ashan Monthly Payroll Settlement", parent_name):
 		parent_state = frappe.db.get_value("Ashan Monthly Payroll Settlement", parent_name, ["locked", "status"], as_dict=True) or {}
@@ -2378,7 +2522,7 @@ def save_social_insurance_adjustment(company, period_month, adjustment_json):
 @frappe.whitelist(methods=["POST"])
 def delete_social_insurance_adjustment(company, period_month, adj_id):
 	"""删除未冻结账期中的社保特殊调整记录。"""
-	check_payroll_workbench_permission("write")
+	check_payroll_workbench_permission("write", company)
 	parent_name = f"{company}-{period_month}"
 	if frappe.db.exists("Ashan Monthly Payroll Settlement", parent_name):
 		state = frappe.db.get_value("Ashan Monthly Payroll Settlement", parent_name, ["locked", "status"], as_dict=True) or {}
@@ -2395,8 +2539,19 @@ def delete_social_insurance_adjustment(company, period_month, adj_id):
 # 4. 公积金台账服务 (12列)
 # ==========================================
 @frappe.whitelist()
-def get_housing_fund_sheet(company="天津祺富机械加工有限公司", period_month="2026-07"):
-	check_payroll_workbench_permission("read")
+def get_housing_fund_sheet(company="天津祺富机械加工有限公司", period_month="2026-07", include_non_contributors=0):
+	"""Return the monthly housing-fund ledger plus explainable policy decisions.
+
+	The employee master base is never zeroed merely because the selected payroll month is
+	an off-month.  The company quarterly schedule is evaluated against the actual housing-
+	fund payment month (one month after payroll), while employee overrides remain keyed to
+	the payroll month.  Official exports default to contributors only; the workbench can
+	request all employees to explain stopped rows.
+	"""
+	check_payroll_workbench_permission("read", company)
+	period_month = _normalize_period_month(period_month)
+	payment_period_month = expected_proof_period(period_month)
+	include_non_contributors = bool(cint(include_non_contributors))
 	parent_name = f"{company}-{period_month}"
 	locked_snapshot = False
 	if frappe.db.exists("Ashan Monthly Payroll Settlement", parent_name):
@@ -2410,81 +2565,130 @@ def get_housing_fund_sheet(company="天津祺富机械加工有限公司", perio
 		)
 	else:
 		snapshot_rows = []
+
 	items = _salary_profiles_for_period(
 		company, period_month,
-		fields=["employee_no", "employee_name", "id_card", "employee_type", "employment_status", "relieving_date", "housing_fund_base"],
+		fields=[
+			"employee_no", "employee_name", "id_card", "employee_type", "employment_status", "relieving_date",
+			"housing_fund_base", "housing_fund_policy",
+		],
 		order_by="employee_no asc",
 	)
-	ss_setting = get_insurance_setting(company, period_month.split("-")[0] if "-" in period_month else 2026)
-
+	year = period_month.split("-")[0] if "-" in period_month else 2026
+	ss_setting = get_insurance_setting(company, year)
+	rule = normalize_policy_setting(ss_setting)
+	overrides = get_override_map(company, period_month)
 	comp_rate = flt(ss_setting.get("hf_company_rate", 5.0))
 	pers_rate = flt(ss_setting.get("hf_person_rate", 5.0))
 
-	rows = []
+	# Keep the complete accounting population for totals and policy cards.  The
+	# ledger itself defaults to actual contributors only, so non-contributors do
+	# not clutter the social-insurance / housing-fund operating tables.
+	all_rows = []
 	seq_idx = 1
 	if locked_snapshot:
 		for it in snapshot_rows:
 			hf_base = flt(it.get("hf_base"))
-			if hf_base <= 0:
-				continue
 			c_amt = flt(it.get("hf_company_total"))
 			p_amt = flt(it.get("hf_person_total"))
-			rows.append({
+			all_rows.append({
 				"seq": seq_idx, "employee_no": it.get("employee_no"), "employee_name": it.get("employee_name"),
-				"id_card": it.get("id_card") or "-", "period_month_str": period_month.replace("-", ""),
-				"employee_type": it.get("employee_type") or "正式工", "hf_base": hf_base,
+				"id_card": it.get("id_card") or "-", "period_month_str": payment_period_month.replace("-", ""),
+				"employee_type": it.get("employee_type") or "正式工", "master_hf_base": hf_base, "hf_base": hf_base,
+				"housing_fund_policy": "历史快照", "policy_label": "已锁定快照", "policy_source": "历史快照",
+				"policy_reason": "账期已锁定，展示当时核定结果，不用当前规则反写历史。", "monthly_override": "", "decision_code": "HISTORICAL",
+				"is_contributing": hf_base > 0,
 				"comp_rate": round(c_amt / hf_base * 100, 4) if hf_base else 0.0, "comp_amount": c_amt,
 				"pers_rate": round(p_amt / hf_base * 100, 4) if hf_base else 0.0, "pers_amount": p_amt,
 				"total_amount": round(c_amt + p_amt, 2),
 			})
 			seq_idx += 1
-	for it in ([] if locked_snapshot else items):
-		hf_base = flt(it.get("housing_fund_base"))
-		emp_type = it.get("employee_type") or "正式工"
-		emp_status = it.get("employment_status") or "在职"
-		rel_d = str(it.get("relieving_date") or "")
-		emp_name = it.get("employee_name") or ""
-		is_resigned = bool(rel_d and rel_d.startswith(period_month))
+	else:
+		for it in items:
+			emp_type = it.get("employee_type") or "正式工"
+			rel_d = str(it.get("relieving_date") or "")
+			is_resigned = bool(rel_d and rel_d.startswith(period_month))
+			override = overrides.get(str(it.get("employee_no") or ""))
+			decision = evaluate_housing_fund_policy(
+				it, period_month, ss_setting, override.override_mode if override else ""
+			)
+			if is_resigned:
+				decision.update({
+					"effective_base": 0.0, "is_contributing": False,
+					"decision_label": "本月离职减员", "decision_source": "在册边界",
+					"reason": "员工在当前账期办理离职减员。",
+				})
+			hf_base = flt(decision.get("effective_base"))
+			c_amt = round(hf_base * (comp_rate / 100.0), 2) if hf_base > 0 else 0.0
+			p_amt = round(hf_base * (pers_rate / 100.0), 2) if hf_base > 0 else 0.0
+			all_rows.append({
+				"seq": seq_idx,
+				"employee_no": it.get("employee_no"),
+				"employee_name": it.get("employee_name") or "",
+				"id_card": it.get("id_card") or "-",
+				"period_month_str": payment_period_month.replace("-", ""),
+				"employee_type": emp_type,
+				"master_hf_base": flt(it.get("housing_fund_base")),
+				"hf_base": hf_base,
+				"housing_fund_policy": decision.get("employee_policy") or "跟随公司规则",
+				"policy_label": decision.get("decision_label") or "-",
+				"policy_source": decision.get("decision_source") or "-",
+				"policy_reason": decision.get("reason") or "",
+				"monthly_override": decision.get("monthly_override") or "",
+				"decision_code": decision.get("decision_code") or "",
+				"is_contributing": bool(decision.get("is_contributing")),
+				"comp_rate": comp_rate,
+				"comp_amount": c_amt,
+				"pers_rate": pers_rate,
+				"pers_amount": p_amt,
+				"total_amount": round(c_amt + p_amt, 2),
+			})
+			seq_idx += 1
 
-		# 纯净权责边界：不缴纳公积金人员（退休返聘、临时工、外籍工、实习生、本月离职减员或基数<=0）自动过滤排除
-		if emp_type in TAX_REHIRE_EMPLOYEE_TYPES or emp_type in ["临时工", "零工", "外籍工", "实习生"] or is_resigned or hf_base <= 0:
-			continue
-
-		c_amt = round(hf_base * (comp_rate / 100.0), 2)
-		p_amt = round(hf_base * (pers_rate / 100.0), 2)
-		tot_amt = round(c_amt + p_amt, 2)
-
-		rows.append({
-			"seq": seq_idx,
-			"employee_no": it.get("employee_no"),
-			"employee_name": emp_name,
-			"id_card": it.get("id_card") or "-",
-			"period_month_str": period_month.replace("-", ""),
-			"employee_type": emp_type,
-			"hf_base": hf_base,
-			"comp_rate": comp_rate,
-			"comp_amount": c_amt,
-			"pers_rate": pers_rate,
-			"pers_amount": p_amt,
-			"total_amount": tot_amt
-		})
-		seq_idx += 1
-
+	contributors = [r for r in all_rows if r.get("is_contributing")]
+	rows = all_rows if include_non_contributors else list(contributors)
+	for seq_idx, row in enumerate(rows, start=1):
+		row["seq"] = seq_idx
 	totals = {
 		"seq": "合计",
-		"employee_no": f"参缴共 {len(rows)} 人",
-		"hf_base": sum(r["hf_base"] for r in rows),
-		"comp_amount": sum(r["comp_amount"] for r in rows),
-		"pers_amount": sum(r["pers_amount"] for r in rows),
-		"total_amount": sum(r["total_amount"] for r in rows)
+		"employee_no": f"参缴共 {len(contributors)} 人",
+		"row_count": len(all_rows),
+		"display_row_count": len(rows),
+		"contributor_count": len(contributors),
+		"stopped_count": len(all_rows) - len(contributors),
+		"fixed_on_count": sum(1 for r in all_rows if r.get("housing_fund_policy") == "固定缴纳"),
+		"override_count": sum(1 for r in all_rows if r.get("monthly_override")),
+		"company_rule_contributor_count": sum(1 for r in all_rows if r.get("is_contributing") and r.get("housing_fund_policy") == "跟随公司规则" and not r.get("monthly_override")),
+		"fixed_on_contributor_count": sum(1 for r in all_rows if r.get("is_contributing") and r.get("housing_fund_policy") == "固定缴纳" and not r.get("monthly_override")),
+		"override_on_contributor_count": sum(1 for r in all_rows if r.get("is_contributing") and r.get("decision_code") == "OVERRIDE_ON"),
+		"hf_base": round(sum(flt(r.get("hf_base")) for r in all_rows), 2),
+		"comp_amount": round(sum(flt(r.get("comp_amount")) for r in all_rows), 2),
+		"pers_amount": round(sum(flt(r.get("pers_amount")) for r in all_rows), 2),
+		"total_amount": round(sum(flt(r.get("total_amount")) for r in all_rows), 2),
 	}
 
 	return {
 		"company": company,
 		"period_month": period_month,
-		"report_title": f"{period_month} 住房公积金缴存明细表",
+		"payment_period_month": payment_period_month,
+		"report_title": f"{payment_period_month} 住房公积金缴存明细表（工资核算 {period_month}）",
+		"locked_snapshot": locked_snapshot,
+		"policy_rule": {
+			**rule,
+			"payroll_period_month": period_month,
+			"schedule_period_month": payment_period_month,
+			# Compatibility key for callers that previously read rule_period_month.
+			"rule_period_month": payment_period_month,
+			"payment_period_month": payment_period_month,
+			"is_scheduled_month": cint(payment_period_month.split("-")[1]) in rule.get("months", []),
+		},
+		"rate_setting": {
+			"company_rate": comp_rate,
+			"person_rate": pers_rate,
+			"minimum_base": flt(ss_setting.get("hf_min_base")) or 2320.0,
+		},
 		"rows": rows,
-		"totals": totals
+		"totals": totals,
 	}
 
 
@@ -2506,7 +2710,7 @@ def get_tax_settlement_full_sheet(company="天津祺富机械加工有限公司"
     核心原则：历史月份使用已落库快照；累计起征点按员工实际存在的月份记录累计；
     负累计应纳税所得额不截断，以便与 VBA 核对。
     """
-    check_payroll_workbench_permission("read")
+    check_payroll_workbench_permission("read", company)
     params = get_effective_tax_parameters(company, period_month)
     tax_thresh = params["tax_threshold"]
     cycle_start_m = params["tax_cycle_start_month"]
@@ -2514,7 +2718,9 @@ def get_tax_settlement_full_sheet(company="天津祺富机械加工有限公司"
     prior_months = cinfo["prior_months"]
 
     detail = get_payroll_settlement_detail(company, period_month)
-    items = detail.get("items", [])
+    items = _supplement_master_fixed_salary_items_for_tax(
+        company, period_month, detail.get("items", [])
+    )
 
     # 一次性读取往期明细，保留 VBA 需要的专项扣除与 7 项专项附加扣除分项。
     prior_parent_names = [f"{company}-{m}" for m in prior_months]
@@ -2712,7 +2918,7 @@ def get_tax_settlement_full_sheet(company="天津祺富机械加工有限公司"
 @frappe.whitelist()
 def get_all_employees_tax_history_summary(company="天津祺富机械加工有限公司", period_month="2026-07"):
     """全员累计个税历史总览；起征点以员工实际历史快照为准，避免新入职人员被多计月份。"""
-    check_payroll_workbench_permission("read")
+    check_payroll_workbench_permission("read", company)
     params = get_effective_tax_parameters(company, period_month)
     cinfo = get_tax_cycle_info(period_month, params["tax_threshold"], params["tax_cycle_start_month"])
     cycle_months = []
@@ -2793,7 +2999,7 @@ def _history_full_columns():
     calc_columns = [
         ("seq", "序号", "text", "员工基本信息"), ("employee_no", "工号", "text", "员工基本信息"),
         ("employee_name", "姓名", "name", "员工基本信息"), ("id_card", "证件号码", "text", "员工基本信息"),
-        ("gender", "性别", "text", "员工基本信息"), ("period_month_str", "本期所属期", "text", "员工基本信息"),
+        ("gender", "性别", "text", "员工基本信息"), ("period_month_str", "实际缴费所属期", "text", "员工基本信息"),
         ("employee_type", "员工类型", "text", "员工基本信息"), ("target_salary", "目标工资", "money", "员工基本信息"),
         ("salary_mode", "工资类型", "text", "员工基本信息"),
         ("gross_salary", "税前工资", "money", "工资扣除(本月)"), ("thresh_cur", "起征点扣除", "money", "工资扣除(本月)"),
@@ -2845,7 +3051,7 @@ def _history_full_columns():
 @frappe.whitelist()
 def get_history_full_ledger(company="天津祺富机械加工有限公司", period_month="2026-07", history_period_month=None, employee_no=None):
     """Historical VBA-68 snapshot + ERP audit fields for one selected month or all months in the tax cycle."""
-    check_payroll_workbench_permission("read")
+    check_payroll_workbench_permission("read", company)
     params = get_effective_tax_parameters(company, period_month)
     cinfo = get_tax_cycle_info(period_month, params["tax_threshold"], params["tax_cycle_start_month"])
     cycle_months = []
@@ -2942,7 +3148,7 @@ def save_history_payroll_input_correction(
     company, current_period_month, history_period_month, employee_no, correction_json
 ):
     """Correct authoritative historical input fields in an unlocked month and cascade recalculation forward."""
-    check_payroll_workbench_permission("write")
+    check_payroll_workbench_permission("write", company)
     history_period_month = str(history_period_month or "").strip()
     current_period_month = str(current_period_month or "").strip()
     if not re.match(r"^\d{4}-\d{2}$", history_period_month) or not re.match(r"^\d{4}-\d{2}$", current_period_month):
@@ -3002,7 +3208,7 @@ def save_history_payroll_input_correction(
 @frappe.whitelist()
 def get_employee_tax_history_timeline(company="天津祺富机械加工有限公司", employee_no="A0001", period_month="2026-07"):
     """单人12个月税务轨迹；累计起征点只在存在该员工历史记录的月份增加。"""
-    check_payroll_workbench_permission("read")
+    check_payroll_workbench_permission("read", company)
     params = get_effective_tax_parameters(company, period_month)
     cinfo = get_tax_cycle_info(period_month, params["tax_threshold"], params["tax_cycle_start_month"])
     cycle_months = []
@@ -3076,18 +3282,18 @@ def get_employee_tax_history_timeline(company="天津祺富机械加工有限公
 
 
 @frappe.whitelist()
-def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", period_month="2026-07", sheet_type="all", tax_view_mode="simple", history_mode="all", history_emp_no="A0001", history_period_month=None):
+def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", period_month="2026-07", sheet_type="all", tax_view_mode="full_68", history_mode="all", history_emp_no="A0001", history_period_month=None):
 	"""
 	导出专业级 Excel 报表 (.xlsx)：
 	1. distribution: 24 列外部薪资实发表
 	2. accounting: 11 列记账工资表
 	3. insurance: 19 列双层表头社保缴费明细表
 	4. housing_fund: 12 列双层表头公积金明细表
-	5. tax: 个人所得税表 (根据 tax_view_mode 动态支持 17 列精简版 或 VBA 68列完整核算台账)
+	5. tax: 默认导出 VBA 68列完整核算台账；仅显式传入 simple 才导出 17 列精简版
 	6. history: 历史数据表 (支持全员15列总览、单人12个月穿透、指定历史月VBA68列+ERP审计)
 	7. all: 包含上述全部 7 个工作表的完整年度薪资结算财务工作簿
 	"""
-	check_payroll_workbench_permission("read")
+	check_payroll_workbench_permission("export", company)
 	period_month = _normalize_period_month(period_month)
 	if history_period_month:
 		history_period_month = _normalize_period_month(history_period_month)
@@ -3104,13 +3310,27 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 
 	# 通用极简专业样式定义：无背景色、标题行加粗、外框加粗、内部细边框
 	font_title = Font(name="Microsoft YaHei", size=15, bold=True, color="000000")
+	font_sub = Font(name="Microsoft YaHei", size=10, color="475569")
 	font_header = Font(name="Microsoft YaHei", size=11, bold=True, color="000000")
 	font_data = Font(name="Microsoft YaHei", size=10, color="000000")
 	font_total = Font(name="Microsoft YaHei", size=10.5, bold=True, color="000000")
 
+	# 三张法定台账使用同一套语义化样式。必须在所有 build_* 函数之前定义，
+	# 避免单表导出与全套导出在运行时找不到样式对象。
+	fill_header = PatternFill("solid", fgColor="F8FAFC")
+	fill_accent = PatternFill("solid", fgColor="DBEAFE")
+	fill_info = PatternFill("solid", fgColor="E0F2FE")
+	fill_warning = PatternFill("solid", fgColor="FEF3C7")
+	fill_success = PatternFill("solid", fgColor="DCFCE7")
+	fill_purple = PatternFill("solid", fgColor="EDE9FE")
+	fill_danger = PatternFill("solid", fgColor="FEE2E2")
+	fill_total = PatternFill("solid", fgColor="F1F5F9")
+
 	side_thin = Side(border_style="thin", color="000000")
 	side_medium = Side(border_style="medium", color="000000")
 	side_double = Side(border_style="double", color="000000")
+	border_cell = Border(left=side_thin, right=side_thin, top=side_thin, bottom=side_thin)
+	double_bottom = Border(bottom=side_double)
 
 	align_center = Alignment(horizontal="center", vertical="center", shrink_to_fit=True)
 	align_left = Alignment(horizontal="left", vertical="center", shrink_to_fit=True)
@@ -3274,11 +3494,12 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 		data_res = get_accounting_payroll_sheet(company, period_month)
 		rows = data_res.get("foreign_rows" if foreign else "rows", [])
 		totals = data_res.get("foreign_totals" if foreign else "totals", {})
-		ws.title = "记账工资表外籍" if foreign else "2.记账工资表(11列)"
+		# Sheet 名按用户要求命名
+		ws.title = "记账工资表-外籍" if foreign else "记账工资表-普通"
 
 		# 第 1 行：主标题（加粗，无背景色，跨度 A1:K1）
 		ws.merge_cells("A1:K1")
-		ws["A1"] = f"{company} {period_month} {'记账工资表外籍' if foreign else '记账工资表'}"
+		ws["A1"] = f"{company} {period_month} {'记账工资表-外籍' if foreign else '记账工资表-普通'}"
 		ws["A1"].font = font_title
 		ws["A1"].alignment = align_center
 		ws.row_dimensions[1].height = 42
@@ -3294,21 +3515,30 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 			cell.font = font_header
 			cell.alignment = align_center
 
-		# 第 3 行起：员工数据行
+		# 第 3 行起：员工数据行（全部使用预计算值，避免 xlsx 打开未计算的问题）
 		for row_idx, r in enumerate(rows, start=3):
 			ws.row_dimensions[row_idx].height = 22
+			gross = flt(r.get("gross_salary", 0))
+			post_all = flt(r.get("post_allowance", 0))
+			house_all = flt(r.get("house_rent_allowance", 0))
+			base_perf = flt(r.get("base_perf_salary", 0))
+			hf_p = flt(r.get("hf_person_total", 0))
+			ss_p = flt(r.get("ss_person_total", 0))
+			tax = flt(r.get("tax_amount", 0))
+			total_ded = round(hf_p + ss_p + tax, 2)
+			net = round(gross - total_ded, 2)
 			vals = [
 				r.get("employee_no"),
 				r.get("employee_name"),
-				f"=F{row_idx}-D{row_idx}-E{row_idx}",
-				r.get("post_allowance", 0) or None,
-				r.get("house_rent_allowance", 0) or None,
-				r.get("gross_salary", 0) or 0,
-				r.get("hf_person_total", 0) or None,
-				r.get("ss_person_total", 0) or None,
-				r.get("tax_amount", 0) or 0,
-				f"=SUM(G{row_idx}:I{row_idx})",
-				f"=F{row_idx}-J{row_idx}",
+				round(base_perf, 2),
+				post_all if post_all else None,
+				house_all if house_all else None,
+				gross,
+				hf_p if hf_p else None,
+				ss_p if ss_p else None,
+				tax,
+				total_ded,   # 合计扣除：预计算值
+				net,         # 税后工资合计：预计算值
 			]
 			for col_idx, val in enumerate(vals, start=1):
 				cell = ws.cell(row=row_idx, column=col_idx, value=val)
@@ -3319,20 +3549,24 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 					cell.alignment = align_left
 				else:
 					cell.alignment = align_right
-				if isinstance(val, (int, float)) or (isinstance(val, str) and val.startswith("=")):
+				if isinstance(val, (int, float)):
 					cell.number_format = "#,##0.00"
 
 		tot_row = len(rows) + 3
 		ws.row_dimensions[tot_row].height = 24
 		ws.cell(row=tot_row, column=1, value="合计").alignment = align_center
 		ws.cell(row=tot_row, column=2, value=f"共 {len(rows)} 人").alignment = align_center
-		if rows:
-			for col_idx in range(3, 12):
-				col_letter = get_column_letter(col_idx)
-				ws.cell(row=tot_row, column=col_idx, value=f"=SUM({col_letter}3:{col_letter}{tot_row - 1})")
-		else:
-			for col_idx in range(3, 12):
-				ws.cell(row=tot_row, column=col_idx, value=0)
+		# 合计行使用后端预计算的真实数值（不使用 Excel SUM 公式，避免空数组或未计算问题）
+		tot_col_keys = [
+			None, None,
+			"base_perf_salary", "post_allowance", "house_rent_allowance", "gross_salary",
+			"hf_person_total", "ss_person_total", "tax_amount", "total_deduction", "net_salary",
+		]
+		for col_idx, key in enumerate(tot_col_keys, start=1):
+			if key is None:
+				continue
+			cell = ws.cell(row=tot_row, column=col_idx, value=flt(totals.get(key, 0)))
+			cell.number_format = "#,##0.00"
 
 		for col_idx in range(1, 12):
 			c = ws.cell(row=tot_row, column=col_idx)
@@ -3456,7 +3690,7 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 		ws.cell(row=3, column=19).alignment = align_center
 
 		sub_headers = [
-			"序号", "工号", "姓名", "证件号码", "所属期", "用工性质", "社保基数",
+			"序号", "工号", "姓名", "证件号码", "实际缴费所属期", "用工性质", "社保基数",
 			"单位养老", "单位失业", "单位医疗", "单位其他医疗", "单位工伤", "单位合计",
 			"个人养老", "个人失业", "个人医疗", "个人大额医疗", "个人合计", "总计"
 		]
@@ -3535,13 +3769,15 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 		ws["A3"].alignment = align_center
 
 		ws.merge_cells("G3:I3")
-		ws["G3"] = "单位缴存部分 (5%)"
+		# 比例以明细列中的实际核定费率为准；锁定历史快照可能与当前设置不同，
+		# 因而不能在分组标题中硬编码 5%。
+		ws["G3"] = "单位缴存部分"
 		ws["G3"].font = font_header
 		ws["G3"].fill = fill_warning
 		ws["G3"].alignment = align_center
 
 		ws.merge_cells("J3:K3")
-		ws["J3"] = "个人缴存部分 (5%)"
+		ws["J3"] = "个人缴存部分"
 		ws["J3"].font = font_header
 		ws["J3"].fill = fill_success
 		ws["J3"].alignment = align_center
@@ -3551,7 +3787,7 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 		ws.cell(row=3, column=12).alignment = align_center
 
 		sub_headers = [
-			"序号", "工号", "姓名", "证件号码", "所属期", "用工性质",
+			"序号", "工号", "姓名", "证件号码", "实际缴费所属期", "用工性质",
 			"公积金基数", "单位比例", "单位金额", "个人比例", "个人金额", "月缴存总额"
 		]
 		ws.row_dimensions[4].height = 24
@@ -3729,7 +3965,7 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 			cell.alignment = align_center
 
 		columns = [
-			("序号","seq"),("工号","employee_no"),("姓名","employee_name"),("证件号码","id_card"),("性别","gender"),("本期所属期","period_month_str"),("员工类型","employee_type"),("目标工资","target_salary"),("工资类型","salary_mode"),
+			("序号","seq"),("工号","employee_no"),("姓名","employee_name"),("证件号码","id_card"),("性别","gender"),("实际缴费所属期","period_month_str"),("员工类型","employee_type"),("目标工资","target_salary"),("工资类型","salary_mode"),
 			("税前工资","gross_salary"),("起征点扣除","thresh_cur"),("公积金","hf_person"),("社保","ss_person"),("工资扣除合计","deduct_cur_tot"),
 			("基本养老","ss_pension"),("基本医疗","ss_med"),("大额医疗","ss_large_med"),("失业保险","ss_unemp"),("住房公积金","hf_spec"),("专项扣除合计","spec_tot_cur"),
 			("子女教育","spec_add_child"),("继续教育","spec_add_edu"),("大病医疗","spec_add_med"),("住房贷款利息","spec_add_loan"),("住房租金","spec_add_rent"),("赡养老人","spec_add_elder"),("3岁以下婴幼儿照护","spec_add_baby"),("专项附加扣除合计","spec_add_tot_cur"),
@@ -4031,14 +4267,15 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 		filename = f"{filename_prefix}_现金点钞核定表.xlsx"
 	elif sheet_type == "accounting":
 		build_accounting_sheet(ws_default)
-		filename = f"{filename_prefix}_11列记账工资表.xlsx"
+		filename = f"{filename_prefix}_记账工资表.xlsx"
 	elif sheet_type == "accounting_xlsm":
+		# 普通员工 sheet（第一个，已是 ws_default）
 		build_accounting_sheet(ws_default)
-		acc_data = get_accounting_payroll_sheet(company, period_month)
-		if acc_data.get("foreign_rows"):
-			ws_foreign = wb.create_sheet()
-			build_accounting_sheet(ws_foreign, foreign=True)
-		filename = f"{filename_prefix}_记账工资表_XLSM参考版.xlsx"
+		# 外籍员工 sheet（始终创建，无外籍则显示空表）
+		ws_foreign = wb.create_sheet()
+		build_accounting_sheet(ws_foreign, foreign=True)
+		# 文件名：去掉 _XLSM参考版 后缀，统一命名
+		filename = f"{filename_prefix}_记账工资表.xlsx"
 	elif sheet_type == "insurance":
 		build_insurance_sheet(ws_default)
 		filename = f"{filename_prefix}_社保缴费明细表.xlsx"
@@ -4048,10 +4285,10 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 	elif sheet_type == "tax":
 		if tax_view_mode == "full_68":
 			build_tax_full_68_sheet(ws_default)
-			filename = f"{filename_prefix}_个人所得税VBA同口径68列台账.xlsx"
+			filename = f"{filename_prefix}_个人所得税台账.xlsx"
 		else:
 			build_tax_simple_sheet(ws_default)
-			filename = f"{filename_prefix}_个人所得税预扣预缴表(17列财税精简版).xlsx"
+			filename = f"{filename_prefix}_个人所得税台账.xlsx"
 	elif sheet_type == "history":
 		if history_mode == "single":
 			build_history_single_sheet(ws_default, history_emp_no)
@@ -4103,7 +4340,7 @@ def export_qifu_payroll_excel(company="天津祺富机械加工有限公司", pe
 			for idx, width in enumerate(widths, start=1):
 				sheet.column_dimensions[get_column_letter(idx)].width = width
 				sheet.column_dimensions[get_column_letter(idx)].hidden = False
-		elif sheet.title in {"2.记账工资表(11列)", "记账工资表外籍"}:
+		elif sheet.title in {"记账工资表-普通", "记账工资表-外籍"}:
 			# 严格对齐参考 XLSM：姓名列加宽至 14.0，适配中长姓名与外籍姓名，适合整表缩小填充打印
 			widths = [8.625, 14.0, 11.625, 8.625, 13.0, 11.625, 9.5, 10.5, 9.5, 10.5, 11.625]
 			for idx, width in enumerate(widths, start=1):
@@ -4167,7 +4404,8 @@ def _recalculate_payroll_item_vba(
             "id_card", "gender", "mobile", "birth_date", "employee_type", "salary_mode", "is_insured",
             "fixed_salary", "base_salary", "post_allowance", "performance_base",
             "meal_allowance", "traffic_allowance", "communication_allowance", "other_allowance",
-            "social_security_base", "housing_fund_base",
+            "social_security_base", "social_security_base_mode", "custom_social_security_base",
+            "housing_fund_base", "housing_fund_policy",
             "deduction_child_education", "deduction_continuing_education",
             "deduction_serious_illness", "deduction_housing_loan", "deduction_housing_rent",
             "deduction_elderly_care", "deduction_infant_care",
@@ -4204,8 +4442,15 @@ def _recalculate_payroll_item_vba(
     emp_type = it.employee_type or emp_doc.get("employee_type") or "正式工"
     no_insurance_types = TAX_REHIRE_EMPLOYEE_TYPES | {"临时工", "零工", "外籍工", "实习生"}
     if refresh_from_profile:
-        ss_base = flt(emp_doc.get("social_security_base"))
-        hf_base = flt(emp_doc.get("housing_fund_base"))
+        ss_base = resolve_social_security_base(emp_doc, ins)
+        hf_override_map = get_override_map(company, period_month)
+        hf_override = hf_override_map.get(str(emp_no))
+        hf_emp = dict(emp_doc)
+        hf_emp["employee_no"] = emp_no
+        hf_emp["employee_type"] = emp_type
+        hf_base = flt(evaluate_housing_fund_policy(
+            hf_emp, period_month, ins, hf_override.override_mode if hf_override else ""
+        ).get("effective_base"))
         if emp_type in no_insurance_types:
             ss_base = 0.0
             hf_base = 0.0
@@ -4431,6 +4676,68 @@ def _append_payroll_item_from_profile(doc, company, employee_no):
     return row
 
 
+def _restore_master_fixed_salary_items(doc, company, period_month):
+    """Restore employees whose authoritative monthly salary comes from the master.
+
+    External workshop spreadsheets are optional for these employees. Deleting an
+    uploaded spreadsheet must therefore remove only external facts, not their
+    system-managed salary rows.
+    """
+    profiles = _salary_profiles_for_period(
+        company, period_month, fields=["employee_no", "fixed_salary"]
+    )
+    restored = []
+    existing = {str(it.employee_no) for it in (doc.items or [])}
+    for profile in profiles:
+        emp_no = str(profile.get("employee_no") or "").strip()
+        if not emp_no or emp_no in existing or flt(profile.get("fixed_salary")) <= 0:
+            continue
+        row = _append_payroll_item_from_profile(doc, company, emp_no)
+        row.remarks = "母表固定工资 · 无需外部实发表"
+        restored.append(emp_no)
+        existing.add(emp_no)
+    return restored
+
+
+def _supplement_master_fixed_salary_items_for_tax(company, period_month, items):
+    """Add read-only calculated master-fixed rows missing from the current snapshot.
+
+    This makes the tax ledger useful even before an external workshop sheet has ever
+    been uploaded. No database row is created by this read path.
+    """
+    result = [dict(it) if isinstance(it, dict) else it.as_dict() for it in (items or [])]
+    existing = {str(it.get("employee_no") or "").strip() for it in result}
+    profiles = _salary_profiles_for_period(
+        company, period_month, fields=["employee_no", "employee_type", "fixed_salary"]
+    )
+    temp_doc = frappe.new_doc("Ashan Monthly Payroll Settlement")
+    temp_doc.company = company
+    temp_doc.period_month = period_month
+    temp_doc.imported_excel_file = None
+    for profile in profiles:
+        emp_no = str(profile.get("employee_no") or "").strip()
+        if (
+            not emp_no
+            or emp_no in existing
+            or flt(profile.get("fixed_salary")) <= 0
+            or not is_tax_ledger_employee(profile.get("employee_type"))
+        ):
+            continue
+        row = _append_payroll_item_from_profile(temp_doc, company, emp_no)
+        _recalculate_payroll_item_vba(
+            temp_doc, row, company, period_month,
+            trigger_source="个税台账母表固定工资只读兜底",
+            task_name="", input_hash="virtual-master-fixed", refresh_from_profile=True,
+        )
+        row.remarks = "母表固定工资 · 无需外部实发表"
+        data = row.as_dict()
+        data["salary_source"] = "master_fixed_salary"
+        result.append(data)
+        existing.add(emp_no)
+    result.sort(key=lambda x: str(x.get("employee_no") or ""))
+    return result
+
+
 @frappe.whitelist(methods=["POST"])
 def recalculate_employee_payroll(
     company="天津祺富机械加工有限公司",
@@ -4442,7 +4749,7 @@ def recalculate_employee_payroll(
     refresh_from_profile=1,
 ):
     """Server-side single-employee calculator used by asynchronous background jobs."""
-    check_payroll_workbench_permission("write")
+    check_payroll_workbench_permission("write", company)
     if not employee_no:
         frappe.throw("必须指定需要重新计算的员工工号。")
     doc = _get_unlocked_settlement(company, period_month)
@@ -4474,7 +4781,7 @@ def recalculate_and_save_monthly_tax(
     force_recompute=0,
 ):
     """Recalculate an unlocked month sequentially with the single verified VBA engine."""
-    check_payroll_workbench_permission("write")
+    check_payroll_workbench_permission("write", company)
     doc = _get_unlocked_settlement(company, period_month)
     from ashan_cn_procurement.services.payroll_recalculation_service import _build_employee_input_hash
 
@@ -4530,8 +4837,7 @@ import re
 import zipfile
 from pypdf import PdfReader
 from ashan_cn_procurement.services.payroll_proof_validation import (
-    expected_proof_period,
-    expand_upload_entries_to_pdfs,
+	expand_upload_entries_to_pdfs,
     parse_social_security_pdf_stream as _parse_social_security_pdf_stream_precise,
     parse_housing_fund_pdf_stream as _parse_housing_fund_pdf_stream_precise,
     validate_proof_pdf_batch,
@@ -4550,7 +4856,7 @@ def get_monthly_workflow_status(company, period_month):
 	"""
 	获取指定月份的全流程任务状态看板数据 (精细化多维度读数与异动摘要)
 	"""
-	check_payroll_workbench_permission("read")
+	check_payroll_workbench_permission("read", company)
 	# 计算下个月份
 	parts = period_month.split("-")
 	y = int(parts[0]) if len(parts) > 0 else 2026
@@ -4602,6 +4908,25 @@ def get_monthly_workflow_status(company, period_month):
 
 	is_locked = bool(doc and doc.locked)
 	status_label = doc.status if doc else "草稿"
+	workflow_stage = doc.get("workflow_stage") if doc else "草稿"
+	unlock_request = {
+		"pending": bool(doc and cint(doc.get("unlock_requested"))),
+		"requested_by": doc.get("unlock_requested_by") if doc else None,
+		"requested_at": doc.get("unlock_requested_at") if doc else None,
+		"reason": doc.get("unlock_request_reason") if doc else None,
+		"approved_by": doc.get("unlocked_by") if doc else None,
+		"approved_at": doc.get("unlocked_at") if doc else None,
+		"approval_note": doc.get("unlock_reason") if doc else None,
+	}
+	workflow_audit = {
+		"calculated_by": doc.get("calculated_by") if doc else None,
+		"calculated_at": doc.get("calculated_at") if doc else None,
+		"proof_verified_by": doc.get("proof_verified_by") if doc else None,
+		"proof_verified_at": doc.get("proof_verified_at") if doc else None,
+		"proof_verification_note": doc.get("proof_verification_note") if doc else None,
+		"locked_by": doc.get("confirmed_by") if doc else None,
+		"locked_at": doc.get("confirmed_date") if doc else None,
+	}
 	
 	# 任务 2: 车间实发表 (精准 25 人，排除非车间人员)
 	dist_sheet = get_salary_distribution_sheet(company, period_month)
@@ -4686,6 +5011,9 @@ def get_monthly_workflow_status(company, period_month):
 		"next_period_month": next_period_month,
 		"is_locked": is_locked,
 		"status": status_label,
+		"workflow_stage": workflow_stage,
+		"unlock_request": unlock_request,
+		"workflow_audit": workflow_audit,
 		"task1_profile": {
 			"status": "done",
 			"active_count": emp_count,
@@ -4893,7 +5221,7 @@ def _save_proof_pdf_batch(settle_doc, proof_type, payroll_period_month, pdf_entr
 @frappe.whitelist(methods=["POST"])
 def upload_and_verify_social_security_file(company, period_month, file_name=None, file_base64=None, file_url=None, files_json=None):
 	"""一个或多个社保 PDF/ZIP：先校验次月所属期，日期错误整批拒绝且不保存，再汇总金额。"""
-	check_payroll_workbench_permission("write")
+	check_payroll_workbench_permission("write", company)
 	expected_period = expected_proof_period(period_month)
 	try:
 		upload_entries = _decode_proof_upload_entries(file_name, file_base64, file_url, files_json)
@@ -4923,6 +5251,8 @@ def upload_and_verify_social_security_file(company, period_month, file_name=None
 	settle_doc.ss_payment_file = saved_files[0]["file_url"] if saved_files else None
 	settle_doc.ss_parsed_amount = parsed_amount
 	settle_doc.ss_verify_status = "核验一致" if is_matched else "金额不符"
+	if settle_doc.ss_verify_status == "核验一致" and settle_doc.hf_verify_status == "核验一致":
+		_record_completed_proof_verification(settle_doc)
 	settle_doc.save(ignore_permissions=True)
 	frappe.db.commit()
 	return {"success": True, "message": f"✅ 社保凭证所属期全部通过（核定期 {period_month} -> 实际缴费所属期 {expected_period}），共 {len(saved_files)} 份 PDF。" + (f" 合计 ¥{parsed_amount:,.2f} 与系统核算 ¥{sys_amount:,.2f} 完全一致。" if is_matched else f" 但凭证合计 ¥{parsed_amount:,.2f} 与系统核算 ¥{sys_amount:,.2f} 不一致，差额 ¥{diff:,.2f}，禁止最终封账。"), "expected_period": expected_period, "proof_count": len(saved_files), "parsed_amount": parsed_amount, "sys_amount": sys_amount, "difference_amount": diff, "is_matched": is_matched, "file_url": saved_files[0]["file_url"] if saved_files else None, "file_urls": saved_files, "files": validation.get("files", [])}
@@ -4930,7 +5260,7 @@ def upload_and_verify_social_security_file(company, period_month, file_name=None
 @frappe.whitelist(methods=["POST"])
 def upload_and_verify_housing_fund_file(company, period_month, file_name=None, file_base64=None, file_url=None, files_json=None):
 	"""一个或多个公积金 PDF/ZIP：先校验次月缴存年月，日期错误整批拒绝且不保存，再汇总金额。"""
-	check_payroll_workbench_permission("write")
+	check_payroll_workbench_permission("write", company)
 	expected_period = expected_proof_period(period_month)
 	try:
 		upload_entries = _decode_proof_upload_entries(file_name, file_base64, file_url, files_json)
@@ -4958,6 +5288,8 @@ def upload_and_verify_housing_fund_file(company, period_month, file_name=None, f
 	settle_doc.hf_payment_file = saved_files[0]["file_url"] if saved_files else None
 	settle_doc.hf_parsed_amount = parsed_amount
 	settle_doc.hf_verify_status = "核验一致" if is_matched else "金额不符"
+	if settle_doc.ss_verify_status == "核验一致" and settle_doc.hf_verify_status == "核验一致":
+		_record_completed_proof_verification(settle_doc)
 	settle_doc.save(ignore_permissions=True)
 	frappe.db.commit()
 	return {"success": True, "message": f"✅ 公积金凭证所属期全部通过（核定期 {period_month} -> 实际缴费所属期 {expected_period}），共 {len(saved_files)} 份 PDF。" + (f" 合计 ¥{parsed_amount:,.2f} 与系统核算 ¥{sys_amount:,.2f} 完全一致。" if is_matched else f" 但凭证合计 ¥{parsed_amount:,.2f} 与系统核算 ¥{sys_amount:,.2f} 不一致，差额 ¥{diff:,.2f}，禁止最终封账。"), "expected_period": expected_period, "proof_count": len(saved_files), "parsed_amount": parsed_amount, "sys_amount": sys_amount, "difference_amount": diff, "is_matched": is_matched, "file_url": saved_files[0]["file_url"] if saved_files else None, "file_urls": saved_files, "files": validation.get("files", [])}
@@ -4967,7 +5299,7 @@ def execute_monthly_settlement_lock(company, period_month):
 	"""
 	执行当月薪酬综合核定并封账锁定，同时初始化开启下月发薪账期权限 (前置强拦截校验)
 	"""
-	check_payroll_workbench_permission("write")
+	check_payroll_workbench_permission("lock", company)
 	doc_name = f"{company}-{period_month}"
 	if not frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
 		return {"success": False, "message": f"未找到【{company}】{period_month} 的薪酬核算记录，无法执行封账！"}
@@ -5019,6 +5351,8 @@ def execute_monthly_settlement_lock(company, period_month):
 	settle_doc.locked = 1
 	settle_doc.confirmed_by = frappe.session.user
 	settle_doc.confirmed_date = now_datetime()
+	settle_doc.unlock_requested = 0
+	_set_payroll_workflow_stage(settle_doc, "已封账")
 	settle_doc.save(ignore_permissions=True)
 
 	# 开启下月发薪账期
@@ -5047,11 +5381,33 @@ def execute_monthly_settlement_lock(company, period_month):
 	}
 
 @frappe.whitelist(methods=["POST"])
+def request_monthly_settlement_unlock(company, period_month, reason=""):
+	"""Submit an auditable unlock request without reopening the payroll month."""
+	check_payroll_workbench_permission("unlock_request", company)
+	if not str(reason or "").strip():
+		frappe.throw("申请解锁必须填写原因，以便保留财务审计轨迹。")
+	doc_name = f"{company}-{period_month}"
+	if not frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
+		return {"success": False, "message": f"未找到【{company}】{period_month} 的薪酬核算记录！"}
+	settle_doc = frappe.get_doc("Ashan Monthly Payroll Settlement", doc_name)
+	if not cint(settle_doc.locked):
+		frappe.throw("当前账期尚未封账，无需申请解锁。")
+	settle_doc.unlock_requested = 1
+	settle_doc.unlock_requested_by = frappe.session.user
+	settle_doc.unlock_requested_at = now_datetime()
+	settle_doc.unlock_request_reason = str(reason).strip()
+	_set_payroll_workflow_stage(settle_doc, "解锁申请中")
+	settle_doc.save(ignore_permissions=True)
+	frappe.db.commit()
+	return {"success": True, "message": f"已提交【{company}】{period_month} 的解锁申请，等待薪酬负责人审批。"}
+
+
+@frappe.whitelist(methods=["POST"])
 def unlock_monthly_settlement(company, period_month, reason=""):
 	"""
 	反审核/解锁指定月份薪酬核定记录
 	"""
-	check_payroll_workbench_permission("write")
+	check_payroll_workbench_permission("unlock", company)
 	if not str(reason or "").strip():
 		frappe.throw("反审核/解锁必须填写原因，以便保留财务审计轨迹。")
 	doc_name = f"{company}-{period_month}"
@@ -5061,7 +5417,11 @@ def unlock_monthly_settlement(company, period_month, reason=""):
 	settle_doc = frappe.get_doc("Ashan Monthly Payroll Settlement", doc_name)
 	settle_doc.status = "草稿"
 	settle_doc.locked = 0
-	settle_doc.unlock_reason = f"[{now_datetime()}] {frappe.session.user}: {reason}"
+	settle_doc.unlocked_by = frappe.session.user
+	settle_doc.unlocked_at = now_datetime()
+	settle_doc.unlock_reason = str(reason).strip()
+	settle_doc.unlock_requested = 0
+	_set_payroll_workflow_stage(settle_doc, "已解锁")
 	settle_doc.save(ignore_permissions=True)
 	frappe.db.commit()
 
@@ -5078,7 +5438,7 @@ def download_payroll_proof_file(company, period_month, proof_type):
 	严格校验当前用户对人事薪酬的读取权限，并以规范中文名安全交付原始源文件流
 	proof_type: 'salary' (车间实发), 'social_security' (社保申报), 'housing_fund' (公积金凭证)
 	"""
-	check_payroll_workbench_permission("read")
+	check_payroll_workbench_permission("read", company)
 
 	doc_name = f"{company}-{period_month}"
 	if not frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
@@ -5119,7 +5479,7 @@ def delete_payroll_proof_file(company, period_month, proof_type):
 	严格校验操作权限与封账状态，清除指定月份已上传的凭证文件及关联数据
 	proof_type: 'salary' (车间实发表), 'social_security' (社保申报表), 'housing_fund' (公积金凭证)
 	"""
-	check_payroll_workbench_permission("write")
+	check_payroll_workbench_permission("write", company)
 
 	doc_name = f"{company}-{period_month}"
 	if not frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
@@ -5137,12 +5497,12 @@ def delete_payroll_proof_file(company, period_month, proof_type):
 		deleted_type_name = "车间外部实发工资表"
 		settle_doc.imported_excel_file = None
 		settle_doc.items = []
-		settle_doc.total_net_salary = 0.0
-		settle_doc.total_gross_salary = 0.0
-		settle_doc.total_individual_tax = 0.0
-		settle_doc.employee_count = 0
-		# 删除对应的子表 Item
+		# 删除外部月度事实后，母表固定工资人员必须继续存在。
 		frappe.db.delete("Ashan Monthly Payroll Item", {"parent": doc_name})
+		restored_fixed = _restore_master_fixed_salary_items(settle_doc, company, period_month)
+		_refresh_monthly_payroll_totals(settle_doc)
+		if hasattr(settle_doc, "employee_count"):
+			settle_doc.employee_count = len(settle_doc.items)
 
 	elif proof_type in ["social_security", "ss", "pdf_ss"]:
 		deleted_type_name = "社会保险缴费申报表"
@@ -5163,9 +5523,20 @@ def delete_payroll_proof_file(company, period_month, proof_type):
 
 	settle_doc.flags.ignore_version = True
 	settle_doc.save(ignore_permissions=True)
+	if proof_type in ["salary", "workshop", "excel"] and restored_fixed:
+		# 同步完成少量固定工资人员的法定扣除与累计个税，删除后立即可在 Tab 5/6 使用。
+		recalculate_and_save_monthly_tax(
+			company=company, period_month=period_month,
+			trigger_source="删除外部实发表后恢复母表固定工资", force_recompute=1,
+		)
 	frappe.db.commit()
 
 	return {
 		"success": True,
-		"message": f"🗑️ 已成功删除【{period_month}】的{deleted_type_name}！任务已重置为待上传状态。"
+		"restored_master_fixed_count": len(restored_fixed) if proof_type in ["salary", "workshop", "excel"] else 0,
+		"message": (
+			f"🗑️ 已删除【{period_month}】的{deleted_type_name}。"
+			+ (f" 已从员工母表自动恢复 {len(restored_fixed)} 名固定工资人员，个税与综合结算继续有效。" if proof_type in ["salary", "workshop", "excel"] and restored_fixed else "")
+			+ " 外部工资任务已重置为待上传状态。"
+		)
 	}

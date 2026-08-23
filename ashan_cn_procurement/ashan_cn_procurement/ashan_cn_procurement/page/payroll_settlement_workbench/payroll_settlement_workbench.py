@@ -402,18 +402,12 @@ def save_payroll_settlement(data):
 
 @frappe.whitelist(methods=["POST"])
 def finalize_payroll_settlement(data):
-    """
-    核定并锁定薪资月结
-    """
-    check_payroll_workbench_permission("write")
-    res = save_payroll_settlement(data)
-    name = res["name"]
-    doc = frappe.get_doc("Ashan Payroll Settlement", name)
-    doc.status = "已核定锁定"
-    doc.locked_at = frappe.utils.now_datetime()
-    doc.save(ignore_permissions=True)
-    frappe.db.commit()
-    return {"success": True, "message": "薪资月结已核定并锁定！"}
+    """Block the retired lock path that bypassed proof and calculation checks."""
+    frappe.throw(
+        "旧版薪酬月结工作台已停止封账。请使用【人事薪酬工作台】的最终核定，"
+        "系统将同步校验计算中心、社保申报表和公积金凭证。",
+        frappe.ValidationError,
+    )
 
 @frappe.whitelist()
 def export_payroll_excel(period_month=None, company=None, tax_cycle_start_month=None):

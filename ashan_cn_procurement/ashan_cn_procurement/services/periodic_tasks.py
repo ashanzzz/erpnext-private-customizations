@@ -4,6 +4,7 @@
 
 import frappe
 from frappe.utils import getdate, nowdate, cint, date_diff, add_months, add_days
+from ashan_cn_procurement.services.authorization_service import get_allowed_companies
 
 @frappe.whitelist()
 def get_monthly_settlement_status(year=None, month=None):
@@ -31,42 +32,11 @@ def get_monthly_settlement_status(year=None, month=None):
 
         user = frappe.session.user
         roles = frappe.get_roles(user)
-        is_admin = (user == "Administrator") or ("System Manager" in roles) or ("财务主管" in roles) or ("Accounts Manager" in roles)
-
-        # 1. 精准推导当前用户被授权访问的公司
-        user_allowed_companies = set()
-        if is_admin:
-            user_allowed_companies.add("吉众")
-            user_allowed_companies.add("祺富")
-        else:
-            perms = frappe.get_all("User Permission", filters={"user": user, "allow": "Company"}, pluck="for_value")
-            for p in perms:
-                if "吉众" in p:
-                    user_allowed_companies.add("吉众")
-                if "祺富" in p:
-                    user_allowed_companies.add("祺富")
-
-            if frappe.db.exists("DocType", "Employee"):
-                emp_company = frappe.db.get_value("Employee", {"user_id": user}, "company") or ""
-                if "吉众" in emp_company:
-                    user_allowed_companies.add("吉众")
-                if "祺富" in emp_company:
-                    user_allowed_companies.add("祺富")
-
-            def_company = frappe.db.get_value("User", user, "company") or frappe.defaults.get_user_default("company") or ""
-            if "吉众" in str(def_company):
-                user_allowed_companies.add("吉众")
-            if "祺富" in str(def_company):
-                user_allowed_companies.add("祺富")
-
-            if not user_allowed_companies:
-                if any(r in roles for r in ["Oil Card Operator", "Oil Card Manager", "油卡操作员", "油卡管理员"]):
-                    user_allowed_companies.add("吉众")
-                if any(r in roles for r in ["Property Operator", "Property Manager", "物业操作员", "物业管理员", "Accounts User"]):
-                    user_allowed_companies.add("祺富")
-
-        has_jizhong_perm = ("吉众" in user_allowed_companies) or is_admin
-        has_qifu_perm = ("祺富" in user_allowed_companies) or is_admin
+        company_scope = get_allowed_companies(user)
+        is_admin = company_scope is None
+        scoped_companies = company_scope or set()
+        has_jizhong_perm = is_admin or any("吉众" in company for company in scoped_companies)
+        has_qifu_perm = is_admin or any("祺富" in company for company in scoped_companies)
 
         # 角色权限感知
         can_manage_oil = is_admin or any(r in roles for r in ["Oil Card Operator", "Oil Card Manager", "油卡操作员", "油卡管理员"])
@@ -249,28 +219,11 @@ def get_compliance_expiry_status():
         today = getdate(nowdate())
         user = frappe.session.user
         roles = frappe.get_roles(user)
-        is_admin = (user == "Administrator") or ("System Manager" in roles) or ("财务主管" in roles) or ("Accounts Manager" in roles)
-
-        # 公司权限判定
-        user_allowed_companies = set()
-        if is_admin:
-            user_allowed_companies.add("吉众")
-            user_allowed_companies.add("祺富")
-        else:
-            perms = frappe.get_all("User Permission", filters={"user": user, "allow": "Company"}, pluck="for_value")
-            for p in perms:
-                if "吉众" in p: user_allowed_companies.add("吉众")
-                if "祺富" in p: user_allowed_companies.add("祺富")
-            if frappe.db.exists("DocType", "Employee"):
-                emp_company = frappe.db.get_value("Employee", {"user_id": user}, "company") or ""
-                if "吉众" in emp_company: user_allowed_companies.add("吉众")
-                if "祺富" in emp_company: user_allowed_companies.add("祺富")
-            if not user_allowed_companies:
-                user_allowed_companies.add("吉众")
-                user_allowed_companies.add("祺富")
-
-        has_jizhong = ("吉众" in user_allowed_companies) or is_admin
-        has_qifu = ("祺富" in user_allowed_companies) or is_admin
+        company_scope = get_allowed_companies(user)
+        is_admin = company_scope is None
+        scoped_companies = company_scope or set()
+        has_jizhong = is_admin or any("吉众" in company for company in scoped_companies)
+        has_qifu = is_admin or any("祺富" in company for company in scoped_companies)
 
         expiry_items = []
 

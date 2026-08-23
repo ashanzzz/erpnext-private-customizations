@@ -118,6 +118,7 @@ def import_qifu_employees_from_seed():
 		doc.employee_name = emp_name
 		doc.company = company
 		doc.id_card = r.get("id_card", "")
+		doc.certificate_type = r.get("certificate_type") or ("中国居民身份证" if len(str(doc.id_card or "").strip()) in (15, 18) else ("护照" if doc.id_card else "其他证件"))
 		doc.mobile = r.get("mobile", "")
 		doc.gender = r.get("gender", "男")
 		doc.birth_date = r.get("birth_date")
@@ -130,6 +131,7 @@ def import_qifu_employees_from_seed():
 		doc.fixed_salary = flt(r.get("fixed_salary", 0))
 		doc.commercial_insurance = flt(r.get("commercial_insurance", 0))
 		doc.housing_fund_base = flt(r.get("housing_fund_base", 2320))
+		doc.housing_fund_policy = r.get("housing_fund_policy", "跟随公司规则")
 		doc.social_security_base = flt(r.get("social_security_base", 5124))
 
 		doc.deduction_child_education = flt(r.get("deduction_child_education", 0))
@@ -141,6 +143,10 @@ def import_qifu_employees_from_seed():
 		doc.deduction_infant_care = flt(r.get("deduction_infant_care", 0))
 
 		doc.is_insured = cint(r.get("is_insured", 1))
+		if r.get("retirement_category"):
+			doc.retirement_category = r.get("retirement_category")
+		if r.get("name_aliases") is not None:
+			doc.set("name_aliases", r.get("name_aliases") or [])
 
 		doc.save(ignore_permissions=True)
 		imported_count += 1

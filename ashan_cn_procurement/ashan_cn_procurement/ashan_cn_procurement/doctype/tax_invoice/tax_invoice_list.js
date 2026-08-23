@@ -1,7 +1,10 @@
 // Copyright (c) 2026, Ashan CN Procurement
 frappe.listview_settings['Tax Invoice'] = {
-    add_fields: ["business_status", "match_status", "is_red_invoice", "pdf_removed", "parse_status", "vehicle_vessel_tax", "payable_total"],
+    add_fields: ["business_status", "match_status", "is_red_invoice", "pdf_removed", "parse_status", "parse_warning", "payable_total"],
     get_indicator: function(doc) {
+        if ((doc.parse_warning || "").includes("【购买方错误】")) {
+            return [__("购买方错误"), "red", "parse_status,=,需复核"];
+        }
         if (doc.is_red_invoice) {
             return [__("红字发票"), "red", "is_red_invoice,=,1"];
         }

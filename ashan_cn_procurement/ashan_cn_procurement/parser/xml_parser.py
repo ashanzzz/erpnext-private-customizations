@@ -7,6 +7,9 @@ from ashan_cn_procurement.parser.common import (
 	clean_date_str,
 	parse_remark_vehicle_vessel_tax
 )
+from ashan_cn_procurement.services.tax_invoice_validation import (
+	build_vehicle_vessel_tax_items,
+)
 
 def _strip_ns(tag):
 	"""去除 XML namespace 前缀"""
@@ -186,8 +189,6 @@ def parse_tax_invoice_xml(xml_bytes, filename=""):
 			"amount": amt,
 			"tax_rate_text": tax_rate_text,
 			"tax_amount": com_tax_am,
-			"vehicle_vessel_tax": 0.0,
-			"late_fee": 0.0,
 			"line_total": line_tot,
 			"plate_number": plate_num,
 			"vehicle_type": v_type,
@@ -196,27 +197,8 @@ def parse_tax_invoice_xml(xml_bytes, filename=""):
 			"source_note": None
 		})
 
-	# 10. 如果存在车船税，追加一条独立的车船税 Child Row
-	if vehicle_vessel_tax > 0 or late_fee > 0:
-		items.append({
-			"line_type": "车船税",
-			"item_name": "代收车船税",
-			"spec_model": remark_data.get("tax_period"),
-			"unit": "辆",
-			"quantity": 1.0,
-			"unit_price": vehicle_vessel_tax + late_fee,
-			"amount": 0.0,
-			"tax_rate_text": "不征税",
-			"tax_amount": 0.0,
-			"vehicle_vessel_tax": vehicle_vessel_tax,
-			"late_fee": late_fee,
-			"line_total": round(vehicle_vessel_tax + late_fee, 2),
-			"plate_number": remark_data.get("plate_number"),
-			"vehicle_type": None,
-			"passage_start": None,
-			"passage_end": None,
-			"source_note": f"所属期: {remark_data.get('tax_period') or '—'}"
-		})
+	# 10. 车船税与滞纳金必须作为独立的发票项目明细行入库。
+	items.extend(build_vehicle_vessel_tax_items(remark_data))
 
 	# 11. 金额自校验
 	confidence = "高"

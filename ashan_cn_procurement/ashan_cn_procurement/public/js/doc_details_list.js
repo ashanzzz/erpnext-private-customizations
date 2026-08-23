@@ -70,34 +70,31 @@ function register_doc_details_formatter(dt) {
     frappe.listview_settings[dt].formatters["custom_doc_details"] = function (val, df, doc) {
         return ashan.doc_details.render_badges(val || (doc && doc.custom_doc_details));
     };
-    frappe.listview_settings[dt].formatters["custom_items_summary"] = function (val, df, doc) {
-        return ashan.doc_details.render_badges(val || (doc && (doc.custom_doc_details || doc.custom_items_summary)));
-    };
 }
 
-// 1. 初始化时注册
-targetDocTypes.forEach(register_doc_details_formatter);
+function register_purchase_invoice_list_settings() {
+    register_doc_details_formatter("Purchase Invoice");
 
-// 2. 页面切换时保证注册
+    const settings = frappe.listview_settings["Purchase Invoice"];
+    const fields = settings.add_fields || [];
+    settings.add_fields = Array.from(new Set([
+        ...fields,
+        "custom_doc_details",
+        "supplier",
+        "bill_no",
+        "bill_date",
+        "grand_total",
+        "status"
+    ]));
+}
+
+// 在 ListView 创建前就注册采购发票的字段与渲染器，避免先显示原生列、
+// 再异步加载 doctype_list_js 而产生闪屏。
+targetDocTypes.forEach(register_doc_details_formatter);
+register_purchase_invoice_list_settings();
+
+// 页面切换时仅重新注册配置，不做 250ms 的全页扫描/重绘。
 $(document).on("page-change", function () {
     targetDocTypes.forEach(register_doc_details_formatter);
+    register_purchase_invoice_list_settings();
 });
-
-// 3. 动态 DOM 扫描替换器 (三重保障，确保所有列表列中呈现精致立体的单行小卡片徽章与省略号)
-setInterval(function () {
-    const cur_route = frappe.get_route();
-    if (cur_route && cur_route[0] === 'List') {
-        const dt = cur_route[1];
-        if (targetDocTypes.includes(dt)) {
-            register_doc_details_formatter(dt);
-            $('.list-row-col[data-fieldname="custom_doc_details"], .list-row-col[data-fieldname="custom_items_summary"]').each(function () {
-                const $col = $(this);
-                if ($col.find('.doc-details-badges-wrapper').length > 0) return;
-                const rawText = $col.text().trim();
-                if (rawText && rawText !== '—' && rawText !== '-' && !rawText.includes('单据明细') && !rawText.includes('开票物料明细')) {
-                    $col.html(ashan.doc_details.render_badges(rawText));
-                }
-            });
-        }
-    }
-}, 250);

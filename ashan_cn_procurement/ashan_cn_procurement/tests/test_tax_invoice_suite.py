@@ -12,6 +12,10 @@ from ashan_cn_procurement.services.tax_invoice_cleanup import (
 	delete_single_tax_invoice_pdf,
 	cleanup_expired_tax_invoice_pdfs
 )
+from ashan_cn_procurement.services.tax_invoice_validation import (
+	get_buyer_validation_error,
+	remove_stale_company_mapping_warnings,
+)
 
 def run_all_tests():
 	loader = unittest.TestLoader()
@@ -49,7 +53,7 @@ def import_real_sample_invoices():
 		doc.invoice_no = inv_no
 		doc.issue_date = res.get('issue_date')
 		doc.invoice_type = res.get('invoice_type')
-		doc.company = identify_company(res.get('buyer_name'), res.get('buyer_tax_id')) or '天津吉众机电设备有限公司'
+		doc.company = identify_company(res.get('buyer_name'), res.get('buyer_tax_id'))
 		doc.seller_name = res.get('seller_name')
 		doc.seller_tax_id = res.get('seller_tax_id')
 		doc.buyer_name = res.get('buyer_name')
@@ -58,8 +62,6 @@ def import_real_sample_invoices():
 		doc.amount_without_tax = res.get('amount_without_tax')
 		doc.tax_amount = res.get('tax_amount')
 		doc.invoice_grand_total = res.get('invoice_grand_total')
-		doc.vehicle_vessel_tax = res.get('vehicle_vessel_tax') or 0.0
-		doc.late_fee = res.get('late_fee') or 0.0
 		doc.remark_total = res.get('remark_total') or 0.0
 		doc.payable_total = res.get('payable_total')
 		doc.remark = res.get('remark')
@@ -109,7 +111,7 @@ class TestTaxInvoiceSuite(unittest.TestCase):
     </SellerInformation>
     <BuyerInformation>
       <BuyerIdNum>91120118MA06R1D13A</BuyerIdNum>
-      <BuyerName>天津吉众机电设备有限公司</BuyerName>
+      <BuyerName>天津吉众科技有限公司</BuyerName>
     </BuyerInformation>
     <BasicInformation>
       <TotalAmWithoutTax>10584.53</TotalAmWithoutTax>
@@ -173,7 +175,7 @@ class TestTaxInvoiceSuite(unittest.TestCase):
     </SellerInformation>
     <BuyerInformation>
       <BuyerIdNum>91120118MA06R1D13A</BuyerIdNum>
-      <BuyerName>天津吉众机电设备有限公司</BuyerName>
+      <BuyerName>天津吉众科技有限公司</BuyerName>
     </BuyerInformation>
     <BasicInformation>
       <TotalAmWithoutTax>692.92</TotalAmWithoutTax>
@@ -206,7 +208,7 @@ class TestTaxInvoiceSuite(unittest.TestCase):
 		self.assertEqual(len(res["items"]), 2)
 		self.assertEqual(res["items"][1]["line_type"], "车船税")
 		self.assertEqual(res["items"][1]["item_name"], "代收车船税")
-		self.assertEqual(res["items"][1]["vehicle_vessel_tax"], 325.00)
+		self.assertEqual(res["items"][1]["amount"], 325.00)
 		self.assertEqual(res["items"][1]["line_total"], 325.00)
 
 	def test_c_xml_toll_invoice(self):
@@ -314,9 +316,16 @@ class TestTaxInvoiceSuite(unittest.TestCase):
 		ti = frappe.new_doc("Tax Invoice")
 		ti.invoice_no = test_inv_no
 		ti.issue_date = nowdate()
+		ti.buyer_name = "天津吉众科技有限公司"
 		ti.invoice_grand_total = 1000.0
 		ti.business_status = "待录入"
 		ti.match_status = "未匹配"
+		ti.append("items", {
+			"line_type": "普通",
+			"item_name": "测试采购项目",
+			"amount": 1000.0,
+			"line_total": 1000.0,
+		})
 		ti.insert(ignore_permissions=True)
 
 		# 验证初始为待录入
@@ -358,10 +367,17 @@ class TestTaxInvoiceSuite(unittest.TestCase):
 		ti = frappe.new_doc("Tax Invoice")
 		ti.invoice_no = test_inv_no
 		ti.issue_date = nowdate()
+		ti.buyer_name = "天津吉众科技有限公司"
 		ti.invoice_grand_total = 500.0
 		ti.business_status = "已废弃"
 		ti.abandoned_reason = "开错发票"
 		ti.match_status = "未匹配"
+		ti.append("items", {
+			"line_type": "普通",
+			"item_name": "测试废弃项目",
+			"amount": 500.0,
+			"line_total": 500.0,
+		})
 		ti.insert(ignore_permissions=True)
 
 		# 模拟后续出现相同发票号 Purchase Invoice
@@ -385,6 +401,7 @@ class TestTaxInvoiceSuite(unittest.TestCase):
 		ti = frappe.new_doc("Tax Invoice")
 		ti.invoice_no = test_inv_no
 		ti.issue_date = nowdate()
+		ti.buyer_name = "天津吉众科技有限公司"
 		ti.invoice_grand_total = 200.0
 		ti.business_status = "待录入"
 		ti.invoice_pdf = "/private/files/test_fake.pdf"
@@ -411,3 +428,61 @@ class TestTaxInvoiceSuite(unittest.TestCase):
 
 		# 清理
 		frappe.delete_doc("Tax Invoice", test_inv_no, force=1)
+
+	def test_k_buyer_boundary_and_detail_only_vehicle_vessel_tax(self):
+		"""Test K: only the two legal buyers pass and tax is stored as a detail row."""
+		self.assertFalse(get_buyer_validation_error("天津祺富机械加工有限公司"))
+		self.assertFalse(get_buyer_validation_error("天津吉众科技有限公司"))
+		self.assertTrue(get_buyer_validation_error("天津吉众机电设备有限公司"))
+
+		test_inv_no = "TEST_INVALID_BUYER_004"
+		if frappe.db.exists("Tax Invoice", test_inv_no):
+			frappe.delete_doc("Tax Invoice", test_inv_no, force=1)
+
+		ti = frappe.new_doc("Tax Invoice")
+		ti.invoice_no = test_inv_no
+		ti.issue_date = nowdate()
+		ti.buyer_name = "天津市第三方公司"
+		ti.invoice_grand_total = 0.0
+		ti.append("items", {
+			"line_type": "车船税",
+			"item_name": "代收车船税",
+			"amount": 325.0,
+			"tax_amount": 0.0,
+			"line_total": 325.0,
+		})
+		ti.insert(ignore_permissions=True)
+		ti.reload()
+
+		self.assertEqual(ti.parse_status, "需复核")
+		self.assertIn("【购买方错误】", ti.parse_warning)
+		self.assertIsNone(ti.company)
+		self.assertEqual(len(ti.items), 1)
+		self.assertEqual(ti.items[0].amount, 325.0)
+		self.assertEqual(ti.payable_total, 325.0)
+		self.assertFalse(ti.get("vehicle_vessel_tax"))
+
+		update_tax_invoice_match_state(ti.name, matched_pis=[{
+			"name": "PI-SHOULD-NOT-MATCH",
+			"bill_no": test_inv_no,
+			"docstatus": 0,
+			"grand_total": 650.0,
+		}])
+		ti.reload()
+		self.assertEqual(ti.match_status, "未匹配")
+		self.assertFalse(ti.matched_purchase_invoice)
+
+		frappe.delete_doc("Tax Invoice", test_inv_no, force=1)
+
+	def test_l_stale_company_mapping_warning_resolves_only_after_mapping(self):
+		"""Test L: resolved company mappings clear stale review warnings without hiding other warnings."""
+		warning = "购买方公司未能自动匹配; 金额待人工复核"
+		unmapped_warning, unmapped_removed = remove_stale_company_mapping_warnings(warning, None)
+		self.assertFalse(unmapped_removed)
+		self.assertEqual(unmapped_warning, warning)
+
+		mapped_warning, mapped_removed = remove_stale_company_mapping_warnings(
+			warning, "天津吉众机电设备有限公司"
+		)
+		self.assertTrue(mapped_removed)
+		self.assertEqual(mapped_warning, "金额待人工复核")

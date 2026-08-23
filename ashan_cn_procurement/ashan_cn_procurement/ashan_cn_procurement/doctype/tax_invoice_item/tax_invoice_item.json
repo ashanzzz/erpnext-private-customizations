@@ -15,8 +15,6 @@
   "amount",
   "tax_rate_text",
   "tax_amount",
-  "vehicle_vessel_tax",
-  "late_fee",
   "line_total",
   "col_break_toll",
   "plate_number",
@@ -78,17 +76,6 @@
    "fieldtype": "Currency",
    "in_list_view": 1,
    "label": "税额"
-  },
-  {
-   "fieldname": "vehicle_vessel_tax",
-   "fieldtype": "Currency",
-   "in_list_view": 1,
-   "label": "车船税"
-  },
-  {
-   "fieldname": "late_fee",
-   "fieldtype": "Currency",
-   "label": "滞纳金"
   },
   {
    "fieldname": "line_total",

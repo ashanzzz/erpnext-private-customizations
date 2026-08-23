@@ -9,8 +9,9 @@
     {
       "role": "System Manager"
     },
-    {
-      "role": "All"
-    }
+    {"role": "HR Manager"},
+    {"role": "HR User"},
+    {"role": "Accounts Manager"},
+    {"role": "Accounts User"}
   ]
 }
