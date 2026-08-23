@@ -1869,3 +1869,399 @@ def get_procurement_picker_overview_kpis(company: str | None = None) -> dict:
             "pi_to_rr": {"count": pi_count, "amount": pi_amount, "label": "待报销付款发票"},
         }
     }
+
+
+# =========================================================================
+# Document Details, Preview Cascade Deletion & Safe Deletion APIs
+# =========================================================================
+
+ALLOWED_PROCUREMENT_DOCTYPES = [
+    "Material Request",
+    "Purchase Order",
+    "Purchase Receipt",
+    "Purchase Invoice",
+    "Reimbursement Request",
+]
+
+
+@frappe.whitelist()
+def get_document_details(doctype: str, name: str) -> dict:
+    """Retrieve full structured document metadata, line items, and upstream/downstream flow for quick view dialog."""
+    if doctype not in ALLOWED_PROCUREMENT_DOCTYPES:
+        frappe.throw(_("不支持的单据类型：{0}").format(doctype))
+
+    if not frappe.db.exists(doctype, name):
+        frappe.throw(_("单据不存在：{0} {1}").format(doctype, name))
+
+    doc = frappe.get_doc(doctype, name)
+    assert_company_access(doc.company)
+
+    status_str = doc.get("status") or ("Draft" if doc.docstatus == 0 else ("Submitted" if doc.docstatus == 1 else "Cancelled"))
+    date_str = str(doc.get("transaction_date") or doc.get("posting_date") or doc.get("bill_date") or doc.creation)[:10]
+
+    # Extract items
+    items = []
+    total_qty = 0.0
+    total_amount = 0.0
+
+    child_field = "items" if hasattr(doc, "items") else ("invoice_items" if hasattr(doc, "invoice_items") else "")
+    raw_children = getattr(doc, child_field, []) if child_field else []
+
+    for idx, it in enumerate(raw_children, 1):
+        q = flt(it.get("qty") or 1.0, 4)
+        r = flt(it.get("rate") or 0.0, 2)
+        amt = flt(it.get("amount") or (q * r), 2)
+        tax_rate = flt(it.get("custom_tax_rate") or it.get("tax_rate") or 0.0, 2)
+        tax_amt = flt(it.get("custom_tax_amount") or it.get("tax_amount") or 0.0, 2)
+        tot = flt(it.get("custom_total_amount") or it.get("total_amount") or (amt + tax_amt), 2)
+
+        total_qty += q
+        total_amount += (tot if tot > 0 else amt)
+
+        items.append({
+            "idx": idx,
+            "item_code": it.get("item_code") or "",
+            "item_name": it.get("item_name") or it.get("item_code") or "",
+            "description": it.get("description") or "",
+            "item_group": it.get("item_group") or "",
+            "uom": it.get("uom") or it.get("stock_uom") or "",
+            "qty": q,
+            "rate": r,
+            "amount": amt,
+            "tax_rate": tax_rate,
+            "tax_amount": tax_amt,
+            "total_amount": tot,
+            "warehouse": it.get("warehouse") or "",
+            "schedule_date": str(it.get("schedule_date") or "") if it.get("schedule_date") else "",
+        })
+
+    # Flow traceability links
+    linked_upstream = []
+    linked_downstream = []
+
+    if doctype == "Material Request":
+        # Downstream POs
+        pos = frappe.db.sql("""
+            SELECT DISTINCT poi.parent AS name, po.status, po.docstatus, po.grand_total, po.transaction_date
+            FROM `tabPurchase Order Item` poi
+            INNER JOIN `tabPurchase Order` po ON po.name = poi.parent
+            WHERE poi.material_request = %s AND po.docstatus < 2
+            ORDER BY po.transaction_date DESC
+        """, (name,), as_dict=True)
+        for po in pos:
+            linked_downstream.append({
+                "doctype": "Purchase Order",
+                "doctype_label": "采购订单",
+                "name": po.name,
+                "status": po.status or ("Draft" if po.docstatus == 0 else "Submitted"),
+                "docstatus": po.docstatus,
+                "grand_total": flt(po.grand_total, 2),
+                "date": str(po.transaction_date or ""),
+            })
+
+    elif doctype == "Purchase Order":
+        # Upstream MRs
+        mr_names = list({it.get("material_request") for it in raw_children if it.get("material_request")})
+        for mr_n in mr_names:
+            mr_row = frappe.db.get_value("Material Request", mr_n, ["name", "status", "docstatus", "transaction_date"], as_dict=True)
+            if mr_row:
+                linked_upstream.append({
+                    "doctype": "Material Request",
+                    "doctype_label": "采购申请单",
+                    "name": mr_row.name,
+                    "status": mr_row.status or ("Draft" if mr_row.docstatus == 0 else "Submitted"),
+                    "docstatus": mr_row.docstatus,
+                    "date": str(mr_row.transaction_date or ""),
+                })
+        # Downstream PRs
+        prs = frappe.db.sql("""
+            SELECT DISTINCT pri.parent AS name, pr.status, pr.docstatus, pr.grand_total, pr.posting_date
+            FROM `tabPurchase Receipt Item` pri
+            INNER JOIN `tabPurchase Receipt` pr ON pr.name = pri.parent
+            WHERE pri.purchase_order = %s AND pr.docstatus < 2
+            ORDER BY pr.posting_date DESC
+        """, (name,), as_dict=True)
+        for pr in prs:
+            linked_downstream.append({
+                "doctype": "Purchase Receipt",
+                "doctype_label": "采购入库单",
+                "name": pr.name,
+                "status": pr.status or ("Draft" if pr.docstatus == 0 else "Submitted"),
+                "docstatus": pr.docstatus,
+                "grand_total": flt(pr.grand_total, 2),
+                "date": str(pr.posting_date or ""),
+            })
+
+    elif doctype == "Purchase Receipt":
+        # Upstream POs
+        po_names = list({it.get("purchase_order") for it in raw_children if it.get("purchase_order")})
+        for po_n in po_names:
+            po_row = frappe.db.get_value("Purchase Order", po_n, ["name", "status", "docstatus", "grand_total", "transaction_date"], as_dict=True)
+            if po_row:
+                linked_upstream.append({
+                    "doctype": "Purchase Order",
+                    "doctype_label": "采购订单",
+                    "name": po_row.name,
+                    "status": po_row.status or ("Draft" if po_row.docstatus == 0 else "Submitted"),
+                    "docstatus": po_row.docstatus,
+                    "grand_total": flt(po_row.grand_total, 2),
+                    "date": str(po_row.transaction_date or ""),
+                })
+        # Downstream PIs
+        pis = frappe.db.sql("""
+            SELECT DISTINCT pii.parent AS name, pi.status, pi.docstatus, pi.grand_total, pi.posting_date
+            FROM `tabPurchase Invoice Item` pii
+            INNER JOIN `tabPurchase Invoice` pi ON pi.name = pii.parent
+            WHERE pii.purchase_receipt = %s AND pi.docstatus < 2
+            ORDER BY pi.posting_date DESC
+        """, (name,), as_dict=True)
+        for pi in pis:
+            linked_downstream.append({
+                "doctype": "Purchase Invoice",
+                "doctype_label": "采购发票",
+                "name": pi.name,
+                "status": pi.status or ("Draft" if pi.docstatus == 0 else "Submitted"),
+                "docstatus": pi.docstatus,
+                "grand_total": flt(pi.grand_total, 2),
+                "date": str(pi.posting_date or ""),
+            })
+
+    elif doctype == "Purchase Invoice":
+        # Upstream PRs
+        pr_names = list({it.get("purchase_receipt") for it in raw_children if it.get("purchase_receipt")})
+        for pr_n in pr_names:
+            pr_row = frappe.db.get_value("Purchase Receipt", pr_n, ["name", "status", "docstatus", "grand_total", "posting_date"], as_dict=True)
+            if pr_row:
+                linked_upstream.append({
+                    "doctype": "Purchase Receipt",
+                    "doctype_label": "采购入库单",
+                    "name": pr_row.name,
+                    "status": pr_row.status or ("Draft" if pr_row.docstatus == 0 else "Submitted"),
+                    "docstatus": pr_row.docstatus,
+                    "grand_total": flt(pr_row.grand_total, 2),
+                    "date": str(pr_row.posting_date or ""),
+                })
+        # Downstream RRs
+        rrs = frappe.db.sql("""
+            SELECT DISTINCT rii.parent AS name, rr.status, rr.docstatus, rr.total_amount, rr.posting_date
+            FROM `tabReimbursement Invoice Item` rii
+            INNER JOIN `tabReimbursement Request` rr ON rr.name = rii.parent
+            WHERE rii.source_pi = %s AND rr.docstatus < 2
+            ORDER BY rr.posting_date DESC
+        """, (name,), as_dict=True)
+        for rr in rrs:
+            linked_downstream.append({
+                "doctype": "Reimbursement Request",
+                "doctype_label": "报销申请单",
+                "name": rr.name,
+                "status": rr.status or ("Draft" if rr.docstatus == 0 else "Submitted"),
+                "docstatus": rr.docstatus,
+                "grand_total": flt(rr.total_amount, 2),
+                "date": str(rr.posting_date or ""),
+            })
+
+    can_delete = frappe.has_permission(doctype, "delete", doc)
+    can_cancel = frappe.has_permission(doctype, "cancel", doc) if doc.docstatus == 1 else True
+
+    return {
+        "doctype": doctype,
+        "name": name,
+        "company": doc.company,
+        "docstatus": doc.docstatus,
+        "status": status_str,
+        "date": date_str,
+        "owner": doc.owner,
+        "supplier": doc.get("supplier") or "",
+        "department": doc.get("department") or "",
+        "bill_no": doc.get("bill_no") or "",
+        "grand_total": flt(doc.get("grand_total") or total_amount, 2),
+        "total_qty": flt(total_qty, 2),
+        "currency": doc.get("currency") or "CNY",
+        "custom_doc_details": doc.get("custom_doc_details") or "",
+        "items": items,
+        "linked_upstream": linked_upstream,
+        "linked_downstream": linked_downstream,
+        "can_delete": can_delete,
+        "can_cancel": can_cancel,
+    }
+
+
+@frappe.whitelist()
+def preview_document_cascade_deletion(doctype: str, name: str) -> dict:
+    """Analyze full downstream dependency tree for cascading deletion and verify user permissions."""
+    if doctype not in ALLOWED_PROCUREMENT_DOCTYPES:
+        frappe.throw(_("不支持的单据类型：{0}").format(doctype))
+
+    if not frappe.db.exists(doctype, name):
+        frappe.throw(_("单据不存在：{0} {1}").format(doctype, name))
+
+    root_doc = frappe.get_doc(doctype, name)
+    assert_company_access(root_doc.company)
+
+    # Collect all downstream documents
+    tree_docs: list[tuple[str, str]] = []  # List of (doctype, name) in forward order
+    visited = set()
+
+    def trace_downstream(cur_dt: str, cur_nm: str):
+        key = (cur_dt, cur_nm)
+        if key in visited:
+            return
+        visited.add(key)
+        tree_docs.append(key)
+
+        if cur_dt == "Material Request":
+            pos = frappe.db.sql_list("""
+                SELECT DISTINCT poi.parent
+                FROM `tabPurchase Order Item` poi
+                INNER JOIN `tabPurchase Order` po ON po.name = poi.parent
+                WHERE poi.material_request = %s AND po.docstatus < 2
+            """, (cur_nm,))
+            for po_n in pos:
+                trace_downstream("Purchase Order", po_n)
+
+        elif cur_dt == "Purchase Order":
+            prs = frappe.db.sql_list("""
+                SELECT DISTINCT pri.parent
+                FROM `tabPurchase Receipt Item` pri
+                INNER JOIN `tabPurchase Receipt` pr ON pr.name = pri.parent
+                WHERE pri.purchase_order = %s AND pr.docstatus < 2
+            """, (cur_nm,))
+            for pr_n in prs:
+                trace_downstream("Purchase Receipt", pr_n)
+
+            pis = frappe.db.sql_list("""
+                SELECT DISTINCT pii.parent
+                FROM `tabPurchase Invoice Item` pii
+                INNER JOIN `tabPurchase Invoice` pi ON pi.name = pii.parent
+                WHERE pii.purchase_order = %s AND pi.docstatus < 2
+            """, (cur_nm,))
+            for pi_n in pis:
+                trace_downstream("Purchase Invoice", pi_n)
+
+        elif cur_dt == "Purchase Receipt":
+            pis = frappe.db.sql_list("""
+                SELECT DISTINCT pii.parent
+                FROM `tabPurchase Invoice Item` pii
+                INNER JOIN `tabPurchase Invoice` pi ON pi.name = pii.parent
+                WHERE pii.purchase_receipt = %s AND pi.docstatus < 2
+            """, (cur_nm,))
+            for pi_n in pis:
+                trace_downstream("Purchase Invoice", pi_n)
+
+        elif cur_dt == "Purchase Invoice":
+            rrs = frappe.db.sql_list("""
+                SELECT DISTINCT rii.parent
+                FROM `tabReimbursement Invoice Item` rii
+                INNER JOIN `tabReimbursement Request` rr ON rr.name = rii.parent
+                WHERE rii.source_pi = %s AND rr.docstatus < 2
+            """, (cur_nm,))
+            for rr_n in rrs:
+                trace_downstream("Reimbursement Request", rr_n)
+
+    trace_downstream(doctype, name)
+
+    # Reverse order for safe deletion: RR -> PI -> PR -> PO -> MR
+    reverse_order_keys = list(reversed(tree_docs))
+
+    doctype_labels = {
+        "Material Request": "采购申请单",
+        "Purchase Order": "采购订单",
+        "Purchase Receipt": "采购入库单",
+        "Purchase Invoice": "采购发票",
+        "Reimbursement Request": "报销申请单",
+    }
+
+    cascade_list = []
+    missing_permissions = []
+
+    for dt, nm in reverse_order_keys:
+        d = frappe.get_doc(dt, nm)
+        has_del = frappe.has_permission(dt, "delete", d)
+        has_cancel = frappe.has_permission(dt, "cancel", d) if d.docstatus == 1 else True
+
+        dt_label = doctype_labels.get(dt, dt)
+        status_text = "草稿 (待删除)" if d.docstatus == 0 else ("已提交 (需先撤单后删除)" if d.docstatus == 1 else "已取消 (待删除)")
+
+        if not has_del:
+            missing_permissions.append(f"【{dt_label}】{nm} (缺少删除权限)")
+        if not has_cancel:
+            missing_permissions.append(f"【{dt_label}】{nm} (缺少撤单权限)")
+
+        cascade_list.append({
+            "doctype": dt,
+            "doctype_label": dt_label,
+            "name": nm,
+            "company": d.company,
+            "docstatus": d.docstatus,
+            "status_text": status_text,
+            "grand_total": flt(d.get("grand_total") or d.get("total_amount") or d.get("total") or 0.0, 2),
+            "supplier": d.get("supplier") or d.get("department") or "",
+            "has_permission": bool(has_del and has_cancel),
+        })
+
+    has_downstream = len(cascade_list) > 1
+
+    return {
+        "target_doc": {
+            "doctype": doctype,
+            "doctype_label": doctype_labels.get(doctype, doctype),
+            "name": name,
+            "docstatus": root_doc.docstatus,
+        },
+        "has_downstream": has_downstream,
+        "cascade_count": len(cascade_list),
+        "cascade_list": cascade_list,
+        "can_delete": len(missing_permissions) == 0,
+        "missing_permissions": missing_permissions,
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def delete_procurement_document(doctype: str, name: str, cascade: bool | int | str = False) -> dict:
+    """Execute safe deletion of a single procurement document or full reverse cascade deletion."""
+    cascade = frappe.utils.cint(cascade) == 1
+
+    preview = preview_document_cascade_deletion(doctype, name)
+    if not preview["can_delete"]:
+        frappe.throw(
+            _("权限不足，无法执行删除操作。缺少以下单据的删除/撤单权限：<br>{0}").format("<br>".join(preview["missing_permissions"]))
+        )
+
+    if preview["has_downstream"] and not cascade:
+        frappe.throw(_("该单据已生成下游关联单据，无法直接单独删除。请选择【连带级联删除】。"))
+
+    # Execute reverse deletion inside a transaction
+    deleted_docs = []
+    for item in preview["cascade_list"]:
+        item_dt = item["doctype"]
+        item_nm = item["name"]
+
+        if not frappe.db.exists(item_dt, item_nm):
+            continue
+
+        doc_to_del = frappe.get_doc(item_dt, item_nm)
+
+        # 1. Release reimbursement reservation if any
+        if item_dt == "Purchase Invoice" and frappe.db.exists("DocType", "Reimbursement Source Reservation"):
+            frappe.db.delete("Reimbursement Source Reservation", {"source_purchase_invoice": item_nm})
+        elif item_dt == "Reimbursement Request" and frappe.db.exists("DocType", "Reimbursement Source Reservation"):
+            frappe.db.delete("Reimbursement Source Reservation", {"voucher_no": item_nm})
+
+        # 2. Cancel if submitted
+        if doc_to_del.docstatus == 1:
+            doc_to_del.flags.ignore_permissions = False
+            doc_to_del.cancel()
+
+        # 3. Delete doc
+        frappe.delete_doc(item_dt, item_nm, force=1, ignore_permissions=False)
+        deleted_docs.append(f"{item['doctype_label']} {item_nm}")
+
+    frappe.db.commit()
+
+    return {
+        "success": True,
+        "deleted_count": len(deleted_docs),
+        "deleted_docs": deleted_docs,
+        "message": _("成功删除 {0} 张单据：<br>{1}").format(len(deleted_docs), "<br>".join(deleted_docs)),
+    }
+

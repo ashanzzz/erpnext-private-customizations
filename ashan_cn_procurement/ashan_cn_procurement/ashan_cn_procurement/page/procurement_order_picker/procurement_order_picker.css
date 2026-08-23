@@ -958,4 +958,346 @@ tr.picker-row-completed input.picker-row-checkbox {
     box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
 }
 
+/* =========================================================================
+   Doc Detail Modal & Action Dialog
+   ========================================================================= */
+.picker-doc-modal-container {
+    padding: 4px 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.picker-doc-meta-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 14px;
+}
+
+.picker-doc-meta-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+}
+
+.picker-doc-title-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.picker-doc-title-text {
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.picker-doc-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px 14px;
+    font-size: 11.5px;
+}
+
+.picker-doc-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.picker-doc-meta-label {
+    color: #64748b;
+    font-size: 10.5px;
+}
+
+.picker-doc-meta-val {
+    color: #1e293b;
+    font-weight: 600;
+}
+
+.picker-doc-table-box {
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 14px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.picker-doc-modal-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11.5px;
+}
+
+.picker-doc-modal-table th {
+    background: #f1f5f9;
+    color: #475569;
+    font-weight: 600;
+    padding: 6px 8px;
+    border-bottom: 1px solid #cbd5e1;
+    text-align: left;
+}
+
+.picker-doc-modal-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #1e293b;
+}
+
+.picker-doc-modal-table tr:hover td {
+    background: #f8fafc;
+}
+
+.picker-doc-flow-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+}
+
+.picker-doc-flow-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 8px;
+}
+
+.picker-doc-flow-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.picker-doc-flow-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 11px;
+}
+
+.picker-doc-flow-item.downstream {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+}
+
+.picker-doc-flow-item.upstream {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+}
+
+.picker-modal-footer-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 10px;
+    border-top: 1px solid #e2e8f0;
+    margin-top: 6px;
+}
+
+.picker-btn-danger-del {
+    background: #fee2e2;
+    color: #b91c1c;
+    border: 1px solid #f87171;
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.picker-btn-danger-del:hover {
+    background: #dc2626;
+    color: #ffffff;
+}
+
+.picker-btn-action-view {
+    background: #f8fafc;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none !important;
+}
+
+.picker-btn-action-view:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+/* Cascade Delete Modal Styling */
+.picker-cascade-box {
+    padding: 6px 0;
+}
+
+.picker-cascade-warning-alert {
+    background: #fff1f2;
+    border: 1px solid #fecdd3;
+    border-radius: 6px;
+    padding: 10px 14px;
+    color: #be123c;
+    font-size: 12px;
+    margin-bottom: 12px;
+}
+
+.picker-cascade-tree-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 14px 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.picker-cascade-tree-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 11.5px;
+}
+
+.picker-cascade-tree-item:last-child {
+    border-bottom: none;
+}
+
+.picker-cascade-tree-item.root-item {
+    background: #f8fafc;
+    font-weight: 700;
+}
+
+.picker-cascade-perm-badge-ok {
+    color: #15803d;
+    background: #dcfce7;
+    border: 1px solid #86efac;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10.5px;
+    font-weight: 600;
+}
+
+.picker-cascade-perm-badge-no {
+    color: #b91c1c;
+    background: #fee2e2;
+    border: 1px solid #fca5a5;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10.5px;
+    font-weight: 600;
+}
+
+.picker-row-action-btn {
+    padding: 1px 6px;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    font-size: 10.5px;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.picker-row-action-btn:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+/* Modal Helper Semantic Classes (Zero Inline Styles) */
+.picker-cell-center {
+    text-align: center;
+}
+
+.picker-cell-right {
+    text-align: right;
+}
+
+.picker-cell-col-idx {
+    width: 40px;
+    text-align: center;
+}
+
+.picker-doc-empty-state {
+    text-align: center;
+    color: #94a3b8;
+    padding: 16px;
+}
+
+.picker-flow-empty-hint {
+    color: #94a3b8;
+    font-weight: normal;
+}
+
+.picker-meta-owner-text {
+    font-size: 11px;
+    color: #64748b;
+}
+
+.picker-meta-val-highlight {
+    color: #0284c7;
+}
+
+.picker-modal-actions-right {
+    display: flex;
+    gap: 8px;
+}
+
+.picker-no-delete-perm-hint {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.picker-cascade-target-heading {
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 8px;
+}
+
+.picker-cascade-item-code {
+    color: #0284c7;
+}
+
+.picker-cascade-item-comp {
+    color: #64748b;
+    font-size: 11px;
+    margin-left: 6px;
+}
+
+.picker-cascade-item-status {
+    font-size: 11px;
+    color: #475569;
+}
+
+.picker-cascade-tree-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.picker-cascade-security-hint {
+    font-size: 11.5px;
+    color: #64748b;
+}
+
+.picker-danger-confirm-hint {
+    color: #dc2626;
+    font-size: 12px;
+}
+
+
+
 

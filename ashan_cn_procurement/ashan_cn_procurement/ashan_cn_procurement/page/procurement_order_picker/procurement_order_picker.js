@@ -307,9 +307,21 @@ class ProcurementOrderPickerCenter {
         $(this.page.body).on("click", "#picker-select-all-btn", () => this.select_all_visible());
         $(this.page.body).on("click", "#picker-clear-sel-btn", () => this.clear_selection());
         $(this.page.body).on("click", "#picker-fill-max-btn", () => this.fill_max_quantities());
+        $(this.page.body).on("click", "#picker-batch-delete-btn", () => this.batch_delete_selected());
 
         // Primary Action Submit
         $(this.page.body).on("click", "#picker-submit-btn", () => this.execute_primary_action());
+
+        // Click on document link / badge to open Doc Detail Modal
+        $(this.page.body).on("click", ".picker-doc-clickable-link", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const dt = $(this).attr("data-doctype");
+            const nm = $(this).attr("data-name");
+            if (dt && nm) {
+                self.show_doc_detail_modal(dt, nm);
+            }
+        });
     }
 
     sync_route_params() {
@@ -832,13 +844,22 @@ class ProcurementOrderPickerCenter {
         const mode = this.view_modes[stage] || "detail";
         const is_all_company = this.active_company === "All";
 
+        const slug_map = {
+            "material-request": "Material Request",
+            "purchase-order": "Purchase Order",
+            "purchase-receipt": "Purchase Receipt",
+            "purchase-invoice": "Purchase Invoice",
+            "reimbursement-request": "Reimbursement Request",
+        };
+
         const render_linked_badges = (names_str, slug) => {
             if (!names_str || !names_str.trim()) {
                 return `<span class="picker-no-link">-</span>`;
             }
+            const dt = slug_map[slug] || "Purchase Order";
             const names = names_str.split(/[、,]/).map(s => s.trim()).filter(Boolean);
             if (!names.length) return `<span class="picker-no-link">-</span>`;
-            return names.map(n => `<a href="/desk/${slug}/${encodeURIComponent(n)}" target="_blank" class="picker-linked-badge" title="点击查看单据 ${frappe.utils.escape_html(n)}">🔗 ${frappe.utils.escape_html(n)}</a>`).join(" ");
+            return names.map(n => `<span class="picker-linked-badge picker-doc-clickable-link" data-doctype="${dt}" data-name="${frappe.utils.escape_html(n)}" title="点击弹窗查看单据详情与操作">🔗 ${frappe.utils.escape_html(n)}</span>`).join(" ");
         };
 
         this.table_data.forEach((r, idx) => {
@@ -885,7 +906,7 @@ class ProcurementOrderPickerCenter {
             if (stage === "item_to_mr") {
                 if (mode === "doc") {
                     tr_html += `
-                        <td><a href="/desk/material-request/${r.mr_name}" target="_blank" class="picker-linked-badge">${frappe.utils.escape_html(r.mr_name)}</a></td>
+                        <td><span class="picker-linked-badge picker-doc-clickable-link" data-doctype="Material Request" data-name="${r.mr_name}" title="点击弹窗查看单据详情与操作">📋 ${frappe.utils.escape_html(r.mr_name)}</span></td>
                         <td>${r.transaction_date || "-"}</td>
                         <td>${frappe.utils.escape_html(r.department || "-")}</td>
                         <td>${doc_badges(r.custom_doc_details)}</td>
@@ -896,7 +917,7 @@ class ProcurementOrderPickerCenter {
                     `;
                 } else {
                     tr_html += `
-                        <td><a href="/desk/material-request/${r.mr_name}" target="_blank" class="picker-linked-badge">${frappe.utils.escape_html(r.mr_name)}</a></td>
+                        <td><span class="picker-linked-badge picker-doc-clickable-link" data-doctype="Material Request" data-name="${r.mr_name}" title="点击弹窗查看单据详情与操作">📋 ${frappe.utils.escape_html(r.mr_name)}</span></td>
                         <td><strong>${frappe.utils.escape_html(r.item_code)}</strong></td>
                         <td>${frappe.utils.escape_html(r.item_name || r.item_code)}</td>
                         <td>${frappe.utils.escape_html(r.item_group || "")}</td>
@@ -910,7 +931,7 @@ class ProcurementOrderPickerCenter {
             } else if (stage === "mr_to_po") {
                 if (mode === "doc") {
                     tr_html += `
-                        <td><span class="picker-source-docname">${frappe.utils.escape_html(r.mr_name)}</span></td>
+                        <td><span class="picker-source-docname picker-doc-clickable-link" data-doctype="Material Request" data-name="${r.mr_name}" title="点击查看详情与操作">${frappe.utils.escape_html(r.mr_name)}</span></td>
                         <td>${r.transaction_date || "-"}</td>
                         <td>${r.schedule_date || "-"}</td>
                         <td>${doc_badges(r.custom_doc_details)}</td>
@@ -925,7 +946,7 @@ class ProcurementOrderPickerCenter {
                     const urgent_tag = r.is_overdue ? `<span class="picker-badge-urgent">逾期</span>` : (r.is_urgent ? `<span class="picker-badge-urgent">紧急</span>` : "");
                     const input_val = is_completed ? 0 : (r.this_qty || r.pending_qty);
                     tr_html += `
-                        <td><span class="picker-source-docname">${frappe.utils.escape_html(r.mr_name)}</span></td>
+                        <td><span class="picker-source-docname picker-doc-clickable-link" data-doctype="Material Request" data-name="${r.mr_name}" title="点击查看详情与操作">${frappe.utils.escape_html(r.mr_name)}</span></td>
                         <td>${r.schedule_date || "-"} ${urgent_tag}</td>
                         <td><strong>${frappe.utils.escape_html(r.item_code)}</strong></td>
                         <td>${frappe.utils.escape_html(r.item_name || "")}</td>
@@ -946,7 +967,7 @@ class ProcurementOrderPickerCenter {
                 if (mode === "doc") {
                     tr_html += `
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
-                        <td><span class="picker-source-docname">${frappe.utils.escape_html(r.po_name)}</span></td>
+                        <td><span class="picker-source-docname picker-doc-clickable-link" data-doctype="Purchase Order" data-name="${r.po_name}" title="点击查看详情与操作">${frappe.utils.escape_html(r.po_name)}</span></td>
                         <td>${r.po_date || "-"}</td>
                         <td>${r.schedule_date || "-"}</td>
                         <td>${frappe.utils.escape_html(r.warehouse || "-")}</td>
@@ -962,7 +983,7 @@ class ProcurementOrderPickerCenter {
                     const input_val = is_completed ? 0 : (r.this_qty || r.pending_qty);
                     tr_html += `
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
-                        <td><span class="picker-source-docname">${frappe.utils.escape_html(r.po_name)}</span></td>
+                        <td><span class="picker-source-docname picker-doc-clickable-link" data-doctype="Purchase Order" data-name="${r.po_name}" title="点击查看详情与操作">${frappe.utils.escape_html(r.po_name)}</span></td>
                         <td>${r.po_date || "-"}</td>
                         <td>${r.schedule_date || "-"}</td>
                         <td><span class="ashan-tag-badge">${frappe.utils.escape_html(r.item_code)}</span> ${frappe.utils.escape_html(r.item_name || "")}</td>
@@ -982,7 +1003,7 @@ class ProcurementOrderPickerCenter {
                 if (mode === "doc") {
                     tr_html += `
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
-                        <td><span class="picker-source-docname">${frappe.utils.escape_html(r.pr_name)}</span></td>
+                        <td><span class="picker-source-docname picker-doc-clickable-link" data-doctype="Purchase Receipt" data-name="${r.pr_name}" title="点击查看详情与操作">${frappe.utils.escape_html(r.pr_name)}</span></td>
                         <td>${r.pr_date || "-"}</td>
                         <td>${doc_badges(r.custom_doc_details)}</td>
                         <td class="picker-qty-cell">${r.unbilled_item_count || 0}</td>
@@ -996,7 +1017,7 @@ class ProcurementOrderPickerCenter {
                     const input_val = is_completed ? 0 : (r.this_qty || r.pending_qty);
                     tr_html += `
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
-                        <td><span class="picker-source-docname">${frappe.utils.escape_html(r.pr_name)}</span></td>
+                        <td><span class="picker-source-docname picker-doc-clickable-link" data-doctype="Purchase Receipt" data-name="${r.pr_name}" title="点击查看详情与操作">${frappe.utils.escape_html(r.pr_name)}</span></td>
                         <td>${r.pr_date || "-"}</td>
                         <td><span class="ashan-tag-badge">${frappe.utils.escape_html(r.item_code)}</span> ${frappe.utils.escape_html(r.item_name || "")}</td>
                         <td>${frappe.utils.escape_html(r.uom || "")}</td>
@@ -1015,7 +1036,7 @@ class ProcurementOrderPickerCenter {
             } else if (stage === "pi_to_rr") {
                 if (mode === "doc") {
                     tr_html += `
-                        <td><span class="picker-source-docname">${frappe.utils.escape_html(r.pi_name)}</span></td>
+                        <td><span class="picker-source-docname picker-doc-clickable-link" data-doctype="Purchase Invoice" data-name="${r.pi_name}" title="点击查看详情与操作">${frappe.utils.escape_html(r.pi_name)}</span></td>
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
                         <td><span class="picker-badge-invoice-type">${frappe.utils.escape_html(r.bill_no || "未填")}</span></td>
                         <td><span class="ashan-status-badge ashan-status-blue">${frappe.utils.escape_html(r.invoice_type || "普通发票")}</span></td>
@@ -1029,7 +1050,7 @@ class ProcurementOrderPickerCenter {
                     `;
                 } else {
                     tr_html += `
-                        <td><span class="picker-source-docname">${frappe.utils.escape_html(r.pi_name)}</span></td>
+                        <td><span class="picker-source-docname picker-doc-clickable-link" data-doctype="Purchase Invoice" data-name="${r.pi_name}" title="点击查看详情与操作">${frappe.utils.escape_html(r.pi_name)}</span></td>
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
                         <td><span class="picker-badge-invoice-type">${frappe.utils.escape_html(r.bill_no || "未填")}</span></td>
                         <td><strong>${frappe.utils.escape_html(r.item_code)}</strong> ${frappe.utils.escape_html(r.item_name || "")}</td>
@@ -1227,6 +1248,7 @@ class ProcurementOrderPickerCenter {
                 <div class="picker-btn-group">
                     <button class="picker-btn-secondary" id="picker-select-all-btn">全选本页</button>
                     <button class="picker-btn-secondary" id="picker-clear-sel-btn">清空选择</button>
+                    <button class="picker-btn-secondary" id="picker-batch-delete-btn" ${sel_count === 0 ? 'disabled' : ''}>🗑️ 删除所选</button>
                     <button class="picker-btn-create-mr" id="picker-create-mr-btn">
                         <span>➕</span>
                         <span>新建物料申请单</span>
@@ -1276,6 +1298,7 @@ class ProcurementOrderPickerCenter {
             <div class="picker-btn-group">
                 <button class="picker-btn-secondary" id="picker-select-all-btn">全选本页</button>
                 <button class="picker-btn-secondary" id="picker-clear-sel-btn">清空选择</button>
+                <button class="picker-btn-secondary" id="picker-batch-delete-btn" ${sel_count === 0 ? 'disabled' : ''}>🗑️ 删除所选</button>
                 ${fill_max_btn}
                 ${stage_inputs}
                 <button class="picker-btn-primary" id="picker-submit-btn" ${sel_count === 0 ? 'disabled' : ''}>
@@ -1794,4 +1817,403 @@ class ProcurementOrderPickerCenter {
         });
         d.show();
     }
+
+    async show_doc_detail_modal(doctype, name) {
+        if (!doctype || !name) return;
+        frappe.dom.freeze(__("正在加载单据详情..."));
+        try {
+            const r = await frappe.call({
+                method: "ashan_cn_procurement.services.procurement_picker_service.get_document_details",
+                args: { doctype: doctype, name: name },
+            });
+            frappe.dom.unfreeze();
+            if (!r || !r.message) return;
+            const doc = r.message;
+            this.render_doc_detail_dialog(doc);
+        } catch (e) {
+            frappe.dom.unfreeze();
+            frappe.msgprint(e.message || __("加载单据失败"));
+        }
+    }
+
+    render_doc_detail_dialog(doc) {
+        const self = this;
+        const doctype_labels = {
+            "Material Request": "采购申请单",
+            "Purchase Order": "采购订单",
+            "Purchase Receipt": "采购入库单",
+            "Purchase Invoice": "采购发票",
+            "Reimbursement Request": "报销申请单",
+        };
+        const dt_label = doctype_labels[doc.doctype] || doc.doctype;
+
+        // Build item rows
+        let items_tbody_html = "";
+        (doc.items || []).forEach((it) => {
+            items_tbody_html += `
+                <tr>
+                    <td class="picker-cell-center">${it.idx}</td>
+                    <td><strong>${frappe.utils.escape_html(it.item_code)}</strong></td>
+                    <td>${frappe.utils.escape_html(it.item_name)}</td>
+                    <td>${frappe.utils.escape_html(it.uom || "-")}</td>
+                    <td class="picker-qty-cell"><strong>${flt(it.qty).toFixed(2)}</strong></td>
+                    <td class="picker-money-cell">${self.fmt_money(it.rate)}</td>
+                    <td class="picker-money-cell">${self.fmt_money(it.amount)}</td>
+                    <td class="picker-cell-right">${it.tax_rate ? (it.tax_rate + '%') : '-'}</td>
+                    <td class="picker-money-cell">${self.fmt_money(it.tax_amount)}</td>
+                    <td class="picker-money-cell"><strong>${self.fmt_money(it.total_amount)}</strong></td>
+                </tr>
+            `;
+        });
+
+        if (!items_tbody_html) {
+            items_tbody_html = `<tr><td colspan="10" class="picker-doc-empty-state">无物料明细数据</td></tr>`;
+        }
+
+        // Build upstream flow items
+        let upstream_html = "";
+        (doc.linked_upstream || []).forEach((u) => {
+            upstream_html += `
+                <span class="picker-doc-flow-item upstream picker-doc-modal-link" data-doctype="${u.doctype}" data-name="${u.name}" title="点击查看详情">
+                    <span>⬆️ ${u.doctype_label}:</span>
+                    <strong>${frappe.utils.escape_html(u.name)}</strong>
+                    <span class="ashan-status-badge ashan-status-blue">${frappe.utils.escape_html(u.status || "")}</span>
+                </span>
+            `;
+        });
+
+        // Build downstream flow items
+        let downstream_html = "";
+        (doc.linked_downstream || []).forEach((d) => {
+            downstream_html += `
+                <span class="picker-doc-flow-item downstream picker-doc-modal-link" data-doctype="${d.doctype}" data-name="${d.name}" title="点击查看详情">
+                    <span>⬇️ ${d.doctype_label}:</span>
+                    <strong>${frappe.utils.escape_html(d.name)}</strong>
+                    <span class="ashan-status-badge ashan-status-green">${frappe.utils.escape_html(d.status || "")}</span>
+                </span>
+            `;
+        });
+
+        const flow_section_html = (upstream_html || downstream_html) ? `
+            <div class="picker-doc-flow-card">
+                <div class="picker-doc-flow-title">🔗 上下游业务全链路追溯</div>
+                <div class="picker-doc-flow-list">
+                    ${upstream_html}
+                    ${downstream_html}
+                </div>
+            </div>
+        ` : `
+            <div class="picker-doc-flow-card">
+                <div class="picker-doc-flow-title picker-flow-empty-hint">🔗 当前单据无关联上下游单据（独立单据）</div>
+            </div>
+        `;
+
+        const comp_badge_cls = (doc.company || "").includes("祺富") ? "picker-company-badge-qifu" : "picker-company-badge-jizhong";
+
+        const modal_content = `
+            <div class="picker-doc-modal-container">
+                <!-- Meta Info Card -->
+                <div class="picker-doc-meta-card">
+                    <div class="picker-doc-meta-header">
+                        <div class="picker-doc-title-box">
+                            <span class="picker-doc-title-text">${dt_label}: ${frappe.utils.escape_html(doc.name)}</span>
+                            <span class="picker-company-badge ${comp_badge_cls}">${frappe.utils.escape_html(doc.company)}</span>
+                            <span class="ashan-status-badge ashan-status-blue">${frappe.utils.escape_html(doc.status)}</span>
+                        </div>
+                        <div>
+                            <span class="picker-meta-owner-text">录单人: ${frappe.utils.escape_html(doc.owner || "-")}</span>
+                        </div>
+                    </div>
+                    <div class="picker-doc-meta-grid">
+                        <div class="picker-doc-meta-item">
+                            <span class="picker-doc-meta-label">单据日期</span>
+                            <span class="picker-doc-meta-val">${doc.date || "-"}</span>
+                        </div>
+                        <div class="picker-doc-meta-item">
+                            <span class="picker-doc-meta-label">${doc.supplier ? '供应商' : '需求部门'}</span>
+                            <span class="picker-doc-meta-val">${frappe.utils.escape_html(doc.supplier || doc.department || "-")}</span>
+                        </div>
+                        <div class="picker-doc-meta-item">
+                            <span class="picker-doc-meta-label">物料总数量</span>
+                            <span class="picker-doc-meta-val">${doc.total_qty}</span>
+                        </div>
+                        <div class="picker-doc-meta-item">
+                            <span class="picker-doc-meta-label">单据总金额</span>
+                            <span class="picker-doc-meta-val picker-meta-val-highlight">${self.fmt_money(doc.grand_total)}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Items Table -->
+                <div class="picker-doc-table-box">
+                    <table class="picker-doc-modal-table">
+                        <thead>
+                            <tr>
+                                <th class="picker-cell-col-idx">#</th>
+                                <th>物料代码</th>
+                                <th>物料名称/规格</th>
+                                <th>单位</th>
+                                <th class="picker-cell-right">数量</th>
+                                <th class="picker-cell-right">单价</th>
+                                <th class="picker-cell-right">金额</th>
+                                <th class="picker-cell-right">税率</th>
+                                <th class="picker-cell-right">税额</th>
+                                <th class="picker-cell-right">价税合计</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${items_tbody_html}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Flow Traceability -->
+                ${flow_section_html}
+
+                <!-- Action Toolbar -->
+                <div class="picker-modal-footer-bar">
+                    <div>
+                        ${doc.can_delete ? `
+                            <button class="picker-btn-danger-del" id="picker-modal-del-btn">
+                                🗑️ 删除单据
+                            </button>
+                        ` : `
+                            <span class="picker-no-delete-perm-hint">(当前账号无删除权限)</span>
+                        `}
+                    </div>
+                    <div class="picker-modal-actions-right">
+                        <button class="picker-btn-action-view" id="picker-modal-print-btn">
+                            🖨️ 打印单据
+                        </button>
+                        <a href="/desk/${frappe.router.slug(doc.doctype)}/${encodeURIComponent(doc.name)}" target="_blank" class="picker-btn-action-view">
+                            ✏️ 完整编辑页面
+                        </a>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const d = new frappe.ui.Dialog({
+            title: __("🔍 单据详情与操作 · {0} {1}", [dt_label, doc.name]),
+            fields: [
+                {
+                    fieldtype: "HTML",
+                    fieldname: "detail_html",
+                    options: modal_content,
+                }
+            ],
+            size: "large",
+        });
+
+        d.show();
+
+        const $w = d.$wrapper;
+
+        // Flow link clicks inside modal
+        $w.on("click", ".picker-doc-modal-link", function () {
+            const dt = $(this).attr("data-doctype");
+            const nm = $(this).attr("data-name");
+            d.hide();
+            self.show_doc_detail_modal(dt, nm);
+        });
+
+        // Print button
+        $w.on("click", "#picker-modal-print-btn", function () {
+            const print_url = `/printview?doctype=${encodeURIComponent(doc.doctype)}&name=${encodeURIComponent(doc.name)}&trigger_print=1`;
+            window.open(print_url, "_blank");
+        });
+
+        // Delete button
+        $w.on("click", "#picker-modal-del-btn", function () {
+            self.handle_document_deletion(doc.doctype, doc.name, d);
+        });
+    }
+
+    async handle_document_deletion(doctype, name, parent_dialog) {
+        frappe.dom.freeze(__("正在分析单据依赖与权限..."));
+        try {
+            const r = await frappe.call({
+                method: "ashan_cn_procurement.services.procurement_picker_service.preview_document_cascade_deletion",
+                args: { doctype: doctype, name: name },
+            });
+            frappe.dom.unfreeze();
+            if (!r || !r.message) return;
+            const preview = r.message;
+
+            if (!preview.can_delete) {
+                frappe.msgprint({
+                    title: __("🚨 权限不足，无法删除"),
+                    indicator: "red",
+                    message: __("您缺少以下关联单据的删除或撤单权限：<br><br>") + preview.missing_permissions.map(p => `• <strong>${frappe.utils.escape_html(p)}</strong>`).join("<br>")
+                });
+                return;
+            }
+
+            if (preview.has_downstream) {
+                this.show_cascade_delete_dialog(preview, parent_dialog);
+            } else {
+                frappe.confirm(__("确定要删除单据 <strong>{0}</strong> ({1}) 吗？<br><br><span class='picker-danger-confirm-hint'>⚠️ 警告：删除后数据将无法恢复！</span>", [name, preview.target_doc.doctype_label]), async () => {
+                    await this.execute_document_deletion(doctype, name, false, parent_dialog);
+                });
+            }
+        } catch (e) {
+            frappe.dom.unfreeze();
+            frappe.msgprint(e.message || __("删除预检失败"));
+        }
+    }
+
+    show_cascade_delete_dialog(preview, parent_dialog) {
+        const self = this;
+        let tree_items_html = "";
+        preview.cascade_list.forEach((item, idx) => {
+            const is_root = item.doctype === preview.target_doc.doctype && item.name === preview.target_doc.name;
+            tree_items_html += `
+                <li class="picker-cascade-tree-item ${is_root ? 'root-item' : ''}">
+                    <div>
+                        <span>${idx + 1}. </span>
+                        <strong>${frappe.utils.escape_html(item.doctype_label)}</strong>: 
+                        <span class="picker-cascade-item-code">${frappe.utils.escape_html(item.name)}</span>
+                        <span class="picker-cascade-item-comp">(${frappe.utils.escape_html(item.company || '')})</span>
+                    </div>
+                    <div class="picker-cascade-tree-item-actions">
+                        <span class="picker-cascade-item-status">${item.status_text}</span>
+                        <span class="picker-cascade-perm-badge-ok">✓ 权限齐备</span>
+                    </div>
+                </li>
+            `;
+        });
+
+        const cascade_dialog = new frappe.ui.Dialog({
+            title: __("⚠️ 关联单据级联连带删除确认"),
+            fields: [
+                {
+                    fieldtype: "HTML",
+                    fieldname: "cascade_html",
+                    options: `
+                        <div class="picker-cascade-box">
+                            <div class="picker-cascade-warning-alert">
+                                <strong>🚨 警告：检测到该单据已生成下游关联业务单据！</strong><br>
+                                若继续删除，系统将按照业务依赖严格逆序（最下游 ➔ 最上游）依次执行<strong>撤销提交、还原库存/已订数量、彻底删除单据</strong>。
+                            </div>
+                            <div class="picker-cascade-target-heading">
+                                📋 将连带逆序删除以下全部 ${preview.cascade_count} 张单据：
+                            </div>
+                            <ul class="picker-cascade-tree-list">
+                                ${tree_items_html}
+                            </ul>
+                            <div class="picker-cascade-security-hint">
+                                🛡️ 系统已完成全链路权限校验：当前用户对上述全部单据均拥有删除与撤单权限。
+                            </div>
+                        </div>
+                    `,
+                }
+            ],
+            primary_action_label: __("🚨 确认连带删除全部 {0} 张单据", [preview.cascade_count]),
+            primary_action: async () => {
+                cascade_dialog.hide();
+                await self.execute_document_deletion(preview.target_doc.doctype, preview.target_doc.name, true, parent_dialog);
+            }
+        });
+
+        cascade_dialog.show();
+    }
+
+    async execute_document_deletion(doctype, name, cascade, parent_dialog) {
+        frappe.dom.freeze(__("正在执行安全删除..."));
+        try {
+            const r = await frappe.call({
+                method: "ashan_cn_procurement.services.procurement_picker_service.delete_procurement_document",
+                args: {
+                    doctype: doctype,
+                    name: name,
+                    cascade: cascade ? 1 : 0
+                }
+            });
+            frappe.dom.unfreeze();
+            if (r && r.message && r.message.success) {
+                frappe.show_alert({
+                    message: r.message.message || __("删除成功"),
+                    indicator: "green"
+                }, 5);
+                if (parent_dialog) {
+                    parent_dialog.hide();
+                }
+                this.selected_map.clear();
+                this.locked_company = null;
+                this.update_company_lock_ui();
+                await this.refresh_all();
+            }
+        } catch (e) {
+            frappe.dom.unfreeze();
+            frappe.msgprint(e.message || __("删除失败"));
+        }
+    }
+
+    async batch_delete_selected() {
+        const selected_items = Array.from(this.selected_map.values());
+        if (!selected_items.length) {
+            frappe.msgprint(__("请先勾选需要删除的单据/明细。"));
+            return;
+        }
+
+        const stage = this.active_stage;
+        let doctype = "Material Request";
+        let docnames = new Set();
+
+        if (stage === "item_to_mr" || stage === "mr_to_po") {
+            doctype = "Material Request";
+            selected_items.forEach(i => { if (i.mr_name) docnames.add(i.mr_name); });
+        } else if (stage === "po_to_pr") {
+            doctype = "Purchase Order";
+            selected_items.forEach(i => { if (i.po_name) docnames.add(i.po_name); });
+        } else if (stage === "pr_to_pi") {
+            doctype = "Purchase Receipt";
+            selected_items.forEach(i => { if (i.pr_name) docnames.add(i.pr_name); });
+        } else if (stage === "pi_to_rr") {
+            doctype = "Purchase Invoice";
+            selected_items.forEach(i => { if (i.pi_name) docnames.add(i.pi_name); });
+        }
+
+        const docname_list = Array.from(docnames);
+        if (!docname_list.length) {
+            frappe.msgprint(__("未找到可删除的单据编号。"));
+            return;
+        }
+
+        if (docname_list.length === 1) {
+            this.handle_document_deletion(doctype, docname_list[0]);
+        } else {
+            frappe.confirm(__("确定要删除勾选的 <strong>{0}</strong> 张单据吗？<br><br>{1}", [docname_list.length, docname_list.map(n => `• ${frappe.utils.escape_html(n)}`).join("<br>")]), async () => {
+                frappe.dom.freeze(__("正在批量删除单据..."));
+                let success_count = 0;
+                let fail_msgs = [];
+                for (const nm of docname_list) {
+                    try {
+                        await frappe.call({
+                            method: "ashan_cn_procurement.services.procurement_picker_service.delete_procurement_document",
+                            args: { doctype: doctype, name: nm, cascade: 1 }
+                        });
+                        success_count++;
+                    } catch (e) {
+                        fail_msgs.push(`【${nm}】: ${e.message || '删除失败'}`);
+                    }
+                }
+                frappe.dom.unfreeze();
+                if (fail_msgs.length) {
+                    frappe.msgprint({
+                        title: __("批量删除部分完成"),
+                        indicator: "orange",
+                        message: __("成功删除 {0} 张单据，以下单据删除失败：<br><br>{1}", [success_count, fail_msgs.join("<br>")])
+                    });
+                } else {
+                    frappe.show_alert({ message: __("成功批量删除 {0} 张单据", [success_count]), indicator: "green" });
+                }
+                this.selected_map.clear();
+                this.locked_company = null;
+                this.update_company_lock_ui();
+                await this.refresh_all();
+            });
+        }
+    }
 }
+
