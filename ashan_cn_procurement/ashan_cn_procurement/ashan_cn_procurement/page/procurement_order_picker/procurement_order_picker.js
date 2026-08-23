@@ -1260,6 +1260,9 @@ class ProcurementOrderPickerCenter {
 
     open_create_mr_dialog() {
         const default_company = this.active_company !== "All" ? this.active_company : (this.companies[0] || "");
+        const default_schedule_date = (typeof frappe !== "undefined" && frappe.datetime && frappe.datetime.add_months)
+            ? frappe.datetime.add_months(frappe.datetime.nowdate(), 1)
+            : "";
         let rows_data = [
             { item_code: "", item_name: "", qty: 1.0, rate: 0.0, amount: 0.0, tax_rate: 13.0, tax_amount: 0.0, total_amount: 0.0, description: "" }
         ];
@@ -1347,16 +1350,11 @@ class ProcurementOrderPickerCenter {
                     reqd: 1,
                 },
                 {
-                    fieldtype: "Data",
-                    fieldname: "department",
-                    label: __("需求部门"),
-                    placeholder: "例如：生产部、研发部",
-                },
-                {
                     fieldtype: "Date",
                     fieldname: "schedule_date",
                     label: __("期望到货日期"),
-                    default: frappe.datetime.nowdate(),
+                    default: default_schedule_date,
+                    reqd: 1,
                 },
                 {
                     fieldtype: "Section Break",
@@ -1416,7 +1414,6 @@ class ProcurementOrderPickerCenter {
                         method: "ashan_cn_procurement.services.procurement_picker_service.quick_create_material_request",
                         args: {
                             company: vals.company,
-                            department: vals.department,
                             schedule_date: vals.schedule_date,
                             items: valid_items,
                         },

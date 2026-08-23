@@ -367,8 +367,7 @@ def quick_create_material_request(
     mr.material_request_type = "Purchase"
     mr.company = company
     mr.transaction_date = nowdate()
-    if schedule_date:
-        mr.schedule_date = schedule_date
+    mr.schedule_date = schedule_date or frappe.utils.add_months(nowdate(), 1)
     if default_company_wh and _meta_has("Material Request", "set_warehouse"):
         mr.set_warehouse = default_company_wh
     if department and _meta_has("Material Request", "department"):
