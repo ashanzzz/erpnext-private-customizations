@@ -721,6 +721,13 @@ def get_pending_material_request_items(
         is_overdue = bool(sched and sched < today)
         is_urgent = bool(sched and sched <= today)
 
+        rate = flt(r.rate, 2)
+        pending_qty = flt(r.pending_qty, 2)
+        amount = flt(pending_qty * rate, 2)
+        tax_rate = 13.0
+        tax_amount = flt(amount * (tax_rate / 100.0), 2)
+        total_amount = flt(amount + tax_amount, 2)
+
         rows.append({
             "mri_name": r.mri_name,
             "mr_name": r.mr_name,
@@ -732,14 +739,19 @@ def get_pending_material_request_items(
             "requested_by": r.requested_by or "",
             "item_code": r.item_code,
             "item_name": r.item_name or r.item_code,
+            "spec": r.description or "",
             "item_group": r.item_group or "",
             "uom": r.uom or "",
             "qty": flt(r.qty, 2),
             "ordered_qty": flt(r.ordered_qty, 2),
-            "pending_qty": flt(r.pending_qty, 2),
-            "this_qty": flt(r.pending_qty, 2),
-            "rate": flt(r.rate, 2),
-            "estimated_amount": flt(r.estimated_amount, 2),
+            "pending_qty": pending_qty,
+            "this_qty": pending_qty,
+            "rate": rate,
+            "amount": amount,
+            "tax_rate": tax_rate,
+            "tax_amount": tax_amount,
+            "total_amount": total_amount,
+            "estimated_amount": amount,
             "supplier": r.default_supplier or "",
             "warehouse": r.warehouse or "",
             "linked_po_names": r.linked_po_names or "",

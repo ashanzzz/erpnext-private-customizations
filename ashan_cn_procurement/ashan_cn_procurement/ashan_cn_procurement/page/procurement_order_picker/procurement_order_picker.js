@@ -720,9 +720,10 @@ class ProcurementOrderPickerCenter {
                     <th>申请总数</th>
                     <th>已订数</th>
                     <th>未订数量</th>
-                    <th>本次下单数</th>
                     <th>参考单价</th>
-                    <th>预估金额</th>
+                    <th>金额</th>
+                    <th>税额</th>
+                    <th>含税总价</th>
                     <th>建议供应商</th>
                     <th>🔗 关联采购订单</th>
                 `;
@@ -948,21 +949,23 @@ class ProcurementOrderPickerCenter {
                     `;
                 } else {
                     const urgent_tag = r.is_overdue ? `<span class="picker-badge-urgent">逾期</span>` : (r.is_urgent ? `<span class="picker-badge-urgent">紧急</span>` : "");
-                    const input_val = is_completed ? 0 : (r.this_qty || r.pending_qty);
+                    const name_spec_str = r.spec ? `${frappe.utils.escape_html(r.item_name || "")} (${frappe.utils.escape_html(r.spec)})` : frappe.utils.escape_html(r.item_name || "");
+                    const row_amt = flt(r.amount || (r.pending_qty * r.rate));
+                    const row_tax = flt(r.tax_amount || (row_amt * (flt(r.tax_rate || 13) / 100.0)));
+                    const row_total = flt(r.total_amount || (row_amt + row_tax));
                     tr_html += `
                         <td><span class="picker-source-docname picker-doc-clickable-link" data-doctype="Material Request" data-name="${r.mr_name}" title="点击查看详情与操作">${frappe.utils.escape_html(r.mr_name)}</span></td>
                         <td>${r.schedule_date || "-"} ${urgent_tag}</td>
                         <td><strong>${frappe.utils.escape_html(r.item_code)}</strong></td>
-                        <td>${frappe.utils.escape_html(r.item_name || "")}</td>
+                        <td>${name_spec_str}</td>
                         <td>${frappe.utils.escape_html(r.uom || "")}</td>
                         <td class="picker-qty-cell">${r.qty}</td>
                         <td class="picker-qty-cell">${r.ordered_qty}</td>
                         <td class="picker-qty-cell"><strong>${r.pending_qty}</strong></td>
-                        <td>
-                            <input type="number" class="picker-input-qty" step="0.01" min="0.01" max="${r.pending_qty}" value="${input_val}" ${is_completed ? 'disabled' : ''}>
-                        </td>
                         <td class="picker-money-cell">${this.fmt_money(r.rate)}</td>
-                        <td class="picker-money-cell cell-row-amt">${this.fmt_money(r.estimated_amount)}</td>
+                        <td class="picker-money-cell cell-row-amt">${this.fmt_money(row_amt)}</td>
+                        <td class="picker-money-cell">${this.fmt_money(row_tax)}</td>
+                        <td class="picker-money-cell">${this.fmt_money(row_total)}</td>
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
                         <td>${render_linked_badges(r.linked_po_names, "purchase-order")}</td>
                     `;
@@ -1113,9 +1116,11 @@ class ProcurementOrderPickerCenter {
                 foot_html += `
                     <td colspan="5"></td>
                     <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
-                    <td colspan="2"></td>
+                    <td colspan="3"></td>
                     <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
-                    <td></td>
+                    <td class="picker-money-cell">${this.fmt_money(total_amt * 0.13)}</td>
+                    <td class="picker-money-cell">${this.fmt_money(total_amt * 1.13)}</td>
+                    <td colspan="2"></td>
                 `;
             }
         } else if (stage === "po_to_pr") {
@@ -3263,7 +3268,7 @@ class ProcurementOrderPickerCenter {
         };
 
         const d = new frappe.ui.Dialog({
-            title: __("🚀 生成采购订单 · 确认与填写信息"),
+            title: __("🚀 新建采购订单 · 选单创建与明细核算"),
             fields: [
                 {
                     fieldtype: "Select",
