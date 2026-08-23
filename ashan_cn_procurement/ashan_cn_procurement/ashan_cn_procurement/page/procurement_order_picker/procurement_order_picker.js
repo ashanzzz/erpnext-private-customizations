@@ -13,7 +13,7 @@ frappe.pages["procurement-order-picker"].on_page_load = function (wrapper) {
 class ProcurementOrderPickerCenter {
     constructor(page) {
         this.page = page;
-        this.active_stage = "mr_to_po"; // item_to_mr, mr_to_po, po_to_pr, pr_to_pi, pi_to_rr
+        this.active_stage = "item_to_mr"; // item_to_mr, mr_to_po, po_to_pr, pr_to_pi, pi_to_rr
         this.active_company = "All"; // "All" or specific company name
         this.companies = [];
         this.locked_company = null; // Dynamically set when first row is checked in "All" mode
@@ -31,41 +31,46 @@ class ProcurementOrderPickerCenter {
         this.stages_config = {
             item_to_mr: {
                 id: "item_to_mr",
-                name: "采购申请 (选物料)",
-                kpi_title: "物料主数据/采购申请",
-                sub_label: "可采购物料底册",
+                name: "采购申请",
+                banner_title: "当前：采购申请 (从物料主数据提报采购需求)",
+                banner_desc: "勾选物料明细，行内录入本次申请数量，一键下推生成采购申请单草稿 (Material Request)。",
+                sub_label: "可提报物料主数据",
                 icon: "📋",
                 btn_label: "⚡ 生成采购申请草稿",
             },
             mr_to_po: {
                 id: "mr_to_po",
-                name: "采购订货 (选需求)",
-                kpi_title: "待订货需求明细",
-                sub_label: "已审批待采购物料",
+                name: "采购订货",
+                banner_title: "当前：采购订货 (从采购需求选单下达订单)",
+                banner_desc: "勾选待订需求明细，系统自动按建议供应商智能拆单合并生成采购订单草稿 (Purchase Order)。",
+                sub_label: "待订货需求明细",
                 icon: "🛒",
                 btn_label: "⚡ 生成采购订单草稿",
             },
             po_to_pr: {
                 id: "po_to_pr",
-                name: "采购入库 (选订单)",
-                kpi_title: "待收货订单明细",
-                sub_label: "已下达待入库订单",
+                name: "采购入库",
+                banner_title: "当前：采购入库 (从采购订单选单收货入库)",
+                banner_desc: "勾选待收货明细，录入本次到货数量与目的入库仓库，生成采购入库单草稿 (Purchase Receipt)。",
+                sub_label: "待收货订单明细",
                 icon: "📦",
                 btn_label: "⚡ 生成采购入库单草稿",
             },
             pr_to_pi: {
                 id: "pr_to_pi",
-                name: "采购开票 (选入库)",
-                kpi_title: "待开票入库明细",
-                sub_label: "已收货待结算发票",
+                name: "采购开票",
+                banner_title: "当前：采购开票 (从采购入库选单开票结算)",
+                banner_desc: "勾选已入库物料明细，录入纸质/金税发票号码与日期，生成采购发票草稿 (Purchase Invoice)。",
+                sub_label: "待开票入库明细",
                 icon: "🧾",
                 btn_label: "⚡ 生成采购发票草稿",
             },
             pi_to_rr: {
                 id: "pi_to_rr",
-                name: "报销付款 (选发票)",
-                kpi_title: "待报销付款发票",
-                sub_label: "待报销发票明细",
+                name: "报销付款",
+                banner_title: "当前：报销付款 (从采购发票选单报销/付款)",
+                banner_desc: "勾选待报销发票，自动创建报销申请单并写入行级排他预占 (Reimbursement Request)。",
+                sub_label: "待报销付款发票",
                 icon: "💰",
                 btn_label: "⚡ 生成报销申请单草稿",
             },
@@ -85,15 +90,17 @@ class ProcurementOrderPickerCenter {
     setup_ui_skeleton() {
         const html = `
             <div class="picker-page-container">
-                <!-- Top Header & Company Bar -->
+                <!-- Top Header & Company Dropdown -->
                 <div class="picker-top-bar">
                     <div class="picker-title-group">
                         <h2>🛒 采购全流程选单生单中心</h2>
-                        <div class="picker-subtitle">自然采购全生命周期明细池：物料选单 ➔ 采购需求 ➔ 采购订单 ➔ 采购入库 ➔ 采购发票 ➔ 报销申请</div>
+                        <div class="picker-subtitle">自然采购全生命周期明细池：物料主数据 ➔ 采购申请 ➔ 采购订货 ➔ 采购入库 ➔ 采购开票 ➔ 报销付款</div>
                     </div>
                     <div class="picker-company-group">
-                        <span class="picker-company-label">公司范围:</span>
-                        <div class="picker-company-chips-container" id="picker-company-chips"></div>
+                        <label class="picker-company-label" for="picker-company-select">所属公司:</label>
+                        <select class="picker-company-select" id="picker-company-select">
+                            <option value="All">🌐 全部公司 (汇聚视图)</option>
+                        </select>
                     </div>
                 </div>
 
@@ -106,11 +113,11 @@ class ProcurementOrderPickerCenter {
                     <button class="picker-unlock-btn" id="picker-unlock-btn">清空已选并恢复全量</button>
                 </div>
 
-                <!-- 5-Step KPI Cards Grid -->
+                <!-- 5-Step KPI Cards Grid (Master Navigation) -->
                 <div class="picker-kpi-grid" id="picker-kpi-grid"></div>
 
-                <!-- Natural Flow Tab Bar -->
-                <div class="picker-nav-tabs" id="picker-nav-tabs"></div>
+                <!-- Section Context Banner (Replaces redundant Tab Bar) -->
+                <div class="picker-section-banner" id="picker-section-banner"></div>
 
                 <!-- Dynamic Filter Bar -->
                 <div class="picker-filter-bar" id="picker-filter-bar"></div>
@@ -143,49 +150,35 @@ class ProcurementOrderPickerCenter {
             });
             if (r && r.message) {
                 this.companies = r.message.companies || [];
-                this.render_company_chips();
+                this.render_company_select();
             }
         } catch (e) {
             console.error("Failed to load user companies", e);
         }
     }
 
-    render_company_chips() {
-        const $container = $("#picker-company-chips");
-        $container.empty();
+    render_company_select() {
+        const $select = $("#picker-company-select");
+        $select.empty();
 
-        // "全部公司" chip
-        const is_all_active = this.active_company === "All";
-        const $all_chip = $(`
-            <div class="picker-company-chip ${is_all_active ? 'active' : ''}" data-company="All">
-                🌐 全部公司 (汇聚视图)
-            </div>
-        `);
-        $container.append($all_chip);
+        $select.append(`<option value="All" ${this.active_company === 'All' ? 'selected' : ''}>🌐 全部公司 (汇聚视图)</option>`);
 
-        // Individual companies
         this.companies.forEach((comp) => {
-            const is_active = this.active_company === comp;
-            const $chip = $(`
-                <div class="picker-company-chip ${is_active ? 'active' : ''}" data-company="${frappe.utils.escape_html(comp)}">
-                    ${frappe.utils.escape_html(comp)}
-                </div>
-            `);
-            $container.append($chip);
+            const is_selected = this.active_company === comp;
+            $select.append(`<option value="${frappe.utils.escape_html(comp)}" ${is_selected ? 'selected' : ''}>${frappe.utils.escape_html(comp)}</option>`);
         });
     }
 
     bind_global_events() {
         const self = this;
 
-        // Company Chip Click
-        $(this.page.body).on("click", ".picker-company-chip", function () {
-            const comp = $(this).attr("data-company");
+        // Company Select Change
+        $(this.page.body).on("change", "#picker-company-select", function () {
+            const comp = $(this).val();
             if (self.active_company === comp) return;
             self.active_company = comp;
             self.locked_company = null;
             self.selected_map.clear();
-            self.render_company_chips();
             self.refresh_all();
         });
 
@@ -198,16 +191,8 @@ class ProcurementOrderPickerCenter {
             self.update_action_summary();
         });
 
-        // KPI Card Click
+        // KPI Card Click (Master Flow Navigation)
         $(this.page.body).on("click", ".picker-kpi-card", function () {
-            const stage = $(this).attr("data-stage");
-            if (stage && self.active_stage !== stage) {
-                self.switch_stage(stage);
-            }
-        });
-
-        // Tab Click
-        $(this.page.body).on("click", ".picker-tab-btn", function () {
             const stage = $(this).attr("data-stage");
             if (stage && self.active_stage !== stage) {
                 self.switch_stage(stage);
@@ -317,7 +302,7 @@ class ProcurementOrderPickerCenter {
         this.selected_map.clear();
         this.update_company_lock_ui();
         this.render_kpis();
-        this.render_tabs();
+        this.render_section_banner();
         this.render_filter_bar();
         this.load_table_data();
     }
@@ -325,7 +310,7 @@ class ProcurementOrderPickerCenter {
     async refresh_all() {
         await this.load_kpis();
         this.render_kpis();
-        this.render_tabs();
+        this.render_section_banner();
         this.render_filter_bar();
         await this.load_table_data();
     }
@@ -363,7 +348,7 @@ class ProcurementOrderPickerCenter {
             const html = `
                 <div class="picker-kpi-card ${is_active ? 'active' : ''}" data-stage="${key}">
                     <div class="picker-kpi-header">
-                        <div class="picker-kpi-title">${cfg.kpi_title}</div>
+                        <div class="picker-kpi-title">${cfg.name}</div>
                         <div class="picker-kpi-icon">${cfg.icon}</div>
                     </div>
                     <div class="picker-kpi-body">
@@ -376,26 +361,26 @@ class ProcurementOrderPickerCenter {
         });
     }
 
-    render_tabs() {
-        const $container = $("#picker-nav-tabs");
-        $container.empty();
+    render_section_banner() {
+        const $container = $("#picker-section-banner");
+        const cfg = this.stages_config[this.active_stage];
+        const data = this.kpis[this.active_stage] || { count: 0 };
 
-        const stage_keys = ["item_to_mr", "mr_to_po", "po_to_pr", "pr_to_pi", "pi_to_rr"];
-        stage_keys.forEach((key) => {
-            const cfg = this.stages_config[key];
-            const is_active = this.active_stage === key;
-            const data = this.kpis[key] || { count: 0 };
-            const badge_cnt = data.count || 0;
-
-            const html = `
-                <button class="picker-tab-btn ${is_active ? 'active' : ''}" data-stage="${key}">
-                    <span>${cfg.icon}</span>
-                    <span>${cfg.name}</span>
-                    <span class="picker-tab-badge">${badge_cnt}</span>
-                </button>
-            `;
-            $container.append(html);
-        });
+        const html = `
+            <div class="picker-section-main">
+                <div class="picker-section-icon">${cfg.icon}</div>
+                <div class="picker-section-heading">
+                    <div class="picker-section-title">
+                        <span>${cfg.banner_title}</span>
+                    </div>
+                    <div class="picker-section-desc">${cfg.banner_desc}</div>
+                </div>
+            </div>
+            <div class="picker-section-badge">
+                待办统计: ${data.count || 0} 笔
+            </div>
+        `;
+        $container.html(html);
     }
 
     render_filter_bar() {
@@ -945,7 +930,6 @@ class ProcurementOrderPickerCenter {
 
     select_all_visible() {
         const self = this;
-        let first_comp = null;
 
         // If not locked and in All mode, check the first visible row's company
         if (this.active_company === "All" && !this.locked_company) {

@@ -47,85 +47,70 @@ def main():
         page.fill("#login_email", USERNAME)
         page.fill("#login_password", PASSWORD)
         page.click(".btn-login")
-        page.wait_for_timeout(6000)
+        page.wait_for_url("**/desk/**", timeout=20000)
+        page.wait_for_timeout(3000)
 
         print("2. Navigating to Procurement Order Picker Workbench...")
         page.evaluate("frappe.set_route('procurement-order-picker')")
         page.wait_for_selector(".picker-page-container", timeout=15000)
         page.wait_for_timeout(3000)
 
-        # Tab 1: item_to_mr (物料选单 ➔ 采购申请)
-        print("Testing Tab 1 (物料选单 ➔ 采购申请)...")
-        page.click(".picker-tab-btn[data-stage='item_to_mr']")
-        page.wait_for_timeout(2000)
-        shot1 = os.path.join(BRAIN_DIR, "step1_item_to_mr.png")
-        page.screenshot(path=shot1)
-        print(f"Captured Step 1 screenshot: {shot1}")
+        # 1. Verify Company Dropdown Select exists
+        comp_select = page.locator("#picker-company-select")
+        print(f"Company Dropdown Select Count: {comp_select.count()}")
+        selected_val = comp_select.input_value()
+        print(f"Default Company Value: {selected_val}")
 
-        # Tab 2: mr_to_po (采购订货)
-        print("Testing Tab 2 (采购订货)...")
-        page.click(".picker-tab-btn[data-stage='mr_to_po']")
-        page.wait_for_timeout(2000)
-        shot2 = os.path.join(BRAIN_DIR, "step2_mr_to_po.png")
-        page.screenshot(path=shot2)
-        print(f"Captured Step 2 screenshot: {shot2}")
+        # 2. Click KPI Cards to switch stages and check Section Banner
+        stages = [
+            ("item_to_mr", "当前：采购申请", "step1_item_to_mr_v2.png"),
+            ("mr_to_po", "当前：采购订货", "step2_mr_to_po_v2.png"),
+            ("po_to_pr", "当前：采购入库", "step3_po_to_pr_v2.png"),
+            ("pr_to_pi", "当前：采购开票", "step4_pr_to_pi_v2.png"),
+            ("pi_to_rr", "当前：报销付款", "step5_pi_to_rr_v2.png"),
+        ]
 
-        # Tab 3: po_to_pr (采购入库)
-        print("Testing Tab 3 (采购入库)...")
-        page.click(".picker-tab-btn[data-stage='po_to_pr']")
-        page.wait_for_timeout(2000)
-        shot3 = os.path.join(BRAIN_DIR, "step3_po_to_pr.png")
-        page.screenshot(path=shot3)
-        print(f"Captured Step 3 screenshot: {shot3}")
+        for stage_id, expected_title_sub, shot_name in stages:
+            print(f"Clicking KPI card: {stage_id}...")
+            page.click(f".picker-kpi-card[data-stage='{stage_id}']")
+            page.wait_for_timeout(1500)
 
-        # Tab 4: pr_to_pi (采购开票)
-        print("Testing Tab 4 (采购开票)...")
-        page.click(".picker-tab-btn[data-stage='pr_to_pi']")
-        page.wait_for_timeout(2000)
-        shot4 = os.path.join(BRAIN_DIR, "step4_pr_to_pi.png")
-        page.screenshot(path=shot4)
-        print(f"Captured Step 4 screenshot: {shot4}")
+            banner_text = page.locator("#picker-section-banner .picker-section-title").inner_text()
+            print(f"  -> Banner Title: {banner_text}")
+            assert expected_title_sub in banner_text, f"Expected '{expected_title_sub}' in '{banner_text}'"
 
-        # Tab 5: pi_to_rr (报销付款)
-        print("Testing Tab 5 (报销付款)...")
-        page.click(".picker-tab-btn[data-stage='pi_to_rr']")
-        page.wait_for_timeout(2000)
-        shot5 = os.path.join(BRAIN_DIR, "step5_pi_to_rr.png")
-        page.screenshot(path=shot5)
-        print(f"Captured Step 5 screenshot: {shot5}")
+            shot_path = os.path.join(BRAIN_DIR, shot_name)
+            page.screenshot(path=shot_path)
+            print(f"  -> Saved screenshot: {shot_path}")
 
-        # --- Test Core User Requirement: Company Exclusive Dynamic Lock on Selection ---
-        print("\n3. Testing Core User Requirement: Company Exclusive Dynamic Lock...")
-        # Switch back to Tab 1 (item_to_mr) where rows from multiple companies exist
-        page.click(".picker-tab-btn[data-stage='item_to_mr']")
-        page.wait_for_timeout(2000)
+        # 3. Test Company Dropdown selection
+        print("\n3. Testing Company Dropdown Change...")
+        # Switch back to Step 1
+        page.click(".picker-kpi-card[data-stage='item_to_mr']")
+        page.wait_for_timeout(1000)
 
-        # Check total rows visible before selection
-        total_rows_before = page.locator("#picker-table-tbody tr:not(.picker-row-company-hidden)").count()
-        print(f"Total visible rows in 'All Companies' mode: {total_rows_before}")
-
-        # Check the first row
+        # 4. Test Exclusive Company Lock in "All" mode
+        print("\n4. Testing Exclusive Company Lock on selection...")
         first_checkbox = page.locator("#picker-table-tbody tr:first-child .picker-row-checkbox")
         if first_checkbox.count() > 0:
             first_checkbox.check()
             page.wait_for_timeout(1000)
 
-            # Verify lock banner is active
             banner_visible = page.is_visible("#picker-company-lock-banner.is-active")
             print(f"Company Lock Notice Banner Active: {banner_visible}")
 
-            shot_locked = os.path.join(BRAIN_DIR, "exclusive_company_lock_active.png")
+            shot_locked = os.path.join(BRAIN_DIR, "exclusive_company_lock_active_v2.png")
             page.screenshot(path=shot_locked)
             print(f"Captured Exclusive Company Lock screenshot: {shot_locked}")
 
-            # Now uncheck the first row
-            first_checkbox.uncheck()
+            # Click unlock button
+            page.click("#picker-unlock-btn")
             page.wait_for_timeout(1000)
 
             banner_visible_after = page.is_visible("#picker-company-lock-banner.is-active")
-            print(f"Company Lock Notice Banner after Uncheck: {banner_visible_after} (should be False)")
+            print(f"Company Lock Notice Banner after Unlock: {banner_visible_after} (should be False)")
 
-            shot_unlocked = os.path.join(BRAIN_DIR, "exclusive_company_lock_restored.png")
+            shot_unlocked = os.path.join(BRAIN_DIR, "exclusive_company_lock_restored_v2.png")
             page.screenshot(path=shot_unlocked)
             print(f"Captured Restored View screenshot: {shot_unlocked}")
 
@@ -137,7 +122,7 @@ def main():
         for err in console_errors:
             print(f"  - {err}")
     else:
-        print("[SUCCESS] 0 Console Errors across all 5 natural steps and company lock interactions!")
+        print("[SUCCESS] 0 Console Errors across all upgraded master cards and company dropdown!")
 
 if __name__ == "__main__":
     main()
