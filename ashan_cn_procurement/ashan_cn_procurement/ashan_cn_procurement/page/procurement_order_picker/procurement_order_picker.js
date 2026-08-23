@@ -1407,21 +1407,24 @@ class ProcurementOrderPickerCenter {
                         <td class="picker-modal-cell-center">${idx + 1}</td>
                         <td>
                             <div class="picker-suggest-wrapper">
-                                <input type="text" class="picker-modal-item-input modal-input-code" placeholder="搜索物料代码/名称..." value="${frappe.utils.escape_html(row.item_code ? (row.item_code + (row.item_name ? ' (' + row.item_name + ')' : '')) : '')}">
+                                <input type="text" class="modal-input-code" placeholder="输入物料代码..." value="${frappe.utils.escape_html(row.item_code || '')}">
                                 <div class="picker-suggest-dropdown" id="suggest-dd-${idx}"></div>
                             </div>
                         </td>
                         <td>
-                            <input type="number" class="picker-modal-item-input modal-input-qty picker-modal-input-right" step="0.01" min="0.01" value="${row.qty || 1}">
+                            <input type="text" class="modal-input-name" placeholder="物料名称/规格..." value="${frappe.utils.escape_html(row.item_name || '')}">
                         </td>
                         <td>
-                            <input type="number" class="picker-modal-item-input modal-input-rate picker-modal-input-right" step="0.01" min="0" value="${row.rate || 0}">
+                            <input type="number" class="modal-input-qty" step="0.01" min="0.01" value="${row.qty || 1}">
+                        </td>
+                        <td>
+                            <input type="number" class="modal-input-rate" step="0.01" min="0" value="${row.rate || 0}">
                         </td>
                         <td class="picker-modal-calc-cell modal-cell-amt">
                             ${flt(row.amount).toFixed(2)}
                         </td>
                         <td>
-                            <input type="number" class="picker-modal-item-input modal-input-tax-rate picker-modal-input-right" step="1" min="0" max="100" value="${row.tax_rate}">
+                            <input type="number" class="modal-input-tax-rate" step="1" min="0" max="100" value="${row.tax_rate}">
                         </td>
                         <td class="picker-modal-calc-cell modal-cell-tax-amt">
                             ${flt(row.tax_amount).toFixed(2)}
@@ -1430,7 +1433,7 @@ class ProcurementOrderPickerCenter {
                             ${flt(row.total_amount).toFixed(2)}
                         </td>
                         <td>
-                            <input type="text" class="picker-modal-item-input modal-input-desc" placeholder="用途/规格..." value="${frappe.utils.escape_html(row.description || '')}">
+                            <input type="text" class="modal-input-desc" placeholder="用途说明..." value="${frappe.utils.escape_html(row.description || '')}">
                         </td>
                         <td class="picker-modal-cell-center">
                             <button class="picker-modal-del-btn" data-idx="${idx}">删除</button>
@@ -1478,7 +1481,8 @@ class ProcurementOrderPickerCenter {
                                 <thead>
                                     <tr>
                                         <th>#</th>
-                                        <th>物料代码 / 名称 (原生联想)</th>
+                                        <th>物料代码 (联想搜索)</th>
+                                        <th>物料名称/规格</th>
                                         <th>申请数量</th>
                                         <th>参考单价</th>
                                         <th>不含税金额</th>
@@ -1598,6 +1602,19 @@ class ProcurementOrderPickerCenter {
                         </div>
                     `;
 
+                    // Check available space below input to avoid bottom overflow cut-off
+                    const input_el = $input[0];
+                    if (input_el) {
+                        const rect = input_el.getBoundingClientRect();
+                        const modal_el = $wrap.closest(".modal-body")[0];
+                        const bottom_limit = modal_el ? modal_el.getBoundingClientRect().bottom : window.innerHeight;
+                        if (bottom_limit - rect.bottom < 240) {
+                            $dd.addClass("drop-up");
+                        } else {
+                            $dd.removeClass("drop-up");
+                        }
+                    }
+
                     $dd.html(dd_html).addClass("is-open");
                 } catch (err) {
                     console.error("Autocomplete search error", err);
@@ -1636,7 +1653,12 @@ class ProcurementOrderPickerCenter {
             }
         });
 
-        // Live calculation on quantity, rate, tax rate, description change
+        // Live calculation on item_name, quantity, rate, tax rate, description change
+        $wrap.on("input change", ".modal-input-name", function () {
+            const idx = parseInt($(this).closest("tr").attr("data-idx"));
+            rows_data[idx].item_name = $(this).val();
+        });
+
         $wrap.on("input change", ".modal-input-qty", function () {
             const idx = parseInt($(this).closest("tr").attr("data-idx"));
             rows_data[idx].qty = flt($(this).val()) || 1.0;
@@ -2114,9 +2136,12 @@ class ProcurementOrderPickerCenter {
                         <td class="picker-cell-col-idx">${idx + 1}</td>
                         <td>
                             <div class="picker-suggest-wrapper">
-                                <input type="text" class="modal-input-code" placeholder="输入代码或名称模糊搜索..." value="${frappe.utils.escape_html(r.item_code)}">
+                                <input type="text" class="modal-input-code" placeholder="输入物料代码..." value="${frappe.utils.escape_html(r.item_code || '')}">
                                 <div class="picker-suggest-dropdown" id="suggest-dd-${idx}"></div>
                             </div>
+                        </td>
+                        <td>
+                            <input type="text" class="modal-input-name" placeholder="物料名称/规格..." value="${frappe.utils.escape_html(r.item_name || '')}">
                         </td>
                         <td>
                             <input type="number" step="any" min="0.01" class="modal-input-qty" value="${r.qty}">
@@ -2185,7 +2210,8 @@ class ProcurementOrderPickerCenter {
                                 <thead>
                                     <tr>
                                         <th>#</th>
-                                        <th>物料代码 / 名称 (原生联想)</th>
+                                        <th>物料代码 (联想搜索)</th>
+                                        <th>物料名称/规格</th>
                                         <th>申请数量</th>
                                         <th>参考单价</th>
                                         <th>不含税金额</th>
@@ -2307,6 +2333,19 @@ class ProcurementOrderPickerCenter {
                         </div>
                     `;
 
+                    // Check available space below input to avoid bottom overflow cut-off
+                    const input_el = $input[0];
+                    if (input_el) {
+                        const rect = input_el.getBoundingClientRect();
+                        const modal_el = $wrap.closest(".modal-body")[0];
+                        const bottom_limit = modal_el ? modal_el.getBoundingClientRect().bottom : window.innerHeight;
+                        if (bottom_limit - rect.bottom < 240) {
+                            $dd.addClass("drop-up");
+                        } else {
+                            $dd.removeClass("drop-up");
+                        }
+                    }
+
                     $dd.html(dd_html).addClass("is-open");
                 } catch (err) {
                     console.error("Autocomplete search error", err);
@@ -2345,7 +2384,12 @@ class ProcurementOrderPickerCenter {
             }
         });
 
-        // Live calculation on quantity, rate, tax rate, description change
+        // Live calculation on item_name, quantity, rate, tax rate, description change
+        $wrap.on("input change", ".modal-input-name", function () {
+            const idx = parseInt($(this).closest("tr").attr("data-idx"));
+            rows_data[idx].item_name = $(this).val();
+        });
+
         $wrap.on("input change", ".modal-input-qty", function () {
             const idx = parseInt($(this).closest("tr").attr("data-idx"));
             rows_data[idx].qty = flt($(this).val()) || 1.0;

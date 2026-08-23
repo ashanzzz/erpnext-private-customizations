@@ -735,15 +735,16 @@
 }
 
 .picker-modal-item-table th:nth-child(1) { width: 36px; text-align: center; }
-.picker-modal-item-table th:nth-child(2) { width: 26%; min-width: 240px; }
-.picker-modal-item-table th:nth-child(3) { width: 85px; text-align: right; }
-.picker-modal-item-table th:nth-child(4) { width: 95px; text-align: right; }
-.picker-modal-item-table th:nth-child(5) { width: 95px; text-align: right; }
-.picker-modal-item-table th:nth-child(6) { width: 68px; text-align: right; }
-.picker-modal-item-table th:nth-child(7) { width: 85px; text-align: right; }
-.picker-modal-item-table th:nth-child(8) { width: 105px; text-align: right; }
-.picker-modal-item-table th:nth-child(9) { width: auto; min-width: 180px; }
-.picker-modal-item-table th:nth-child(10) { width: 52px; text-align: center; }
+.picker-modal-item-table th:nth-child(2) { width: 17%; min-width: 170px; }
+.picker-modal-item-table th:nth-child(3) { width: 22%; min-width: 210px; }
+.picker-modal-item-table th:nth-child(4) { width: 80px; text-align: right; }
+.picker-modal-item-table th:nth-child(5) { width: 90px; text-align: right; }
+.picker-modal-item-table th:nth-child(6) { width: 90px; text-align: right; }
+.picker-modal-item-table th:nth-child(7) { width: 68px; text-align: right; }
+.picker-modal-item-table th:nth-child(8) { width: 85px; text-align: right; }
+.picker-modal-item-table th:nth-child(9) { width: 105px; text-align: right; }
+.picker-modal-item-table th:nth-child(10) { width: auto; min-width: 160px; }
+.picker-modal-item-table th:nth-child(11) { width: 50px; text-align: center; }
 
 .picker-modal-item-table td {
     padding: 6px 8px;
@@ -756,7 +757,13 @@
     border-right: none;
 }
 
+.picker-modal-item-table tr:focus-within {
+    position: relative;
+    z-index: 1050;
+}
+
 .modal-input-code,
+.modal-input-name,
 .modal-input-qty,
 .modal-input-rate,
 .modal-input-tax,
@@ -774,6 +781,7 @@
 }
 
 .modal-input-code:focus,
+.modal-input-name:focus,
 .modal-input-qty:focus,
 .modal-input-rate:focus,
 .modal-input-tax:focus,
@@ -840,22 +848,28 @@
 
 .picker-suggest-dropdown {
     position: absolute;
-    top: 100%;
+    top: calc(100% + 2px);
     left: 0;
-    right: 0;
-    z-index: 1050;
+    min-width: 360px;
+    max-width: 480px;
+    z-index: 999999 !important;
     background: #ffffff;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #94a3b8;
     border-radius: 6px;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-    max-height: 220px;
+    box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.08);
+    max-height: 250px;
     overflow-y: auto;
-    margin-top: 2px;
     display: none;
 }
 
 .picker-suggest-dropdown.is-open {
-    display: block;
+    display: block !important;
+}
+
+.picker-suggest-dropdown.drop-up {
+    top: auto !important;
+    bottom: calc(100% + 2px) !important;
+    box-shadow: 0 -16px 36px -4px rgba(0, 0, 0, 0.28), 0 -2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .picker-suggest-item {
