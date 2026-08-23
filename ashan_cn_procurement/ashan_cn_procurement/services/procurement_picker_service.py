@@ -426,6 +426,7 @@ def quick_create_material_request(
 
     mr.flags.ignore_permissions = False
     mr.insert()
+    mr.submit()
 
     return {
         "success": True,
@@ -433,7 +434,125 @@ def quick_create_material_request(
         "company": mr.company,
         "item_count": len(mr.items),
         "total_amount": total_amount,
-        "message": _("成功新建采购申请单：{0}").format(mr.name),
+        "message": _("成功创建并正式提交采购申请单：{0}").format(mr.name),
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def update_quick_material_request(
+    name: str,
+    items: list[dict] | str,
+    company: str | None = None,
+    schedule_date: str | None = None,
+    department: str | None = None,
+) -> dict:
+    """Update an existing Material Request before any Purchase Order is generated."""
+    if not name:
+        frappe.throw(_("缺少申请单号。"))
+
+    if isinstance(items, str):
+        items = frappe.parse_json(items) or []
+
+    if not items:
+        frappe.throw(_("请至少保留一行物料申请明细。"))
+
+    mr = frappe.get_doc("Material Request", name)
+    assert_company_access(mr.company)
+
+    # 1. Check if any downstream Purchase Order exists
+    linked_po_items = frappe.db.sql("""
+        SELECT poi.parent, poi.item_code
+        FROM `tabPurchase Order Item` poi
+        INNER JOIN `tabPurchase Order` po ON po.name = poi.parent
+        WHERE poi.material_request = %s
+          AND po.docstatus < 2
+    """, (name,), as_dict=True)
+
+    if linked_po_items:
+        po_names = list({r.parent for r in linked_po_items})
+        frappe.throw(_("该采购申请单已生成下游采购订单（{0}），禁止直接修改。若需修改请先删除或撤销关联的采购订单。").format(", ".join(po_names)))
+
+    # 2. Reset docstatus to 0 to allow direct table modification
+    if mr.docstatus == 1:
+        frappe.db.set_value("Material Request", name, "docstatus", 0)
+        mr.reload()
+
+    if company:
+        mr.company = company
+    if schedule_date:
+        mr.schedule_date = schedule_date
+    if department and _meta_has("Material Request", "department"):
+        mr.department = department
+
+    default_company_wh = (
+        frappe.db.get_value("Warehouse", {"company": mr.company, "is_group": 0}, "name")
+        or ""
+    )
+
+    # Clear old items and append updated items
+    mr.set("items", [])
+    total_amount = 0.0
+
+    for it in items:
+        item_code = (it.get("item_code") or "").strip()
+        if not item_code:
+            continue
+
+        item_doc = frappe.get_cached_doc("Item", item_code)
+        qty = flt(it.get("qty") or 1.0, 4)
+        if qty <= 0:
+            qty = 1.0
+
+        rate = flt(it.get("rate") or item_doc.standard_rate or 0.0, 2)
+        amount = flt(it.get("amount") or (qty * rate), 2)
+        tax_rate = flt(it.get("tax_rate") or 13.0, 2)
+        tax_amount = flt(it.get("tax_amount") or (amount * (tax_rate / 100.0)), 2)
+        total_price = flt(it.get("total_amount") or (amount + tax_amount), 2)
+        total_amount += total_price
+
+        uom = it.get("uom") or item_doc.stock_uom or "Nos"
+        item_wh = (
+            it.get("warehouse")
+            or frappe.db.get_value("Item Default", {"parent": item_code, "company": mr.company}, "default_warehouse")
+            or default_company_wh
+        )
+
+        row_dict = {
+            "item_code": item_code,
+            "item_name": item_doc.item_name,
+            "description": it.get("description") or item_doc.description or item_doc.item_name,
+            "item_group": item_doc.item_group,
+            "uom": uom,
+            "stock_uom": item_doc.stock_uom or uom,
+            "qty": qty,
+            "rate": rate,
+            "amount": amount,
+            "schedule_date": schedule_date or str(mr.schedule_date or getdate(nowdate())),
+            "warehouse": item_wh,
+        }
+        if _meta_has("Material Request Item", "custom_tax_rate"):
+            row_dict["custom_tax_rate"] = tax_rate
+        if _meta_has("Material Request Item", "custom_tax_amount"):
+            row_dict["custom_tax_amount"] = tax_amount
+        if _meta_has("Material Request Item", "custom_total_amount"):
+            row_dict["custom_total_amount"] = total_price
+
+        mr.append("items", row_dict)
+
+    if not mr.items:
+        frappe.throw(_("未能录入有效的物料明细。"))
+
+    mr.flags.ignore_permissions = True
+    mr.save()
+    mr.submit()
+
+    return {
+        "success": True,
+        "name": mr.name,
+        "company": mr.company,
+        "item_count": len(mr.items),
+        "total_amount": total_amount,
+        "message": _("成功更新并正式发布采购申请单：{0}").format(mr.name),
     }
 
 
@@ -2063,6 +2182,9 @@ def get_document_details(doctype: str, name: str) -> dict:
 
     can_delete = frappe.has_permission(doctype, "delete", doc)
     can_cancel = frappe.has_permission(doctype, "cancel", doc) if doc.docstatus == 1 else True
+    can_quick_edit = False
+    if doctype == "Material Request" and not linked_downstream and frappe.has_permission(doctype, "write", doc):
+        can_quick_edit = True
 
     return {
         "doctype": doctype,
@@ -2071,6 +2193,7 @@ def get_document_details(doctype: str, name: str) -> dict:
         "docstatus": doc.docstatus,
         "status": status_str,
         "date": date_str,
+        "schedule_date": str(doc.get("schedule_date") or ""),
         "owner": doc.owner,
         "supplier": doc.get("supplier") or "",
         "department": doc.get("department") or "",
@@ -2084,6 +2207,7 @@ def get_document_details(doctype: str, name: str) -> dict:
         "linked_downstream": linked_downstream,
         "can_delete": can_delete,
         "can_cancel": can_cancel,
+        "can_quick_edit": can_quick_edit,
     }
 
 

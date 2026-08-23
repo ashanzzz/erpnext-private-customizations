@@ -1506,7 +1506,7 @@ class ProcurementOrderPickerCenter {
                     `,
                 },
             ],
-            primary_action_label: __("立即创建申请单草稿"),
+            primary_action_label: __("🚀 正式提交物料申请单"),
             primary_action: async () => {
                 const vals = d.get_values();
                 if (!vals) return;
@@ -1518,7 +1518,7 @@ class ProcurementOrderPickerCenter {
                 }
 
                 try {
-                    frappe.dom.freeze(__("正在创建采购申请单..."));
+                    frappe.dom.freeze(__("正在创建并正式提交采购申请单..."));
                     const res = await frappe.call({
                         method: "ashan_cn_procurement.services.procurement_picker_service.quick_create_material_request",
                         args: {
@@ -1531,7 +1531,7 @@ class ProcurementOrderPickerCenter {
                     if (res && res.message && res.message.success) {
                         d.hide();
                         frappe.show_alert({
-                            message: __("🎉 成功创建采购申请单：{0}", [res.message.name]),
+                            message: __("🎉 成功创建并正式发布采购申请单：{0}", [res.message.name]),
                             indicator: "green",
                         });
                         this.refresh_all();
@@ -1865,12 +1865,13 @@ class ProcurementOrderPickerCenter {
                     <td class="picker-cell-right">${it.tax_rate ? (it.tax_rate + '%') : '-'}</td>
                     <td class="picker-money-cell">${self.fmt_money(it.tax_amount)}</td>
                     <td class="picker-money-cell"><strong>${self.fmt_money(it.total_amount)}</strong></td>
+                    <td>${frappe.utils.escape_html(it.description || "-")}</td>
                 </tr>
             `;
         });
 
         if (!items_tbody_html) {
-            items_tbody_html = `<tr><td colspan="10" class="picker-doc-empty-state">无物料明细数据</td></tr>`;
+            items_tbody_html = `<tr><td colspan="11" class="picker-doc-empty-state">无物料明细数据</td></tr>`;
         }
 
         // Build upstream flow items
@@ -1962,6 +1963,7 @@ class ProcurementOrderPickerCenter {
                                 <th class="picker-cell-right">税率</th>
                                 <th class="picker-cell-right">税额</th>
                                 <th class="picker-cell-right">价税合计</th>
+                                <th>用途/规格备注</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1985,6 +1987,11 @@ class ProcurementOrderPickerCenter {
                         `}
                     </div>
                     <div class="picker-modal-actions-right">
+                        ${doc.can_quick_edit ? `
+                            <button class="picker-btn-action-view" id="picker-modal-edit-btn">
+                                ✏️ 修改申请单
+                            </button>
+                        ` : ''}
                         <button class="picker-btn-action-view" id="picker-modal-print-btn">
                             🖨️ 打印单据
                         </button>
@@ -2012,6 +2019,11 @@ class ProcurementOrderPickerCenter {
 
         const $w = d.$wrapper;
 
+        // Edit button inside modal
+        $w.on("click", "#picker-modal-edit-btn", function () {
+            self.open_edit_mr_dialog(doc, d);
+        });
+
         // Flow link clicks inside modal
         $w.on("click", ".picker-doc-modal-link", function () {
             const dt = $(this).attr("data-doctype");
@@ -2029,6 +2041,325 @@ class ProcurementOrderPickerCenter {
         // Delete button
         $w.on("click", "#picker-modal-del-btn", function () {
             self.handle_document_deletion(doc.doctype, doc.name, d);
+        });
+    }
+
+    open_edit_mr_dialog(doc, parent_dialog) {
+        const default_company = doc.company || this.companies[0] || "";
+        const default_schedule_date = doc.schedule_date || frappe.datetime.add_months(frappe.datetime.nowdate(), 1);
+        let rows_data = [];
+
+        (doc.items || []).forEach((it) => {
+            rows_data.push({
+                item_code: it.item_code || "",
+                item_name: it.item_name || "",
+                qty: flt(it.qty) || 1.0,
+                rate: flt(it.rate) || 0.0,
+                amount: flt(it.amount) || 0.0,
+                tax_rate: flt(it.tax_rate) || 13.0,
+                tax_amount: flt(it.tax_amount) || 0.0,
+                total_amount: flt(it.total_amount) || 0.0,
+                description: it.description || "",
+            });
+        });
+
+        if (!rows_data.length) {
+            rows_data.push({
+                item_code: "",
+                item_name: "",
+                qty: 1.0,
+                rate: 0.0,
+                amount: 0.0,
+                tax_rate: 13.0,
+                tax_amount: 0.0,
+                total_amount: 0.0,
+                description: "",
+            });
+        }
+
+        const recalculate_row = (r) => {
+            r.qty = flt(r.qty) || 1.0;
+            r.rate = flt(r.rate) || 0.0;
+            r.tax_rate = flt(r.tax_rate) || 0.0;
+            r.amount = flt(r.qty * r.rate, 2);
+            r.tax_amount = flt(r.amount * (r.tax_rate / 100.0), 2);
+            r.total_amount = flt(r.amount + r.tax_amount, 2);
+        };
+
+        const render_rows = (dialog) => {
+            const $tbody = dialog.get_field("items_html").$wrapper.find("#picker-modal-item-tbody");
+            $tbody.empty();
+
+            let sum_qty = 0;
+            let sum_amt = 0;
+            let sum_tax = 0;
+            let sum_total = 0;
+
+            rows_data.forEach((r, idx) => {
+                recalculate_row(r);
+                sum_qty += r.qty;
+                sum_amt += r.amount;
+                sum_tax += r.tax_amount;
+                sum_total += r.total_amount;
+
+                const tr = `
+                    <tr data-idx="${idx}">
+                        <td class="picker-cell-col-idx">${idx + 1}</td>
+                        <td>
+                            <div class="picker-suggest-wrapper">
+                                <input type="text" class="modal-input-code" placeholder="输入代码或名称模糊搜索..." value="${frappe.utils.escape_html(r.item_code)}">
+                                <div class="picker-suggest-dropdown" id="suggest-dd-${idx}"></div>
+                            </div>
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0.01" class="modal-input-qty" value="${r.qty}">
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0" class="modal-input-rate" value="${r.rate}">
+                        </td>
+                        <td>
+                            <span class="modal-display-val">¥ ${flt(r.amount).toFixed(2)}</span>
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0" class="modal-input-tax" value="${r.tax_rate}">
+                        </td>
+                        <td>
+                            <span class="modal-display-val">¥ ${flt(r.tax_amount).toFixed(2)}</span>
+                        </td>
+                        <td>
+                            <span class="modal-display-val font-bold">¥ ${flt(r.total_amount).toFixed(2)}</span>
+                        </td>
+                        <td>
+                            <input type="text" class="modal-input-desc" placeholder="用途说明..." value="${frappe.utils.escape_html(r.description || "")}">
+                        </td>
+                        <td>
+                            <button class="picker-modal-del-btn" data-idx="${idx}">删除</button>
+                        </td>
+                    </tr>
+                `;
+                $tbody.append(tr);
+            });
+
+            const $wrap = dialog.get_field("items_html").$wrapper;
+            $wrap.find("#modal-sum-qty").text(sum_qty.toFixed(2));
+            $wrap.find("#modal-sum-amt").text(this.fmt_money(sum_amt));
+            $wrap.find("#modal-sum-tax").text(this.fmt_money(sum_tax));
+            $wrap.find("#modal-sum-total").text(this.fmt_money(sum_total));
+        };
+
+        const d = new frappe.ui.Dialog({
+            title: __("✏️ 修改物料申请单 · {0}", [doc.name]),
+            fields: [
+                {
+                    fieldtype: "Select",
+                    fieldname: "company",
+                    label: __("所属公司"),
+                    options: this.companies.join("\n"),
+                    default: default_company,
+                    reqd: 1,
+                },
+                {
+                    fieldtype: "Date",
+                    fieldname: "schedule_date",
+                    label: __("期望到货日期"),
+                    default: default_schedule_date,
+                    reqd: 1,
+                },
+                {
+                    fieldtype: "Section Break",
+                    label: __("申请物料明细与税额核算 (任意修改)"),
+                },
+                {
+                    fieldtype: "HTML",
+                    fieldname: "items_html",
+                    options: `
+                        <div>
+                            <table class="picker-modal-item-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>物料代码 / 名称 (原生联想)</th>
+                                        <th>申请数量</th>
+                                        <th>参考单价</th>
+                                        <th>不含税金额</th>
+                                        <th>税率 %</th>
+                                        <th>税额</th>
+                                        <th>含税总价</th>
+                                        <th>用途/规格备注</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="picker-modal-item-tbody"></tbody>
+                            </table>
+                            <button class="picker-modal-add-btn" id="picker-modal-add-row-btn">➕ 添加一行物料</button>
+
+                            <div class="picker-modal-summary-bar">
+                                <span>合计汇总:</span>
+                                <div class="picker-modal-summary-items">
+                                    <span>申请总数: <strong id="modal-sum-qty" class="picker-summary-highlight">0</strong></span>
+                                    <span>不含税金额: <strong id="modal-sum-amt" class="picker-summary-highlight">¥ 0.00</strong></span>
+                                    <span>税额: <strong id="modal-sum-tax" class="picker-summary-highlight">¥ 0.00</strong></span>
+                                    <span>含税总额: <strong id="modal-sum-total" class="picker-summary-highlight">¥ 0.00</strong></span>
+                                </div>
+                            </div>
+                        </div>
+                    `,
+                },
+            ],
+            primary_action_label: __("💾 保存修改并正式发布"),
+            primary_action: async () => {
+                const vals = d.get_values();
+                if (!vals) return;
+
+                const valid_items = rows_data.filter((r) => (r.item_code || "").trim().length > 0);
+                if (!valid_items.length) {
+                    frappe.msgprint(__("请至少保留一行有效的物料代码。"));
+                    return;
+                }
+
+                try {
+                    frappe.dom.freeze(__("正在更新采购申请单..."));
+                    const res = await frappe.call({
+                        method: "ashan_cn_procurement.services.procurement_picker_service.update_quick_material_request",
+                        args: {
+                            name: doc.name,
+                            company: vals.company,
+                            schedule_date: vals.schedule_date,
+                            items: valid_items,
+                        },
+                    });
+                    frappe.dom.unfreeze();
+                    if (res && res.message && res.message.success) {
+                        d.hide();
+                        if (parent_dialog) parent_dialog.hide();
+                        frappe.show_alert({
+                            message: __("🎉 成功更新并正式发布采购申请单：{0}", [doc.name]),
+                            indicator: "green",
+                        });
+                        this.refresh_all();
+                    }
+                } catch (e) {
+                    frappe.dom.unfreeze();
+                    frappe.msgprint(e.message || __("更新采购申请单失败"));
+                }
+            },
+        });
+
+        d.$wrapper.addClass("picker-create-mr-modal");
+        d.show();
+        render_rows(d);
+
+        const $wrap = d.get_field("items_html").$wrapper;
+
+        $wrap.on("click", "#picker-modal-add-row-btn", () => {
+            rows_data.push({ item_code: "", item_name: "", qty: 1.0, rate: 0.0, amount: 0.0, tax_rate: 13.0, tax_amount: 0.0, total_amount: 0.0, description: "" });
+            render_rows(d);
+        });
+
+        $wrap.on("click", ".picker-modal-del-btn", function () {
+            const idx = parseInt($(this).attr("data-idx"));
+            rows_data.splice(idx, 1);
+            if (!rows_data.length) rows_data.push({ item_code: "", item_name: "", qty: 1.0, rate: 0.0, amount: 0.0, tax_rate: 13.0, tax_amount: 0.0, total_amount: 0.0, description: "" });
+            render_rows(d);
+        });
+
+        // Autocomplete Search on item input
+        let search_timeout = null;
+        $wrap.on("input focus", ".modal-input-code", function () {
+            const $input = $(this);
+            const idx = parseInt($input.closest("tr").attr("data-idx"));
+            const $dd = $wrap.find(`#suggest-dd-${idx}`);
+            const query = $input.val();
+
+            clearTimeout(search_timeout);
+            search_timeout = setTimeout(async () => {
+                const comp = d.get_value("company") || default_company;
+                try {
+                    const r = await frappe.call({
+                        method: "ashan_cn_procurement.services.procurement_picker_service.search_picker_items",
+                        args: { query: query, company: comp },
+                    });
+                    const items = (r && r.message && r.message.items) || [];
+                    let dd_html = "";
+                    items.forEach((it) => {
+                        dd_html += `
+                            <div class="picker-suggest-item" data-code="${frappe.utils.escape_html(it.item_code)}" data-name="${frappe.utils.escape_html(it.item_name)}" data-rate="${it.rate}" data-uom="${it.uom}" data-tax="${it.tax_rate}">
+                                <div class="picker-suggest-main">
+                                    <span class="picker-suggest-code">${frappe.utils.escape_html(it.item_code)}</span>
+                                    <span class="picker-suggest-name">${frappe.utils.escape_html(it.item_name)} (${it.uom})</span>
+                                </div>
+                                <div class="picker-suggest-price">¥ ${flt(it.rate).toFixed(2)}</div>
+                            </div>
+                        `;
+                    });
+
+                    dd_html += `
+                        <div class="picker-suggest-create-btn" id="modal-create-new-item-btn">
+                            <span>➕</span>
+                            <span>新建物料 (Create Item)</span>
+                        </div>
+                    `;
+
+                    $dd.html(dd_html).addClass("is-open");
+                } catch (err) {
+                    console.error("Autocomplete search error", err);
+                }
+            }, 250);
+        });
+
+        // Select an item from dropdown
+        $wrap.on("click", ".picker-suggest-item", function () {
+            const $tr = $(this).closest("tr");
+            const idx = parseInt($tr.attr("data-idx"));
+            const code = $(this).attr("data-code");
+            const name = $(this).attr("data-name");
+            const rate = flt($(this).attr("data-rate"));
+            const tax = flt($(this).attr("data-tax")) || 13.0;
+
+            rows_data[idx].item_code = code;
+            rows_data[idx].item_name = name;
+            rows_data[idx].rate = rate;
+            rows_data[idx].tax_rate = tax;
+
+            $wrap.find(".picker-suggest-dropdown").removeClass("is-open");
+            render_rows(d);
+        });
+
+        // Quick create item click
+        $wrap.on("click", "#modal-create-new-item-btn", function () {
+            $wrap.find(".picker-suggest-dropdown").removeClass("is-open");
+            frappe.new_doc("Item");
+        });
+
+        // Close dropdown when clicking outside
+        $(document).on("click.picker_suggest_edit", (e) => {
+            if (!$(e.target).closest(".picker-suggest-wrapper").length) {
+                $wrap.find(".picker-suggest-dropdown").removeClass("is-open");
+            }
+        });
+
+        // Live calculation on quantity, rate, tax rate, description change
+        $wrap.on("input change", ".modal-input-qty", function () {
+            const idx = parseInt($(this).closest("tr").attr("data-idx"));
+            rows_data[idx].qty = flt($(this).val()) || 1.0;
+            render_rows(d);
+        });
+
+        $wrap.on("input change", ".modal-input-rate", function () {
+            const idx = parseInt($(this).closest("tr").attr("data-idx"));
+            rows_data[idx].rate = flt($(this).val()) || 0.0;
+            render_rows(d);
+        });
+
+        $wrap.on("input change", ".modal-input-tax", function () {
+            const idx = parseInt($(this).closest("tr").attr("data-idx"));
+            rows_data[idx].tax_rate = flt($(this).val()) || 0.0;
+            render_rows(d);
+        });
+
+        $wrap.on("input change", ".modal-input-desc", function () {
+            const idx = parseInt($(this).closest("tr").attr("data-idx"));
+            rows_data[idx].description = $(this).val() || "";
         });
     }
 
