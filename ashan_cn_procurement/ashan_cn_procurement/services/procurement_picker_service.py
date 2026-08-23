@@ -165,12 +165,20 @@ def get_material_request_picker_rows(
     has_mr_dept = _meta_has("Material Request", "department")
     dept_col = "COALESCE(mr.department, '')" if has_mr_dept else "''"
 
+    purchase_status = filters.get("match_status") or filters.get("purchase_status") or "pending"
+
     conditions = [
         "mr.material_request_type = 'Purchase'",
         "mr.docstatus < 2",
         "mr.company IN %(companies)s",
     ]
     params: dict[str, Any] = {"companies": companies}
+
+    if purchase_status == "pending":
+        conditions.append("(mri.qty - COALESCE(mri.ordered_qty, 0)) > 0.0001")
+        conditions.append("mr.status NOT IN ('Stopped', 'Cancelled', 'Transfer')")
+    elif purchase_status in ("ordered", "completed"):
+        conditions.append("(mri.qty - COALESCE(mri.ordered_qty, 0)) <= 0.0001")
 
     if filters.get("mr_name"):
         conditions.append("mr.name LIKE %(mr_name)s")
@@ -188,10 +196,6 @@ def get_material_request_picker_rows(
         conditions.append("mr.department = %(department)s")
         params["department"] = filters["department"]
 
-    if filters.get("supplier"):
-        conditions.append("(COALESCE(item_def.default_supplier, '') = %(supplier)s OR COALESCE(item_sup.supplier, '') = %(supplier)s)")
-        params["supplier"] = filters["supplier"]
-
     where_clause = " AND ".join(conditions)
 
     sql = f"""
@@ -206,6 +210,7 @@ def get_material_request_picker_rows(
             mr.status,
             mri.item_code,
             mri.item_name,
+            mri.description,
             mri.item_group,
             COALESCE(mri.uom, mri.stock_uom, '') AS uom,
             COALESCE(mri.qty, 0) AS qty,
@@ -225,34 +230,20 @@ def get_material_request_picker_rows(
 
     raw_rows = frappe.db.sql(sql, params, as_dict=True)
 
-    # Stock balances
-    item_codes = list({r.item_code for r in raw_rows})
-    stock_map = defaultdict(float)
-    if item_codes:
-        bins = frappe.db.sql("""
-            SELECT b.item_code, w.company, SUM(b.actual_qty) AS total_actual_qty
-            FROM `tabBin` b
-            INNER JOIN `tabWarehouse` w ON w.name = b.warehouse
-            WHERE b.item_code IN %s AND w.company IN %s
-            GROUP BY b.item_code, w.company
-        """, (item_codes, companies), as_dict=True)
-        for b in bins:
-            stock_map[(b.item_code, b.company)] = flt(b.total_actual_qty, 2)
-
     rows = []
     for r in raw_rows:
-        current_stock = stock_map.get((r.item_code, r.company), 0.0)
         rows.append({
             "mri_name": r.mri_name,
             "mr_name": r.mr_name,
             "company": r.company,
+            "transaction_date": str(r.transaction_date or ""),
             "schedule_date": str(r.schedule_date or ""),
             "department": r.department or "",
             "item_code": r.item_code,
             "item_name": r.item_name or r.item_code,
+            "description": r.description or "",
             "item_group": r.item_group or "",
             "uom": r.uom or "",
-            "current_stock": current_stock,
             "qty": flt(r.qty, 2),
             "ordered_qty": flt(r.ordered_qty, 2),
             "pending_qty": max(flt(r.qty) - flt(r.ordered_qty), 0.0),
@@ -286,6 +277,8 @@ def get_material_request_doc_rows(
     has_custom_doc_details = _meta_has("Material Request", "custom_doc_details")
     doc_details_col = "COALESCE(mr.custom_doc_details, '')" if has_custom_doc_details else "''"
 
+    purchase_status = filters.get("match_status") or filters.get("purchase_status") or "pending"
+
     conditions = [
         "mr.material_request_type = 'Purchase'",
         "mr.docstatus < 2",
@@ -303,6 +296,12 @@ def get_material_request_doc_rows(
 
     where_clause = " AND ".join(conditions)
 
+    having_clause = ""
+    if purchase_status == "pending":
+        having_clause = "HAVING (COALESCE(SUM(mri.qty), 0) - COALESCE(SUM(mri.ordered_qty), 0)) > 0.0001"
+    elif purchase_status in ("ordered", "completed"):
+        having_clause = "HAVING (COALESCE(SUM(mri.qty), 0) - COALESCE(SUM(mri.ordered_qty), 0)) <= 0.0001"
+
     sql = f"""
         SELECT
             mr.name AS mr_name,
@@ -316,13 +315,15 @@ def get_material_request_doc_rows(
             mr.owner,
             COUNT(mri.name) AS item_count,
             COALESCE(SUM(mri.qty), 0) AS total_qty,
+            COALESCE(SUM(mri.ordered_qty), 0) AS total_ordered_qty,
             GROUP_CONCAT(DISTINCT CONCAT(mri.item_name, ' (', ROUND(mri.qty, 2), ' ', COALESCE(mri.uom, mri.stock_uom, ''), ')') SEPARATOR '、') AS synthesized_details
         FROM `tabMaterial Request` mr
         LEFT JOIN `tabMaterial Request Item` mri ON mri.parent = mr.name
         WHERE {where_clause}
         GROUP BY mr.name
+        {having_clause}
         ORDER BY mr.transaction_date DESC, mr.name DESC
-        LIMIT 500
+        LIMIT 1000
     """
 
     docs = frappe.db.sql(sql, params, as_dict=True)

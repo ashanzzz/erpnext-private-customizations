@@ -28,7 +28,7 @@ class ProcurementOrderPickerCenter {
         this.table_data = [];
         this.selected_map = new Map(); // key -> row object
         this.filters = {
-            item_to_mr: { mr_name: "", item_code: "", item_group: "", department: "", supplier: "" },
+            item_to_mr: { match_status: "pending", mr_name: "", item_code: "", item_group: "", department: "" },
             mr_to_po: { match_status: "pending", linked_doc: "", supplier: "", department: "", item_code: "", from_date: "", to_date: "" },
             po_to_pr: { match_status: "pending", linked_doc: "", supplier: "", warehouse: "", po_name: "", item_code: "" },
             pr_to_pi: { match_status: "pending", linked_doc: "", supplier: "", pr_name: "", item_code: "" },
@@ -429,7 +429,16 @@ class ProcurementOrderPickerCenter {
 
         let filters_html = "";
         if (stage === "item_to_mr") {
+            const ms = this.filters[stage].match_status || "pending";
             filters_html = `
+                <div class="picker-filter-group">
+                    <label>采购状态:</label>
+                    <select class="picker-filter-select" data-filter="match_status">
+                        <option value="pending" ${ms === 'pending' ? 'selected' : ''}>🟡 仅待订购需求 (未生成订单/未订完)</option>
+                        <option value="completed" ${ms === 'completed' ? 'selected' : ''}>🟢 仅已全部订购 (已生成订单)</option>
+                        <option value="all" ${ms === 'all' ? 'selected' : ''}>🌐 全部申请单据 (全量追溯)</option>
+                    </select>
+                </div>
                 <div class="picker-filter-group">
                     <label>申请单号:</label>
                     <input type="text" class="picker-filter-input" data-filter="mr_name" placeholder="搜索单号..." value="${this.filters[stage].mr_name || ''}">
@@ -437,10 +446,6 @@ class ProcurementOrderPickerCenter {
                 <div class="picker-filter-group">
                     <label>物料编码/名称:</label>
                     <input type="text" class="picker-filter-input" data-filter="item_code" placeholder="物料代码/名称..." value="${this.filters[stage].item_code || ''}">
-                </div>
-                <div class="picker-filter-group">
-                    <label>建议供应商:</label>
-                    <input type="text" class="picker-filter-input" data-filter="supplier" placeholder="供应商名称..." value="${this.filters[stage].supplier || ''}">
                 </div>
             `;
         } else if (stage === "mr_to_po") {
@@ -685,10 +690,9 @@ class ProcurementOrderPickerCenter {
                     <th>物料名称/规格</th>
                     <th>物料分组</th>
                     <th>单位</th>
-                    <th>当前库存</th>
                     <th>申请数</th>
-                    <th>建议供应商</th>
                     <th>参考单价</th>
+                    <th>用途/规格备注</th>
                 `;
             }
         } else if (stage === "mr_to_po") {
@@ -922,10 +926,9 @@ class ProcurementOrderPickerCenter {
                         <td>${frappe.utils.escape_html(r.item_name || r.item_code)}</td>
                         <td>${frappe.utils.escape_html(r.item_group || "")}</td>
                         <td>${frappe.utils.escape_html(r.uom || "")}</td>
-                        <td class="picker-qty-cell">${r.current_stock || 0}</td>
                         <td class="picker-qty-cell"><strong>${r.qty}</strong></td>
-                        <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
                         <td class="picker-money-cell">${this.fmt_money(r.rate)}</td>
+                        <td>${frappe.utils.escape_html(r.description || "-")}</td>
                     `;
                 }
             } else if (stage === "mr_to_po") {
