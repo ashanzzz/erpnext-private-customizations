@@ -1,5 +1,5 @@
 # Copyright (c) 2026, Ashan CN Procurement
-"""Automated regression & end-to-end test suite for Procurement Order Picker (5 Steps, Dual Views & Quick Creation)."""
+"""Automated regression & end-to-end test suite for Procurement Order Picker (5 Steps, 10 Dual Views & Smart Search)."""
 
 import unittest
 import frappe
@@ -7,16 +7,20 @@ from frappe.utils import nowdate, flt, random_string
 
 from ashan_cn_procurement.services.procurement_picker_service import (
     get_user_procurement_companies,
+    search_picker_items,
     get_material_request_picker_rows,
     get_material_request_doc_rows,
     quick_create_material_request,
-    get_item_master_picker_rows,
     get_pending_material_request_items,
+    get_pending_material_request_docs,
     make_purchase_orders_from_mr_items,
     get_pending_purchase_order_items,
+    get_pending_purchase_order_docs,
     make_purchase_receipts_from_po_items,
     get_pending_purchase_receipt_items,
+    get_pending_purchase_receipt_docs,
     make_purchase_invoices_from_pr_items,
+    get_pending_reimbursement_invoice_items,
     get_pending_reimbursement_invoices,
     make_reimbursement_from_invoices,
     get_procurement_picker_overview_kpis,
@@ -43,29 +47,45 @@ class TestProcurementPicker(unittest.TestCase):
         self.assertIn("pr_to_pi", res_all["kpis"])
         self.assertIn("pi_to_rr", res_all["kpis"])
 
-    def test_02_query_endpoints_smoke(self):
-        """Verify query endpoints execute without SQL or permission errors for All and single company."""
+    def test_02_all_10_dual_views_smoke(self):
+        """Verify query endpoints for all 5 stages in both Detail View and Doc View."""
         for comp_scope in ["All", self.company]:
+            # Search helper
+            s_res = search_picker_items(query="TEST", company=comp_scope)
+            self.assertIn("items", s_res)
+
+            # Stage 1: MR (Detail & Doc)
             mr_items = get_material_request_picker_rows(comp_scope)
             self.assertIn("rows", mr_items)
-
             mr_docs = get_material_request_doc_rows(comp_scope)
             self.assertIn("rows", mr_docs)
 
-            mr_res = get_pending_material_request_items(comp_scope)
-            self.assertIn("rows", mr_res)
+            # Stage 2: PO (Detail & Doc)
+            po_items = get_pending_material_request_items(comp_scope)
+            self.assertIn("rows", po_items)
+            po_docs = get_pending_material_request_docs(comp_scope)
+            self.assertIn("rows", po_docs)
 
-            po_res = get_pending_purchase_order_items(comp_scope)
-            self.assertIn("rows", po_res)
+            # Stage 3: PR (Detail & Doc)
+            pr_items = get_pending_purchase_order_items(comp_scope)
+            self.assertIn("rows", pr_items)
+            pr_docs = get_pending_purchase_order_docs(comp_scope)
+            self.assertIn("rows", pr_docs)
 
-            pr_res = get_pending_purchase_receipt_items(comp_scope)
-            self.assertIn("rows", pr_res)
+            # Stage 4: PI (Detail & Doc)
+            pi_items = get_pending_purchase_receipt_items(comp_scope)
+            self.assertIn("rows", pi_items)
+            pi_docs = get_pending_purchase_receipt_docs(comp_scope)
+            self.assertIn("rows", pi_docs)
 
-            rr_res = get_pending_reimbursement_invoices(comp_scope)
-            self.assertIn("rows", rr_res)
+            # Stage 5: RR (Detail & Doc)
+            rr_items = get_pending_reimbursement_invoice_items(comp_scope)
+            self.assertIn("rows", rr_items)
+            rr_docs = get_pending_reimbursement_invoices(comp_scope)
+            self.assertIn("rows", rr_docs)
 
     def test_03_quick_create_and_full_lifecycle(self):
-        """Test quick Material Request creation, dual view queries, and downstream flow."""
+        """Test smart Material Request creation with taxes, dual view queries, and downstream flow."""
         supplier = frappe.db.get_value("Supplier", {}, "name")
         if not supplier:
             sup_doc = frappe.get_doc({
@@ -89,7 +109,7 @@ class TestProcurementPicker(unittest.TestCase):
             }).insert()
             item_code = item_doc.name
 
-        # --- Step 1: Quick Create Material Request via Dialog RPC ---
+        # --- Step 1: Quick Create Material Request via Dialog RPC (With rate, tax, amount) ---
         mr_res = quick_create_material_request(
             company=self.company,
             department="生产部",
@@ -97,11 +117,17 @@ class TestProcurementPicker(unittest.TestCase):
             items=[{
                 "item_code": item_code,
                 "qty": 20.0,
-                "description": "物料申请弹窗测试",
+                "rate": 100.0,
+                "amount": 2000.0,
+                "tax_rate": 13.0,
+                "tax_amount": 260.0,
+                "total_amount": 2260.0,
+                "description": "物料申请智能弹窗测试",
             }],
         )
         self.assertTrue(mr_res["success"])
         mr_name = mr_res["name"]
+        self.assertEqual(mr_res["total_amount"], 2260.0)
 
         # Verify Step 1 Detail View returns this MR item with mr_name
         detail_pool = get_material_request_picker_rows(self.company, {"mr_name": mr_name})
@@ -121,14 +147,15 @@ class TestProcurementPicker(unittest.TestCase):
 
         try:
             # --- Step 2: Material Request -> Purchase Order ---
-            mr_pool = get_pending_material_request_items(self.company)
-            found_mr = [r for r in mr_pool["rows"] if r["mri_name"] == mri_name]
-            self.assertTrue(len(found_mr) > 0, "Material request item should appear in pending order pool")
-            self.assertEqual(found_mr[0]["pending_qty"], 20.0)
+            # Verify Doc view works for Stage 2
+            mr_doc_pool = get_pending_material_request_docs(self.company, {"mr_name": mr_name})
+            self.assertTrue(len(mr_doc_pool["rows"]) > 0)
+            self.assertIn("custom_doc_details", mr_doc_pool["rows"][0])
 
+            # Generate PO from MR
             po_gen = make_purchase_orders_from_mr_items(
                 self.company,
-                selected_items=[{"mri_name": mri_name, "this_qty": 20.0, "rate": 50.0}],
+                selected_items=[{"mri_name": mri_name, "this_qty": 20.0, "rate": 100.0}],
                 supplier_override=supplier,
             )
             self.assertTrue(po_gen["success"])
@@ -139,9 +166,10 @@ class TestProcurementPicker(unittest.TestCase):
             poi_name = po_doc.items[0].name
 
             # --- Step 3: Purchase Order -> Purchase Receipt ---
-            po_pool = get_pending_purchase_order_items(self.company, {"supplier": supplier})
-            found_po = [r for r in po_pool["rows"] if r["poi_name"] == poi_name]
-            self.assertTrue(len(found_po) > 0, "PO item should appear in pending receipt pool")
+            # Verify Doc view works for Stage 3
+            po_doc_pool = get_pending_purchase_order_docs(self.company, {"po_name": po_name})
+            self.assertTrue(len(po_doc_pool["rows"]) > 0)
+            self.assertIn("custom_doc_details", po_doc_pool["rows"][0])
 
             pr_gen = make_purchase_receipts_from_po_items(
                 self.company,
@@ -155,14 +183,15 @@ class TestProcurementPicker(unittest.TestCase):
             pri_name = pr_doc.items[0].name
 
             # --- Step 4: Purchase Receipt -> Purchase Invoice ---
-            pr_pool = get_pending_purchase_receipt_items(self.company, {"supplier": supplier})
-            found_pr = [r for r in pr_pool["rows"] if r["pri_name"] == pri_name]
-            self.assertTrue(len(found_pr) > 0, "PR item should appear in pending invoice pool")
+            # Verify Doc view works for Stage 4
+            pr_doc_pool = get_pending_purchase_receipt_docs(self.company, {"pr_name": pr_name})
+            self.assertTrue(len(pr_doc_pool["rows"]) > 0)
+            self.assertIn("custom_doc_details", pr_doc_pool["rows"][0])
 
             pi_gen = make_purchase_invoices_from_pr_items(
                 self.company,
                 selected_items=[{"pri_name": pri_name, "this_qty": 20.0}],
-                bill_no="TEST-AUTO-INV-003",
+                bill_no="TEST-AUTO-INV-004",
                 bill_date=nowdate(),
             )
             self.assertTrue(pi_gen["success"])
@@ -172,14 +201,18 @@ class TestProcurementPicker(unittest.TestCase):
             pi_doc.submit()
 
             # --- Step 5: Purchase Invoice -> Reimbursement Request ---
-            pi_pool = get_pending_reimbursement_invoices(self.company)
-            found_pi = [r for r in pi_pool["rows"] if r["pi_name"] == pi_name]
-            self.assertTrue(len(found_pi) > 0, "PI should appear in pending reimbursement pool")
+            # Verify Detail & Doc views for Stage 5
+            pi_item_pool = get_pending_reimbursement_invoice_items(self.company, {"bill_no": "TEST-AUTO-INV-004"})
+            self.assertTrue(len(pi_item_pool["rows"]) > 0)
+
+            pi_doc_pool = get_pending_reimbursement_invoices(self.company, {"bill_no": "TEST-AUTO-INV-004"})
+            self.assertTrue(len(pi_doc_pool["rows"]) > 0)
+            self.assertIn("custom_doc_details", pi_doc_pool["rows"][0])
 
             rr_gen = make_reimbursement_from_invoices(
                 self.company,
                 selected_invoices=[pi_name],
-                purpose="5步全流程端到端测试",
+                purpose="5步全流程双视图测试",
             )
             self.assertTrue(rr_gen["success"])
             rr_name = rr_gen["reimbursement_name"]

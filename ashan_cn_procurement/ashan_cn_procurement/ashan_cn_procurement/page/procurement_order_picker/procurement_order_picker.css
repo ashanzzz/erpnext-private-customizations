@@ -685,26 +685,39 @@
     gap: 10px;
 }
 
-/* New MR Creation Modal Styles */
+/* New MR Creation Modal Styles & Advanced Table */
+.picker-create-mr-modal .modal-dialog {
+    max-width: 1100px !important;
+    width: 95% !important;
+}
+
 .picker-modal-item-table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 8px;
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .picker-modal-item-table th {
     background: #f8fafc;
-    padding: 6px 8px;
+    padding: 6px 6px;
     border: 1px solid #e2e8f0;
     text-align: left;
-    font-weight: 600;
+    font-weight: 700;
+    color: #1e293b;
+    white-space: nowrap;
 }
 
-.picker-modal-item-table th:nth-child(1) { width: 40px; }
-.picker-modal-item-table th:nth-child(2) { width: 220px; }
-.picker-modal-item-table th:nth-child(3) { width: 90px; }
-.picker-modal-item-table th:nth-child(5) { width: 50px; }
+.picker-modal-item-table th:nth-child(1) { width: 28px; text-align: center; }
+.picker-modal-item-table th:nth-child(2) { min-width: 220px; }
+.picker-modal-item-table th:nth-child(3) { width: 70px; text-align: right; }
+.picker-modal-item-table th:nth-child(4) { width: 75px; text-align: right; }
+.picker-modal-item-table th:nth-child(5) { width: 85px; text-align: right; }
+.picker-modal-item-table th:nth-child(6) { width: 55px; text-align: right; }
+.picker-modal-item-table th:nth-child(7) { width: 75px; text-align: right; }
+.picker-modal-item-table th:nth-child(8) { width: 90px; text-align: right; }
+.picker-modal-item-table th:nth-child(9) { min-width: 130px; }
+.picker-modal-item-table th:nth-child(10) { width: 44px; text-align: center; }
 
 .picker-modal-item-table td {
     padding: 4px 6px;
@@ -718,6 +731,137 @@
     border: 1px solid #cbd5e1;
     border-radius: 4px;
     font-size: 11px;
+    background: #ffffff;
+}
+
+.picker-modal-item-input:focus {
+    outline: none;
+    border-color: #1e40af;
+}
+
+.picker-modal-calc-cell {
+    font-family: monospace;
+    font-size: 11px;
+    text-align: right;
+    color: #334155;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.picker-modal-calc-bold {
+    color: #15803d;
+    font-weight: 700;
+}
+
+/* Autocomplete Suggestion Dropdown */
+.picker-suggest-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.picker-suggest-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+    max-height: 220px;
+    overflow-y: auto;
+    margin-top: 2px;
+    display: none;
+}
+
+.picker-suggest-dropdown.is-open {
+    display: block;
+}
+
+.picker-suggest-item {
+    padding: 6px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.picker-suggest-item:hover,
+.picker-suggest-item.is-focused {
+    background: #eff6ff;
+}
+
+.picker-suggest-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.picker-suggest-code {
+    font-weight: 700;
+    color: #1e40af;
+}
+
+.picker-suggest-name {
+    color: #475569;
+    font-size: 10.5px;
+}
+
+.picker-suggest-price {
+    font-family: monospace;
+    font-weight: 600;
+    color: #059669;
+    text-align: right;
+}
+
+.picker-suggest-create-btn {
+    padding: 8px 10px;
+    background: #f8fafc;
+    border-top: 1px dashed #cbd5e1;
+    color: #0284c7;
+    font-weight: 600;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.picker-suggest-create-btn:hover {
+    background: #e0f2fe;
+}
+
+/* Modal Bottom Summary Bar */
+.picker-modal-summary-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 8px 14px;
+    margin-top: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #334155;
+}
+
+.picker-modal-summary-items {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.picker-modal-cell-center {
+    text-align: center;
+}
+
+.picker-modal-input-right {
+    text-align: right;
+    font-family: monospace;
 }
 
 .picker-modal-del-btn {
@@ -736,8 +880,9 @@
     color: #15803d;
     border: 1px dashed #86efac;
     border-radius: 4px;
-    padding: 4px 10px;
+    padding: 4px 12px;
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
 }
+

@@ -55,69 +55,78 @@ def main():
         page.wait_for_selector(".picker-page-container", timeout=15000)
         page.wait_for_timeout(3000)
 
-        # 1. Verify Step 1 Detail View (Single-line Header, Readonly qty, View switcher)
-        print("Testing Step 1: 采购申请 (明细视图)...")
+        # 1. Step 1: 采购申请 (明细 & 单号视图)
+        print("Testing Step 1: 采购申请 (Detail & Doc Views)...")
         page.click(".picker-kpi-card[data-stage='item_to_mr']")
         page.wait_for_timeout(1500)
-        shot1_detail = os.path.join(BRAIN_DIR, "step1_mr_detail_view.png")
-        page.screenshot(path=shot1_detail)
-        print(f"  -> Saved Step 1 Detail View screenshot: {shot1_detail}")
+        page.screenshot(path=os.path.join(BRAIN_DIR, "v4_step1_mr_detail.png"))
 
-        # 2. Test Step 1 Doc View Switch
-        print("Testing Step 1: 采购申请 (切换单号视图)...")
         page.click(".picker-view-btn[data-mode='doc']")
         page.wait_for_timeout(1500)
-        shot1_doc = os.path.join(BRAIN_DIR, "step1_mr_doc_view.png")
-        page.screenshot(path=shot1_doc)
-        print(f"  -> Saved Step 1 Doc View screenshot: {shot1_doc}")
+        page.screenshot(path=os.path.join(BRAIN_DIR, "v4_step1_mr_doc.png"))
 
-        # Switch back to Detail
-        page.click(".picker-view-btn[data-mode='detail']")
-        page.wait_for_timeout(1000)
-
-        # 3. Test + 新建物料申请单 Dialog
-        print("Testing Modal: + 新建物料申请单...")
+        # 2. Step 1: Smart Material Request Modal with Real-time Search & Tax Calc
+        print("Testing Smart Modal: + 新建物料申请单...")
         page.click("#picker-create-mr-btn")
         page.wait_for_timeout(1000)
-        shot_modal = os.path.join(BRAIN_DIR, "step1_create_mr_modal.png")
-        page.screenshot(path=shot_modal)
-        print(f"  -> Saved Modal Dialog screenshot: {shot_modal}")
 
-        # Close modal
+        # Trigger autocomplete search
+        page.fill(".modal-input-code", "ITEM")
+        page.wait_for_timeout(800)
+        page.screenshot(path=os.path.join(BRAIN_DIR, "v4_modal_autocomplete.png"))
+
+        # Select first suggestion item
+        page.click(".picker-suggest-item:first-child")
+        page.wait_for_timeout(600)
+
+        # Fill quantity to 5.0
+        page.fill(".modal-input-qty", "5")
+        page.wait_for_timeout(500)
+        page.screenshot(path=os.path.join(BRAIN_DIR, "v4_modal_calculated.png"))
+
+        # Close dialog
         page.click(".modal-header .btn-modal-close, .modal-header .close")
-        page.wait_for_timeout(1000)
+        page.wait_for_timeout(800)
 
-        # 4. Step 2 (采购订货)
-        print("Testing Step 2: 采购订货 (单行表头)...")
+        # 3. Step 2: 采购订货 (Detail & Doc Views)
+        print("Testing Step 2: 采购订货 (Detail & Doc Views)...")
         page.click(".picker-kpi-card[data-stage='mr_to_po']")
         page.wait_for_timeout(1500)
-        shot2 = os.path.join(BRAIN_DIR, "step2_mr_to_po_v3.png")
-        page.screenshot(path=shot2)
-        print(f"  -> Saved Step 2 screenshot: {shot2}")
+        page.screenshot(path=os.path.join(BRAIN_DIR, "v4_step2_po_detail.png"))
 
-        # 5. Step 3 (采购入库)
-        print("Testing Step 3: 采购入库 (单行表头)...")
+        page.click(".picker-view-btn[data-mode='doc']")
+        page.wait_for_timeout(1500)
+        page.screenshot(path=os.path.join(BRAIN_DIR, "v4_step2_po_doc.png"))
+
+        # 4. Step 3: 采购入库 (Detail & Doc Views)
+        print("Testing Step 3: 采购入库 (Detail & Doc Views)...")
         page.click(".picker-kpi-card[data-stage='po_to_pr']")
         page.wait_for_timeout(1500)
-        shot3 = os.path.join(BRAIN_DIR, "step3_po_to_pr_v3.png")
-        page.screenshot(path=shot3)
-        print(f"  -> Saved Step 3 screenshot: {shot3}")
+        page.screenshot(path=os.path.join(BRAIN_DIR, "v4_step3_pr_detail.png"))
 
-        # 6. Step 4 (采购开票)
-        print("Testing Step 4: 采购开票 (单行表头)...")
+        page.click(".picker-view-btn[data-mode='doc']")
+        page.wait_for_timeout(1500)
+        page.screenshot(path=os.path.join(BRAIN_DIR, "v4_step3_pr_doc.png"))
+
+        # 5. Step 4: 采购开票 (Detail & Doc Views)
+        print("Testing Step 4: 采购开票 (Detail & Doc Views)...")
         page.click(".picker-kpi-card[data-stage='pr_to_pi']")
         page.wait_for_timeout(1500)
-        shot4 = os.path.join(BRAIN_DIR, "step4_pr_to_pi_v3.png")
-        page.screenshot(path=shot4)
-        print(f"  -> Saved Step 4 screenshot: {shot4}")
+        page.screenshot(path=os.path.join(BRAIN_DIR, "v4_step4_pi_detail.png"))
 
-        # 7. Step 5 (报销付款)
-        print("Testing Step 5: 报销付款 (单行表头)...")
+        page.click(".picker-view-btn[data-mode='doc']")
+        page.wait_for_timeout(1500)
+        page.screenshot(path=os.path.join(BRAIN_DIR, "v4_step4_pi_doc.png"))
+
+        # 6. Step 5: 报销付款 (Detail & Doc Views)
+        print("Testing Step 5: 报销付款 (Detail & Doc Views)...")
         page.click(".picker-kpi-card[data-stage='pi_to_rr']")
         page.wait_for_timeout(1500)
-        shot5 = os.path.join(BRAIN_DIR, "step5_pi_to_rr_v3.png")
-        page.screenshot(path=shot5)
-        print(f"  -> Saved Step 5 screenshot: {shot5}")
+        page.screenshot(path=os.path.join(BRAIN_DIR, "v4_step5_rr_doc.png"))
+
+        page.click(".picker-view-btn[data-mode='detail']")
+        page.wait_for_timeout(1500)
+        page.screenshot(path=os.path.join(BRAIN_DIR, "v4_step5_rr_detail.png"))
 
         browser.close()
 
@@ -127,7 +136,7 @@ def main():
         for err in console_errors:
             print(f"  - {err}")
     else:
-        print("[SUCCESS] 0 Console Errors across all single-line headers, dual views & modal creation!")
+        print("[SUCCESS] 0 Console Errors across all 5 stages in both Detail and Doc views & smart calculation modal!")
 
 if __name__ == "__main__":
     main()
