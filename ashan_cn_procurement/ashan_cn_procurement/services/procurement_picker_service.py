@@ -607,6 +607,24 @@ def update_quick_material_request(
     }
 
 
+def parse_description_parts(desc: str | None, item_name: str | None = None) -> tuple[str, str]:
+    """Parse unified description format 'ItemName | 规格:Spec | Remarks' into (spec, remarks)."""
+    if not desc:
+        return "", ""
+    parts = [p.strip() for p in desc.split(" | ") if p.strip()]
+    spec = ""
+    remarks_parts = []
+    for p in parts:
+        if p.startswith("规格:"):
+            spec = p[3:].strip()
+        elif item_name and p == item_name:
+            continue
+        else:
+            remarks_parts.append(p)
+    remarks = " | ".join(remarks_parts)
+    return spec, remarks
+
+
 # =========================================================================
 # Step 2: Material Request (Item/Doc) -> Purchase Order (采购订货)
 # =========================================================================
@@ -687,6 +705,7 @@ def get_pending_material_request_items(
             mr.owner AS requested_by,
             mri.item_code,
             mri.item_name,
+            mri.description,
             mri.item_group,
             COALESCE(mri.uom, mri.stock_uom, '') AS uom,
             COALESCE(mri.qty, 0) AS qty,
@@ -728,6 +747,8 @@ def get_pending_material_request_items(
         tax_amount = flt(amount * (tax_rate / 100.0), 2)
         total_amount = flt(amount + tax_amount, 2)
 
+        spec, remarks = parse_description_parts(r.description, r.item_name)
+
         rows.append({
             "mri_name": r.mri_name,
             "mr_name": r.mr_name,
@@ -739,7 +760,9 @@ def get_pending_material_request_items(
             "requested_by": r.requested_by or "",
             "item_code": r.item_code,
             "item_name": r.item_name or r.item_code,
-            "spec": r.description or "",
+            "spec": spec,
+            "remarks": remarks,
+            "description": remarks,
             "item_group": r.item_group or "",
             "uom": r.uom or "",
             "qty": flt(r.qty, 2),
@@ -1446,7 +1469,12 @@ def make_purchase_receipts_from_po_items(
             this_qty = flt(db_row.pending_qty)
 
         target_wh = (warehouse_override or "").strip() or user_row.get("warehouse") or db_row.warehouse
-        if not target_wh:
+        if target_wh and not frappe.db.exists("Warehouse", target_wh):
+            matched_wh = frappe.db.get_value("Warehouse", {"company": row_company, "is_group": 0, "warehouse_name": ["like", f"%{target_wh}%"]}, "name")
+            if not matched_wh:
+                matched_wh = frappe.db.get_value("Warehouse", {"company": row_company, "is_group": 0, "name": ["like", f"%{target_wh}%"]}, "name")
+            target_wh = matched_wh
+        if not target_wh or not frappe.db.exists("Warehouse", target_wh):
             target_wh = frappe.db.get_value("Warehouse", {"company": row_company, "is_group": 0}, "name")
 
         supplier_groups[(row_company, db_row.supplier)].append({
@@ -1484,6 +1512,7 @@ def make_purchase_receipts_from_po_items(
 
         pr.flags.ignore_permissions = False
         pr.insert()
+        pr.submit()
 
         created_receipts.append({
             "name": pr.name,
@@ -1819,6 +1848,7 @@ def make_purchase_invoices_from_pr_items(
 
         pi.flags.ignore_permissions = False
         pi.insert()
+        pi.submit()
 
         created_invoices.append({
             "name": pi.name,
@@ -2138,13 +2168,14 @@ def make_reimbursement_from_invoices(
 
     rr.flags.ignore_permissions = False
     rr.insert()
+    rr.submit()
 
     return {
         "success": True,
         "reimbursement_name": rr.name,
         "company": target_company,
         "total_amount": flt(rr.get("total_amount") or sum(flt(c["row"]["amount"]) for c in candidates)),
-        "message": _("成功生成报销申请单草稿：{0}").format(rr.name),
+        "message": _("成功生成并正式发布报销申请单：{0}").format(rr.name),
     }
 
 

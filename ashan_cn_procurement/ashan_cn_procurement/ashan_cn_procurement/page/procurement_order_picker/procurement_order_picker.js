@@ -58,28 +58,28 @@ class ProcurementOrderPickerCenter {
                 id: "po_to_pr",
                 name: "采购入库",
                 banner_title: "当前：采购入库",
-                banner_desc: "勾选待收货明细或单号，录入本次到货数量与目的入库仓库，生成采购入库单草稿 (Purchase Receipt)。",
+                banner_desc: "勾选待收货订单明细，弹窗核对或调整实收数量与仓库，生成并正式发布采购入库单 (Purchase Receipt)。",
                 sub_label: "待收货订单明细",
                 icon: "📦",
-                btn_label: "⚡ 生成采购入库单草稿",
+                btn_label: "🚀 生成采购入库单",
             },
             pr_to_pi: {
                 id: "pr_to_pi",
                 name: "采购开票",
                 banner_title: "当前：采购开票",
-                banner_desc: "勾选已入库物料明细或单号，录入纸质/金税发票号码与日期，生成采购发票草稿 (Purchase Invoice)。",
+                banner_desc: "勾选已入库物料明细，弹窗录入发票号码、日期与税额，生成并正式发布采购发票 (Purchase Invoice)。",
                 sub_label: "待开票入库明细",
                 icon: "🧾",
-                btn_label: "⚡ 生成采购发票草稿",
+                btn_label: "🚀 生成采购发票",
             },
             pi_to_rr: {
                 id: "pi_to_rr",
                 name: "报销付款",
                 banner_title: "当前：报销付款",
-                banner_desc: "勾选待报销发票或明细，自动创建报销申请单并写入行级排他预占 (Reimbursement Request)。",
+                banner_desc: "勾选待报销发票明细，弹窗核对报销人与金额，生成并正式发布报销付款申请 (Reimbursement Request)。",
                 sub_label: "待报销付款发票",
                 icon: "💰",
-                btn_label: "⚡ 生成报销申请单草稿",
+                btn_label: "🚀 生成报销申请单",
             },
         };
 
@@ -724,6 +724,7 @@ class ProcurementOrderPickerCenter {
                     <th>金额</th>
                     <th>税额</th>
                     <th>含税总价</th>
+                    <th>备注</th>
                     <th>建议供应商</th>
                     <th>🔗 关联采购订单</th>
                 `;
@@ -966,6 +967,7 @@ class ProcurementOrderPickerCenter {
                         <td class="picker-money-cell cell-row-amt">${this.fmt_money(row_amt)}</td>
                         <td class="picker-money-cell">${this.fmt_money(row_tax)}</td>
                         <td class="picker-money-cell">${this.fmt_money(row_total)}</td>
+                        <td>${frappe.utils.escape_html(r.remarks || r.description || "-")}</td>
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
                         <td>${render_linked_badges(r.linked_po_names, "purchase-order")}</td>
                     `;
@@ -1120,7 +1122,7 @@ class ProcurementOrderPickerCenter {
                     <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
                     <td class="picker-money-cell">${this.fmt_money(total_amt * 0.13)}</td>
                     <td class="picker-money-cell">${this.fmt_money(total_amt * 1.13)}</td>
-                    <td colspan="2"></td>
+                    <td colspan="3"></td>
                 `;
             }
         } else if (stage === "po_to_pr") {
@@ -1825,81 +1827,11 @@ class ProcurementOrderPickerCenter {
         if (stage === "mr_to_po") {
             this.open_create_po_from_mr_dialog(selected_items, target_comp);
         } else if (stage === "po_to_pr") {
-            const wh_override = $("#picker-opt-warehouse").val();
-            const count_text = mode === "doc" ? `${selected_items.length} 张订单` : `${selected_items.length} 行订单明细`;
-            frappe.confirm(__("确定将选中的 {0} 生成采购入库单草稿吗？", [count_text]), async () => {
-                try {
-                    frappe.dom.freeze(__("正在生成采购入库单..."));
-                    const r = await frappe.call({
-                        method: "ashan_cn_procurement.services.procurement_picker_service.make_purchase_receipts_from_po_items",
-                        args: {
-                            company: target_comp,
-                            selected_items: selected_items,
-                            warehouse_override: wh_override,
-                        },
-                    });
-                    frappe.dom.unfreeze();
-                    if (r && r.message && r.message.success) {
-                        this.show_generation_success_dialog("采购入库单", r.message.receipts, "purchase-receipt");
-                        this.refresh_all();
-                    }
-                } catch (e) {
-                    frappe.dom.unfreeze();
-                    frappe.msgprint(e.message || __("生成采购入库单失败"));
-                }
-            });
+            this.open_create_pr_from_po_dialog(selected_items, target_comp);
         } else if (stage === "pr_to_pi") {
-            const bill_no = $("#picker-opt-bill-no").val();
-            const count_text = mode === "doc" ? `${selected_items.length} 张入库单` : `${selected_items.length} 行入库明细`;
-            frappe.confirm(__("确定将选中的 {0} 生成采购发票草稿吗？", [count_text]), async () => {
-                try {
-                    frappe.dom.freeze(__("正在生成采购发票..."));
-                    const r = await frappe.call({
-                        method: "ashan_cn_procurement.services.procurement_picker_service.make_purchase_invoices_from_pr_items",
-                        args: {
-                            company: target_comp,
-                            selected_items: selected_items,
-                            bill_no: bill_no,
-                        },
-                    });
-                    frappe.dom.unfreeze();
-                    if (r && r.message && r.message.success) {
-                        this.show_generation_success_dialog("采购发票", r.message.invoices, "purchase-invoice");
-                        this.refresh_all();
-                    }
-                } catch (e) {
-                    frappe.dom.unfreeze();
-                    frappe.msgprint(e.message || __("生成采购发票失败"));
-                }
-            });
+            this.open_create_pi_from_pr_dialog(selected_items, target_comp);
         } else if (stage === "pi_to_rr") {
-            const applicant = $("#picker-opt-applicant").val();
-            const inv_names = Array.from(new Set(selected_items.map((i) => i.pi_name).filter(Boolean)));
-            frappe.confirm(__("确定将选中的 {0} 张采购发票生成报销申请单草稿吗？", [inv_names.length]), async () => {
-                try {
-                    frappe.dom.freeze(__("正在生成报销申请..."));
-                    const r = await frappe.call({
-                        method: "ashan_cn_procurement.services.procurement_picker_service.make_reimbursement_from_invoices",
-                        args: {
-                            company: target_comp,
-                            selected_invoices: inv_names,
-                            applicant: applicant,
-                            purpose: `采购发票选单报销 (${inv_names.length}张)`,
-                        },
-                    });
-                    frappe.dom.unfreeze();
-                    if (r && r.message && r.message.success) {
-                        frappe.show_alert({
-                            message: __("成功生成报销申请单：{0}", [r.message.reimbursement_name]),
-                            indicator: "green",
-                        });
-                        frappe.set_route("reimbursement-request", r.message.reimbursement_name);
-                    }
-                } catch (e) {
-                    frappe.dom.unfreeze();
-                    frappe.msgprint(e.message || __("生成报销申请单失败"));
-                }
-            });
+            this.open_create_rr_from_pi_dialog(selected_items, target_comp);
         }
     }
 
@@ -3527,6 +3459,779 @@ class ProcurementOrderPickerCenter {
         $wrap.on("input change", ".modal-input-total-amount", function () {
             recalculate_and_sync_row($(this).closest("tr"), "total_amount", $wrap);
         });
+    }
+
+    open_create_pr_from_po_dialog(selected_items, target_comp) {
+        const self = this;
+        const wh_override = $("#picker-opt-warehouse").val() || "";
+        const default_supplier = selected_items[0].supplier || "";
+        const default_warehouse = wh_override || selected_items[0].warehouse || "";
+
+        let rows_data = selected_items.map((it) => {
+            const q = flt(it.this_qty || it.pending_qty || it.qty || 1.0);
+            const r = flt(it.rate || 0.0);
+            const a = Math.round(q * r * 100) / 100;
+            const tx_pct = flt(it.tax_rate) || 13.0;
+            const tx_amt = Math.round(a * (tx_pct / 100.0) * 100) / 100;
+            const tot = Math.round((a + tx_amt) * 100) / 100;
+            return {
+                poi_name: it.poi_name || it.name,
+                po_name: it.po_name || it.parent,
+                item_code: it.item_code || "",
+                item_name: it.item_name || "",
+                spec: it.spec || "",
+                qty: q,
+                rate: r,
+                amount: a,
+                tax_rate: tx_pct,
+                tax_amount: tx_amt,
+                total_amount: tot,
+                warehouse: it.warehouse || default_warehouse,
+                description: it.remarks || it.description || "",
+            };
+        });
+
+        const recalculate_row_state = (r) => {
+            const qty = flt(r.qty) || 0.0;
+            const rate = flt(r.rate) || 0.0;
+            r.amount = Math.round(qty * rate * 100) / 100;
+            const tax_pct = flt(r.tax_rate) || 0.0;
+            r.tax_amount = Math.round(r.amount * (tax_pct / 100.0) * 100) / 100;
+            r.total_amount = Math.round((r.amount + r.tax_amount) * 100) / 100;
+        };
+
+        const update_bottom_summary = ($wrapper) => {
+            let total_qty = 0;
+            let total_amt = 0;
+            let total_tax = 0;
+            let grand_total = 0;
+            $wrapper.find("#picker-modal-item-tbody tr").each(function () {
+                const q = flt($(this).find(".modal-input-qty").val()) || 0;
+                const a = flt($(this).find(".modal-input-amount").val()) || 0;
+                const tx = flt($(this).find(".modal-input-tax-amount").val()) || 0;
+                const tot = flt($(this).find(".modal-input-total-amount").val()) || 0;
+                total_qty += q;
+                total_amt += a;
+                total_tax += tx;
+                grand_total += tot;
+            });
+            $wrapper.find("#modal-sum-qty").text(total_qty.toFixed(2));
+            $wrapper.find("#modal-sum-amt").text(this.fmt_money(total_amt));
+            $wrapper.find("#modal-sum-tax").text(this.fmt_money(total_tax));
+            $wrapper.find("#modal-sum-total").text(this.fmt_money(grand_total));
+        };
+
+        const recalculate_and_sync_row = ($tr, field_changed, $wrapper) => {
+            const idx = parseInt($tr.attr("data-idx"));
+            const $qty = $tr.find(".modal-input-qty");
+            const $rate = $tr.find(".modal-input-rate");
+            const $amount = $tr.find(".modal-input-amount");
+            const $tax_rate = $tr.find(".modal-input-tax-rate");
+            const $tax_amount = $tr.find(".modal-input-tax-amount");
+            const $total_amount = $tr.find(".modal-input-total-amount");
+
+            let qty = flt($qty.val()) || 0.0;
+            let rate = flt($rate.val()) || 0.0;
+            let amount = flt($amount.val()) || 0.0;
+            let tax_rate = flt($tax_rate.val()) || 0.0;
+            let tax_amount = flt($tax_amount.val()) || 0.0;
+            let total_amount = flt($total_amount.val()) || 0.0;
+
+            if (field_changed === "qty" || field_changed === "rate") {
+                amount = Math.round(qty * rate * 100) / 100;
+                tax_amount = Math.round(amount * (tax_rate / 100.0) * 100) / 100;
+                total_amount = Math.round((amount + tax_amount) * 100) / 100;
+                $amount.val(amount.toFixed(2));
+                $tax_amount.val(tax_amount.toFixed(2));
+                $total_amount.val(total_amount.toFixed(2));
+            } else if (field_changed === "tax_rate") {
+                tax_amount = Math.round(amount * (tax_rate / 100.0) * 100) / 100;
+                total_amount = Math.round((amount + tax_amount) * 100) / 100;
+                $tax_amount.val(tax_amount.toFixed(2));
+                $total_amount.val(total_amount.toFixed(2));
+            } else if (field_changed === "amount") {
+                if (qty > 0) {
+                    rate = Math.round((amount / qty) * 10000) / 10000;
+                    $rate.val(rate);
+                }
+                tax_amount = Math.round(amount * (tax_rate / 100.0) * 100) / 100;
+                total_amount = Math.round((amount + tax_amount) * 100) / 100;
+                $tax_amount.val(tax_amount.toFixed(2));
+                $total_amount.val(total_amount.toFixed(2));
+            } else if (field_changed === "tax_amount") {
+                total_amount = Math.round((amount + tax_amount) * 100) / 100;
+                $total_amount.val(total_amount.toFixed(2));
+                if (amount > 0) {
+                    tax_rate = Math.round((tax_amount / amount) * 10000) / 100;
+                    $tax_rate.val(tax_rate);
+                }
+            } else if (field_changed === "total_amount") {
+                amount = Math.round((total_amount / (1 + tax_rate / 100.0)) * 100) / 100;
+                tax_amount = Math.round((total_amount - amount) * 100) / 100;
+                if (qty > 0) {
+                    rate = Math.round((amount / qty) * 10000) / 10000;
+                    $rate.val(rate);
+                }
+                $amount.val(amount.toFixed(2));
+                $tax_amount.val(tax_amount.toFixed(2));
+            }
+
+            if (rows_data[idx]) {
+                rows_data[idx].qty = qty;
+                rows_data[idx].rate = rate;
+                rows_data[idx].amount = amount;
+                rows_data[idx].tax_rate = tax_rate;
+                rows_data[idx].tax_amount = tax_amount;
+                rows_data[idx].total_amount = total_amount;
+            }
+
+            update_bottom_summary($wrapper);
+        };
+
+        const render_rows = (dialog) => {
+            const $wrapper = dialog.get_field("items_html").$wrapper;
+            const $tbody = $wrapper.find("#picker-modal-item-tbody");
+            $tbody.empty();
+
+            rows_data.forEach((r, idx) => {
+                recalculate_row_state(r);
+                const tr = `
+                    <tr data-idx="${idx}">
+                        <td class="picker-modal-cell-center">${idx + 1}</td>
+                        <td class="picker-suggest-wrapper">
+                            <input type="text" class="modal-input-code" placeholder="物料代码/搜索..." value="${frappe.utils.escape_html(r.item_code || '')}">
+                            <div class="picker-suggest-dropdown" id="suggest-dd-pr-create-${idx}"></div>
+                        </td>
+                        <td>
+                            <input type="text" class="modal-input-name" placeholder="物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
+                        </td>
+                        <td>
+                            <input type="text" class="modal-input-spec" placeholder="规格型号..." value="${frappe.utils.escape_html(r.spec || '')}">
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0.0001" class="modal-input-qty" value="${r.qty}">
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0" class="modal-input-rate" value="${r.rate}">
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0" class="modal-input-amount" value="${flt(r.amount).toFixed(2)}">
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0" max="100" class="modal-input-tax-rate" value="${r.tax_rate}">
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0" class="modal-input-tax-amount" value="${flt(r.tax_amount).toFixed(2)}">
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0" class="modal-input-total-amount" value="${flt(r.total_amount).toFixed(2)}">
+                        </td>
+                        <td>
+                            <input type="text" class="modal-input-remarks" placeholder="备注说明..." value="${frappe.utils.escape_html(r.description || '')}">
+                        </td>
+                        <td class="picker-modal-cell-center">
+                            <button class="picker-modal-del-btn" data-idx="${idx}">删除</button>
+                        </td>
+                    </tr>
+                `;
+                $tbody.append(tr);
+            });
+
+            update_bottom_summary($wrapper);
+        };
+
+        const d = new frappe.ui.Dialog({
+            title: __("📦 新建采购入库单 · 选单创建与明细核算"),
+            fields: [
+                {
+                    fieldtype: "Select",
+                    fieldname: "company",
+                    label: __("所属公司"),
+                    options: this.companies.join("\n"),
+                    default: target_comp,
+                    read_only: 1,
+                },
+                {
+                    fieldtype: "Link",
+                    options: "Supplier",
+                    fieldname: "supplier",
+                    label: __("供应商"),
+                    default: default_supplier,
+                    read_only: 1,
+                },
+                {
+                    fieldtype: "Link",
+                    options: "Warehouse",
+                    fieldname: "warehouse",
+                    label: __("入库仓库"),
+                    default: default_warehouse,
+                    reqd: 1,
+                },
+                {
+                    fieldtype: "Date",
+                    fieldname: "posting_date",
+                    label: __("过账日期"),
+                    default: frappe.datetime.get_today(),
+                    reqd: 1,
+                },
+                {
+                    fieldtype: "Section Break",
+                    label: __("入库物料明细与核算 (可确认实收数与金额)"),
+                },
+                {
+                    fieldtype: "HTML",
+                    fieldname: "items_html",
+                    options: `
+                        <div>
+                            <table class="picker-modal-item-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>物料代码</th>
+                                        <th>物料名称</th>
+                                        <th>规格</th>
+                                        <th>实收数量</th>
+                                        <th>参考单价</th>
+                                        <th>不含税金额</th>
+                                        <th>税率 %</th>
+                                        <th>税额</th>
+                                        <th>含税总价</th>
+                                        <th>备注</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="picker-modal-item-tbody"></tbody>
+                            </table>
+                            <button class="picker-modal-add-btn" id="picker-modal-add-row-btn">➕ 添加一行物料</button>
+
+                            <div class="picker-modal-summary-bar">
+                                <span>合计汇总:</span>
+                                <div class="picker-modal-summary-items">
+                                    <span>实收总数: <strong id="modal-sum-qty" class="picker-summary-highlight">0</strong></span>
+                                    <span>不含税金额: <strong id="modal-sum-amt" class="picker-summary-highlight">¥ 0.00</strong></span>
+                                    <span>税额: <strong id="modal-sum-tax" class="picker-summary-highlight">¥ 0.00</strong></span>
+                                    <span>含税总额: <strong id="modal-sum-total" class="picker-summary-highlight">¥ 0.00</strong></span>
+                                </div>
+                            </div>
+                        </div>
+                    `,
+                },
+            ],
+            primary_action_label: __("🚀 立即生成并正式提交入库单"),
+            primary_action: async () => {
+                const vals = d.get_values();
+                if (!vals) return;
+
+                const valid_items = rows_data.filter((r) => (r.item_code || "").trim().length > 0);
+                if (!valid_items.length) {
+                    frappe.msgprint(__("请至少保留一行有效的物料代码。"));
+                    return;
+                }
+
+                try {
+                    frappe.dom.freeze(__("正在生成采购入库单..."));
+                    const res = await frappe.call({
+                        method: "ashan_cn_procurement.services.procurement_picker_service.make_purchase_receipts_from_po_items",
+                        args: {
+                            company: target_comp,
+                            selected_items: valid_items,
+                            warehouse_override: vals.warehouse,
+                            posting_date: vals.posting_date,
+                        },
+                    });
+                    frappe.dom.unfreeze();
+                    if (res && res.message && res.message.success) {
+                        d.hide();
+                        self.show_generation_success_dialog("采购入库单", res.message.receipts, "purchase-receipt");
+                        self.refresh_all();
+                    }
+                } catch (e) {
+                    frappe.dom.unfreeze();
+                    frappe.msgprint(e.message || __("生成采购入库单失败"));
+                }
+            },
+        });
+
+        d.$wrapper.addClass("picker-create-mr-modal");
+        d.show();
+        render_rows(d);
+
+        const $wrap = d.get_field("items_html").$wrapper;
+
+        $wrap.on("click", "#picker-modal-add-row-btn", () => {
+            rows_data.push({ item_code: "", item_name: "", spec: "", qty: 1.0, rate: 0.0, amount: 0.0, tax_rate: 13.0, tax_amount: 0.0, total_amount: 0.0, description: "" });
+            render_rows(d);
+        });
+
+        $wrap.on("click", ".picker-modal-del-btn", function () {
+            const idx = parseInt($(this).attr("data-idx"));
+            rows_data.splice(idx, 1);
+            if (!rows_data.length) rows_data.push({ item_code: "", item_name: "", spec: "", qty: 1.0, rate: 0.0, amount: 0.0, tax_rate: 13.0, tax_amount: 0.0, total_amount: 0.0, description: "" });
+            render_rows(d);
+        });
+
+        $wrap.on("input change", ".modal-input-qty", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "qty", $wrap);
+        });
+        $wrap.on("input change", ".modal-input-rate", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "rate", $wrap);
+        });
+        $wrap.on("input change", ".modal-input-amount", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "amount", $wrap);
+        });
+        $wrap.on("input change", ".modal-input-tax-rate", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "tax_rate", $wrap);
+        });
+        $wrap.on("input change", ".modal-input-tax-amount", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "tax_amount", $wrap);
+        });
+        $wrap.on("input change", ".modal-input-total-amount", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "total_amount", $wrap);
+        });
+    }
+
+    open_create_pi_from_pr_dialog(selected_items, target_comp) {
+        const self = this;
+        const bill_no_val = $("#picker-opt-bill-no").val() || "";
+        const default_supplier = selected_items[0].supplier || "";
+
+        let rows_data = selected_items.map((it) => {
+            const q = flt(it.this_qty || it.pending_qty || it.qty || 1.0);
+            const r = flt(it.rate || 0.0);
+            const a = Math.round(q * r * 100) / 100;
+            const tx_pct = flt(it.tax_rate) || 13.0;
+            const tx_amt = Math.round(a * (tx_pct / 100.0) * 100) / 100;
+            const tot = Math.round((a + tx_amt) * 100) / 100;
+            return {
+                pri_name: it.pri_name || it.name,
+                pr_name: it.pr_name || it.parent,
+                item_code: it.item_code || "",
+                item_name: it.item_name || "",
+                spec: it.spec || "",
+                qty: q,
+                rate: r,
+                amount: a,
+                tax_rate: tx_pct,
+                tax_amount: tx_amt,
+                total_amount: tot,
+                description: it.remarks || it.description || "",
+            };
+        });
+
+        const recalculate_row_state = (r) => {
+            const qty = flt(r.qty) || 0.0;
+            const rate = flt(r.rate) || 0.0;
+            r.amount = Math.round(qty * rate * 100) / 100;
+            const tax_pct = flt(r.tax_rate) || 0.0;
+            r.tax_amount = Math.round(r.amount * (tax_pct / 100.0) * 100) / 100;
+            r.total_amount = Math.round((r.amount + r.tax_amount) * 100) / 100;
+        };
+
+        const update_bottom_summary = ($wrapper) => {
+            let total_qty = 0;
+            let total_amt = 0;
+            let total_tax = 0;
+            let grand_total = 0;
+            $wrapper.find("#picker-modal-item-tbody tr").each(function () {
+                const q = flt($(this).find(".modal-input-qty").val()) || 0;
+                const a = flt($(this).find(".modal-input-amount").val()) || 0;
+                const tx = flt($(this).find(".modal-input-tax-amount").val()) || 0;
+                const tot = flt($(this).find(".modal-input-total-amount").val()) || 0;
+                total_qty += q;
+                total_amt += a;
+                total_tax += tx;
+                grand_total += tot;
+            });
+            $wrapper.find("#modal-sum-qty").text(total_qty.toFixed(2));
+            $wrapper.find("#modal-sum-amt").text(this.fmt_money(total_amt));
+            $wrapper.find("#modal-sum-tax").text(this.fmt_money(total_tax));
+            $wrapper.find("#modal-sum-total").text(this.fmt_money(grand_total));
+        };
+
+        const recalculate_and_sync_row = ($tr, field_changed, $wrapper) => {
+            const idx = parseInt($tr.attr("data-idx"));
+            const $qty = $tr.find(".modal-input-qty");
+            const $rate = $tr.find(".modal-input-rate");
+            const $amount = $tr.find(".modal-input-amount");
+            const $tax_rate = $tr.find(".modal-input-tax-rate");
+            const $tax_amount = $tr.find(".modal-input-tax-amount");
+            const $total_amount = $tr.find(".modal-input-total-amount");
+
+            let qty = flt($qty.val()) || 0.0;
+            let rate = flt($rate.val()) || 0.0;
+            let amount = flt($amount.val()) || 0.0;
+            let tax_rate = flt($tax_rate.val()) || 0.0;
+            let tax_amount = flt($tax_amount.val()) || 0.0;
+            let total_amount = flt($total_amount.val()) || 0.0;
+
+            if (field_changed === "qty" || field_changed === "rate") {
+                amount = Math.round(qty * rate * 100) / 100;
+                tax_amount = Math.round(amount * (tax_rate / 100.0) * 100) / 100;
+                total_amount = Math.round((amount + tax_amount) * 100) / 100;
+                $amount.val(amount.toFixed(2));
+                $tax_amount.val(tax_amount.toFixed(2));
+                $total_amount.val(total_amount.toFixed(2));
+            } else if (field_changed === "tax_rate") {
+                tax_amount = Math.round(amount * (tax_rate / 100.0) * 100) / 100;
+                total_amount = Math.round((amount + tax_amount) * 100) / 100;
+                $tax_amount.val(tax_amount.toFixed(2));
+                $total_amount.val(total_amount.toFixed(2));
+            } else if (field_changed === "amount") {
+                if (qty > 0) {
+                    rate = Math.round((amount / qty) * 10000) / 10000;
+                    $rate.val(rate);
+                }
+                tax_amount = Math.round(amount * (tax_rate / 100.0) * 100) / 100;
+                total_amount = Math.round((amount + tax_amount) * 100) / 100;
+                $tax_amount.val(tax_amount.toFixed(2));
+                $total_amount.val(total_amount.toFixed(2));
+            } else if (field_changed === "tax_amount") {
+                total_amount = Math.round((amount + tax_amount) * 100) / 100;
+                $total_amount.val(total_amount.toFixed(2));
+                if (amount > 0) {
+                    tax_rate = Math.round((tax_amount / amount) * 10000) / 100;
+                    $tax_rate.val(tax_rate);
+                }
+            } else if (field_changed === "total_amount") {
+                amount = Math.round((total_amount / (1 + tax_rate / 100.0)) * 100) / 100;
+                tax_amount = Math.round((total_amount - amount) * 100) / 100;
+                if (qty > 0) {
+                    rate = Math.round((amount / qty) * 10000) / 10000;
+                    $rate.val(rate);
+                }
+                $amount.val(amount.toFixed(2));
+                $tax_amount.val(tax_amount.toFixed(2));
+            }
+
+            if (rows_data[idx]) {
+                rows_data[idx].qty = qty;
+                rows_data[idx].rate = rate;
+                rows_data[idx].amount = amount;
+                rows_data[idx].tax_rate = tax_rate;
+                rows_data[idx].tax_amount = tax_amount;
+                rows_data[idx].total_amount = total_amount;
+            }
+
+            update_bottom_summary($wrapper);
+        };
+
+        const render_rows = (dialog) => {
+            const $wrapper = dialog.get_field("items_html").$wrapper;
+            const $tbody = $wrapper.find("#picker-modal-item-tbody");
+            $tbody.empty();
+
+            rows_data.forEach((r, idx) => {
+                recalculate_row_state(r);
+                const tr = `
+                    <tr data-idx="${idx}">
+                        <td class="picker-modal-cell-center">${idx + 1}</td>
+                        <td class="picker-suggest-wrapper">
+                            <input type="text" class="modal-input-code" placeholder="物料代码/搜索..." value="${frappe.utils.escape_html(r.item_code || '')}">
+                            <div class="picker-suggest-dropdown" id="suggest-dd-pi-create-${idx}"></div>
+                        </td>
+                        <td>
+                            <input type="text" class="modal-input-name" placeholder="物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
+                        </td>
+                        <td>
+                            <input type="text" class="modal-input-spec" placeholder="规格型号..." value="${frappe.utils.escape_html(r.spec || '')}">
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0.0001" class="modal-input-qty" value="${r.qty}">
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0" class="modal-input-rate" value="${r.rate}">
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0" class="modal-input-amount" value="${flt(r.amount).toFixed(2)}">
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0" max="100" class="modal-input-tax-rate" value="${r.tax_rate}">
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0" class="modal-input-tax-amount" value="${flt(r.tax_amount).toFixed(2)}">
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0" class="modal-input-total-amount" value="${flt(r.total_amount).toFixed(2)}">
+                        </td>
+                        <td>
+                            <input type="text" class="modal-input-remarks" placeholder="备注说明..." value="${frappe.utils.escape_html(r.description || '')}">
+                        </td>
+                        <td class="picker-modal-cell-center">
+                            <button class="picker-modal-del-btn" data-idx="${idx}">删除</button>
+                        </td>
+                    </tr>
+                `;
+                $tbody.append(tr);
+            });
+
+            update_bottom_summary($wrapper);
+        };
+
+        const d = new frappe.ui.Dialog({
+            title: __("🧾 新建采购发票 · 选单创建与明细核算"),
+            fields: [
+                {
+                    fieldtype: "Select",
+                    fieldname: "company",
+                    label: __("所属公司"),
+                    options: this.companies.join("\n"),
+                    default: target_comp,
+                    read_only: 1,
+                },
+                {
+                    fieldtype: "Link",
+                    options: "Supplier",
+                    fieldname: "supplier",
+                    label: __("供应商"),
+                    default: default_supplier,
+                    read_only: 1,
+                },
+                {
+                    fieldtype: "Data",
+                    fieldname: "bill_no",
+                    label: __("发票号码 (纸质/金税发票)"),
+                    default: bill_no_val,
+                },
+                {
+                    fieldtype: "Date",
+                    fieldname: "bill_date",
+                    label: __("开票日期"),
+                    default: frappe.datetime.get_today(),
+                    reqd: 1,
+                },
+                {
+                    fieldtype: "Section Break",
+                    label: __("发票物料明细与税额核算 (可核对开票数量与税额)"),
+                },
+                {
+                    fieldtype: "HTML",
+                    fieldname: "items_html",
+                    options: `
+                        <div>
+                            <table class="picker-modal-item-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>物料代码</th>
+                                        <th>物料名称</th>
+                                        <th>规格</th>
+                                        <th>开票数量</th>
+                                        <th>单价</th>
+                                        <th>不含税金额</th>
+                                        <th>税率 %</th>
+                                        <th>税额</th>
+                                        <th>含税总价</th>
+                                        <th>备注</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="picker-modal-item-tbody"></tbody>
+                            </table>
+                            <button class="picker-modal-add-btn" id="picker-modal-add-row-btn">➕ 添加一行物料</button>
+
+                            <div class="picker-modal-summary-bar">
+                                <span>合计汇总:</span>
+                                <div class="picker-modal-summary-items">
+                                    <span>开票总数: <strong id="modal-sum-qty" class="picker-summary-highlight">0</strong></span>
+                                    <span>不含税金额: <strong id="modal-sum-amt" class="picker-summary-highlight">¥ 0.00</strong></span>
+                                    <span>税额: <strong id="modal-sum-tax" class="picker-summary-highlight">¥ 0.00</strong></span>
+                                    <span>含税总额: <strong id="modal-sum-total" class="picker-summary-highlight">¥ 0.00</strong></span>
+                                </div>
+                            </div>
+                        </div>
+                    `,
+                },
+            ],
+            primary_action_label: __("🚀 立即生成并正式提交采购发票"),
+            primary_action: async () => {
+                const vals = d.get_values();
+                if (!vals) return;
+
+                const valid_items = rows_data.filter((r) => (r.item_code || "").trim().length > 0);
+                if (!valid_items.length) {
+                    frappe.msgprint(__("请至少保留一行有效的物料代码。"));
+                    return;
+                }
+
+                try {
+                    frappe.dom.freeze(__("正在生成采购发票..."));
+                    const res = await frappe.call({
+                        method: "ashan_cn_procurement.services.procurement_picker_service.make_purchase_invoices_from_pr_items",
+                        args: {
+                            company: target_comp,
+                            selected_items: valid_items,
+                            bill_no: vals.bill_no,
+                            bill_date: vals.bill_date,
+                        },
+                    });
+                    frappe.dom.unfreeze();
+                    if (res && res.message && res.message.success) {
+                        d.hide();
+                        self.show_generation_success_dialog("采购发票", res.message.invoices, "purchase-invoice");
+                        self.refresh_all();
+                    }
+                } catch (e) {
+                    frappe.dom.unfreeze();
+                    frappe.msgprint(e.message || __("生成采购发票失败"));
+                }
+            },
+        });
+
+        d.$wrapper.addClass("picker-create-mr-modal");
+        d.show();
+        render_rows(d);
+
+        const $wrap = d.get_field("items_html").$wrapper;
+
+        $wrap.on("click", "#picker-modal-add-row-btn", () => {
+            rows_data.push({ item_code: "", item_name: "", spec: "", qty: 1.0, rate: 0.0, amount: 0.0, tax_rate: 13.0, tax_amount: 0.0, total_amount: 0.0, description: "" });
+            render_rows(d);
+        });
+
+        $wrap.on("click", ".picker-modal-del-btn", function () {
+            const idx = parseInt($(this).attr("data-idx"));
+            rows_data.splice(idx, 1);
+            if (!rows_data.length) rows_data.push({ item_code: "", item_name: "", spec: "", qty: 1.0, rate: 0.0, amount: 0.0, tax_rate: 13.0, tax_amount: 0.0, total_amount: 0.0, description: "" });
+            render_rows(d);
+        });
+
+        $wrap.on("input change", ".modal-input-qty", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "qty", $wrap);
+        });
+        $wrap.on("input change", ".modal-input-rate", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "rate", $wrap);
+        });
+        $wrap.on("input change", ".modal-input-amount", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "amount", $wrap);
+        });
+        $wrap.on("input change", ".modal-input-tax-rate", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "tax_rate", $wrap);
+        });
+        $wrap.on("input change", ".modal-input-tax-amount", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "tax_amount", $wrap);
+        });
+        $wrap.on("input change", ".modal-input-total-amount", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "total_amount", $wrap);
+        });
+    }
+
+    open_create_rr_from_pi_dialog(selected_items, target_comp) {
+        const self = this;
+        const applicant_val = $("#picker-opt-applicant").val() || "";
+        const inv_names = Array.from(new Set(selected_items.map((i) => i.pi_name).filter(Boolean)));
+
+        let rows_html = selected_items.map((it, idx) => `
+            <tr>
+                <td class="picker-modal-cell-center">${idx + 1}</td>
+                <td><strong>${frappe.utils.escape_html(it.pi_name)}</strong></td>
+                <td>${frappe.utils.escape_html(it.supplier || "-")}</td>
+                <td>${it.bill_date || it.posting_date || "-"}</td>
+                <td class="picker-money-cell">${this.fmt_money(it.grand_total)}</td>
+                <td class="picker-money-cell">${this.fmt_money(it.net_available_amount || it.outstanding_amount)}</td>
+                <td class="picker-money-cell cell-row-amt"><strong>${this.fmt_money(it.this_amount || it.net_available_amount || it.outstanding_amount)}</strong></td>
+            </tr>
+        `).join("");
+
+        const total_claim = selected_items.reduce((s, it) => s + flt(it.this_amount || it.net_available_amount || it.outstanding_amount), 0);
+
+        const d = new frappe.ui.Dialog({
+            title: __("💰 新建报销付款申请 · 选单创建与明细核算"),
+            fields: [
+                {
+                    fieldtype: "Select",
+                    fieldname: "company",
+                    label: __("所属公司"),
+                    options: this.companies.join("\n"),
+                    default: target_comp,
+                    read_only: 1,
+                },
+                {
+                    fieldtype: "Link",
+                    options: "Employee",
+                    fieldname: "applicant",
+                    label: __("报销申请人"),
+                    default: applicant_val,
+                },
+                {
+                    fieldtype: "Data",
+                    fieldname: "purpose",
+                    label: __("报销事由"),
+                    default: `采购发票报销结算 (${inv_names.length}张发票)`,
+                    reqd: 1,
+                },
+                {
+                    fieldtype: "Date",
+                    fieldname: "posting_date",
+                    label: __("申请日期"),
+                    default: frappe.datetime.get_today(),
+                    reqd: 1,
+                },
+                {
+                    fieldtype: "Section Break",
+                    label: __("关联采购发票明细清单"),
+                },
+                {
+                    fieldtype: "HTML",
+                    fieldname: "invoices_html",
+                    options: `
+                        <div>
+                            <table class="picker-modal-item-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>发票单号</th>
+                                        <th>供应商</th>
+                                        <th>开票/过账日期</th>
+                                        <th>发票总额</th>
+                                        <th>未付金额</th>
+                                        <th>本次报销金额</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${rows_html}</tbody>
+                            </table>
+
+                            <div class="picker-modal-summary-bar">
+                                <span>合计汇总:</span>
+                                <div class="picker-modal-summary-items">
+                                    <span>发票总数: <strong class="picker-summary-highlight">${inv_names.length} 张</strong></span>
+                                    <span>报销总额: <strong class="picker-summary-highlight">${this.fmt_money(total_claim)}</strong></span>
+                                </div>
+                            </div>
+                        </div>
+                    `,
+                },
+            ],
+            primary_action_label: __("🚀 立即生成并正式提交报销申请"),
+            primary_action: async () => {
+                const vals = d.get_values();
+                if (!vals) return;
+
+                try {
+                    frappe.dom.freeze(__("正在生成报销申请..."));
+                    const res = await frappe.call({
+                        method: "ashan_cn_procurement.services.procurement_picker_service.make_reimbursement_from_invoices",
+                        args: {
+                            company: target_comp,
+                            selected_invoices: inv_names,
+                            applicant: vals.applicant,
+                            purpose: vals.purpose,
+                        },
+                    });
+                    frappe.dom.unfreeze();
+                    if (res && res.message && res.message.success) {
+                        d.hide();
+                        self.show_generation_success_dialog("报销申请单", [{ name: res.message.reimbursement_name, company: target_comp, grand_total: res.message.total_amount, item_count: inv_names.length }], "reimbursement-request");
+                        self.refresh_all();
+                    }
+                } catch (e) {
+                    frappe.dom.unfreeze();
+                    frappe.msgprint(e.message || __("生成报销申请单失败"));
+                }
+            },
+        });
+
+        d.$wrapper.addClass("picker-create-mr-modal");
+        d.show();
     }
 
     async handle_document_deletion(doctype, name, parent_dialog) {
