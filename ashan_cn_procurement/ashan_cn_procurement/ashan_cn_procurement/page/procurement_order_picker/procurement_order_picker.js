@@ -1602,19 +1602,6 @@ class ProcurementOrderPickerCenter {
                         </div>
                     `;
 
-                    // Check available space below input to avoid bottom overflow cut-off
-                    const input_el = $input[0];
-                    if (input_el) {
-                        const rect = input_el.getBoundingClientRect();
-                        const modal_el = $wrap.closest(".modal-body")[0];
-                        const bottom_limit = modal_el ? modal_el.getBoundingClientRect().bottom : window.innerHeight;
-                        if (bottom_limit - rect.bottom < 240) {
-                            $dd.addClass("drop-up");
-                        } else {
-                            $dd.removeClass("drop-up");
-                        }
-                    }
-
                     $dd.html(dd_html).addClass("is-open");
                 } catch (err) {
                     console.error("Autocomplete search error", err);
@@ -2332,19 +2319,6 @@ class ProcurementOrderPickerCenter {
                             <span>新建物料 (Create Item)</span>
                         </div>
                     `;
-
-                    // Check available space below input to avoid bottom overflow cut-off
-                    const input_el = $input[0];
-                    if (input_el) {
-                        const rect = input_el.getBoundingClientRect();
-                        const modal_el = $wrap.closest(".modal-body")[0];
-                        const bottom_limit = modal_el ? modal_el.getBoundingClientRect().bottom : window.innerHeight;
-                        if (bottom_limit - rect.bottom < 240) {
-                            $dd.addClass("drop-up");
-                        } else {
-                            $dd.removeClass("drop-up");
-                        }
-                    }
 
                     $dd.html(dd_html).addClass("is-open");
                 } catch (err) {
