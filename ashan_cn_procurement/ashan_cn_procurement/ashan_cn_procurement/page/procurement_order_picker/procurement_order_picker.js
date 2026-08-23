@@ -14,6 +14,7 @@ class ProcurementOrderPickerCenter {
     constructor(page) {
         this.page = page;
         this.active_stage = "item_to_mr"; // item_to_mr, mr_to_po, po_to_pr, pr_to_pi, pi_to_rr
+        this.mr_view_mode = "detail"; // "detail" | "doc" (for Step 1)
         this.active_company = "All"; // "All" or specific company name
         this.companies = [];
         this.locked_company = null; // Dynamically set when first row is checked in "All" mode
@@ -21,7 +22,7 @@ class ProcurementOrderPickerCenter {
         this.table_data = [];
         this.selected_map = new Map(); // key -> row object
         this.filters = {
-            item_to_mr: { item_code: "", item_group: "", supplier: "" },
+            item_to_mr: { mr_name: "", item_code: "", item_group: "", department: "", supplier: "" },
             mr_to_po: { supplier: "", department: "", item_code: "", from_date: "", to_date: "" },
             po_to_pr: { supplier: "", warehouse: "", po_name: "", item_code: "" },
             pr_to_pi: { supplier: "", pr_name: "", item_code: "" },
@@ -32,16 +33,16 @@ class ProcurementOrderPickerCenter {
             item_to_mr: {
                 id: "item_to_mr",
                 name: "采购申请",
-                banner_title: "当前：采购申请 (从物料主数据提报采购需求)",
-                banner_desc: "勾选物料明细，行内录入本次申请数量，一键下推生成采购申请单草稿 (Material Request)。",
-                sub_label: "可提报物料主数据",
+                banner_title: "当前：采购申请",
+                banner_desc: "查看与管理已提报的采购申请明细及单据。如需修改请点击申请单号进入单据修改，或点击【+ 新建物料申请单】快速录入。",
+                sub_label: "采购申请单据",
                 icon: "📋",
-                btn_label: "⚡ 生成采购申请草稿",
+                btn_label: "",
             },
             mr_to_po: {
                 id: "mr_to_po",
                 name: "采购订货",
-                banner_title: "当前：采购订货 (从采购需求选单下达订单)",
+                banner_title: "当前：采购订货",
                 banner_desc: "勾选待订需求明细，系统自动按建议供应商智能拆单合并生成采购订单草稿 (Purchase Order)。",
                 sub_label: "待订货需求明细",
                 icon: "🛒",
@@ -50,7 +51,7 @@ class ProcurementOrderPickerCenter {
             po_to_pr: {
                 id: "po_to_pr",
                 name: "采购入库",
-                banner_title: "当前：采购入库 (从采购订单选单收货入库)",
+                banner_title: "当前：采购入库",
                 banner_desc: "勾选待收货明细，录入本次到货数量与目的入库仓库，生成采购入库单草稿 (Purchase Receipt)。",
                 sub_label: "待收货订单明细",
                 icon: "📦",
@@ -59,7 +60,7 @@ class ProcurementOrderPickerCenter {
             pr_to_pi: {
                 id: "pr_to_pi",
                 name: "采购开票",
-                banner_title: "当前：采购开票 (从采购入库选单开票结算)",
+                banner_title: "当前：采购开票",
                 banner_desc: "勾选已入库物料明细，录入纸质/金税发票号码与日期，生成采购发票草稿 (Purchase Invoice)。",
                 sub_label: "待开票入库明细",
                 icon: "🧾",
@@ -68,7 +69,7 @@ class ProcurementOrderPickerCenter {
             pi_to_rr: {
                 id: "pi_to_rr",
                 name: "报销付款",
-                banner_title: "当前：报销付款 (从采购发票选单报销/付款)",
+                banner_title: "当前：报销付款",
                 banner_desc: "勾选待报销发票，自动创建报销申请单并写入行级排他预占 (Reimbursement Request)。",
                 sub_label: "待报销付款发票",
                 icon: "💰",
@@ -116,7 +117,7 @@ class ProcurementOrderPickerCenter {
                 <!-- 5-Step KPI Cards Grid (Master Navigation) -->
                 <div class="picker-kpi-grid" id="picker-kpi-grid"></div>
 
-                <!-- Section Context Banner (Replaces redundant Tab Bar) -->
+                <!-- Section Context Banner -->
                 <div class="picker-section-banner" id="picker-section-banner"></div>
 
                 <!-- Dynamic Filter Bar -->
@@ -199,6 +200,24 @@ class ProcurementOrderPickerCenter {
             }
         });
 
+        // Step 1 View Mode Switcher (明细视图 vs 单号视图)
+        $(this.page.body).on("click", ".picker-view-btn", function () {
+            const mode = $(this).attr("data-mode");
+            if (mode && self.mr_view_mode !== mode) {
+                self.mr_view_mode = mode;
+                $(".picker-view-btn").removeClass("active");
+                $(this).addClass("active");
+                self.selected_map.clear();
+                self.locked_company = null;
+                self.load_table_data();
+            }
+        });
+
+        // Quick Create Material Request Button
+        $(this.page.body).on("click", "#picker-create-mr-btn", function () {
+            self.open_create_mr_dialog();
+        });
+
         // Dual Scrollbar Sync
         const $top_scroll = $("#picker-top-scrollbar");
         const $table_scroll = $("#picker-main-table-scroll");
@@ -242,7 +261,7 @@ class ProcurementOrderPickerCenter {
                 }
 
                 const $tr = $(this).closest("tr");
-                const input_qty = flt($tr.find(".picker-input-qty").val()) || row.pending_qty || row.this_qty || 1;
+                const input_qty = flt($tr.find(".picker-input-qty").val()) || row.pending_qty || row.qty || 1;
                 row.this_qty = input_qty;
                 self.selected_map.set(key, row);
                 $tr.addClass("row-selected");
@@ -261,7 +280,7 @@ class ProcurementOrderPickerCenter {
             self.update_action_summary();
         });
 
-        // Row Qty Input Change
+        // Row Qty Input Change (Only in stages 2..4)
         $(this.page.body).on("input change", ".picker-input-qty", function () {
             const $tr = $(this).closest("tr");
             const key = $tr.attr("data-key");
@@ -377,7 +396,7 @@ class ProcurementOrderPickerCenter {
                 </div>
             </div>
             <div class="picker-section-badge">
-                待办统计: ${data.count || 0} 笔
+                统计: ${data.count || 0} 笔
             </div>
         `;
         $container.html(html);
@@ -392,16 +411,16 @@ class ProcurementOrderPickerCenter {
         if (stage === "item_to_mr") {
             filters_html = `
                 <div class="picker-filter-group">
+                    <label>申请单号:</label>
+                    <input type="text" class="picker-filter-input" data-filter="mr_name" placeholder="搜索单号..." value="${this.filters[stage].mr_name || ''}">
+                </div>
+                <div class="picker-filter-group">
                     <label>物料编码/名称:</label>
-                    <input type="text" class="picker-filter-input" data-filter="item_code" placeholder="搜索物料..." value="${this.filters[stage].item_code || ''}">
+                    <input type="text" class="picker-filter-input" data-filter="item_code" placeholder="物料代码/名称..." value="${this.filters[stage].item_code || ''}">
                 </div>
                 <div class="picker-filter-group">
-                    <label>物料分组:</label>
-                    <input type="text" class="picker-filter-input" data-filter="item_group" placeholder="物料分类..." value="${this.filters[stage].item_group || ''}">
-                </div>
-                <div class="picker-filter-group">
-                    <label>供应商:</label>
-                    <input type="text" class="picker-filter-input" data-filter="supplier" placeholder="供应商..." value="${this.filters[stage].supplier || ''}">
+                    <label>需求部门:</label>
+                    <input type="text" class="picker-filter-input" data-filter="department" placeholder="部门..." value="${this.filters[stage].department || ''}">
                 </div>
             `;
         } else if (stage === "mr_to_po") {
@@ -498,7 +517,9 @@ class ProcurementOrderPickerCenter {
         const stage = this.active_stage;
         let method = "";
         if (stage === "item_to_mr") {
-            method = "ashan_cn_procurement.services.procurement_picker_service.get_item_master_picker_rows";
+            method = this.mr_view_mode === "doc"
+                ? "ashan_cn_procurement.services.procurement_picker_service.get_material_request_doc_rows"
+                : "ashan_cn_procurement.services.procurement_picker_service.get_material_request_picker_rows";
         } else if (stage === "mr_to_po") {
             method = "ashan_cn_procurement.services.procurement_picker_service.get_pending_material_request_items";
         } else if (stage === "po_to_pr") {
@@ -531,7 +552,9 @@ class ProcurementOrderPickerCenter {
     }
 
     get_row_key(row) {
-        if (this.active_stage === "item_to_mr") return `${row.item_code}::${row.company}`;
+        if (this.active_stage === "item_to_mr") {
+            return this.mr_view_mode === "doc" ? row.mr_name : row.mri_name;
+        }
         if (this.active_stage === "mr_to_po") return row.mri_name;
         if (this.active_stage === "po_to_pr") return row.poi_name;
         if (this.active_stage === "pr_to_pi") return row.pri_name;
@@ -549,82 +572,95 @@ class ProcurementOrderPickerCenter {
     render_table_header() {
         const stage = this.active_stage;
         let ths = `
-            <th class="picker-col-sticky-1"><span class="picker-th-badge">序号</span><span class="picker-th-title">#</span></th>
-            <th class="picker-col-sticky-2"><span class="picker-th-badge">选择</span><span class="picker-th-title">勾选</span></th>
+            <th class="picker-col-sticky-1">#</th>
+            <th class="picker-col-sticky-2">勾选</th>
         `;
 
         if (this.active_company === "All") {
-            ths += `<th class="picker-col-sticky-3"><span class="picker-th-badge">主体</span><span class="picker-th-title">所属公司</span></th>`;
+            ths += `<th class="picker-col-sticky-3">所属公司</th>`;
         }
 
         if (stage === "item_to_mr") {
-            ths += `
-                <th><span class="picker-th-badge">物料编码</span><span class="picker-th-title">物料代码</span></th>
-                <th><span class="picker-th-badge">物料名称/规格</span><span class="picker-th-title">物料描述</span></th>
-                <th><span class="picker-th-badge">分类</span><span class="picker-th-title">物料分组</span></th>
-                <th><span class="picker-th-badge">单位</span><span class="picker-th-title">单位</span></th>
-                <th><span class="picker-th-badge">结存</span><span class="picker-th-title">当前库存</span></th>
-                <th><span class="picker-th-badge">申请数</span><span class="picker-th-title">本次申请</span></th>
-                <th><span class="picker-th-badge">建议供应商</span><span class="picker-th-title">默认供应商</span></th>
-                <th><span class="picker-th-badge">参考单价</span><span class="picker-th-title">标准进价</span></th>
-            `;
+            if (this.mr_view_mode === "doc") {
+                ths += `
+                    <th>申请单号</th>
+                    <th>申请日期</th>
+                    <th>需求部门</th>
+                    <th>物料项数</th>
+                    <th>申请总数</th>
+                    <th>单据状态</th>
+                    <th>制单人</th>
+                `;
+            } else {
+                ths += `
+                    <th>申请单号</th>
+                    <th>物料代码</th>
+                    <th>物料名称/规格</th>
+                    <th>物料分组</th>
+                    <th>单位</th>
+                    <th>当前库存</th>
+                    <th>申请数</th>
+                    <th>建议供应商</th>
+                    <th>参考单价</th>
+                `;
+            }
         } else if (stage === "mr_to_po") {
             ths += `
-                <th><span class="picker-th-badge">申请单号</span><span class="picker-th-title">采购需求单</span></th>
-                <th><span class="picker-th-badge">需求交期</span><span class="picker-th-title">期望到货</span></th>
-                <th><span class="picker-th-badge">部门/申请人</span><span class="picker-th-title">需求部门</span></th>
-                <th><span class="picker-th-badge">物料编码</span><span class="picker-th-title">物料代码</span></th>
-                <th><span class="picker-th-badge">物料名称/规格</span><span class="picker-th-title">名称规格</span></th>
-                <th><span class="picker-th-badge">单位</span><span class="picker-th-title">单位</span></th>
-                <th><span class="picker-th-badge">申请数</span><span class="picker-th-title">总数量</span></th>
-                <th><span class="picker-th-badge">已订数</span><span class="picker-th-title">已订</span></th>
-                <th><span class="picker-th-badge">待订数</span><span class="picker-th-title">未订数量</span></th>
-                <th><span class="picker-th-badge">本次订购</span><span class="picker-th-title">本次下单数</span></th>
-                <th><span class="picker-th-badge">参考单价</span><span class="picker-th-title">单价</span></th>
-                <th><span class="picker-th-badge">预估金额</span><span class="picker-th-title">金额</span></th>
-                <th><span class="picker-th-badge">建议供应商</span><span class="picker-th-title">供应商</span></th>
+                <th>采购申请单号</th>
+                <th>期望到货日</th>
+                <th>需求部门</th>
+                <th>物料代码</th>
+                <th>物料名称/规格</th>
+                <th>单位</th>
+                <th>申请总数</th>
+                <th>已订数</th>
+                <th>未订数量</th>
+                <th>本次下单数</th>
+                <th>参考单价</th>
+                <th>预估金额</th>
+                <th>建议供应商</th>
             `;
         } else if (stage === "po_to_pr") {
             ths += `
-                <th><span class="picker-th-badge">供应商</span><span class="picker-th-title">供应商</span></th>
-                <th><span class="picker-th-badge">采购订单</span><span class="picker-th-title">订单单号</span></th>
-                <th><span class="picker-th-badge">下单日期</span><span class="picker-th-title">订单日期</span></th>
-                <th><span class="picker-th-badge">交期状态</span><span class="picker-th-title">承诺交期</span></th>
-                <th><span class="picker-th-badge">物料编码/名称</span><span class="picker-th-title">物料描述</span></th>
-                <th><span class="picker-th-badge">目的仓库</span><span class="picker-th-title">默认仓库</span></th>
-                <th><span class="picker-th-badge">订单数量</span><span class="picker-th-title">订购总数</span></th>
-                <th><span class="picker-th-badge">已收数量</span><span class="picker-th-title">已收</span></th>
-                <th><span class="picker-th-badge">待收数量</span><span class="picker-th-title">未收数量</span></th>
-                <th><span class="picker-th-badge">本次实收</span><span class="picker-th-title">本次到货数</span></th>
-                <th><span class="picker-th-badge">单价</span><span class="picker-th-title">采购单价</span></th>
-                <th><span class="picker-th-badge">待收金额</span><span class="picker-th-title">未收金额</span></th>
+                <th>供应商</th>
+                <th>采购订单号</th>
+                <th>订单日期</th>
+                <th>承诺交期</th>
+                <th>物料代码/名称</th>
+                <th>收货仓库</th>
+                <th>订购总数</th>
+                <th>已收数</th>
+                <th>未收数量</th>
+                <th>本次实收数</th>
+                <th>采购单价</th>
+                <th>待收金额</th>
             `;
         } else if (stage === "pr_to_pi") {
             ths += `
-                <th><span class="picker-th-badge">供应商</span><span class="picker-th-title">供应商</span></th>
-                <th><span class="picker-th-badge">采购入库单</span><span class="picker-th-title">入库单号</span></th>
-                <th><span class="picker-th-badge">入库日期</span><span class="picker-th-title">过账日期</span></th>
-                <th><span class="picker-th-badge">物料编码/名称</span><span class="picker-th-title">物料描述</span></th>
-                <th><span class="picker-th-badge">单位</span><span class="picker-th-title">单位</span></th>
-                <th><span class="picker-th-badge">入库数</span><span class="picker-th-title">实收总数</span></th>
-                <th><span class="picker-th-badge">已开票数</span><span class="picker-th-title">已结数</span></th>
-                <th><span class="picker-th-badge">待开票数</span><span class="picker-th-title">未结数量</span></th>
-                <th><span class="picker-th-badge">本次开票</span><span class="picker-th-title">本次结算数</span></th>
-                <th><span class="picker-th-badge">单价</span><span class="picker-th-title">入库单价</span></th>
-                <th><span class="picker-th-badge">待开票金额</span><span class="picker-th-title">待结金额</span></th>
-                <th><span class="picker-th-badge">关联订单</span><span class="picker-th-title">源采购订单</span></th>
+                <th>供应商</th>
+                <th>采购入库单号</th>
+                <th>过账日期</th>
+                <th>物料代码/名称</th>
+                <th>单位</th>
+                <th>实收总数</th>
+                <th>已开票数</th>
+                <th>未结数量</th>
+                <th>本次开票数</th>
+                <th>入库单价</th>
+                <th>待开票金额</th>
+                <th>关联订单</th>
             `;
         } else if (stage === "pi_to_rr") {
             ths += `
-                <th><span class="picker-th-badge">发票单号</span><span class="picker-th-title">ERP发票号</span></th>
-                <th><span class="picker-th-badge">供应商/销售方</span><span class="picker-th-title">供应商</span></th>
-                <th><span class="picker-th-badge">纸质/金税发票号</span><span class="picker-th-title">发票号码</span></th>
-                <th><span class="picker-th-badge">发票类型</span><span class="picker-th-title">票据类别</span></th>
-                <th><span class="picker-th-badge">开票日期</span><span class="picker-th-title">开票日期</span></th>
-                <th><span class="picker-th-badge">经办人</span><span class="picker-th-title">录单人</span></th>
-                <th><span class="picker-th-badge">发票总额</span><span class="picker-th-title">含税总额</span></th>
-                <th><span class="picker-th-badge">已付/已报额</span><span class="picker-th-title">已核销</span></th>
-                <th><span class="picker-th-badge">待报销余额</span><span class="picker-th-title">可报销应付</span></th>
+                <th>采购发票号</th>
+                <th>供应商</th>
+                <th>发票代码/号码</th>
+                <th>票据类型</th>
+                <th>开票日期</th>
+                <th>录单人</th>
+                <th>发票总额</th>
+                <th>已付金额</th>
+                <th>待报销余额</th>
             `;
         }
 
@@ -677,18 +713,29 @@ class ProcurementOrderPickerCenter {
             }
 
             if (stage === "item_to_mr") {
-                tr_html += `
-                    <td><strong>${frappe.utils.escape_html(r.item_code)}</strong></td>
-                    <td>${frappe.utils.escape_html(r.item_name || r.item_code)}</td>
-                    <td>${frappe.utils.escape_html(r.item_group || "")}</td>
-                    <td>${frappe.utils.escape_html(r.uom || "")}</td>
-                    <td class="picker-qty-cell">${r.current_stock || 0}</td>
-                    <td>
-                        <input type="number" class="picker-input-qty" step="1" min="1" value="${r.this_qty || 1}">
-                    </td>
-                    <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
-                    <td class="picker-money-cell">${this.fmt_money(r.rate)}</td>
-                `;
+                if (this.mr_view_mode === "doc") {
+                    tr_html += `
+                        <td><a href="/desk/material-request/${r.mr_name}">${frappe.utils.escape_html(r.mr_name)}</a></td>
+                        <td>${r.transaction_date || "-"}</td>
+                        <td>${frappe.utils.escape_html(r.department || "-")}</td>
+                        <td class="picker-qty-cell">${r.item_count || 0}</td>
+                        <td class="picker-qty-cell"><strong>${flt(r.total_qty).toFixed(2)}</strong></td>
+                        <td><span class="ashan-status-badge ashan-status-blue">${frappe.utils.escape_html(r.status || "Draft")}</span></td>
+                        <td>${frappe.utils.escape_html(r.owner || "-")}</td>
+                    `;
+                } else {
+                    tr_html += `
+                        <td><a href="/desk/material-request/${r.mr_name}">${frappe.utils.escape_html(r.mr_name)}</a></td>
+                        <td><strong>${frappe.utils.escape_html(r.item_code)}</strong></td>
+                        <td>${frappe.utils.escape_html(r.item_name || r.item_code)}</td>
+                        <td>${frappe.utils.escape_html(r.item_group || "")}</td>
+                        <td>${frappe.utils.escape_html(r.uom || "")}</td>
+                        <td class="picker-qty-cell">${r.current_stock || 0}</td>
+                        <td class="picker-qty-cell"><strong>${r.qty}</strong></td>
+                        <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
+                        <td class="picker-money-cell">${this.fmt_money(r.rate)}</td>
+                    `;
+                }
             } else if (stage === "mr_to_po") {
                 const urgent_tag = r.is_overdue ? `<span class="picker-badge-urgent">逾期</span>` : (r.is_urgent ? `<span class="picker-badge-urgent">紧急</span>` : "");
                 tr_html += `
@@ -769,7 +816,7 @@ class ProcurementOrderPickerCenter {
 
         this.table_data.forEach((r) => {
             if (this.locked_company && r.company !== this.locked_company) return;
-            total_qty += flt(r.pending_qty || r.qty || 0);
+            total_qty += flt(r.pending_qty || r.qty || r.total_qty || 0);
             total_amt += flt(r.estimated_amount || r.pending_amount || r.net_available_amount || 0);
         });
 
@@ -782,10 +829,14 @@ class ProcurementOrderPickerCenter {
         `;
 
         if (stage === "item_to_mr") {
-            foot_html += `<td colspan="8"></td>`;
+            if (this.mr_view_mode === "doc") {
+                foot_html += `<td colspan="3"></td><td class="picker-qty-cell">${total_qty.toFixed(2)}</td><td colspan="2"></td>`;
+            } else {
+                foot_html += `<td colspan="5"></td><td class="picker-qty-cell">${total_qty.toFixed(2)}</td><td colspan="2"></td>`;
+            }
         } else if (stage === "mr_to_po") {
             foot_html += `
-                <td colspan="6"></td>
+                <td colspan="5"></td>
                 <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
                 <td colspan="2"></td>
                 <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
@@ -793,14 +844,14 @@ class ProcurementOrderPickerCenter {
             `;
         } else if (stage === "po_to_pr") {
             foot_html += `
-                <td colspan="6"></td>
+                <td colspan="5"></td>
                 <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
                 <td colspan="2"></td>
                 <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
             `;
         } else if (stage === "pr_to_pi") {
             foot_html += `
-                <td colspan="5"></td>
+                <td colspan="4"></td>
                 <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
                 <td colspan="2"></td>
                 <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
@@ -877,14 +928,30 @@ class ProcurementOrderPickerCenter {
             target_comp_suffix = `【${this.active_company}】`;
         }
 
-        let stage_inputs = "";
         if (stage === "item_to_mr") {
-            stage_inputs = `
-                <div class="picker-filter-group">
-                    <input type="text" class="picker-filter-input" id="picker-opt-dept" placeholder="需求部门/用途(可选)">
+            const html = `
+                <div class="picker-summary-text">
+                    <div class="picker-view-switch-group">
+                        <button class="picker-view-btn ${this.mr_view_mode === 'detail' ? 'active' : ''}" data-mode="detail">📑 明细视图</button>
+                        <button class="picker-view-btn ${this.mr_view_mode === 'doc' ? 'active' : ''}" data-mode="doc">📦 单号视图</button>
+                    </div>
+                    <span>已选 <strong class="picker-summary-highlight">${sel_count}</strong> 项</span>
+                </div>
+                <div class="picker-btn-group">
+                    <button class="picker-btn-secondary" id="picker-select-all-btn">全选本页</button>
+                    <button class="picker-btn-secondary" id="picker-clear-sel-btn">清空选择</button>
+                    <button class="picker-btn-create-mr" id="picker-create-mr-btn">
+                        <span>➕</span>
+                        <span>新建物料申请单</span>
+                    </button>
                 </div>
             `;
-        } else if (stage === "mr_to_po") {
+            $bar.html(html);
+            return;
+        }
+
+        let stage_inputs = "";
+        if (stage === "mr_to_po") {
             stage_inputs = `
                 <div class="picker-filter-group">
                     <input type="text" class="picker-filter-input" id="picker-opt-supplier" placeholder="统一指定供应商(可选)">
@@ -918,7 +985,7 @@ class ProcurementOrderPickerCenter {
             <div class="picker-btn-group">
                 <button class="picker-btn-secondary" id="picker-select-all-btn">全选本页</button>
                 <button class="picker-btn-secondary" id="picker-clear-sel-btn">清空选择</button>
-                ${stage !== 'item_to_mr' ? '<button class="picker-btn-secondary" id="picker-fill-max-btn">填充最大待办数</button>' : ''}
+                <button class="picker-btn-secondary" id="picker-fill-max-btn">填充最大待办数</button>
                 ${stage_inputs}
                 <button class="picker-btn-primary" id="picker-submit-btn" ${sel_count === 0 ? 'disabled' : ''}>
                     ${cfg.btn_label}${target_comp_suffix}
@@ -984,6 +1051,156 @@ class ProcurementOrderPickerCenter {
         return `¥ ${flt(val || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
 
+    open_create_mr_dialog() {
+        const default_company = this.active_company !== "All" ? this.active_company : (this.companies[0] || "");
+        let rows_data = [{ item_code: "", qty: 1, description: "" }];
+
+        const render_rows = (dialog) => {
+            const $tbody = dialog.get_field("items_html").$wrapper.find("#picker-modal-item-tbody");
+            $tbody.empty();
+
+            rows_data.forEach((row, idx) => {
+                const tr = $(`
+                    <tr data-idx="${idx}">
+                        <td>${idx + 1}</td>
+                        <td>
+                            <input type="text" class="picker-modal-item-input modal-input-code" placeholder="选择/输入物料代码..." value="${frappe.utils.escape_html(row.item_code || '')}">
+                        </td>
+                        <td>
+                            <input type="number" class="picker-modal-item-input modal-input-qty" step="1" min="1" value="${row.qty || 1}">
+                        </td>
+                        <td>
+                            <input type="text" class="picker-modal-item-input modal-input-desc" placeholder="用途或规格说明..." value="${frappe.utils.escape_html(row.description || '')}">
+                        </td>
+                        <td>
+                            <button class="picker-modal-del-btn" data-idx="${idx}">删除</button>
+                        </td>
+                    </tr>
+                `);
+                $tbody.append(tr);
+            });
+        };
+
+        const d = new frappe.ui.Dialog({
+            title: __("➕ 新建物料申请单 (Material Request)"),
+            fields: [
+                {
+                    fieldtype: "Select",
+                    fieldname: "company",
+                    label: __("所属公司"),
+                    options: this.companies.join("\n"),
+                    default: default_company,
+                    reqd: 1,
+                },
+                {
+                    fieldtype: "Data",
+                    fieldname: "department",
+                    label: __("需求部门"),
+                    placeholder: "例如：生产部、研发部",
+                },
+                {
+                    fieldtype: "Date",
+                    fieldname: "schedule_date",
+                    label: __("期望到货日期"),
+                    default: frappe.datetime.nowdate(),
+                },
+                {
+                    fieldtype: "Section Break",
+                    label: __("申请物料明细 (仅需填建物料与数量)"),
+                },
+                {
+                    fieldtype: "HTML",
+                    fieldname: "items_html",
+                    options: `
+                        <div>
+                            <table class="picker-modal-item-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>物料代码 / 名称</th>
+                                        <th>申请数量</th>
+                                        <th>用途 / 规格备注</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="picker-modal-item-tbody"></tbody>
+                            </table>
+                            <button class="picker-modal-add-btn" id="picker-modal-add-row-btn">➕ 添加一行物料</button>
+                        </div>
+                    `,
+                },
+            ],
+            primary_action_label: __("立即创建申请单草稿"),
+            primary_action: async () => {
+                const vals = d.get_values();
+                if (!vals) return;
+
+                const valid_items = rows_data.filter((r) => (r.item_code || "").trim().length > 0);
+                if (!valid_items.length) {
+                    frappe.msgprint(__("请至少填写一行物料代码。"));
+                    return;
+                }
+
+                try {
+                    frappe.dom.freeze(__("正在创建采购申请单..."));
+                    const res = await frappe.call({
+                        method: "ashan_cn_procurement.services.procurement_picker_service.quick_create_material_request",
+                        args: {
+                            company: vals.company,
+                            department: vals.department,
+                            schedule_date: vals.schedule_date,
+                            items: valid_items,
+                        },
+                    });
+                    frappe.dom.unfreeze();
+                    if (res && res.message && res.message.success) {
+                        d.hide();
+                        frappe.show_alert({
+                            message: __("🎉 成功创建采购申请单：{0}", [res.message.name]),
+                            indicator: "green",
+                        });
+                        this.refresh_all();
+                    }
+                } catch (e) {
+                    frappe.dom.unfreeze();
+                    frappe.msgprint(e.message || __("创建采购申请单失败"));
+                }
+            },
+        });
+
+        d.show();
+        render_rows(d);
+
+        const $wrap = d.get_field("items_html").$wrapper;
+
+        $wrap.on("click", "#picker-modal-add-row-btn", () => {
+            rows_data.push({ item_code: "", qty: 1, description: "" });
+            render_rows(d);
+        });
+
+        $wrap.on("click", ".picker-modal-del-btn", function () {
+            const idx = parseInt($(this).attr("data-idx"));
+            rows_data.splice(idx, 1);
+            if (!rows_data.length) rows_data.push({ item_code: "", qty: 1, description: "" });
+            render_rows(d);
+        });
+
+        $wrap.on("input change", ".modal-input-code", function () {
+            const idx = parseInt($(this).closest("tr").attr("data-idx"));
+            rows_data[idx].item_code = $(this).val();
+        });
+
+        $wrap.on("input change", ".modal-input-qty", function () {
+            const idx = parseInt($(this).closest("tr").attr("data-idx"));
+            rows_data[idx].qty = flt($(this).val()) || 1;
+        });
+
+        $wrap.on("input change", ".modal-input-desc", function () {
+            const idx = parseInt($(this).closest("tr").attr("data-idx"));
+            rows_data[idx].description = $(this).val();
+        });
+    }
+
     async execute_primary_action() {
         const stage = this.active_stage;
         const selected_items = Array.from(this.selected_map.values());
@@ -994,30 +1211,7 @@ class ProcurementOrderPickerCenter {
 
         const target_comp = this.locked_company || (this.active_company !== "All" ? this.active_company : selected_items[0].company);
 
-        if (stage === "item_to_mr") {
-            const dept = $("#picker-opt-dept").val();
-            frappe.confirm(__("确定将选中的 {0} 种物料生成采购申请草稿吗？", [selected_items.length]), async () => {
-                try {
-                    frappe.dom.freeze(__("正在生成采购申请..."));
-                    const r = await frappe.call({
-                        method: "ashan_cn_procurement.services.procurement_picker_service.make_material_requests_from_items",
-                        args: {
-                            company: target_comp,
-                            selected_items: selected_items,
-                            department: dept,
-                        },
-                    });
-                    frappe.dom.unfreeze();
-                    if (r && r.message && r.message.success) {
-                        this.show_generation_success_dialog("采购申请", r.message.requests, "material-request");
-                        this.refresh_all();
-                    }
-                } catch (e) {
-                    frappe.dom.unfreeze();
-                    frappe.msgprint(e.message || __("生成采购申请失败"));
-                }
-            });
-        } else if (stage === "mr_to_po") {
+        if (stage === "mr_to_po") {
             const sup_override = $("#picker-opt-supplier").val();
             frappe.confirm(__("确定将选中的 {0} 行需求生成采购订单草稿吗？", [selected_items.length]), async () => {
                 try {

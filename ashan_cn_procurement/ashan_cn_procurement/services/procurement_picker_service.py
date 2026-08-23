@@ -84,15 +84,274 @@ def _meta_has(doctype: str, fieldname: str) -> bool:
 
 
 # =========================================================================
-# Step 1: Item Master -> Material Request (采购申请/采购需求)
+# Step 1: Material Request (采购申请 / 物料申请)
 # =========================================================================
+
+@frappe.whitelist()
+def get_material_request_picker_rows(
+    company: str | None = None,
+    filters: dict | str | None = None,
+) -> dict:
+    """Query Material Request Items for Step 1 Detail View (Read-Only Detail)."""
+    companies = _resolve_companies(company)
+    if isinstance(filters, str):
+        filters = frappe.parse_json(filters) or {}
+    filters = dict(filters or {})
+
+    has_mr_dept = _meta_has("Material Request", "department")
+    dept_col = "COALESCE(mr.department, '')" if has_mr_dept else "''"
+
+    conditions = [
+        "mr.material_request_type = 'Purchase'",
+        "mr.docstatus < 2",
+        "mr.company IN %(companies)s",
+    ]
+    params: dict[str, Any] = {"companies": companies}
+
+    if filters.get("mr_name"):
+        conditions.append("mr.name LIKE %(mr_name)s")
+        params["mr_name"] = f"%{filters['mr_name']}%"
+
+    if filters.get("item_code"):
+        conditions.append("(mri.item_code LIKE %(item_code)s OR mri.item_name LIKE %(item_code)s)")
+        params["item_code"] = f"%{filters['item_code']}%"
+
+    if filters.get("item_group"):
+        conditions.append("mri.item_group = %(item_group)s")
+        params["item_group"] = filters["item_group"]
+
+    if filters.get("department") and has_mr_dept:
+        conditions.append("mr.department = %(department)s")
+        params["department"] = filters["department"]
+
+    if filters.get("supplier"):
+        conditions.append("(COALESCE(item_def.default_supplier, '') = %(supplier)s OR COALESCE(item_sup.supplier, '') = %(supplier)s)")
+        params["supplier"] = filters["supplier"]
+
+    where_clause = " AND ".join(conditions)
+
+    sql = f"""
+        SELECT
+            mri.name AS mri_name,
+            mr.name AS mr_name,
+            mr.company,
+            mr.transaction_date,
+            COALESCE(mri.schedule_date, mr.schedule_date) AS schedule_date,
+            {dept_col} AS department,
+            mr.docstatus,
+            mr.status,
+            mri.item_code,
+            mri.item_name,
+            mri.item_group,
+            COALESCE(mri.uom, mri.stock_uom, '') AS uom,
+            COALESCE(mri.qty, 0) AS qty,
+            COALESCE(mri.ordered_qty, 0) AS ordered_qty,
+            COALESCE(mri.rate, item.standard_rate, 0) AS rate,
+            COALESCE(item_def.default_supplier, item_sup.supplier, '') AS default_supplier,
+            COALESCE(mri.warehouse, item_def.default_warehouse, '') AS warehouse
+        FROM `tabMaterial Request Item` mri
+        INNER JOIN `tabMaterial Request` mr ON mr.name = mri.parent
+        LEFT JOIN `tabItem` item ON item.name = mri.item_code
+        LEFT JOIN `tabItem Default` item_def ON (item_def.parent = mri.item_code AND item_def.company = mr.company)
+        LEFT JOIN `tabItem Supplier` item_sup ON item_sup.parent = mri.item_code
+        WHERE {where_clause}
+        ORDER BY mr.transaction_date DESC, mr.name DESC, mri.idx ASC
+        LIMIT 1000
+    """
+
+    raw_rows = frappe.db.sql(sql, params, as_dict=True)
+
+    # Stock balances
+    item_codes = list({r.item_code for r in raw_rows})
+    stock_map = defaultdict(float)
+    if item_codes:
+        bins = frappe.db.sql("""
+            SELECT b.item_code, w.company, SUM(b.actual_qty) AS total_actual_qty
+            FROM `tabBin` b
+            INNER JOIN `tabWarehouse` w ON w.name = b.warehouse
+            WHERE b.item_code IN %s AND w.company IN %s
+            GROUP BY b.item_code, w.company
+        """, (item_codes, companies), as_dict=True)
+        for b in bins:
+            stock_map[(b.item_code, b.company)] = flt(b.total_actual_qty, 2)
+
+    rows = []
+    for r in raw_rows:
+        current_stock = stock_map.get((r.item_code, r.company), 0.0)
+        rows.append({
+            "mri_name": r.mri_name,
+            "mr_name": r.mr_name,
+            "company": r.company,
+            "schedule_date": str(r.schedule_date or ""),
+            "department": r.department or "",
+            "item_code": r.item_code,
+            "item_name": r.item_name or r.item_code,
+            "item_group": r.item_group or "",
+            "uom": r.uom or "",
+            "current_stock": current_stock,
+            "qty": flt(r.qty, 2),
+            "ordered_qty": flt(r.ordered_qty, 2),
+            "pending_qty": max(flt(r.qty) - flt(r.ordered_qty), 0.0),
+            "rate": flt(r.rate, 2),
+            "supplier": r.default_supplier or "",
+            "warehouse": r.warehouse or "",
+            "docstatus": r.docstatus,
+            "status": r.status or "Draft",
+        })
+
+    return {
+        "companies": companies,
+        "count": len(rows),
+        "rows": rows,
+    }
+
+
+@frappe.whitelist()
+def get_material_request_doc_rows(
+    company: str | None = None,
+    filters: dict | str | None = None,
+) -> dict:
+    """Query Material Request Documents for Step 1 Header/Doc View."""
+    companies = _resolve_companies(company)
+    if isinstance(filters, str):
+        filters = frappe.parse_json(filters) or {}
+    filters = dict(filters or {})
+
+    has_mr_dept = _meta_has("Material Request", "department")
+    dept_col = "COALESCE(mr.department, '')" if has_mr_dept else "''"
+
+    conditions = [
+        "mr.material_request_type = 'Purchase'",
+        "mr.docstatus < 2",
+        "mr.company IN %(companies)s",
+    ]
+    params: dict[str, Any] = {"companies": companies}
+
+    if filters.get("mr_name"):
+        conditions.append("mr.name LIKE %(mr_name)s")
+        params["mr_name"] = f"%{filters['mr_name']}%"
+
+    if filters.get("department") and has_mr_dept:
+        conditions.append("mr.department = %(department)s")
+        params["department"] = filters["department"]
+
+    where_clause = " AND ".join(conditions)
+
+    sql = f"""
+        SELECT
+            mr.name AS mr_name,
+            mr.company,
+            mr.transaction_date,
+            mr.schedule_date,
+            {dept_col} AS department,
+            mr.docstatus,
+            mr.status,
+            mr.owner,
+            COUNT(mri.name) AS item_count,
+            COALESCE(SUM(mri.qty), 0) AS total_qty
+        FROM `tabMaterial Request` mr
+        LEFT JOIN `tabMaterial Request Item` mri ON mri.parent = mr.name
+        WHERE {where_clause}
+        GROUP BY mr.name
+        ORDER BY mr.transaction_date DESC, mr.name DESC
+        LIMIT 500
+    """
+
+    docs = frappe.db.sql(sql, params, as_dict=True)
+
+    return {
+        "companies": companies,
+        "count": len(docs),
+        "rows": docs,
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def quick_create_material_request(
+    company: str,
+    items: list[dict] | str,
+    department: str | None = None,
+    schedule_date: str | None = None,
+    purpose: str | None = None,
+) -> dict:
+    """Quickly create a new Material Request (Purchase) from the lightweight modal dialog."""
+    if isinstance(items, str):
+        items = frappe.parse_json(items) or []
+
+    if not company:
+        frappe.throw(_("请指定所属公司。"))
+
+    assert_company_access(company)
+
+    if not items:
+        frappe.throw(_("请至少添加一行物料申请明细。"))
+
+    default_company_wh = (
+        frappe.db.get_value("Warehouse", {"company": company, "is_group": 0}, "name")
+        or ""
+    )
+
+    mr = frappe.new_doc("Material Request")
+    mr.material_request_type = "Purchase"
+    mr.company = company
+    mr.transaction_date = nowdate()
+    if schedule_date:
+        mr.schedule_date = schedule_date
+    if default_company_wh and _meta_has("Material Request", "set_warehouse"):
+        mr.set_warehouse = default_company_wh
+    if department and _meta_has("Material Request", "department"):
+        mr.department = department
+
+    for it in items:
+        item_code = it.get("item_code")
+        if not item_code:
+            continue
+
+        item_doc = frappe.get_cached_doc("Item", item_code)
+        qty = flt(it.get("qty") or 1.0, 4)
+        if qty <= 0:
+            qty = 1.0
+
+        uom = it.get("uom") or item_doc.stock_uom
+        item_wh = (
+            it.get("warehouse")
+            or frappe.db.get_value("Item Default", {"parent": item_code, "company": company}, "default_warehouse")
+            or default_company_wh
+        )
+
+        mr.append("items", {
+            "item_code": item_code,
+            "item_name": item_doc.item_name,
+            "description": it.get("description") or item_doc.description or item_doc.item_name,
+            "item_group": item_doc.item_group,
+            "uom": uom,
+            "stock_uom": item_doc.stock_uom,
+            "qty": qty,
+            "schedule_date": schedule_date or str(getdate(nowdate())),
+            "warehouse": item_wh,
+        })
+
+    if not mr.items:
+        frappe.throw(_("未能录入有效的物料明细。"))
+
+    mr.flags.ignore_permissions = False
+    mr.insert()
+
+    return {
+        "success": True,
+        "name": mr.name,
+        "company": mr.company,
+        "item_count": len(mr.items),
+        "message": _("成功新建采购申请单：{0}").format(mr.name),
+    }
+
 
 @frappe.whitelist()
 def get_item_master_picker_rows(
     company: str | None = None,
     filters: dict | str | None = None,
 ) -> dict:
-    """Query purchasable item master records with stock balance for Material Request."""
+    """Query purchasable item master records with stock balance for popup search."""
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
@@ -1232,9 +1491,13 @@ def get_procurement_picker_overview_kpis(company: str | None = None) -> dict:
     """Return aggregated KPI counts for all 5 procurement steps."""
     companies = _resolve_companies(company)
 
-    item_count = frappe.db.sql("""
-        SELECT COUNT(name) FROM `tabItem` WHERE disabled = 0
-    """)[0][0] or 0
+    mr_all_count = frappe.db.sql("""
+        SELECT COUNT(DISTINCT mr.name)
+        FROM `tabMaterial Request` mr
+        WHERE mr.docstatus < 2
+          AND mr.material_request_type = 'Purchase'
+          AND mr.company IN %s
+    """, (companies,))[0][0] or 0
 
     mr_count = frappe.db.sql("""
         SELECT COUNT(DISTINCT mri.name)
@@ -1281,7 +1544,7 @@ def get_procurement_picker_overview_kpis(company: str | None = None) -> dict:
     return {
         "companies": companies,
         "kpis": {
-            "item_to_mr": {"count": item_count, "label": "物料主数据/待申请物料"},
+            "item_to_mr": {"count": mr_all_count, "label": "采购申请单据"},
             "mr_to_po": {"count": mr_count, "label": "待订货需求明细"},
             "po_to_pr": {"count": po_count, "label": "待收货订单明细"},
             "pr_to_pi": {"count": pr_count, "label": "待开票入库明细"},

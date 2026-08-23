@@ -209,7 +209,7 @@
     text-align: right;
 }
 
-/* --- Section Context Banner (Replaces redundant Tab bar) --- */
+/* --- Section Context Banner --- */
 .picker-section-banner {
     display: flex;
     justify-content: space-between;
@@ -342,6 +342,35 @@
     flex-wrap: wrap;
 }
 
+/* View Mode Switcher (明细视图 vs 单号视图) */
+.picker-view-switch-group {
+    display: inline-flex;
+    border-radius: 6px;
+    border: 1px solid var(--ashan-color-slate-300, #cbd5e1);
+    overflow: hidden;
+    background: #f1f5f9;
+}
+
+.picker-view-btn {
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ashan-color-slate-600, #475569);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.picker-view-btn:hover {
+    color: var(--ashan-color-primary, #1e40af);
+}
+
+.picker-view-btn.active {
+    background: var(--ashan-color-primary, #1e40af);
+    color: #ffffff;
+}
+
 .picker-btn-secondary {
     padding: 5px 10px;
     font-size: 11px;
@@ -357,6 +386,25 @@
 .picker-btn-secondary:hover {
     background: var(--ashan-color-slate-50, #f8fafc);
     border-color: var(--ashan-color-slate-400, #94a3b8);
+}
+
+.picker-btn-create-mr {
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    background: #0284c7;
+    border: 1px solid #0369a1;
+    border-radius: 4px;
+    color: #ffffff;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+
+.picker-btn-create-mr:hover {
+    background: #0369a1;
 }
 
 .picker-btn-primary {
@@ -425,34 +473,21 @@
 
 .picker-data-table th,
 .picker-data-table td {
-    padding: 6px 10px;
+    padding: 8px 10px;
     border-bottom: 1px solid #f1f5f9;
     border-right: 1px solid #f1f5f9;
     white-space: nowrap;
     vertical-align: middle;
 }
 
-/* Dual-line Header Badges */
+/* Single-line Clean Header */
 .picker-data-table thead th {
     background: #f8fafc;
     position: sticky;
     top: 0;
     z-index: 10;
-    border-bottom: 1px solid #cbd5e1;
+    border-bottom: 1.5px solid #cbd5e1;
     text-align: left;
-    font-weight: 700;
-}
-
-.picker-th-badge {
-    display: block;
-    font-size: 9px;
-    font-weight: 600;
-    color: #64748b;
-    line-height: 1.1;
-}
-
-.picker-th-title {
-    display: block;
     font-size: 11px;
     font-weight: 700;
     color: #1e293b;
@@ -648,4 +683,61 @@
     display: flex;
     align-items: center;
     gap: 10px;
+}
+
+/* New MR Creation Modal Styles */
+.picker-modal-item-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+    font-size: 12px;
+}
+
+.picker-modal-item-table th {
+    background: #f8fafc;
+    padding: 6px 8px;
+    border: 1px solid #e2e8f0;
+    text-align: left;
+    font-weight: 600;
+}
+
+.picker-modal-item-table th:nth-child(1) { width: 40px; }
+.picker-modal-item-table th:nth-child(2) { width: 220px; }
+.picker-modal-item-table th:nth-child(3) { width: 90px; }
+.picker-modal-item-table th:nth-child(5) { width: 50px; }
+
+.picker-modal-item-table td {
+    padding: 4px 6px;
+    border: 1px solid #e2e8f0;
+    vertical-align: middle;
+}
+
+.picker-modal-item-input {
+    width: 100%;
+    padding: 4px 6px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+.picker-modal-del-btn {
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fca5a5;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.picker-modal-add-btn {
+    margin-top: 8px;
+    background: #f0fdf4;
+    color: #15803d;
+    border: 1px dashed #86efac;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
 }

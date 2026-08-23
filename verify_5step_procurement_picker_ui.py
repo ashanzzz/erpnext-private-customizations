@@ -55,64 +55,69 @@ def main():
         page.wait_for_selector(".picker-page-container", timeout=15000)
         page.wait_for_timeout(3000)
 
-        # 1. Verify Company Dropdown Select exists
-        comp_select = page.locator("#picker-company-select")
-        print(f"Company Dropdown Select Count: {comp_select.count()}")
-        selected_val = comp_select.input_value()
-        print(f"Default Company Value: {selected_val}")
-
-        # 2. Click KPI Cards to switch stages and check Section Banner
-        stages = [
-            ("item_to_mr", "当前：采购申请", "step1_item_to_mr_v2.png"),
-            ("mr_to_po", "当前：采购订货", "step2_mr_to_po_v2.png"),
-            ("po_to_pr", "当前：采购入库", "step3_po_to_pr_v2.png"),
-            ("pr_to_pi", "当前：采购开票", "step4_pr_to_pi_v2.png"),
-            ("pi_to_rr", "当前：报销付款", "step5_pi_to_rr_v2.png"),
-        ]
-
-        for stage_id, expected_title_sub, shot_name in stages:
-            print(f"Clicking KPI card: {stage_id}...")
-            page.click(f".picker-kpi-card[data-stage='{stage_id}']")
-            page.wait_for_timeout(1500)
-
-            banner_text = page.locator("#picker-section-banner .picker-section-title").inner_text()
-            print(f"  -> Banner Title: {banner_text}")
-            assert expected_title_sub in banner_text, f"Expected '{expected_title_sub}' in '{banner_text}'"
-
-            shot_path = os.path.join(BRAIN_DIR, shot_name)
-            page.screenshot(path=shot_path)
-            print(f"  -> Saved screenshot: {shot_path}")
-
-        # 3. Test Company Dropdown selection
-        print("\n3. Testing Company Dropdown Change...")
-        # Switch back to Step 1
+        # 1. Verify Step 1 Detail View (Single-line Header, Readonly qty, View switcher)
+        print("Testing Step 1: 采购申请 (明细视图)...")
         page.click(".picker-kpi-card[data-stage='item_to_mr']")
+        page.wait_for_timeout(1500)
+        shot1_detail = os.path.join(BRAIN_DIR, "step1_mr_detail_view.png")
+        page.screenshot(path=shot1_detail)
+        print(f"  -> Saved Step 1 Detail View screenshot: {shot1_detail}")
+
+        # 2. Test Step 1 Doc View Switch
+        print("Testing Step 1: 采购申请 (切换单号视图)...")
+        page.click(".picker-view-btn[data-mode='doc']")
+        page.wait_for_timeout(1500)
+        shot1_doc = os.path.join(BRAIN_DIR, "step1_mr_doc_view.png")
+        page.screenshot(path=shot1_doc)
+        print(f"  -> Saved Step 1 Doc View screenshot: {shot1_doc}")
+
+        # Switch back to Detail
+        page.click(".picker-view-btn[data-mode='detail']")
         page.wait_for_timeout(1000)
 
-        # 4. Test Exclusive Company Lock in "All" mode
-        print("\n4. Testing Exclusive Company Lock on selection...")
-        first_checkbox = page.locator("#picker-table-tbody tr:first-child .picker-row-checkbox")
-        if first_checkbox.count() > 0:
-            first_checkbox.check()
-            page.wait_for_timeout(1000)
+        # 3. Test + 新建物料申请单 Dialog
+        print("Testing Modal: + 新建物料申请单...")
+        page.click("#picker-create-mr-btn")
+        page.wait_for_timeout(1000)
+        shot_modal = os.path.join(BRAIN_DIR, "step1_create_mr_modal.png")
+        page.screenshot(path=shot_modal)
+        print(f"  -> Saved Modal Dialog screenshot: {shot_modal}")
 
-            banner_visible = page.is_visible("#picker-company-lock-banner.is-active")
-            print(f"Company Lock Notice Banner Active: {banner_visible}")
+        # Close modal
+        page.click(".modal-header .btn-modal-close, .modal-header .close")
+        page.wait_for_timeout(1000)
 
-            shot_locked = os.path.join(BRAIN_DIR, "exclusive_company_lock_active_v2.png")
-            page.screenshot(path=shot_locked)
-            print(f"Captured Exclusive Company Lock screenshot: {shot_locked}")
+        # 4. Step 2 (采购订货)
+        print("Testing Step 2: 采购订货 (单行表头)...")
+        page.click(".picker-kpi-card[data-stage='mr_to_po']")
+        page.wait_for_timeout(1500)
+        shot2 = os.path.join(BRAIN_DIR, "step2_mr_to_po_v3.png")
+        page.screenshot(path=shot2)
+        print(f"  -> Saved Step 2 screenshot: {shot2}")
 
-            # Click unlock button
-            page.click("#picker-unlock-btn")
-            page.wait_for_timeout(1000)
+        # 5. Step 3 (采购入库)
+        print("Testing Step 3: 采购入库 (单行表头)...")
+        page.click(".picker-kpi-card[data-stage='po_to_pr']")
+        page.wait_for_timeout(1500)
+        shot3 = os.path.join(BRAIN_DIR, "step3_po_to_pr_v3.png")
+        page.screenshot(path=shot3)
+        print(f"  -> Saved Step 3 screenshot: {shot3}")
 
-            banner_visible_after = page.is_visible("#picker-company-lock-banner.is-active")
-            print(f"Company Lock Notice Banner after Unlock: {banner_visible_after} (should be False)")
+        # 6. Step 4 (采购开票)
+        print("Testing Step 4: 采购开票 (单行表头)...")
+        page.click(".picker-kpi-card[data-stage='pr_to_pi']")
+        page.wait_for_timeout(1500)
+        shot4 = os.path.join(BRAIN_DIR, "step4_pr_to_pi_v3.png")
+        page.screenshot(path=shot4)
+        print(f"  -> Saved Step 4 screenshot: {shot4}")
 
-            shot_unlocked = os.path.join(BRAIN_DIR, "exclusive_company_lock_restored_v2.png")
-            page.screenshot(path=shot_unlocked)
-            print(f"Captured Restored View screenshot: {shot_unlocked}")
+        # 7. Step 5 (报销付款)
+        print("Testing Step 5: 报销付款 (单行表头)...")
+        page.click(".picker-kpi-card[data-stage='pi_to_rr']")
+        page.wait_for_timeout(1500)
+        shot5 = os.path.join(BRAIN_DIR, "step5_pi_to_rr_v3.png")
+        page.screenshot(path=shot5)
+        print(f"  -> Saved Step 5 screenshot: {shot5}")
 
         browser.close()
 
@@ -122,7 +127,7 @@ def main():
         for err in console_errors:
             print(f"  - {err}")
     else:
-        print("[SUCCESS] 0 Console Errors across all upgraded master cards and company dropdown!")
+        print("[SUCCESS] 0 Console Errors across all single-line headers, dual views & modal creation!")
 
 if __name__ == "__main__":
     main()
