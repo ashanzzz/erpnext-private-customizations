@@ -111,15 +111,6 @@ class ProcurementOrderPickerCenter {
                     </div>
                 </div>
 
-                <!-- Company Exclusive Lock Notice Banner -->
-                <div class="picker-company-lock-banner" id="picker-company-lock-banner">
-                    <div class="picker-company-lock-text">
-                        <span>💡</span>
-                        <span id="picker-lock-banner-text">已锁定公司范围，其他公司明细已自动隐藏</span>
-                    </div>
-                    <button class="picker-unlock-btn" id="picker-unlock-btn">清空已选并恢复全量</button>
-                </div>
-
                 <!-- 5-Step KPI Cards Grid (Master Navigation) -->
                 <div class="picker-kpi-grid" id="picker-kpi-grid"></div>
 
@@ -258,7 +249,7 @@ class ProcurementOrderPickerCenter {
                 // If in "All" mode and not locked yet, lock to this company
                 if (self.active_company === "All" && !self.locked_company) {
                     self.locked_company = row.company;
-                    self.update_company_lock_ui();
+                    self.update_company_lock_ui(true);
                 }
 
                 // If locked and row is from another company, ignore
@@ -279,7 +270,7 @@ class ProcurementOrderPickerCenter {
                 // If no rows selected, release lock
                 if (self.selected_map.size === 0) {
                     self.locked_company = null;
-                    self.update_company_lock_ui();
+                    self.update_company_lock_ui(false);
                 }
             }
 
@@ -1181,15 +1172,12 @@ class ProcurementOrderPickerCenter {
         $("#picker-table-tfoot").html(foot_html);
     }
 
-    update_company_lock_ui() {
-        const $banner = $("#picker-company-lock-banner");
-        const $text = $("#picker-lock-banner-text");
-
-        if (this.locked_company && this.active_company === "All") {
-            $banner.addClass("is-active");
-            $text.html(`当前已按【<strong>${frappe.utils.escape_html(this.locked_company)}</strong>】锁定选单生单范围（已自动隐藏其他公司明细，取消勾选后恢复全量视图）`);
-        } else {
-            $banner.removeClass("is-active");
+    update_company_lock_ui(is_locking = false) {
+        if (is_locking && this.locked_company && this.active_company === "All") {
+            frappe.show_alert({
+                message: __("💡 已按【{0}】锁定选单生单范围（已自动隐藏其他公司明细，取消勾选后恢复全量视图）", [frappe.utils.escape_html(this.locked_company)]),
+                indicator: "orange"
+            }, 5);
         }
     }
 
@@ -1351,7 +1339,7 @@ class ProcurementOrderPickerCenter {
             const first_visible = this.table_data.find((r) => !self.locked_company || r.company === self.locked_company);
             if (first_visible) {
                 this.locked_company = first_visible.company;
-                this.update_company_lock_ui();
+                this.update_company_lock_ui(true);
             }
         }
 
