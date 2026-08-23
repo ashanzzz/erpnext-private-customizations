@@ -1995,9 +1995,9 @@ class ProcurementOrderPickerCenter {
                         <button class="picker-btn-action-view" id="picker-modal-print-btn">
                             🖨️ 打印单据
                         </button>
-                        <a href="/desk/${frappe.router.slug(doc.doctype)}/${encodeURIComponent(doc.name)}" target="_blank" class="picker-btn-action-view">
+                        <button class="picker-btn-action-view" id="picker-modal-goto-form-btn">
                             ✏️ 完整编辑页面
-                        </a>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -2015,9 +2015,16 @@ class ProcurementOrderPickerCenter {
             size: "large",
         });
 
+        d.$wrapper.addClass("picker-doc-detail-modal");
         d.show();
 
         const $w = d.$wrapper;
+
+        // Goto Form page button
+        $w.on("click", "#picker-modal-goto-form-btn", function () {
+            d.hide();
+            frappe.set_route("Form", doc.doctype, doc.name);
+        });
 
         // Edit button inside modal
         $w.on("click", "#picker-modal-edit-btn", function () {

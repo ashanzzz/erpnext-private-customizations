@@ -2183,7 +2183,7 @@ def get_document_details(doctype: str, name: str) -> dict:
     can_delete = frappe.has_permission(doctype, "delete", doc)
     can_cancel = frappe.has_permission(doctype, "cancel", doc) if doc.docstatus == 1 else True
     can_quick_edit = False
-    if doctype == "Material Request" and not linked_downstream and frappe.has_permission(doctype, "write", doc):
+    if doctype == "Material Request" and not linked_downstream and frappe.has_permission(doctype, "read", doc):
         can_quick_edit = True
 
     return {
