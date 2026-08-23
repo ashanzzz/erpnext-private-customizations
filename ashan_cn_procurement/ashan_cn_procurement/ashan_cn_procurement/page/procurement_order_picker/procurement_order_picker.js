@@ -1373,16 +1373,105 @@ class ProcurementOrderPickerCenter {
             ? frappe.datetime.add_months(frappe.datetime.nowdate(), 1)
             : "";
         let rows_data = [
-            { item_code: "", item_name: "", qty: 1.0, rate: 0.0, amount: 0.0, tax_rate: 13.0, tax_amount: 0.0, total_amount: 0.0, description: "" }
+            { item_code: "", item_name: "", spec: "", qty: 1.0, rate: 0.0, amount: 0.0, tax_rate: 13.0, tax_amount: 0.0, total_amount: 0.0, description: "" }
         ];
 
-        const recalculate_row = (r) => {
-            const qty = flt(r.qty) || 1.0;
+        const recalculate_row_state = (r) => {
+            const qty = flt(r.qty) || 0.0;
             const rate = flt(r.rate) || 0.0;
-            r.amount = flt(qty * rate, 2);
+            r.amount = Math.round(qty * rate * 100) / 100;
             const tax_pct = flt(r.tax_rate) || 0.0;
-            r.tax_amount = flt(r.amount * (tax_pct / 100.0), 2);
-            r.total_amount = flt(r.amount + r.tax_amount, 2);
+            r.tax_amount = Math.round(r.amount * (tax_pct / 100.0) * 100) / 100;
+            r.total_amount = Math.round((r.amount + r.tax_amount) * 100) / 100;
+        };
+
+        const update_bottom_summary = ($wrapper) => {
+            let sum_qty = 0;
+            let sum_amount = 0;
+            let sum_tax = 0;
+            let sum_total = 0;
+            rows_data.forEach((r) => {
+                sum_qty += flt(r.qty);
+                sum_amount += flt(r.amount);
+                sum_tax += flt(r.tax_amount);
+                sum_total += flt(r.total_amount);
+            });
+            $wrapper.find("#modal-sum-qty").text(sum_qty.toFixed(2));
+            $wrapper.find("#modal-sum-amt").text(this.fmt_money(sum_amount));
+            $wrapper.find("#modal-sum-tax").text(this.fmt_money(sum_tax));
+            $wrapper.find("#modal-sum-total").text(this.fmt_money(sum_total));
+        };
+
+        const recalculate_and_sync_row = ($tr, field_changed, $wrap) => {
+            const idx = parseInt($tr.attr("data-idx"));
+            const r = rows_data[idx];
+            if (!r) return;
+
+            let qty = flt($tr.find(".modal-input-qty").val());
+            if (isNaN(qty) || qty < 0) qty = 0;
+
+            let rate = flt($tr.find(".modal-input-rate").val());
+            if (isNaN(rate) || rate < 0) rate = 0;
+
+            let amount = flt($tr.find(".modal-input-amount").val());
+            if (isNaN(amount) || amount < 0) amount = 0;
+
+            let tax_rate = flt($tr.find(".modal-input-tax-rate").val());
+            if (isNaN(tax_rate) || tax_rate < 0) tax_rate = 0;
+
+            let tax_amount = flt($tr.find(".modal-input-tax-amount").val());
+            if (isNaN(tax_amount) || tax_amount < 0) tax_amount = 0;
+
+            let total_amount = flt($tr.find(".modal-input-total-amount").val());
+            if (isNaN(total_amount) || total_amount < 0) total_amount = 0;
+
+            if (field_changed === "qty" || field_changed === "rate") {
+                amount = Math.round(qty * rate * 100) / 100;
+                tax_amount = Math.round(amount * (tax_rate / 100.0) * 100) / 100;
+                total_amount = Math.round((amount + tax_amount) * 100) / 100;
+                $tr.find(".modal-input-amount").val(amount.toFixed(2));
+                $tr.find(".modal-input-tax-amount").val(tax_amount.toFixed(2));
+                $tr.find(".modal-input-total-amount").val(total_amount.toFixed(2));
+            } else if (field_changed === "tax_rate") {
+                tax_amount = Math.round(amount * (tax_rate / 100.0) * 100) / 100;
+                total_amount = Math.round((amount + tax_amount) * 100) / 100;
+                $tr.find(".modal-input-tax-amount").val(tax_amount.toFixed(2));
+                $tr.find(".modal-input-total-amount").val(total_amount.toFixed(2));
+            } else if (field_changed === "amount") {
+                if (qty > 0) {
+                    rate = Math.round((amount / qty) * 10000) / 10000;
+                    $tr.find(".modal-input-rate").val(rate);
+                }
+                tax_amount = Math.round(amount * (tax_rate / 100.0) * 100) / 100;
+                total_amount = Math.round((amount + tax_amount) * 100) / 100;
+                $tr.find(".modal-input-tax-amount").val(tax_amount.toFixed(2));
+                $tr.find(".modal-input-total-amount").val(total_amount.toFixed(2));
+            } else if (field_changed === "tax_amount") {
+                total_amount = Math.round((amount + tax_amount) * 100) / 100;
+                if (amount > 0) {
+                    tax_rate = Math.round((tax_amount / amount) * 10000) / 100;
+                    $tr.find(".modal-input-tax-rate").val(tax_rate);
+                }
+                $tr.find(".modal-input-total-amount").val(total_amount.toFixed(2));
+            } else if (field_changed === "total_amount") {
+                amount = Math.round((total_amount / (1 + tax_rate / 100.0)) * 100) / 100;
+                tax_amount = Math.round((total_amount - amount) * 100) / 100;
+                if (qty > 0) {
+                    rate = Math.round((amount / qty) * 10000) / 10000;
+                    $tr.find(".modal-input-rate").val(rate);
+                }
+                $tr.find(".modal-input-amount").val(amount.toFixed(2));
+                $tr.find(".modal-input-tax-amount").val(tax_amount.toFixed(2));
+            }
+
+            r.qty = qty;
+            r.rate = rate;
+            r.amount = amount;
+            r.tax_rate = tax_rate;
+            r.tax_amount = tax_amount;
+            r.total_amount = total_amount;
+
+            update_bottom_summary($wrap);
         };
 
         const render_rows = (dialog) => {
@@ -1390,17 +1479,8 @@ class ProcurementOrderPickerCenter {
             const $tbody = $wrapper.find("#picker-modal-item-tbody");
             $tbody.empty();
 
-            let sum_qty = 0;
-            let sum_amount = 0;
-            let sum_tax = 0;
-            let sum_total = 0;
-
             rows_data.forEach((row, idx) => {
-                recalculate_row(row);
-                sum_qty += flt(row.qty);
-                sum_amount += flt(row.amount);
-                sum_tax += flt(row.tax_amount);
-                sum_total += flt(row.total_amount);
+                recalculate_row_state(row);
 
                 const tr = $(`
                     <tr data-idx="${idx}">
@@ -1412,28 +1492,31 @@ class ProcurementOrderPickerCenter {
                             </div>
                         </td>
                         <td>
-                            <input type="text" class="modal-input-name" placeholder="物料名称/规格..." value="${frappe.utils.escape_html(row.item_name || '')}">
+                            <input type="text" class="modal-input-name" placeholder="物料名称..." value="${frappe.utils.escape_html(row.item_name || '')}">
                         </td>
                         <td>
-                            <input type="number" class="modal-input-qty" step="0.01" min="0.01" value="${row.qty || 1}">
+                            <input type="text" class="modal-input-spec" placeholder="规格型号..." value="${frappe.utils.escape_html(row.spec || '')}">
                         </td>
                         <td>
-                            <input type="number" class="modal-input-rate" step="0.01" min="0" value="${row.rate || 0}">
-                        </td>
-                        <td class="picker-modal-calc-cell modal-cell-amt">
-                            ${flt(row.amount).toFixed(2)}
+                            <input type="number" step="any" min="0" class="modal-input-qty" value="${row.qty}">
                         </td>
                         <td>
-                            <input type="number" class="modal-input-tax-rate" step="1" min="0" max="100" value="${row.tax_rate}">
-                        </td>
-                        <td class="picker-modal-calc-cell modal-cell-tax-amt">
-                            ${flt(row.tax_amount).toFixed(2)}
-                        </td>
-                        <td class="picker-modal-calc-cell picker-modal-calc-bold modal-cell-total-amt">
-                            ${flt(row.total_amount).toFixed(2)}
+                            <input type="number" step="any" min="0" class="modal-input-rate" value="${row.rate}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-desc" placeholder="用途说明..." value="${frappe.utils.escape_html(row.description || '')}">
+                            <input type="number" step="any" min="0" class="modal-input-amount" value="${flt(row.amount).toFixed(2)}">
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0" max="100" class="modal-input-tax-rate" value="${row.tax_rate}">
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0" class="modal-input-tax-amount" value="${flt(row.tax_amount).toFixed(2)}">
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0" class="modal-input-total-amount" value="${flt(row.total_amount).toFixed(2)}">
+                        </td>
+                        <td>
+                            <input type="text" class="modal-input-remarks" placeholder="备注说明..." value="${frappe.utils.escape_html(row.description || '')}">
                         </td>
                         <td class="picker-modal-cell-center">
                             <button class="picker-modal-del-btn" data-idx="${idx}">删除</button>
@@ -1443,11 +1526,7 @@ class ProcurementOrderPickerCenter {
                 $tbody.append(tr);
             });
 
-            // Update bottom summary bar
-            $wrapper.find("#modal-sum-qty").text(sum_qty.toFixed(2));
-            $wrapper.find("#modal-sum-amt").text(this.fmt_money(sum_amount));
-            $wrapper.find("#modal-sum-tax").text(this.fmt_money(sum_tax));
-            $wrapper.find("#modal-sum-total").text(this.fmt_money(sum_total));
+            update_bottom_summary($wrapper);
         };
 
         const d = new frappe.ui.Dialog({
@@ -1481,15 +1560,16 @@ class ProcurementOrderPickerCenter {
                                 <thead>
                                     <tr>
                                         <th>#</th>
-                                        <th>物料代码 (联想搜索)</th>
-                                        <th>物料名称/规格</th>
-                                        <th>申请数量</th>
+                                        <th>物料代码</th>
+                                        <th>物料名称</th>
+                                        <th>规格</th>
+                                        <th>数量</th>
                                         <th>参考单价</th>
                                         <th>不含税金额</th>
                                         <th>税率 %</th>
                                         <th>税额</th>
                                         <th>含税总价</th>
-                                        <th>用途/规格备注</th>
+                                        <th>备注</th>
                                         <th>操作</th>
                                     </tr>
                                 </thead>
@@ -1554,14 +1634,14 @@ class ProcurementOrderPickerCenter {
         const $wrap = d.get_field("items_html").$wrapper;
 
         $wrap.on("click", "#picker-modal-add-row-btn", () => {
-            rows_data.push({ item_code: "", item_name: "", qty: 1.0, rate: 0.0, amount: 0.0, tax_rate: 13.0, tax_amount: 0.0, total_amount: 0.0, description: "" });
+            rows_data.push({ item_code: "", item_name: "", spec: "", qty: 1.0, rate: 0.0, amount: 0.0, tax_rate: 13.0, tax_amount: 0.0, total_amount: 0.0, description: "" });
             render_rows(d);
         });
 
         $wrap.on("click", ".picker-modal-del-btn", function () {
             const idx = parseInt($(this).attr("data-idx"));
             rows_data.splice(idx, 1);
-            if (!rows_data.length) rows_data.push({ item_code: "", item_name: "", qty: 1.0, rate: 0.0, amount: 0.0, tax_rate: 13.0, tax_amount: 0.0, total_amount: 0.0, description: "" });
+            if (!rows_data.length) rows_data.push({ item_code: "", item_name: "", spec: "", qty: 1.0, rate: 0.0, amount: 0.0, tax_rate: 13.0, tax_amount: 0.0, total_amount: 0.0, description: "" });
             render_rows(d);
         });
 
@@ -1631,11 +1711,13 @@ class ProcurementOrderPickerCenter {
             const idx = parseInt($tr.attr("data-idx"));
             const code = $(this).attr("data-code");
             const name = $(this).attr("data-name");
+            const uom = $(this).attr("data-uom");
             const rate = flt($(this).attr("data-rate"));
             const tax = flt($(this).attr("data-tax")) || 13.0;
 
             rows_data[idx].item_code = code;
             rows_data[idx].item_name = name;
+            rows_data[idx].spec = uom || "";
             rows_data[idx].rate = rate;
             rows_data[idx].tax_rate = tax;
 
@@ -1656,33 +1738,51 @@ class ProcurementOrderPickerCenter {
             }
         });
 
-        // Live calculation on item_name, quantity, rate, tax rate, description change
+        // Live text and calculation event bindings
+        $wrap.on("input change", ".modal-input-code", function () {
+            const idx = parseInt($(this).closest("tr").attr("data-idx"));
+            if (rows_data[idx]) {
+                rows_data[idx].item_code = $(this).val().trim();
+            }
+        });
+
         $wrap.on("input change", ".modal-input-name", function () {
             const idx = parseInt($(this).closest("tr").attr("data-idx"));
             rows_data[idx].item_name = $(this).val();
         });
 
-        $wrap.on("input change", ".modal-input-qty", function () {
+        $wrap.on("input change", ".modal-input-spec", function () {
             const idx = parseInt($(this).closest("tr").attr("data-idx"));
-            rows_data[idx].qty = flt($(this).val()) || 1.0;
-            render_rows(d);
+            rows_data[idx].spec = $(this).val();
+        });
+
+        $wrap.on("input change", ".modal-input-remarks", function () {
+            const idx = parseInt($(this).closest("tr").attr("data-idx"));
+            rows_data[idx].description = $(this).val();
+        });
+
+        $wrap.on("input change", ".modal-input-qty", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "qty", $wrap);
         });
 
         $wrap.on("input change", ".modal-input-rate", function () {
-            const idx = parseInt($(this).closest("tr").attr("data-idx"));
-            rows_data[idx].rate = flt($(this).val()) || 0.0;
-            render_rows(d);
+            recalculate_and_sync_row($(this).closest("tr"), "rate", $wrap);
+        });
+
+        $wrap.on("input change", ".modal-input-amount", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "amount", $wrap);
         });
 
         $wrap.on("input change", ".modal-input-tax-rate", function () {
-            const idx = parseInt($(this).closest("tr").attr("data-idx"));
-            rows_data[idx].tax_rate = flt($(this).val()) || 0.0;
-            render_rows(d);
+            recalculate_and_sync_row($(this).closest("tr"), "tax_rate", $wrap);
         });
 
-        $wrap.on("input change", ".modal-input-desc", function () {
-            const idx = parseInt($(this).closest("tr").attr("data-idx"));
-            rows_data[idx].description = $(this).val();
+        $wrap.on("input change", ".modal-input-tax-amount", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "tax_amount", $wrap);
+        });
+
+        $wrap.on("input change", ".modal-input-total-amount", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "total_amount", $wrap);
         });
     }
 
@@ -2085,12 +2185,13 @@ class ProcurementOrderPickerCenter {
             rows_data.push({
                 item_code: it.item_code || "",
                 item_name: it.item_name || "",
+                spec: it.custom_item_spec || it.spec || "",
                 qty: flt(it.qty) || 1.0,
                 rate: flt(it.rate) || 0.0,
                 amount: flt(it.amount) || 0.0,
-                tax_rate: flt(it.tax_rate) || 13.0,
-                tax_amount: flt(it.tax_amount) || 0.0,
-                total_amount: flt(it.total_amount) || 0.0,
+                tax_rate: flt(it.custom_tax_rate !== undefined ? it.custom_tax_rate : (it.tax_rate !== undefined ? it.tax_rate : 13.0)),
+                tax_amount: flt(it.custom_tax_amount !== undefined ? it.custom_tax_amount : (it.tax_amount || 0.0)),
+                total_amount: flt(it.custom_total_amount !== undefined ? it.custom_total_amount : (it.total_amount || 0.0)),
                 description: it.description || "",
             });
         });
@@ -2099,6 +2200,7 @@ class ProcurementOrderPickerCenter {
             rows_data.push({
                 item_code: "",
                 item_name: "",
+                spec: "",
                 qty: 1.0,
                 rate: 0.0,
                 amount: 0.0,
@@ -2109,30 +2211,111 @@ class ProcurementOrderPickerCenter {
             });
         }
 
-        const recalculate_row = (r) => {
-            r.qty = flt(r.qty) || 1.0;
-            r.rate = flt(r.rate) || 0.0;
-            r.tax_rate = flt(r.tax_rate) || 0.0;
-            r.amount = flt(r.qty * r.rate, 2);
-            r.tax_amount = flt(r.amount * (r.tax_rate / 100.0), 2);
-            r.total_amount = flt(r.amount + r.tax_amount, 2);
+        const recalculate_row_state = (r) => {
+            const qty = flt(r.qty) || 0.0;
+            const rate = flt(r.rate) || 0.0;
+            r.amount = Math.round(qty * rate * 100) / 100;
+            const tax_pct = flt(r.tax_rate) || 0.0;
+            r.tax_amount = Math.round(r.amount * (tax_pct / 100.0) * 100) / 100;
+            r.total_amount = Math.round((r.amount + r.tax_amount) * 100) / 100;
+        };
+
+        const update_bottom_summary = ($wrapper) => {
+            let sum_qty = 0;
+            let sum_amount = 0;
+            let sum_tax = 0;
+            let sum_total = 0;
+            rows_data.forEach((r) => {
+                sum_qty += flt(r.qty);
+                sum_amount += flt(r.amount);
+                sum_tax += flt(r.tax_amount);
+                sum_total += flt(r.total_amount);
+            });
+            $wrapper.find("#modal-sum-qty").text(sum_qty.toFixed(2));
+            $wrapper.find("#modal-sum-amt").text(this.fmt_money(sum_amount));
+            $wrapper.find("#modal-sum-tax").text(this.fmt_money(sum_tax));
+            $wrapper.find("#modal-sum-total").text(this.fmt_money(sum_total));
+        };
+
+        const recalculate_and_sync_row = ($tr, field_changed, $wrap) => {
+            const idx = parseInt($tr.attr("data-idx"));
+            const r = rows_data[idx];
+            if (!r) return;
+
+            let qty = flt($tr.find(".modal-input-qty").val());
+            if (isNaN(qty) || qty < 0) qty = 0;
+
+            let rate = flt($tr.find(".modal-input-rate").val());
+            if (isNaN(rate) || rate < 0) rate = 0;
+
+            let amount = flt($tr.find(".modal-input-amount").val());
+            if (isNaN(amount) || amount < 0) amount = 0;
+
+            let tax_rate = flt($tr.find(".modal-input-tax-rate").val());
+            if (isNaN(tax_rate) || tax_rate < 0) tax_rate = 0;
+
+            let tax_amount = flt($tr.find(".modal-input-tax-amount").val());
+            if (isNaN(tax_amount) || tax_amount < 0) tax_amount = 0;
+
+            let total_amount = flt($tr.find(".modal-input-total-amount").val());
+            if (isNaN(total_amount) || total_amount < 0) total_amount = 0;
+
+            if (field_changed === "qty" || field_changed === "rate") {
+                amount = Math.round(qty * rate * 100) / 100;
+                tax_amount = Math.round(amount * (tax_rate / 100.0) * 100) / 100;
+                total_amount = Math.round((amount + tax_amount) * 100) / 100;
+                $tr.find(".modal-input-amount").val(amount.toFixed(2));
+                $tr.find(".modal-input-tax-amount").val(tax_amount.toFixed(2));
+                $tr.find(".modal-input-total-amount").val(total_amount.toFixed(2));
+            } else if (field_changed === "tax_rate") {
+                tax_amount = Math.round(amount * (tax_rate / 100.0) * 100) / 100;
+                total_amount = Math.round((amount + tax_amount) * 100) / 100;
+                $tr.find(".modal-input-tax-amount").val(tax_amount.toFixed(2));
+                $tr.find(".modal-input-total-amount").val(total_amount.toFixed(2));
+            } else if (field_changed === "amount") {
+                if (qty > 0) {
+                    rate = Math.round((amount / qty) * 10000) / 10000;
+                    $tr.find(".modal-input-rate").val(rate);
+                }
+                tax_amount = Math.round(amount * (tax_rate / 100.0) * 100) / 100;
+                total_amount = Math.round((amount + tax_amount) * 100) / 100;
+                $tr.find(".modal-input-tax-amount").val(tax_amount.toFixed(2));
+                $tr.find(".modal-input-total-amount").val(total_amount.toFixed(2));
+            } else if (field_changed === "tax_amount") {
+                total_amount = Math.round((amount + tax_amount) * 100) / 100;
+                if (amount > 0) {
+                    tax_rate = Math.round((tax_amount / amount) * 10000) / 100;
+                    $tr.find(".modal-input-tax-rate").val(tax_rate);
+                }
+                $tr.find(".modal-input-total-amount").val(total_amount.toFixed(2));
+            } else if (field_changed === "total_amount") {
+                amount = Math.round((total_amount / (1 + tax_rate / 100.0)) * 100) / 100;
+                tax_amount = Math.round((total_amount - amount) * 100) / 100;
+                if (qty > 0) {
+                    rate = Math.round((amount / qty) * 10000) / 10000;
+                    $tr.find(".modal-input-rate").val(rate);
+                }
+                $tr.find(".modal-input-amount").val(amount.toFixed(2));
+                $tr.find(".modal-input-tax-amount").val(tax_amount.toFixed(2));
+            }
+
+            r.qty = qty;
+            r.rate = rate;
+            r.amount = amount;
+            r.tax_rate = tax_rate;
+            r.tax_amount = tax_amount;
+            r.total_amount = total_amount;
+
+            update_bottom_summary($wrap);
         };
 
         const render_rows = (dialog) => {
-            const $tbody = dialog.get_field("items_html").$wrapper.find("#picker-modal-item-tbody");
+            const $wrapper = dialog.get_field("items_html").$wrapper;
+            const $tbody = $wrapper.find("#picker-modal-item-tbody");
             $tbody.empty();
 
-            let sum_qty = 0;
-            let sum_amt = 0;
-            let sum_tax = 0;
-            let sum_total = 0;
-
             rows_data.forEach((r, idx) => {
-                recalculate_row(r);
-                sum_qty += r.qty;
-                sum_amt += r.amount;
-                sum_tax += r.tax_amount;
-                sum_total += r.total_amount;
+                recalculate_row_state(r);
 
                 const tr = `
                     <tr data-idx="${idx}">
@@ -2144,30 +2327,33 @@ class ProcurementOrderPickerCenter {
                             </div>
                         </td>
                         <td>
-                            <input type="text" class="modal-input-name" placeholder="物料名称/规格..." value="${frappe.utils.escape_html(r.item_name || '')}">
+                            <input type="text" class="modal-input-name" placeholder="物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
                         </td>
                         <td>
-                            <input type="number" step="any" min="0.01" class="modal-input-qty" value="${r.qty}">
+                            <input type="text" class="modal-input-spec" placeholder="规格型号..." value="${frappe.utils.escape_html(r.spec || '')}">
+                        </td>
+                        <td>
+                            <input type="number" step="any" min="0" class="modal-input-qty" value="${r.qty}">
                         </td>
                         <td>
                             <input type="number" step="any" min="0" class="modal-input-rate" value="${r.rate}">
                         </td>
                         <td>
-                            <span class="modal-display-val">¥ ${flt(r.amount).toFixed(2)}</span>
+                            <input type="number" step="any" min="0" class="modal-input-amount" value="${flt(r.amount).toFixed(2)}">
                         </td>
                         <td>
-                            <input type="number" step="any" min="0" class="modal-input-tax" value="${r.tax_rate}">
+                            <input type="number" step="any" min="0" max="100" class="modal-input-tax-rate" value="${r.tax_rate}">
                         </td>
                         <td>
-                            <span class="modal-display-val">¥ ${flt(r.tax_amount).toFixed(2)}</span>
+                            <input type="number" step="any" min="0" class="modal-input-tax-amount" value="${flt(r.tax_amount).toFixed(2)}">
                         </td>
                         <td>
-                            <span class="modal-display-val font-bold">¥ ${flt(r.total_amount).toFixed(2)}</span>
+                            <input type="number" step="any" min="0" class="modal-input-total-amount" value="${flt(r.total_amount).toFixed(2)}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-desc" placeholder="用途说明..." value="${frappe.utils.escape_html(r.description || "")}">
+                            <input type="text" class="modal-input-remarks" placeholder="备注说明..." value="${frappe.utils.escape_html(r.description || '')}">
                         </td>
-                        <td>
+                        <td class="picker-modal-cell-center">
                             <button class="picker-modal-del-btn" data-idx="${idx}">删除</button>
                         </td>
                     </tr>
@@ -2175,11 +2361,7 @@ class ProcurementOrderPickerCenter {
                 $tbody.append(tr);
             });
 
-            const $wrap = dialog.get_field("items_html").$wrapper;
-            $wrap.find("#modal-sum-qty").text(sum_qty.toFixed(2));
-            $wrap.find("#modal-sum-amt").text(this.fmt_money(sum_amt));
-            $wrap.find("#modal-sum-tax").text(this.fmt_money(sum_tax));
-            $wrap.find("#modal-sum-total").text(this.fmt_money(sum_total));
+            update_bottom_summary($wrapper);
         };
 
         const d = new frappe.ui.Dialog({
@@ -2213,15 +2395,16 @@ class ProcurementOrderPickerCenter {
                                 <thead>
                                     <tr>
                                         <th>#</th>
-                                        <th>物料代码 (联想搜索)</th>
-                                        <th>物料名称/规格</th>
-                                        <th>申请数量</th>
+                                        <th>物料代码</th>
+                                        <th>物料名称</th>
+                                        <th>规格</th>
+                                        <th>数量</th>
                                         <th>参考单价</th>
                                         <th>不含税金额</th>
                                         <th>税率 %</th>
                                         <th>税额</th>
                                         <th>含税总价</th>
-                                        <th>用途/规格备注</th>
+                                        <th>备注</th>
                                         <th>操作</th>
                                     </tr>
                                 </thead>
@@ -2288,14 +2471,14 @@ class ProcurementOrderPickerCenter {
         const $wrap = d.get_field("items_html").$wrapper;
 
         $wrap.on("click", "#picker-modal-add-row-btn", () => {
-            rows_data.push({ item_code: "", item_name: "", qty: 1.0, rate: 0.0, amount: 0.0, tax_rate: 13.0, tax_amount: 0.0, total_amount: 0.0, description: "" });
+            rows_data.push({ item_code: "", item_name: "", spec: "", qty: 1.0, rate: 0.0, amount: 0.0, tax_rate: 13.0, tax_amount: 0.0, total_amount: 0.0, description: "" });
             render_rows(d);
         });
 
         $wrap.on("click", ".picker-modal-del-btn", function () {
             const idx = parseInt($(this).attr("data-idx"));
             rows_data.splice(idx, 1);
-            if (!rows_data.length) rows_data.push({ item_code: "", item_name: "", qty: 1.0, rate: 0.0, amount: 0.0, tax_rate: 13.0, tax_amount: 0.0, total_amount: 0.0, description: "" });
+            if (!rows_data.length) rows_data.push({ item_code: "", item_name: "", spec: "", qty: 1.0, rate: 0.0, amount: 0.0, tax_rate: 13.0, tax_amount: 0.0, total_amount: 0.0, description: "" });
             render_rows(d);
         });
 
@@ -2365,11 +2548,13 @@ class ProcurementOrderPickerCenter {
             const idx = parseInt($tr.attr("data-idx"));
             const code = $(this).attr("data-code");
             const name = $(this).attr("data-name");
+            const uom = $(this).attr("data-uom");
             const rate = flt($(this).attr("data-rate"));
             const tax = flt($(this).attr("data-tax")) || 13.0;
 
             rows_data[idx].item_code = code;
             rows_data[idx].item_name = name;
+            rows_data[idx].spec = uom || "";
             rows_data[idx].rate = rate;
             rows_data[idx].tax_rate = tax;
 
@@ -2390,33 +2575,51 @@ class ProcurementOrderPickerCenter {
             }
         });
 
-        // Live calculation on item_name, quantity, rate, tax rate, description change
+        // Live text and calculation event bindings
+        $wrap.on("input change", ".modal-input-code", function () {
+            const idx = parseInt($(this).closest("tr").attr("data-idx"));
+            if (rows_data[idx]) {
+                rows_data[idx].item_code = $(this).val().trim();
+            }
+        });
+
         $wrap.on("input change", ".modal-input-name", function () {
             const idx = parseInt($(this).closest("tr").attr("data-idx"));
             rows_data[idx].item_name = $(this).val();
         });
 
-        $wrap.on("input change", ".modal-input-qty", function () {
+        $wrap.on("input change", ".modal-input-spec", function () {
             const idx = parseInt($(this).closest("tr").attr("data-idx"));
-            rows_data[idx].qty = flt($(this).val()) || 1.0;
-            render_rows(d);
+            rows_data[idx].spec = $(this).val();
+        });
+
+        $wrap.on("input change", ".modal-input-remarks", function () {
+            const idx = parseInt($(this).closest("tr").attr("data-idx"));
+            rows_data[idx].description = $(this).val();
+        });
+
+        $wrap.on("input change", ".modal-input-qty", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "qty", $wrap);
         });
 
         $wrap.on("input change", ".modal-input-rate", function () {
-            const idx = parseInt($(this).closest("tr").attr("data-idx"));
-            rows_data[idx].rate = flt($(this).val()) || 0.0;
-            render_rows(d);
+            recalculate_and_sync_row($(this).closest("tr"), "rate", $wrap);
         });
 
-        $wrap.on("input change", ".modal-input-tax", function () {
-            const idx = parseInt($(this).closest("tr").attr("data-idx"));
-            rows_data[idx].tax_rate = flt($(this).val()) || 0.0;
-            render_rows(d);
+        $wrap.on("input change", ".modal-input-amount", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "amount", $wrap);
         });
 
-        $wrap.on("input change", ".modal-input-desc", function () {
-            const idx = parseInt($(this).closest("tr").attr("data-idx"));
-            rows_data[idx].description = $(this).val() || "";
+        $wrap.on("input change", ".modal-input-tax-rate", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "tax_rate", $wrap);
+        });
+
+        $wrap.on("input change", ".modal-input-tax-amount", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "tax_amount", $wrap);
+        });
+
+        $wrap.on("input change", ".modal-input-total-amount", function () {
+            recalculate_and_sync_row($(this).closest("tr"), "total_amount", $wrap);
         });
     }
 

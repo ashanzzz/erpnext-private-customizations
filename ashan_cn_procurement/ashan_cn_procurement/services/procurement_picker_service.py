@@ -377,32 +377,56 @@ def quick_create_material_request(
     total_amount = 0.0
     for it in items:
         item_code = (it.get("item_code") or "").strip()
-        if not item_code:
-            continue
+        item_name = (it.get("item_name") or "").strip() or item_code
 
-        item_doc = frappe.get_cached_doc("Item", item_code)
+        if not frappe.db.exists("Item", item_code):
+            new_it = frappe.new_doc("Item")
+            new_it.item_code = item_code
+            new_it.item_name = item_name
+            new_it.item_group = frappe.db.get_value("Item Group", {"is_group": 0}, "name") or "All Item Groups"
+            new_it.stock_uom = it.get("uom") or "Nos"
+            new_it.is_stock_item = 1
+            new_it.flags.ignore_permissions = True
+            new_it.insert()
+            item_doc = new_it
+        else:
+            item_doc = frappe.get_cached_doc("Item", item_code)
+
         qty = flt(it.get("qty") or 1.0, 4)
         if qty <= 0:
             qty = 1.0
 
-        rate = flt(it.get("rate") or item_doc.standard_rate or 0.0, 2)
+        rate = flt(it.get("rate") or getattr(item_doc, "standard_rate", 0.0) or 0.0, 2)
         amount = flt(it.get("amount") or (qty * rate), 2)
         tax_rate = flt(it.get("tax_rate") or 13.0, 2)
         tax_amount = flt(it.get("tax_amount") or (amount * (tax_rate / 100.0)), 2)
         total_price = flt(it.get("total_amount") or (amount + tax_amount), 2)
         total_amount += total_price
 
-        uom = it.get("uom") or item_doc.stock_uom or "Nos"
+        uom = it.get("uom") or getattr(item_doc, "stock_uom", "Nos") or "Nos"
         item_wh = (
             it.get("warehouse")
             or frappe.db.get_value("Item Default", {"parent": item_code, "company": company}, "default_warehouse")
             or default_company_wh
         )
 
+        item_name = (it.get("item_name") or "").strip() or item_doc.item_name
+        item_spec = (it.get("spec") or "").strip()
+        item_remarks = (it.get("description") or "").strip()
+
+        desc_parts = []
+        if item_name and item_name != item_doc.item_code:
+            desc_parts.append(item_name)
+        if item_spec:
+            desc_parts.append(f"规格:{item_spec}")
+        if item_remarks:
+            desc_parts.append(item_remarks)
+        final_desc = " | ".join(desc_parts) if desc_parts else (item_doc.description or item_name)
+
         row_dict = {
             "item_code": item_code,
-            "item_name": item_doc.item_name,
-            "description": it.get("description") or item_doc.description or item_doc.item_name,
+            "item_name": item_name,
+            "description": final_desc,
             "item_group": item_doc.item_group,
             "uom": uom,
             "stock_uom": item_doc.stock_uom or uom,
@@ -498,12 +522,26 @@ def update_quick_material_request(
         if not item_code:
             continue
 
-        item_doc = frappe.get_cached_doc("Item", item_code)
+        item_name = (it.get("item_name") or "").strip() or item_code
+
+        if not frappe.db.exists("Item", item_code):
+            new_it = frappe.new_doc("Item")
+            new_it.item_code = item_code
+            new_it.item_name = item_name
+            new_it.item_group = frappe.db.get_value("Item Group", {"is_group": 0}, "name") or "All Item Groups"
+            new_it.stock_uom = it.get("uom") or "Nos"
+            new_it.is_stock_item = 1
+            new_it.flags.ignore_permissions = True
+            new_it.insert()
+            item_doc = new_it
+        else:
+            item_doc = frappe.get_cached_doc("Item", item_code)
+
         qty = flt(it.get("qty") or 1.0, 4)
         if qty <= 0:
             qty = 1.0
 
-        rate = flt(it.get("rate") or item_doc.standard_rate or 0.0, 2)
+        rate = flt(it.get("rate") or getattr(item_doc, "standard_rate", 0.0) or 0.0, 2)
         amount = flt(it.get("amount") or (qty * rate), 2)
         tax_rate = flt(it.get("tax_rate") or 13.0, 2)
         tax_amount = flt(it.get("tax_amount") or (amount * (tax_rate / 100.0)), 2)
@@ -517,10 +555,23 @@ def update_quick_material_request(
             or default_company_wh
         )
 
+        item_name = (it.get("item_name") or "").strip() or item_doc.item_name
+        item_spec = (it.get("spec") or "").strip()
+        item_remarks = (it.get("description") or "").strip()
+
+        desc_parts = []
+        if item_name and item_name != item_doc.item_code:
+            desc_parts.append(item_name)
+        if item_spec:
+            desc_parts.append(f"规格:{item_spec}")
+        if item_remarks:
+            desc_parts.append(item_remarks)
+        final_desc = " | ".join(desc_parts) if desc_parts else (item_doc.description or item_name)
+
         row_dict = {
             "item_code": item_code,
-            "item_name": item_doc.item_name,
-            "description": it.get("description") or item_doc.description or item_doc.item_name,
+            "item_name": item_name,
+            "description": final_desc,
             "item_group": item_doc.item_group,
             "uom": uom,
             "stock_uom": item_doc.stock_uom or uom,
