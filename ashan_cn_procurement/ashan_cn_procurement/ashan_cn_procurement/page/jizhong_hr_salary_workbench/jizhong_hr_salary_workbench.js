@@ -5,7 +5,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         single_column: true
     });
 
-    const COMPANY = "天津吉众机电设备有限公司";
+    const COMPANY = "天津吉众科技有限公司";
     let current_month = "2026-06";
     let current_tab = "payroll"; // payroll | employees | insurance | attendance
 
@@ -15,7 +15,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         <div class="jz-header">
             <div>
                 <div class="jz-title">
-                    <span>⚡ 天津吉众机电设备有限公司 · 人事薪酬综合中枢</span>
+                    <span>⚡ 天津吉众科技有限公司 · 人事薪酬综合中枢</span>
                 </div>
                 <div class="jz-subtitle">
                     结构化薪资体系 (底薪+岗位津贴+绩效+各项补贴) · 独立工伤社保与公积金 · 月度核定锁定与归档
@@ -166,7 +166,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
             <!-- 配置工具栏 -->
             <div class="jz-toolbar">
                 <div class="jz-toolbar-left">
-                    <span style="font-weight: 700; color: #ea580c; font-size: 15px;">⚙️ 天津吉众机电设备有限公司 · 2026 年度费率与基数配置表</span>
+                    <span style="font-weight: 700; color: #ea580c; font-size: 15px;">⚙️ 天津吉众科技有限公司 · 2026 年度费率与基数配置表</span>
                 </div>
                 <div class="jz-toolbar-right">
                     <button class="btn btn-primary btn-sm" id="btn-jz-edit-insurance" style="background:#ea580c; border-color:#ea580c; font-weight:600;">

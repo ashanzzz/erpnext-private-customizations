@@ -23,8 +23,8 @@ frappe.pages['employee-salary-workbench'].on_page_load = function(wrapper) {
                 <div class="emp-company-tab active" data-company="天津祺富机械加工有限公司">
                     <span>🏢 天津祺富机械加工有限公司</span>
                 </div>
-                <div class="emp-company-tab" data-company="天津吉众机电设备有限公司">
-                    <span>⚡ 天津吉众机电设备有限公司</span>
+                <div class="emp-company-tab" data-company="天津吉众科技有限公司">
+                    <span>⚡ 天津吉众科技有限公司</span>
                 </div>
             </div>
 

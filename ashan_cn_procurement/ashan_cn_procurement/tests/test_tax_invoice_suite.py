@@ -337,7 +337,7 @@ class TestTaxInvoiceSuite(unittest.TestCase):
 		pi.supplier = frappe.db.get_value("Supplier", {}, "name") or "Test Supplier"
 		pi.bill_no = test_inv_no
 		pi.bill_date = nowdate()
-		pi.company = frappe.db.get_value("Company", {}, "name") or "天津吉众机电设备有限公司"
+		pi.company = frappe.db.get_value("Company", {}, "name") or "天津吉众科技有限公司"
 		pi.currency = "CNY"
 		pi.conversion_rate = 1.0
 		# 手动触发 Hook 或 update_tax_invoice_match_state
@@ -482,7 +482,7 @@ class TestTaxInvoiceSuite(unittest.TestCase):
 		self.assertEqual(unmapped_warning, warning)
 
 		mapped_warning, mapped_removed = remove_stale_company_mapping_warnings(
-			warning, "天津吉众机电设备有限公司"
+			warning, "天津吉众科技有限公司"
 		)
 		self.assertTrue(mapped_removed)
 		self.assertEqual(mapped_warning, "金额待人工复核")

@@ -17,9 +17,9 @@ def test_exact_match_rule():
 	doc.invoice_no = inv_no
 	doc.issue_date = '2026-08-15'
 	doc.invoice_type = '电子发票(增值税专用发票)'
-	doc.company = '天津吉众机电设备有限公司'
+	doc.company = '天津吉众科技有限公司'
 	doc.seller_name = '天津市某某科技有限公司'
-	doc.buyer_name = '天津吉众机电设备有限公司'
+	doc.buyer_name = '天津吉众科技有限公司'
 	doc.amount_without_tax = 3000.00
 	doc.tax_amount = 390.00
 	doc.invoice_grand_total = 3390.00
@@ -30,7 +30,7 @@ def test_exact_match_rule():
 
 	# 2. 模拟 ERP 采购发票金额不符 (录入了 ¥3,000.00)
 	pi = frappe.new_doc('Purchase Invoice')
-	pi.company = '天津吉众机电设备有限公司'
+	pi.company = '天津吉众科技有限公司'
 	pi.supplier = frappe.db.get_value('Supplier', {}, 'name') or '默认供应商'
 	pi.bill_no = inv_no
 	pi.grand_total = 3000.00
@@ -67,9 +67,9 @@ def seed_mismatch_invoice():
 	doc.invoice_no = inv_no
 	doc.issue_date = '2026-08-18'
 	doc.invoice_type = '电子发票(增值税专用发票)'
-	doc.company = '天津吉众机电设备有限公司'
-	doc.seller_name = '天津市某某自动化科技有限公司'
-	doc.buyer_name = '天津吉众机电设备有限公司'
+	doc.company = '天津吉众科技有限公司'
+	doc.seller_name = '天津市某某科技有限公司'
+	doc.buyer_name = '天津吉众科技有限公司'
 	doc.amount_without_tax = 3000.00
 	doc.tax_amount = 390.00
 	doc.invoice_grand_total = 3390.00

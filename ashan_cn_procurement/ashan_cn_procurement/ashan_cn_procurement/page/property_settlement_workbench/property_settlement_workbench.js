@@ -1041,7 +1041,7 @@ class PropertySettlementWorkbench {
     open_add_adjustment_dialog() {
         const self = this;
         const companies = (self.data?.company_summaries || []).map(s => s.company);
-        const fromDefault = companies[0] || '天津吉众机电设备有限公司';
+        const fromDefault = companies[0] || '天津吉众科技有限公司';
         const toDefault = companies[1] || (companies[0] || '天津祺富机械加工有限公司');
 
         let currentAdjType = '按金额';

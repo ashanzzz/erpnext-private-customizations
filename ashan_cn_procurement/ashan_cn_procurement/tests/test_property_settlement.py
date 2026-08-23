@@ -18,9 +18,9 @@ class TestPropertySettlement(unittest.TestCase):
 	@classmethod
 	def setUpClass(cls):
 		# 确保公司存在
-		if not frappe.db.exists("Company", "天津吉众机电设备有限公司"):
+		if not frappe.db.exists("Company", "天津吉众科技有限公司"):
 			c1 = frappe.new_doc("Company")
-			c1.company_name = "天津吉众机电设备有限公司"
+			c1.company_name = "天津吉众科技有限公司"
 			c1.abbr = "吉众"
 			c1.default_currency = "CNY"
 			c1.insert(ignore_permissions=True)
@@ -32,7 +32,7 @@ class TestPropertySettlement(unittest.TestCase):
 			c2.default_currency = "CNY"
 			c2.insert(ignore_permissions=True)
 
-		cls.comp_jz = "天津吉众机电设备有限公司"
+		cls.comp_jz = "天津吉众科技有限公司"
 		cls.comp_qf = "天津祺富机械加工有限公司"
 
 	def test_01_meter_multiplier_and_usage(self):

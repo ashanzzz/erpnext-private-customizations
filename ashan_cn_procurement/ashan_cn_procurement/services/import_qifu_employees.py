@@ -39,7 +39,7 @@ def setup_all_company_insurance_settings():
 	doc_q.save(ignore_permissions=True)
 
 	# 2. 吉众 2026 设置
-	jz_company = "天津吉众机电设备有限公司"
+	jz_company = "天津吉众科技有限公司"
 	jz_year = 2026
 	jz_name = f"{jz_company}-{jz_year}"
 	

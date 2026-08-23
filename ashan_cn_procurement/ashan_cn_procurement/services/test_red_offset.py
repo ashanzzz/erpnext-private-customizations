@@ -13,10 +13,10 @@ def seed_and_test_red_offset():
 	blue.invoice_no = '26122000000088880001'
 	blue.issue_date = '2026-08-10'
 	blue.invoice_type = '电子发票(增值税专用发票)'
-	blue.company = '天津吉众机电设备有限公司'
+	blue.company = '天津吉众科技有限公司'
 	blue.seller_name = '天津某某自动化控制设备有限公司'
 	blue.seller_tax_id = '91120000MA0123456X'
-	blue.buyer_name = '天津吉众机电设备安装工程有限公司'
+	blue.buyer_name = '天津吉众科技有限公司'
 	blue.buyer_tax_id = '911200000000000000'
 	blue.amount_without_tax = 5000.00
 	blue.tax_amount = 650.00
@@ -33,10 +33,10 @@ def seed_and_test_red_offset():
 	red.invoice_no = '26122000000088880002'
 	red.issue_date = '2026-08-12'
 	red.invoice_type = '电子发票(增值税专用发票)'
-	red.company = '天津吉众机电设备有限公司'
+	red.company = '天津吉众科技有限公司'
 	red.seller_name = '天津某某自动化控制设备有限公司'
 	red.seller_tax_id = '91120000MA0123456X'
-	red.buyer_name = '天津吉众机电设备安装工程有限公司'
+	red.buyer_name = '天津吉众科技有限公司'
 	red.buyer_tax_id = '911200000000000000'
 	red.amount_without_tax = -5000.00
 	red.tax_amount = -650.00
@@ -65,20 +65,15 @@ def init_settings_mappings():
 	settings = frappe.get_single('Tax Invoice Settings')
 	settings.company_mappings = []
 	
-	# 吉众机电及其抬头
+	# 吉众科技及其抬头
 	settings.append('company_mappings', {
-		'company': '天津吉众机电设备有限公司',
+		'company': '天津吉众科技有限公司',
 		'buyer_name': '天津吉众科技有限公司',
 		'buyer_tax_id': ''
 	})
 	settings.append('company_mappings', {
-		'company': '天津吉众机电设备有限公司',
+		'company': '天津吉众科技有限公司',
 		'buyer_name': '天津吉众机电设备安装工程有限公司',
-		'buyer_tax_id': ''
-	})
-	settings.append('company_mappings', {
-		'company': '天津吉众机电设备有限公司',
-		'buyer_name': '天津吉众机电设备有限公司',
 		'buyer_tax_id': ''
 	})
 	

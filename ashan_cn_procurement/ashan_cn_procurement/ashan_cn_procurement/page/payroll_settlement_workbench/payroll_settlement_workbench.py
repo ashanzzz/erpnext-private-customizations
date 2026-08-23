@@ -22,7 +22,7 @@ def get_payroll_workbench_data(period_month=None, company=None, tax_cycle_start_
         now = datetime.datetime.now()
         period_month = now.strftime('%Y-%m')
     if not company:
-        company = "天津吉众机电设备有限公司"
+        company = "天津吉众科技有限公司"
 
     # 1. 查询法定日历获取当月满勤工作日天数
     year, month = period_month.split('-')

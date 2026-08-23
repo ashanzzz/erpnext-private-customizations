@@ -184,7 +184,7 @@ def get_monthly_settlement_status(year=None, month=None):
             "all_done": total_items > 0 and (total_items == settled_items),
             "companies": {
                 "jizhong": {
-                    "company_name": "天津吉众机电设备有限公司",
+                    "company_name": "天津吉众科技有限公司",
                     "short_name": "吉众",
                     "visible": show_jizhong,
                     "items": jizhong_items

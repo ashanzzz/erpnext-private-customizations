@@ -15,7 +15,7 @@ class AshanPayrollWorkbench {
     constructor(wrapper, page) {
         this.wrapper = $(wrapper);
         this.page = page;
-        this.currentCompany = '天津吉众机电设备有限公司';
+        this.currentCompany = '天津吉众科技有限公司';
 
         // 默认 2026-06 (历史真实数据月)
         this.currentPeriod = '2026-06';
@@ -80,7 +80,7 @@ class AshanPayrollWorkbench {
 
                         <!-- 公司切换芯片 (吉众 vs 祺富) -->
                         <div class="payroll-company-tabs" id="payroll-comp-tabs">
-                            <button type="button" class="payroll-comp-tab-btn ${this.currentCompany.includes('吉众')?'active':''}" data-comp="天津吉众机电设备有限公司">🏢 吉众机电</button>
+                            <button type="button" class="payroll-comp-tab-btn ${this.currentCompany.includes('吉众')?'active':''}" data-comp="天津吉众科技有限公司">🏢 吉众科技</button>
                             <button type="button" class="payroll-comp-tab-btn ${this.currentCompany.includes('祺富')?'active':''}" data-comp="天津祺富机械加工有限公司">🏢 祺富机械</button>
                         </div>
                     </div>
