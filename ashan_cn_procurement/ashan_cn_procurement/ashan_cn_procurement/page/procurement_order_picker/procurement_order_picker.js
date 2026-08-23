@@ -1983,6 +1983,7 @@ class ProcurementOrderPickerCenter {
                     <td class="picker-cell-center">${it.idx}</td>
                     <td><strong>${frappe.utils.escape_html(it.item_code)}</strong></td>
                     <td>${frappe.utils.escape_html(it.item_name)}</td>
+                    <td>${frappe.utils.escape_html(it.spec || "-")}</td>
                     <td>${frappe.utils.escape_html(it.uom || "-")}</td>
                     <td class="picker-qty-cell"><strong>${flt(it.qty).toFixed(2)}</strong></td>
                     <td class="picker-money-cell">${self.fmt_money(it.rate)}</td>
@@ -1996,7 +1997,7 @@ class ProcurementOrderPickerCenter {
         });
 
         if (!items_tbody_html) {
-            items_tbody_html = `<tr><td colspan="11" class="picker-doc-empty-state">无物料明细数据</td></tr>`;
+            items_tbody_html = `<tr><td colspan="12" class="picker-doc-empty-state">无物料明细数据</td></tr>`;
         }
 
         // Build upstream flow items
@@ -2080,7 +2081,8 @@ class ProcurementOrderPickerCenter {
                             <tr>
                                 <th class="picker-cell-col-idx">#</th>
                                 <th>物料代码</th>
-                                <th>物料名称/规格</th>
+                                <th>物料名称</th>
+                                <th>规格</th>
                                 <th>单位</th>
                                 <th class="picker-cell-right">数量</th>
                                 <th class="picker-cell-right">单价</th>
@@ -2088,7 +2090,7 @@ class ProcurementOrderPickerCenter {
                                 <th class="picker-cell-right">税率</th>
                                 <th class="picker-cell-right">税额</th>
                                 <th class="picker-cell-right">价税合计</th>
-                                <th>用途/规格备注</th>
+                                <th>备注</th>
                             </tr>
                         </thead>
                         <tbody>

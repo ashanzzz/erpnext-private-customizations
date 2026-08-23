@@ -2089,11 +2089,25 @@ def get_document_details(doctype: str, name: str) -> dict:
         total_qty += q
         total_amount += (tot if tot > 0 else amt)
 
+        custom_spec = (it.get("custom_item_spec") or it.get("spec") or "").strip()
+        desc_raw = (it.get("description") or "").strip()
+        remarks = desc_raw
+        if not custom_spec and "规格:" in desc_raw:
+            parts = desc_raw.split(" | ")
+            clean_remarks = []
+            for p in parts:
+                if p.startswith("规格:"):
+                    custom_spec = p.replace("规格:", "").strip()
+                elif p != (it.get("item_name") or "") and p != (it.get("item_code") or ""):
+                    clean_remarks.append(p)
+            remarks = " | ".join(clean_remarks)
+
         items.append({
             "idx": idx,
             "item_code": it.get("item_code") or "",
             "item_name": it.get("item_name") or it.get("item_code") or "",
-            "description": it.get("description") or "",
+            "spec": custom_spec,
+            "description": remarks,
             "item_group": it.get("item_group") or "",
             "uom": it.get("uom") or it.get("stock_uom") or "",
             "qty": q,
