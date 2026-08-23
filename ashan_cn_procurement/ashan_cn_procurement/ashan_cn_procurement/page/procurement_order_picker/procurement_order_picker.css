@@ -510,25 +510,33 @@
     left: 44px;
     z-index: 5;
     background: inherit;
+    width: 44px;
     min-width: 44px;
-    text-align: center;
-}
-
-.picker-col-checkbox-th {
-    padding: 6px 8px !important;
+    max-width: 44px;
     text-align: center;
     vertical-align: middle;
+}
+
+.picker-data-table thead th.picker-col-sticky-2,
+.picker-data-table tbody td.picker-col-sticky-2 {
+    padding: 0 !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+    height: 38px;
+    box-sizing: border-box;
 }
 
 .picker-header-checkbox,
 .picker-row-checkbox {
     cursor: pointer;
-    width: 15px;
-    height: 15px;
+    width: 16px;
+    height: 16px;
     accent-color: #2563eb;
     vertical-align: middle;
-    margin: 0 auto;
+    margin: 0 !important;
     display: inline-block;
+    border-radius: 3px;
+    outline: none;
 }
 
 .picker-col-sticky-3 {

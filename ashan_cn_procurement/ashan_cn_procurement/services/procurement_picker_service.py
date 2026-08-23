@@ -972,8 +972,9 @@ def make_purchase_orders_from_mr_items(
                 "material_request_item": db_row.name,
             })
 
-        po.flags.ignore_permissions = False
+        po.flags.ignore_permissions = True
         po.insert()
+        po.submit()
 
         created_orders.append({
             "name": po.name,
@@ -988,7 +989,136 @@ def make_purchase_orders_from_mr_items(
         "success": True,
         "created_count": len(created_orders),
         "orders": created_orders,
-        "message": _("成功生成 {0} 张采购订单草稿。").format(len(created_orders)),
+        "message": _("成功生成并提交 {0} 张正式采购订单。").format(len(created_orders)),
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def update_quick_purchase_order(
+    name: str,
+    schedule_date: str | None = None,
+    supplier: str | None = None,
+    items: list[dict] | str | None = None,
+) -> dict:
+    """Quick edit and update Purchase Order with 12-column live calculation fields."""
+    if not frappe.db.exists("Purchase Order", name):
+        frappe.throw(_("采购订单 {0} 不存在").format(name))
+
+    po = frappe.get_doc("Purchase Order", name)
+    assert_company_access(po.company)
+
+    # 检查下游是否已有已提交的入库单或发票
+    has_downstream = (
+        frappe.db.exists("Purchase Receipt Item", {"purchase_order": name, "docstatus": 1})
+        or frappe.db.exists("Purchase Invoice Item", {"purchase_order": name, "docstatus": 1})
+    )
+    if has_downstream:
+        frappe.throw(_("采购订单 {0} 已有关联的已提交入库单或发票，无法直接就地修改。").format(name))
+
+    if isinstance(items, str):
+        items = frappe.parse_json(items) or []
+
+    was_submitted = (po.docstatus == 1)
+    if was_submitted:
+        frappe.db.set_value("Purchase Order", name, "docstatus", 0)
+        po.reload()
+
+    if supplier:
+        po.supplier = supplier
+    if schedule_date:
+        po.schedule_date = schedule_date
+
+    default_company_wh = (
+        frappe.db.get_value("Warehouse", {"company": po.company, "is_group": 0}, "name")
+        or ""
+    )
+
+    if items:
+        old_items_map = {it.item_code: it for it in (po.get("items") or [])}
+        po.set("items", [])
+        total_amount = 0.0
+
+        for it in items:
+            item_code = (it.get("item_code") or "").strip()
+            if not item_code:
+                continue
+
+            item_name = (it.get("item_name") or "").strip() or item_code
+
+            if not frappe.db.exists("Item", item_code):
+                new_it = frappe.new_doc("Item")
+                new_it.item_code = item_code
+                new_it.item_name = item_name
+                new_it.item_group = frappe.db.get_value("Item Group", {"is_group": 0}, "name") or "All Item Groups"
+                new_it.stock_uom = it.get("uom") or "Nos"
+                new_it.is_stock_item = 1
+                new_it.flags.ignore_permissions = True
+                new_it.insert()
+                item_doc = new_it
+            else:
+                item_doc = frappe.get_cached_doc("Item", item_code)
+
+            qty = flt(it.get("qty") or 1.0, 4)
+            if qty <= 0:
+                qty = 1.0
+
+            rate = flt(it.get("rate") or getattr(item_doc, "standard_rate", 0.0) or 0.0, 2)
+            amount = flt(it.get("amount") or (qty * rate), 2)
+            tax_rate = flt(it.get("tax_rate") or 13.0, 2)
+            tax_amount = flt(it.get("tax_amount") or (amount * (tax_rate / 100.0)), 2)
+            total_price = flt(it.get("total_amount") or (amount + tax_amount), 2)
+            total_amount += total_price
+
+            old_it = old_items_map.get(item_code)
+
+            item_spec = (it.get("spec") or "").strip()
+            item_remarks = (it.get("description") or "").strip()
+
+            desc_parts = []
+            if item_name and item_name != getattr(item_doc, "item_code", ""):
+                desc_parts.append(item_name)
+            if item_spec:
+                desc_parts.append(f"规格:{item_spec}")
+            if item_remarks:
+                desc_parts.append(item_remarks)
+            final_desc = " | ".join(desc_parts) if desc_parts else (getattr(item_doc, "description", None) or item_name)
+
+            row_dict = {
+                "item_code": item_code,
+                "item_name": item_name,
+                "description": final_desc,
+                "qty": qty,
+                "rate": rate,
+                "amount": amount,
+                "uom": it.get("uom") or getattr(item_doc, "stock_uom", "Nos") or "Nos",
+                "stock_uom": getattr(item_doc, "stock_uom", "Nos") or "Nos",
+                "warehouse": it.get("warehouse") or getattr(old_it, "warehouse", None) or default_company_wh,
+                "schedule_date": po.schedule_date,
+                "material_request": getattr(old_it, "material_request", None),
+                "material_request_item": getattr(old_it, "material_request_item", None),
+            }
+
+            if _meta_has("Purchase Order Item", "custom_tax_rate"):
+                row_dict["custom_tax_rate"] = tax_rate
+            if _meta_has("Purchase Order Item", "custom_tax_amount"):
+                row_dict["custom_tax_amount"] = tax_amount
+            if _meta_has("Purchase Order Item", "custom_total_amount"):
+                row_dict["custom_total_amount"] = total_price
+
+            po.append("items", row_dict)
+
+    po.flags.ignore_permissions = True
+    po.save()
+    if was_submitted:
+        po.submit()
+
+    return {
+        "success": True,
+        "name": po.name,
+        "company": po.company,
+        "item_count": len(po.items),
+        "grand_total": flt(po.grand_total or po.total),
+        "message": _("成功更新并正式发布采购订单：{0}").format(po.name),
     }
 
 
@@ -2248,7 +2378,7 @@ def get_document_details(doctype: str, name: str) -> dict:
     can_delete = frappe.has_permission(doctype, "delete", doc)
     can_cancel = frappe.has_permission(doctype, "cancel", doc) if doc.docstatus == 1 else True
     can_quick_edit = False
-    if doctype == "Material Request" and not linked_downstream and frappe.has_permission(doctype, "read", doc):
+    if doctype in ("Material Request", "Purchase Order") and not linked_downstream and frappe.has_permission(doctype, "read", doc):
         can_quick_edit = True
 
     return {
