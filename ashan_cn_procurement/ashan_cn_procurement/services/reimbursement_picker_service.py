@@ -453,6 +453,56 @@ def _ensure_supplier(supplier_name: str) -> str:
     return supplier_name
 
 
+def _ensure_uom(uom_name: str) -> str:
+    """Ensure UOM exists in ERPNext UOM table."""
+    uom_name = (uom_name or "个").strip()
+    if not frappe.db.exists("UOM", uom_name):
+        try:
+            uom_doc = frappe.new_doc("UOM")
+            uom_doc.uom_name = uom_name
+            uom_doc.flags.ignore_permissions = True
+            uom_doc.insert()
+            return uom_doc.name
+        except Exception:
+            if frappe.db.exists("UOM", "Nos"):
+                return "Nos"
+            if frappe.db.exists("UOM", "Unit"):
+                return "Unit"
+    return uom_name
+
+
+def _ensure_item(item_code_or_name: str, spec: str = "", uom: str = "个", is_stock: bool = False) -> tuple[str, str, str, bool]:
+    """Ensure Item exists in ERPNext Item DocType, create non-stock service item if missing."""
+    clean_name = (item_code_or_name or "零星费用项").strip()
+    clean_uom = _ensure_uom(uom)
+
+    # 1. 查找是否存在完全一致的 item_code
+    if frappe.db.exists("Item", clean_name):
+        doc = frappe.db.get_value("Item", clean_name, ["item_name", "stock_uom", "is_stock_item"], as_dict=True)
+        return clean_name, doc.item_name, doc.stock_uom, bool(doc.is_stock_item)
+
+    # 2. 查找是否存在 item_name
+    match_by_name = frappe.db.get_value("Item", {"item_name": clean_name}, ["name", "item_name", "stock_uom", "is_stock_item"], as_dict=True)
+    if match_by_name:
+        return match_by_name.name, match_by_name.item_name, match_by_name.stock_uom, bool(match_by_name.is_stock_item)
+
+    # 3. 若均不存在，自动建立一个非库存/费用型 Item
+    item_doc = frappe.new_doc("Item")
+    item_doc.item_code = clean_name
+    item_doc.item_name = clean_name
+    item_doc.item_group = "All Item Groups"
+    item_doc.stock_uom = clean_uom
+    item_doc.is_stock_item = 1 if is_stock else 0
+    if spec and _meta_has("Item", "custom_spec_model"):
+        item_doc.custom_spec_model = spec
+    elif spec:
+        item_doc.description = spec
+
+    item_doc.flags.ignore_permissions = True
+    item_doc.insert()
+    return item_doc.name, item_doc.item_name, item_doc.stock_uom, bool(item_doc.is_stock_item)
+
+
 def _resolve_warehouse_for_company(company: str, preferred: str | None = None) -> str:
     """Determine receiving warehouse for stock items."""
     if preferred and frappe.db.exists("Warehouse", preferred):
@@ -537,21 +587,16 @@ def create_manual_multi_invoice_reimbursement(
             if not item_code_raw and not item_name_raw:
                 frappe.throw(_("发票 [{0}] 第 {1} 行物料名称不能为空。").format(bill_no_raw, row_idx))
 
-            # 尝试在 Item 档案中查找或匹配
-            item_meta = None
-            resolved_code = None
-            if item_code_raw and frappe.db.exists("Item", item_code_raw):
-                resolved_code = item_code_raw
-            elif item_name_raw and frappe.db.exists("Item", item_name_raw):
-                resolved_code = item_name_raw
-            elif item_name_raw and frappe.db.exists("Item", {"item_name": item_name_raw}):
-                resolved_code = frappe.db.get_value("Item", {"item_name": item_name_raw}, "name")
+            raw_spec = (row.get("spec") or "").strip()
+            raw_uom = (row.get("uom") or "个").strip()
 
-            if resolved_code:
-                item_meta = frappe.db.get_value("Item", resolved_code, ["item_name", "stock_uom", "is_stock_item"], as_dict=True)
-            else:
-                # 允许作为费用/非库存项目
-                resolved_code = item_code_raw or item_name_raw
+            # 确保物料与单位安全建立/匹配
+            final_code, final_name, final_uom, is_stock = _ensure_item(
+                item_code_or_name=item_code_raw or item_name_raw,
+                spec=raw_spec,
+                uom=raw_uom,
+                is_stock=False,
+            )
 
             qty = flt(row.get("qty") or 1.0)
             rate = flt(row.get("rate") or 0.0)
@@ -560,7 +605,7 @@ def create_manual_multi_invoice_reimbursement(
             if qty <= 0 or rate <= 0 or amount <= 0:
                 frappe.throw(
                     _("发票 [{0}] 第 {1} 行 [{2}] 的数量({3})、单价(¥{4:.2f})或金额(¥{5:.2f})必须大于0！根据财务纪律，单价与金额严禁为0。").format(
-                        bill_no_raw, row_idx, item_name_raw or resolved_code, qty, rate, amount
+                        bill_no_raw, row_idx, final_name, qty, rate, amount
                     )
                 )
 
@@ -573,16 +618,15 @@ def create_manual_multi_invoice_reimbursement(
             tax_amount = flt(amount * (tax_rate / 100.0), 2)
             line_total = flt(amount + tax_amount, 2)
 
-            is_stock = bool(item_meta.is_stock_item) if item_meta else False
             if is_stock:
                 has_stock_items = True
 
             validated_items.append({
                 "idx": row_idx,
-                "item_code": resolved_code,
-                "item_name": item_name_raw or (item_meta.item_name if item_meta else resolved_code),
-                "spec": (row.get("spec") or "").strip(),
-                "uom": (row.get("uom") or "").strip() or (item_meta.stock_uom if item_meta else "Nos"),
+                "item_code": final_code,
+                "item_name": final_name,
+                "spec": raw_spec,
+                "uom": final_uom,
                 "qty": qty,
                 "rate": rate,
                 "amount": amount,
@@ -799,3 +843,33 @@ def create_manual_multi_invoice_reimbursement(
         "created_pr_names": created_pr_names,
         "created_pi_names": created_pi_names,
     }
+
+
+@frappe.whitelist()
+def search_items_for_reimbursement(txt: str = "", limit: int = 20) -> list[dict]:
+    """Search items for reimbursement by item_code, item_name or spec."""
+    txt = (txt or "").strip()
+    has_spec = _meta_has("Item", "custom_spec_model")
+    spec_col = "custom_spec_model" if has_spec else "description"
+
+    filters = [
+        ["disabled", "=", 0],
+    ]
+    or_filters = [
+        ["name", "like", f"%{txt}%"],
+        ["item_name", "like", f"%{txt}%"],
+    ]
+    if has_spec:
+        or_filters.append(["custom_spec_model", "like", f"%{txt}%"])
+    else:
+        or_filters.append(["description", "like", f"%{txt}%"])
+
+    items = frappe.get_all(
+        "Item",
+        filters=filters,
+        or_filters=or_filters if txt else None,
+        fields=["name AS item_code", "item_name", f"{spec_col} AS spec", "stock_uom AS uom", "is_stock_item"],
+        limit=int(limit or 20),
+        order_by="name ASC",
+    )
+    return items

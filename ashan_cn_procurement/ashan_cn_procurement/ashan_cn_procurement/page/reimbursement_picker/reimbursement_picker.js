@@ -18,6 +18,7 @@ const REIM_API = {
     companies: "ashan_cn_procurement.services.procurement_picker_service.get_user_procurement_companies",
     creation_defaults: "ashan_cn_procurement.services.reimbursement_picker_service.get_reimbursement_creation_defaults",
     create_manual: "ashan_cn_procurement.services.reimbursement_picker_service.create_manual_multi_invoice_reimbursement",
+    search_items: "ashan_cn_procurement.services.reimbursement_picker_service.search_items_for_reimbursement",
 };
 
 class ReimbursementPicker {
@@ -29,6 +30,7 @@ class ReimbursementPicker {
         this.match_status = "pending";
         this.cached_rows = [];
         this.kpis = {};
+        this.cached_items = []; // 物料主数据缓存
 
         this.creation = {
             dialog: null,
@@ -38,8 +40,9 @@ class ReimbursementPicker {
             posting_date: null,
             title: "",
             auto_receive_stock: 1,
-            invoices: [], // List of invoice objects
+            invoices: [],
             invoice_counter: 0,
+            $wrapper: null,
         };
 
         this.init();
@@ -48,8 +51,23 @@ class ReimbursementPicker {
     async init() {
         this.render_layout();
         await this.load_companies();
+        this.preload_items();
         this.bind_global_events();
         this.refresh_all();
+    }
+
+    async preload_items() {
+        try {
+            const r = await frappe.call({
+                method: REIM_API.search_items,
+                args: { txt: "", limit: 100 },
+            });
+            if (r.message) {
+                this.cached_items = r.message;
+            }
+        } catch (e) {
+            console.error("Failed to preload items:", e);
+        }
     }
 
     render_layout() {
@@ -288,7 +306,6 @@ class ReimbursementPicker {
             $top.scrollLeft($(this).scrollLeft());
         });
 
-        // Mousewheel on thead & table converts to horizontal scroll
         $("#reim-table-head, #reim-main-scroll").on("wheel", function (e) {
             if (e.originalEvent.deltaY !== 0) {
                 const delta = e.originalEvent.deltaY;
@@ -517,7 +534,7 @@ class ReimbursementPicker {
     }
 
     // =========================================================================
-    // Multi-Invoice Manual Entry Modal (V3 Smart Form)
+    // Multi-Invoice Manual Entry Modal (V4 Smart Form with Auto-Fill & Full Binding)
     // =========================================================================
 
     open_create_reimbursement_modal() {
@@ -543,6 +560,7 @@ class ReimbursementPicker {
         this.creation.$wrapper = $wrapper;
         $wrapper.html(this.get_creation_dialog_html());
 
+        this.populate_company_dropdown($wrapper);
         this.bind_creation_dialog_events($wrapper);
         this.load_creation_defaults();
 
@@ -560,6 +578,18 @@ class ReimbursementPicker {
         this.creation.invoices = [];
         this.creation.invoice_counter = 0;
         this.creation.$wrapper = null;
+    }
+
+    populate_company_dropdown($wrapper) {
+        const $sel = $wrapper.find("#modal-reim-company");
+        $sel.empty();
+        const comps = this.companies.length ? this.companies : [this.creation.company].filter(Boolean);
+        comps.forEach((c) => {
+            $sel.append(`<option value="${c}">${c}</option>`);
+        });
+        if (this.creation.company) {
+            $sel.val(this.creation.company);
+        }
     }
 
     get_creation_dialog_html() {
@@ -647,18 +677,22 @@ class ReimbursementPicker {
 
         if (r.message) {
             const defs = r.message;
-            const $compSel = $("#modal-reim-company");
-            $compSel.empty();
-            defs.companies.forEach((c) => {
-                $compSel.append(`<option value="${c}" ${c === defs.company ? "selected" : ""}>${c}</option>`);
-            });
+            if (defs.companies && defs.companies.length) {
+                this.companies = defs.companies;
+                if (this.creation.$wrapper) {
+                    this.populate_company_dropdown(this.creation.$wrapper);
+                }
+            }
 
-            this.creation.company = defs.company;
+            this.creation.company = defs.company || this.creation.company;
             this.creation.employee = defs.employee;
             this.creation.employee_name = defs.employee_name;
 
-            if (defs.employee) {
-                $("#modal-reim-employee").val(defs.employee_name ? `${defs.employee_name} (${defs.employee})` : defs.employee);
+            if (this.creation.$wrapper) {
+                this.creation.$wrapper.find("#modal-reim-company").val(this.creation.company);
+                if (defs.employee) {
+                    this.creation.$wrapper.find("#modal-reim-employee").val(defs.employee_name ? `${defs.employee_name} (${defs.employee})` : defs.employee);
+                }
             }
         }
     }
@@ -669,6 +703,7 @@ class ReimbursementPicker {
         // Company change
         $wrapper.on("change", "#modal-reim-company", function () {
             me.creation.company = $(this).val();
+            me.load_creation_defaults();
         });
 
         // Add Invoice Card Button
@@ -682,29 +717,33 @@ class ReimbursementPicker {
             me.remove_invoice_card(invId);
         });
 
-        // Change Invoice Type
+        // Change Invoice Type (严格3种: 专用发票 / 普通发票 / 无发票)
         $wrapper.on("change", ".modal-inv-type-select", function () {
             const invId = $(this).closest(".reim-inv-card").data("inv-id");
             const typeVal = $(this).val();
-            const $card = $(`#reim-inv-card-${invId}`);
+            const $card = me.creation.$wrapper ? me.creation.$wrapper.find(`#reim-inv-card-${invId}`) : $(`#reim-inv-card-${invId}`);
             const $noInput = $card.find(".modal-inv-no-input");
 
             if (typeVal === "无发票") {
-                $noInput.val("").prop("placeholder", "无发票 (系统自动生成编号)");
-                // 将该发票下所有行税率改为 0
+                $noInput.val("").prop("placeholder", "无发票 (系统自动编号)").prop("disabled", true);
+                // 将该发票下所有行税率改为 0 并禁用
                 $card.find(".modal-row-tax-rate").val("0").prop("disabled", true);
             } else if (typeVal === "普通发票") {
-                $noInput.prop("placeholder", "输入发票号码...");
+                $noInput.prop("placeholder", "输入发票号码...").prop("disabled", false);
                 $card.find(".modal-row-tax-rate").val("0").prop("disabled", true);
             } else {
                 // 专用发票
-                $noInput.prop("placeholder", "输入发票号码...");
+                $noInput.prop("placeholder", "输入发票号码...").prop("disabled", false);
                 $card.find(".modal-row-tax-rate").prop("disabled", false);
                 $card.find(".modal-row-tax-rate").each(function () {
-                    if ($(this).val() === "0") $(this).val("13");
+                    if ($(this).val() === "0" || !$(this).val()) $(this).val("13");
                 });
             }
 
+            // 重新触发所有行的联动计算
+            $card.find(".modal-inv-tbody tr").each(function () {
+                me.handle_row_calc("tax_rate", $(this), invId);
+            });
             me.recalculate_invoice(invId);
         });
 
@@ -722,24 +761,63 @@ class ReimbursementPicker {
             me.recalculate_invoice(invId);
         });
 
-        // Input change on Row (qty, rate, tax_rate)
-        $wrapper.on("input", ".modal-row-qty, .modal-row-rate, .modal-row-tax-rate", function () {
+        // Item Select / Autocomplete change
+        $wrapper.on("input change", ".modal-row-item-input", function () {
+            const val = $(this).val().trim();
+            const $row = $(this).closest("tr");
+            
+            // 在缓存中匹配物料
+            const matched = me.cached_items.find(
+                (it) => it.item_code === val || it.item_name === val || `[${it.item_code}] ${it.item_name}` === val
+            );
+
+            if (matched) {
+                $row.find(".modal-row-item-code").val(matched.item_code);
+                $row.find(".modal-row-item-name").val(matched.item_name);
+                $row.find(".modal-row-spec").val(matched.spec || "-");
+                $row.find(".modal-row-uom").val(matched.uom || "个");
+            } else {
+                // 手工输入临时物料/费用项
+                $row.find(".modal-row-item-code").val(val);
+                $row.find(".modal-row-item-name").val(val);
+            }
+        });
+
+        // Multi-directional Calculation Handlers
+        $wrapper.on("input", ".modal-row-qty", function () {
             const $row = $(this).closest("tr");
             const invId = $(this).closest(".reim-inv-card").data("inv-id");
+            me.handle_row_calc("qty", $row, invId);
+        });
 
-            const qty = flt($row.find(".modal-row-qty").val() || 0);
-            const rate = flt($row.find(".modal-row-rate").val() || 0);
-            const taxRate = flt($row.find(".modal-row-tax-rate").val() || 0);
+        $wrapper.on("input", ".modal-row-rate", function () {
+            const $row = $(this).closest("tr");
+            const invId = $(this).closest(".reim-inv-card").data("inv-id");
+            me.handle_row_calc("rate", $row, invId);
+        });
 
-            const amount = flt(qty * rate, 2);
-            const taxAmount = flt(amount * (taxRate / 100.0), 2);
-            const lineTotal = flt(amount + taxAmount, 2);
+        $wrapper.on("input", ".modal-row-tax-rate", function () {
+            const $row = $(this).closest("tr");
+            const invId = $(this).closest(".reim-inv-card").data("inv-id");
+            me.handle_row_calc("tax_rate", $row, invId);
+        });
 
-            $row.find(".modal-row-amount").text(format_currency(amount));
-            $row.find(".modal-row-tax-amount").text(format_currency(taxAmount));
-            $row.find(".modal-row-line-total").text(format_currency(lineTotal));
+        $wrapper.on("input", ".modal-row-amount-input", function () {
+            const $row = $(this).closest("tr");
+            const invId = $(this).closest(".reim-inv-card").data("inv-id");
+            me.handle_row_calc("amount", $row, invId);
+        });
 
-            me.recalculate_invoice(invId);
+        $wrapper.on("input", ".modal-row-tax-amount-input", function () {
+            const $row = $(this).closest("tr");
+            const invId = $(this).closest(".reim-inv-card").data("inv-id");
+            me.handle_row_calc("tax_amount", $row, invId);
+        });
+
+        $wrapper.on("input", ".modal-row-line-total-input", function () {
+            const $row = $(this).closest("tr");
+            const invId = $(this).closest(".reim-inv-card").data("inv-id");
+            me.handle_row_calc("line_total", $row, invId);
         });
 
         // Optional Upload Attachment per Invoice
@@ -762,6 +840,45 @@ class ReimbursementPicker {
                 `);
             }
         });
+    }
+
+    handle_row_calc(triggerField, $row, invId) {
+        let qty = flt($row.find(".modal-row-qty").val() || 0);
+        let rate = flt($row.find(".modal-row-rate").val() || 0);
+        let taxRate = flt($row.find(".modal-row-tax-rate").val() || 0);
+        let amount = flt($row.find(".modal-row-amount-input").val() || 0);
+        let taxAmount = flt($row.find(".modal-row-tax-amount-input").val() || 0);
+        let lineTotal = flt($row.find(".modal-row-line-total-input").val() || 0);
+
+        if (triggerField === "qty" || triggerField === "rate") {
+            amount = flt(qty * rate, 2);
+            taxAmount = flt(amount * (taxRate / 100.0), 2);
+            lineTotal = flt(amount + taxAmount, 2);
+        } else if (triggerField === "tax_rate") {
+            taxAmount = flt(amount * (taxRate / 100.0), 2);
+            lineTotal = flt(amount + taxAmount, 2);
+        } else if (triggerField === "amount") {
+            if (qty > 0) rate = flt(amount / qty, 4);
+            taxAmount = flt(amount * (taxRate / 100.0), 2);
+            lineTotal = flt(amount + taxAmount, 2);
+        } else if (triggerField === "tax_amount") {
+            lineTotal = flt(amount + taxAmount, 2);
+            if (amount > 0) taxRate = flt((taxAmount / amount) * 100, 2);
+        } else if (triggerField === "line_total") {
+            amount = flt(lineTotal / (1 + (taxRate / 100.0)), 2);
+            taxAmount = flt(lineTotal - amount, 2);
+            if (qty > 0) rate = flt(amount / qty, 4);
+        }
+
+        // 回填所有输入框（除了当前正在输入的字段）
+        if (triggerField !== "qty") $row.find(".modal-row-qty").val(qty ? qty : "");
+        if (triggerField !== "rate") $row.find(".modal-row-rate").val(rate ? rate.toFixed(2) : "");
+        if (triggerField !== "tax_rate") $row.find(".modal-row-tax-rate").val(taxRate);
+        if (triggerField !== "amount") $row.find(".modal-row-amount-input").val(amount ? amount.toFixed(2) : "");
+        if (triggerField !== "tax_amount") $row.find(".modal-row-tax-amount-input").val(taxAmount ? taxAmount.toFixed(2) : "");
+        if (triggerField !== "line_total") $row.find(".modal-row-line-total-input").val(lineTotal ? lineTotal.toFixed(2) : "");
+
+        this.recalculate_invoice(invId);
     }
 
     add_invoice_card() {
@@ -788,7 +905,7 @@ class ReimbursementPicker {
                     </div>
                 </div>
 
-                <!-- Invoice Fields -->
+                <!-- Invoice Fields (严格 3 种发票类型) -->
                 <div class="reim-inv-fields-grid">
                     <div class="reim-v2-field-group">
                         <label>发票类型<span class="req">*</span></label>
@@ -822,12 +939,12 @@ class ReimbursementPicker {
                                 <th class="ashan-col-w120">规格型号</th>
                                 <th class="ashan-col-w70 text-center">单位</th>
                                 <th class="ashan-col-w70 text-right">数量<span class="req">*</span></th>
-                                <th class="ashan-col-w90 text-right">单价(元)<span class="req">*</span></th>
+                                <th class="ashan-col-w80 text-right">单价(元)<span class="req">*</span></th>
                                 <th class="ashan-col-w70 text-right">税率(%)</th>
                                 <th class="ashan-col-w90 text-right">金额(不含税)</th>
                                 <th class="ashan-col-w80 text-right">税额</th>
-                                <th class="ashan-col-w100 text-right">价税合计</th>
-                                <th class="ashan-col-w120">备注</th>
+                                <th class="ashan-col-w90 text-right">价税合计</th>
+                                <th class="ashan-col-w110">备注</th>
                                 <th class="ashan-col-w40 text-center">操作</th>
                             </tr>
                         </thead>
@@ -835,11 +952,12 @@ class ReimbursementPicker {
                     </table>
                 </div>
 
-                <!-- Invoice Card Footer -->
+                <!-- Invoice Card Footer (ERPNext 16 Style Grid Actions) -->
                 <div class="reim-inv-footer">
                     <div>
-                        <button type="button" class="reim-btn-sm reim-btn-add-item-row">
-                            <span>➕ 添加物料明细行</span>
+                        <button type="button" class="reim-btn-grid-add reim-btn-add-item-row">
+                            <span class="font-bold">+</span>
+                            <span>添加行</span>
                         </button>
                     </div>
                     <div class="reim-inv-footer-summary">
@@ -877,17 +995,24 @@ class ReimbursementPicker {
         const defaultTaxRate = invType === "专用发票" ? "13" : "0";
         const isTaxDisabled = invType !== "专用发票" ? "disabled" : "";
 
+        // 构建物料自动补全 datalist
+        const datalistId = `reim-items-datalist-${invId}-${rowIdx}`;
+        const datalistOptions = this.cached_items.map((it) => `<option value="[${it.item_code}] ${it.item_name}">规格: ${it.spec || '-'}</option>`).join("");
+
         const rowHtml = `
             <tr>
                 <td class="text-center font-bold text-muted">${rowIdx}</td>
                 <td>
-                    <input type="text" class="reim-cell-input modal-row-item-name" placeholder="输入物料/费用名称..." />
+                    <input type="text" class="reim-cell-input modal-row-item-input" list="${datalistId}" placeholder="输入/选择物料或费用..." />
+                    <datalist id="${datalistId}">${datalistOptions}</datalist>
+                    <input type="hidden" class="modal-row-item-code" />
+                    <input type="hidden" class="modal-row-item-name" />
                 </td>
                 <td>
-                    <input type="text" class="reim-cell-input modal-row-spec" placeholder="规格型号..." />
+                    <input type="text" class="reim-cell-input readonly modal-row-spec" placeholder="自动带出" readonly />
                 </td>
                 <td>
-                    <input type="text" class="reim-cell-input text-center modal-row-uom" value="个" />
+                    <input type="text" class="reim-cell-input text-center readonly modal-row-uom" value="个" readonly />
                 </td>
                 <td>
                     <input type="number" step="any" min="0.0001" class="reim-cell-input number modal-row-qty" value="1" />
@@ -898,9 +1023,15 @@ class ReimbursementPicker {
                 <td>
                     <input type="number" step="any" class="reim-cell-input number modal-row-tax-rate" value="${defaultTaxRate}" ${isTaxDisabled} />
                 </td>
-                <td class="text-right font-mono modal-row-amount">¥ 0.00</td>
-                <td class="text-right font-mono modal-row-tax-amount">¥ 0.00</td>
-                <td class="text-right font-mono font-bold text-primary modal-row-line-total">¥ 0.00</td>
+                <td>
+                    <input type="number" step="any" class="reim-cell-input number modal-row-amount-input" placeholder="0.00" />
+                </td>
+                <td>
+                    <input type="number" step="any" class="reim-cell-input number modal-row-tax-amount-input" placeholder="0.00" />
+                </td>
+                <td>
+                    <input type="number" step="any" class="reim-cell-input number font-bold text-primary modal-row-line-total-input" placeholder="0.00" />
+                </td>
                 <td>
                     <input type="text" class="reim-cell-input modal-row-remarks" placeholder="备注..." />
                 </td>
@@ -914,18 +1045,13 @@ class ReimbursementPicker {
     }
 
     recalculate_invoice(invId) {
-        const $card = $(`#reim-inv-card-${invId}`);
+        const $card = this.creation.$wrapper ? this.creation.$wrapper.find(`#reim-inv-card-${invId}`) : $(`#reim-inv-card-${invId}`);
         let subtotal = 0;
         let totalTax = 0;
 
         $card.find(".modal-inv-tbody tr").each(function () {
-            const qty = flt($(this).find(".modal-row-qty").val() || 0);
-            const rate = flt($(this).find(".modal-row-rate").val() || 0);
-            const taxRate = flt($(this).find(".modal-row-tax-rate").val() || 0);
-
-            const amt = flt(qty * rate, 2);
-            const taxAmt = flt(amt * (taxRate / 100.0), 2);
-
+            const amt = flt($(this).find(".modal-row-amount-input").val() || 0);
+            const taxAmt = flt($(this).find(".modal-row-tax-amount-input").val() || 0);
             subtotal += amt;
             totalTax += taxAmt;
         });
@@ -950,12 +1076,8 @@ class ReimbursementPicker {
             if (supp) suppliers.add(supp);
 
             $(this).find(".modal-inv-tbody tr").each(function () {
-                const qty = flt($(this).find(".modal-row-qty").val() || 0);
-                const rate = flt($(this).find(".modal-row-rate").val() || 0);
-                const taxRate = flt($(this).find(".modal-row-tax-rate").val() || 0);
-                const amt = flt(qty * rate, 2);
-                const taxAmt = flt(amt * (taxRate / 100.0), 2);
-                grandTotal += flt(amt + taxAmt, 2);
+                const lineTotal = flt($(this).find(".modal-row-line-total-input").val() || 0);
+                grandTotal += lineTotal;
             });
         });
 
@@ -965,7 +1087,6 @@ class ReimbursementPicker {
     }
 
     async submit_manual_reimbursement() {
-        const me = this;
         const company = $("#modal-reim-company").val();
         if (!company) {
             frappe.msgprint(__("请选择所属公司。"));
@@ -1008,12 +1129,15 @@ class ReimbursementPicker {
 
             const items = [];
             $(this).find(".modal-inv-tbody tr").each(function (rowIdx) {
-                const itemName = $(this).find(".modal-row-item-name").val().trim();
+                const itemCode = $(this).find(".modal-row-item-code").val().trim();
+                const itemName = $(this).find(".modal-row-item-name").val().trim() || $(this).find(".modal-row-item-input").val().trim();
                 const spec = $(this).find(".modal-row-spec").val().trim();
                 const uom = $(this).find(".modal-row-uom").val().trim() || "个";
                 const qty = flt($(this).find(".modal-row-qty").val() || 0);
                 const rate = flt($(this).find(".modal-row-rate").val() || 0);
                 const taxRate = flt($(this).find(".modal-row-tax-rate").val() || 0);
+                const amount = flt($(this).find(".modal-row-amount-input").val() || (qty * rate));
+                const taxAmount = flt($(this).find(".modal-row-tax-amount-input").val() || (amount * taxRate / 100));
                 const remarks = $(this).find(".modal-row-remarks").val().trim();
 
                 if (!itemName) {
@@ -1022,17 +1146,14 @@ class ReimbursementPicker {
                     return false;
                 }
 
-                if (qty <= 0 || rate <= 0) {
+                if (qty <= 0 || rate <= 0 || amount <= 0) {
                     frappe.msgprint(__(`发票 #${cardIdx} 第 ${rowIdx + 1} 行 [${itemName}] 的数量与单价必须大于0！根据财务纪律，严禁为0。`));
                     hasErrors = true;
                     return false;
                 }
 
-                const amount = flt(qty * rate, 2);
-                const taxAmount = flt(amount * (taxRate / 100.0), 2);
-
-                items.append ? null : items.push({
-                    item_code: itemName,
+                items.push({
+                    item_code: itemCode || itemName,
                     item_name: itemName,
                     spec: spec,
                     uom: uom,
