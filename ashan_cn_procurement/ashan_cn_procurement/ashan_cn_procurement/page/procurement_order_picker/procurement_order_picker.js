@@ -1603,11 +1603,15 @@ class ProcurementOrderPickerCenter {
                     frappe.dom.unfreeze();
                     if (res && res.message && res.message.success) {
                         d.hide();
+                        const mr_name = res.message.name;
                         frappe.show_alert({
-                            message: __("🎉 成功创建并正式发布采购申请单：{0}", [res.message.name]),
+                            message: __("🎉 成功创建并正式发布采购申请单：<b>{0}</b>", [mr_name]),
                             indicator: "green",
-                        });
+                        }, 6);
                         this.refresh_all();
+                        if (mr_name) {
+                            this.show_doc_detail_modal("Material Request", mr_name);
+                        }
                     }
                 } catch (e) {
                     frappe.dom.unfreeze();
@@ -1892,36 +1896,66 @@ class ProcurementOrderPickerCenter {
         };
         const dt_label = doctype_labels[doc.doctype] || doc.doctype;
 
-        // Build item rows
+        // Calculate totals and build item rows
+        let sum_qty = 0;
+        let sum_amount = 0;
+        let sum_tax_amount = 0;
+        let sum_total_amount = 0;
         let items_tbody_html = "";
+
         (doc.items || []).forEach((it) => {
+            const q = flt(it.qty);
+            const amt = flt(it.amount);
+            const t_amt = flt(it.tax_amount);
+            const tot = flt(it.total_amount) || (amt + t_amt);
+
+            sum_qty += q;
+            sum_amount += amt;
+            sum_tax_amount += t_amt;
+            sum_total_amount += tot;
+
             items_tbody_html += `
                 <tr>
                     <td class="picker-cell-center">${it.idx}</td>
                     <td><strong>${frappe.utils.escape_html(it.item_code)}</strong></td>
                     <td>${frappe.utils.escape_html(it.item_name)}</td>
                     <td>${frappe.utils.escape_html(it.spec || "-")}</td>
-                    <td>${frappe.utils.escape_html(it.uom || "-")}</td>
-                    <td class="picker-qty-cell"><strong>${flt(it.qty).toFixed(2)}</strong></td>
+                    <td class="picker-cell-center">${frappe.utils.escape_html(it.uom || "-")}</td>
+                    <td class="picker-qty-cell"><strong>${q.toFixed(2)}</strong></td>
                     <td class="picker-money-cell">${self.fmt_money(it.rate)}</td>
-                    <td class="picker-money-cell">${self.fmt_money(it.amount)}</td>
+                    <td class="picker-money-cell">${self.fmt_money(amt)}</td>
                     <td class="picker-cell-right">${it.tax_rate ? (it.tax_rate + '%') : '-'}</td>
-                    <td class="picker-money-cell">${self.fmt_money(it.tax_amount)}</td>
-                    <td class="picker-money-cell"><strong>${self.fmt_money(it.total_amount)}</strong></td>
+                    <td class="picker-money-cell">${self.fmt_money(t_amt)}</td>
+                    <td class="picker-money-cell"><strong>${self.fmt_money(tot)}</strong></td>
                     <td>${frappe.utils.escape_html(it.description || "-")}</td>
                 </tr>
             `;
         });
 
         if (!items_tbody_html) {
-            items_tbody_html = `<tr><td colspan="12" class="picker-doc-empty-state">无物料明细数据</td></tr>`;
+            items_tbody_html = `<tr><td colspan="12" class="picker-doc-empty-state">无明细数据</td></tr>`;
         }
+
+        const tfoot_html = (doc.items && doc.items.length) ? `
+            <tfoot>
+                <tr>
+                    <td colspan="5" class="picker-cell-right">合计汇总:</td>
+                    <td class="picker-qty-cell">${sum_qty.toFixed(2)}</td>
+                    <td></td>
+                    <td class="picker-money-cell">${self.fmt_money(sum_amount)}</td>
+                    <td></td>
+                    <td class="picker-money-cell">${self.fmt_money(sum_tax_amount)}</td>
+                    <td class="picker-money-cell picker-total-highlight">${self.fmt_money(sum_total_amount || doc.grand_total)}</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        ` : '';
 
         // Build upstream flow items
         let upstream_html = "";
         (doc.linked_upstream || []).forEach((u) => {
             upstream_html += `
-                <span class="picker-doc-flow-item upstream picker-doc-modal-link" data-doctype="${u.doctype}" data-name="${u.name}" title="点击查看详情">
+                <span class="picker-doc-flow-item upstream picker-doc-modal-link" data-doctype="${u.doctype}" data-name="${u.name}" title="点击就地查看详情">
                     <span>⬆️ ${u.doctype_label}:</span>
                     <strong>${frappe.utils.escape_html(u.name)}</strong>
                     <span class="ashan-status-badge ashan-status-blue">${frappe.utils.escape_html(u.status || "")}</span>
@@ -1933,7 +1967,7 @@ class ProcurementOrderPickerCenter {
         let downstream_html = "";
         (doc.linked_downstream || []).forEach((d) => {
             downstream_html += `
-                <span class="picker-doc-flow-item downstream picker-doc-modal-link" data-doctype="${d.doctype}" data-name="${d.name}" title="点击查看详情">
+                <span class="picker-doc-flow-item downstream picker-doc-modal-link" data-doctype="${d.doctype}" data-name="${d.name}" title="点击就地查看详情">
                     <span>⬇️ ${d.doctype_label}:</span>
                     <strong>${frappe.utils.escape_html(d.name)}</strong>
                     <span class="ashan-status-badge ashan-status-green">${frappe.utils.escape_html(d.status || "")}</span>
@@ -1943,7 +1977,7 @@ class ProcurementOrderPickerCenter {
 
         const flow_section_html = (upstream_html || downstream_html) ? `
             <div class="picker-doc-flow-card">
-                <div class="picker-doc-flow-title">🔗 上下游业务全链路追溯</div>
+                <div class="picker-doc-flow-title">🔗 上下游业务全链路追溯（点击可就地平滑穿透查看）</div>
                 <div class="picker-doc-flow-list">
                     ${upstream_html}
                     ${downstream_html}
@@ -1956,6 +1990,12 @@ class ProcurementOrderPickerCenter {
         `;
 
         const comp_badge_cls = (doc.company || "").includes("祺富") ? "picker-company-badge-qifu" : "picker-company-badge-jizhong";
+        let status_badge_cls = "ashan-status-blue";
+        if (["Submitted", "Completed", "To Bill", "To Receive", "Partly Billed", "Paid"].includes(doc.status)) {
+            status_badge_cls = "ashan-status-green";
+        } else if (["Cancelled", "Closed", "Stopped"].includes(doc.status)) {
+            status_badge_cls = "ashan-status-red";
+        }
 
         const modal_content = `
             <div class="picker-doc-modal-container">
@@ -1965,7 +2005,7 @@ class ProcurementOrderPickerCenter {
                         <div class="picker-doc-title-box">
                             <span class="picker-doc-title-text">${dt_label}: ${frappe.utils.escape_html(doc.name)}</span>
                             <span class="picker-company-badge ${comp_badge_cls}">${frappe.utils.escape_html(doc.company)}</span>
-                            <span class="ashan-status-badge ashan-status-blue">${frappe.utils.escape_html(doc.status)}</span>
+                            <span class="ashan-status-badge ${status_badge_cls}">${frappe.utils.escape_html(doc.status)}</span>
                         </div>
                         <div>
                             <span class="picker-meta-owner-text">录单人: ${frappe.utils.escape_html(doc.owner || "-")}</span>
@@ -2013,6 +2053,7 @@ class ProcurementOrderPickerCenter {
                         <tbody>
                             ${items_tbody_html}
                         </tbody>
+                        ${tfoot_html}
                     </table>
                 </div>
 
@@ -2089,7 +2130,7 @@ class ProcurementOrderPickerCenter {
 
         // Print button
         $w.on("click", "#picker-modal-print-btn", function () {
-            const print_url = `/printview?doctype=${encodeURIComponent(doc.doctype)}&name=${encodeURIComponent(doc.name)}&trigger_print=1`;
+            const print_url = `/printview?doctype=${encodeURIComponent(doc.doctype)}&name=${encodeURIComponent(doc.name)}&format=Standard&trigger_print=1`;
             window.open(print_url, "_blank");
         });
 
@@ -3257,8 +3298,19 @@ class ProcurementOrderPickerCenter {
                     frappe.dom.unfreeze();
                     if (res && res.message && res.message.success) {
                         d.hide();
-                        self.show_generation_success_dialog("采购订单", res.message.orders, "purchase-order");
+                        const order_names = (res.message.orders || []).map((o) => o.name).filter(Boolean);
+                        const first_po = order_names[0];
+                        frappe.show_alert({
+                            message: __("🎉 成功生成并正式提交采购订单 <b>{0}</b>{1}", [
+                                first_po || "",
+                                order_names.length > 1 ? ` 等共 ${order_names.length} 张单据` : "",
+                            ]),
+                            indicator: "green",
+                        }, 6);
                         self.refresh_all();
+                        if (first_po) {
+                            self.show_doc_detail_modal("Purchase Order", first_po);
+                        }
                     }
                 } catch (e) {
                     frappe.dom.unfreeze();
@@ -3706,8 +3758,19 @@ class ProcurementOrderPickerCenter {
                     frappe.dom.unfreeze();
                     if (res && res.message && res.message.success) {
                         d.hide();
-                        self.show_generation_success_dialog("采购入库单", res.message.receipts, "purchase-receipt");
+                        const receipt_names = (res.message.receipts || []).map((r) => r.name).filter(Boolean);
+                        const first_pr = receipt_names[0];
+                        frappe.show_alert({
+                            message: __("🎉 成功生成并正式提交采购入库单 <b>{0}</b>{1}", [
+                                first_pr || "",
+                                receipt_names.length > 1 ? ` 等共 ${receipt_names.length} 张单据` : "",
+                            ]),
+                            indicator: "green",
+                        }, 6);
                         self.refresh_all();
+                        if (first_pr) {
+                            self.show_doc_detail_modal("Purchase Receipt", first_pr);
+                        }
                     }
                 } catch (e) {
                     frappe.dom.unfreeze();
@@ -4047,8 +4110,19 @@ class ProcurementOrderPickerCenter {
                     frappe.dom.unfreeze();
                     if (res && res.message && res.message.success) {
                         d.hide();
-                        self.show_generation_success_dialog("采购发票", res.message.invoices, "purchase-invoice");
+                        const invoice_names = (res.message.invoices || []).map((i) => i.name).filter(Boolean);
+                        const first_pi = invoice_names[0];
+                        frappe.show_alert({
+                            message: __("🎉 成功生成并正式提交采购发票 <b>{0}</b>{1}", [
+                                first_pi || "",
+                                invoice_names.length > 1 ? ` 等共 ${invoice_names.length} 张单据` : "",
+                            ]),
+                            indicator: "green",
+                        }, 6);
                         self.refresh_all();
+                        if (first_pi) {
+                            self.show_doc_detail_modal("Purchase Invoice", first_pi);
+                        }
                     }
                 } catch (e) {
                     frappe.dom.unfreeze();
@@ -4202,8 +4276,15 @@ class ProcurementOrderPickerCenter {
                     frappe.dom.unfreeze();
                     if (res && res.message && res.message.success) {
                         d.hide();
-                        self.show_generation_success_dialog("报销申请单", [{ name: res.message.reimbursement_name, company: target_comp, grand_total: res.message.total_amount, item_count: inv_names.length }], "reimbursement-request");
+                        const rr_name = res.message.reimbursement_name;
+                        frappe.show_alert({
+                            message: __("🎉 成功生成并正式提交报销付款申请 <b>{0}</b>！", [rr_name]),
+                            indicator: "green",
+                        }, 6);
                         self.refresh_all();
+                        if (rr_name) {
+                            self.show_doc_detail_modal("Reimbursement Request", rr_name);
+                        }
                     }
                 } catch (e) {
                     frappe.dom.unfreeze();

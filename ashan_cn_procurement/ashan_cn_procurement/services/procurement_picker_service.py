@@ -2485,6 +2485,22 @@ def get_document_details(doctype: str, name: str) -> dict:
                 "date": str(rr.posting_date or ""),
             })
 
+    elif doctype == "Reimbursement Request":
+        # Upstream PIs
+        pi_names = list({it.get("source_pi") for it in raw_children if it.get("source_pi")})
+        for pi_n in pi_names:
+            pi_row = frappe.db.get_value("Purchase Invoice", pi_n, ["name", "status", "docstatus", "grand_total", "posting_date"], as_dict=True)
+            if pi_row:
+                linked_upstream.append({
+                    "doctype": "Purchase Invoice",
+                    "doctype_label": "采购发票",
+                    "name": pi_row.name,
+                    "status": pi_row.status or ("Draft" if pi_row.docstatus == 0 else "Submitted"),
+                    "docstatus": pi_row.docstatus,
+                    "grand_total": flt(pi_row.grand_total, 2),
+                    "date": str(pi_row.posting_date or ""),
+                })
+
     can_delete = frappe.has_permission(doctype, "delete", doc)
     can_cancel = frappe.has_permission(doctype, "cancel", doc) if doc.docstatus == 1 else True
     can_quick_edit = False
