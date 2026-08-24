@@ -58,7 +58,7 @@ def get_reimbursement_picker_overview_kpis(company: str | None = None) -> dict:
 
     comp_list = target_companies
 
-    # 1. 待结款报销单数量
+    # 1. 待结款报销单数量 (包含已提交待结款与草稿)
     pending_rr_count = frappe.db.count(
         "Reimbursement Request",
         filters={
@@ -111,7 +111,7 @@ def get_reimbursement_picker_overview_kpis(company: str | None = None) -> dict:
 
 
 # =========================================================================
-# 2. Doc Summary Rows (Cleaned Table: Single Row Per Reimbursement Request)
+# 2. Doc Summary Rows (Drafts on TOP + Amber Alert Badge)
 # =========================================================================
 
 def _format_compact_preview(items: list[str], max_items: int = 2) -> str:
@@ -128,7 +128,7 @@ def get_reimbursement_picker_doc_summary_rows(
     company: str | None = None,
     filters: dict | str | None = None,
 ) -> dict:
-    """Query doc-level summary rows for 报销申请 without employee column."""
+    """Query doc-level summary rows for 报销申请 with Drafts pinned on TOP."""
     target_companies = _get_target_companies(company)
     if not target_companies:
         return {"rows": [], "total_count": 0, "total_amount": 0, "total_outstanding": 0}
@@ -184,6 +184,7 @@ def get_reimbursement_picker_doc_summary_rows(
 
     where_clause = " AND ".join(where_clauses)
 
+    # 核心：ORDER BY docstatus ASC 将草稿 (0) 永远置顶在最顶部！
     sql = f"""
         SELECT
             rr.name AS rr_name,
@@ -222,7 +223,7 @@ def get_reimbursement_picker_doc_summary_rows(
             ) AS auto_items_summary
         FROM `tabReimbursement Request` rr
         WHERE {where_clause}
-        ORDER BY rr.posting_date DESC, rr.name DESC
+        ORDER BY (CASE WHEN rr.docstatus = 0 THEN 0 ELSE 1 END) ASC, rr.posting_date DESC, rr.name DESC
         LIMIT 500
     """
 
@@ -231,9 +232,11 @@ def get_reimbursement_picker_doc_summary_rows(
     rows = []
     for idx, d in enumerate(raw_docs, 1):
         outstanding = flt(d.outstanding_amount)
+        is_draft = False
         if d.docstatus == 0:
-            status_label = "🔘 草稿"
+            status_label = "🟡 待提交草稿"
             doc_status = "Draft"
+            is_draft = True
         elif outstanding > 0.0001:
             status_label = "🟡 待结款"
             doc_status = "Submitted"
@@ -256,6 +259,7 @@ def get_reimbursement_picker_doc_summary_rows(
             "company": d.company,
             "docstatus": d.docstatus,
             "doc_status": doc_status,
+            "is_draft": is_draft,
             "title": d.title or "-",
             "supplier_count": supp_count,
             "invoice_count": inv_count,
@@ -283,7 +287,7 @@ def get_reimbursement_picker_doc_summary_rows(
 
 
 # =========================================================================
-# 3. Item Detail Rows Query
+# 3. Item Detail Rows Query (Drafts on TOP)
 # =========================================================================
 
 @frappe.whitelist()
@@ -291,7 +295,7 @@ def get_reimbursement_picker_rows(
     company: str | None = None,
     filters: dict | str | None = None,
 ) -> dict:
-    """Query item detail rows for 报销申请 without employee column."""
+    """Query item detail rows for 报销申请 with Drafts pinned on TOP."""
     target_companies = _get_target_companies(company)
     if not target_companies:
         return {"rows": [], "total_count": 0, "total_amount": 0, "total_outstanding": 0}
@@ -356,7 +360,7 @@ def get_reimbursement_picker_rows(
         FROM `tabReimbursement Invoice Item` rii
         INNER JOIN `tabReimbursement Request` rr ON rii.parent = rr.name
         WHERE {where_clause}
-        ORDER BY rr.posting_date DESC, rr.name DESC, rii.idx ASC
+        ORDER BY (CASE WHEN rr.docstatus = 0 THEN 0 ELSE 1 END) ASC, rr.posting_date DESC, rr.name DESC, rii.idx ASC
         LIMIT 500
     """
 
@@ -366,7 +370,7 @@ def get_reimbursement_picker_rows(
     for idx, it in enumerate(raw_items, 1):
         outstanding = flt(it.outstanding_amount)
         if it.docstatus == 0:
-            status_label = "🔘 草稿"
+            status_label = "🟡 待提交草稿"
         elif outstanding > 0.0001:
             status_label = "🟡 待结款"
         else:
@@ -397,7 +401,7 @@ def get_reimbursement_picker_rows(
         "rows": rows,
         "total_count": len(rows),
         "total_amount": sum(r["amount"] for r in rows),
-        "total_outstanding": sum(flt(r["amount"]) for r in rows if r["status_label"] == "🟡 待结款"),
+        "total_outstanding": sum(flt(r["amount"]) for r in rows if r["status_label"] != "🟢 已结清"),
     }
 
 
@@ -622,6 +626,11 @@ def create_manual_multi_invoice_reimbursement(
         bill_date_str = str(inv.get("invoice_date") or posting_date_str)
         bill_no_raw = (inv.get("invoice_no") or "").strip()
 
+        # 校验：专用发票与普通发票的发票号码必填 (在正式提交时强校验)
+        if not is_draft:
+            if inv_type in ("专用发票", "普通发票") and not bill_no_raw:
+                frappe.throw(_("发票 #{0} ({1}) 必须填写发票号码！").format(inv_idx, inv_type))
+
         if inv_type == "无发票" or not bill_no_raw:
             bill_no_raw = f"REIM-NOINV-{posting_date_str.replace('-', '')}-{inv_idx:02d}"
 
@@ -648,7 +657,7 @@ def create_manual_multi_invoice_reimbursement(
             if inv_type == "普通发票" or inv_type == "无发票":
                 tax_rate = 0.0
 
-            if qty <= 0.0 or rate <= 0.0:
+            if not is_draft and (qty <= 0.0 or rate <= 0.0):
                 frappe.throw(_("发票 #{0} 第 {1} 行【{2}】数量与单价必须大于 0！").format(inv_idx, row_idx, item_name_raw))
 
             amount = flt(row.get("amount") or (qty * rate), 2)
