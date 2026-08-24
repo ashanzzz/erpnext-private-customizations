@@ -38,15 +38,6 @@ def _meta_has(doctype: str, fieldname: str) -> bool:
         return False
 
 
-def _normalize_name_list(values: Any) -> list[str]:
-    """Return safe, de-duplicated document names from RPC input."""
-    if isinstance(values, str):
-        values = frappe.parse_json(values)
-    if not isinstance(values, (list, tuple, set)):
-        return []
-    return list(dict.fromkeys(str(v).strip() for v in values if str(v).strip()))
-
-
 def _normalize_dict(values: Any) -> dict:
     if isinstance(values, str):
         values = frappe.parse_json(values)
@@ -98,16 +89,6 @@ def get_reimbursement_picker_overview_kpis(company: str | None = None) -> dict:
           AND (custom_biz_mode = '现金报销' OR custom_biz_mode = '报销申请')
     """, (companies,))[0][0] or 0
 
-    # 4. 可用税局发票数
-    tax_inv_ready_count = frappe.db.sql("""
-        SELECT COUNT(name)
-        FROM `tabTax Invoice`
-        WHERE company IN %s
-          AND business_status != '已废弃'
-          AND business_status != '已对冲'
-          AND COALESCE(parse_status, '已解析') = '已解析'
-    """, (companies,))[0][0] or 0
-
     return {
         "pending_rr_count": pending_rr_count,
         "rr_total_count": rr_total_count,
@@ -115,7 +96,6 @@ def get_reimbursement_picker_overview_kpis(company: str | None = None) -> dict:
         "rr_outstanding": rr_outstanding,
         "pi_count": pi_count,
         "pr_count": pr_count,
-        "tax_inv_ready_count": tax_inv_ready_count,
     }
 
 
@@ -236,7 +216,6 @@ def get_reimbursement_picker_doc_summary_rows(
         supp_count = len(suppliers_list)
         inv_count = len(invoices_list)
 
-        # Display masked invoice numbers (show last 8 chars for elegance)
         masked_invoices = [f"…{x[-8:]}" if len(x) > 8 else x for x in invoices_list]
 
         rows.append({
@@ -408,7 +387,7 @@ def get_reimbursement_picker_rows(
 
 
 # =========================================================================
-# 3. Reimbursement V2 Engine (Multi-Tax-Invoice Driven)
+# 3. Reimbursement Creation Defaults API
 # =========================================================================
 
 @frappe.whitelist()
@@ -452,768 +431,15 @@ def get_reimbursement_creation_defaults(company: str | None = None) -> dict:
     }
 
 
-def _classify_tax_invoice_for_reimbursement(row: dict, company: str) -> tuple[str, list[dict]]:
-    """Determine eligibility and issues for one Tax Invoice."""
-    issues = []
-    eligibility = "ready"
-
-    # 1. 基础阻断检查
-    if row.get("business_status") == "已废弃":
-        issues.append({"level": "blocked", "message": "发票已被废弃，禁止报销"})
-        eligibility = "blocked"
-
-    if row.get("business_status") == "已对冲":
-        issues.append({"level": "blocked", "message": "发票已红冲对冲，无需报销"})
-        eligibility = "blocked"
-
-    if row.get("company") and row.get("company") != company:
-        issues.append({"level": "blocked", "message": f"发票所属公司({row.get('company')})与报销公司不一致"})
-        eligibility = "blocked"
-
-    parse_warning = row.get("parse_warning") or ""
-    if "购买方" in parse_warning or "纳税人识别号不匹配" in parse_warning:
-        issues.append({"level": "blocked", "message": f"发票购买方信息异常: {parse_warning}"})
-        eligibility = "blocked"
-
-    if flt(row.get("payable_total")) <= 0:
-        issues.append({"level": "blocked", "message": "发票应付金额必须大于 0"})
-        eligibility = "blocked"
-
-    # 2. 检查是否已被有效 Reservation 占用
-    res_key = f"TAXINV::{row.get('name')}"
-    active_res = frappe.get_all(
-        "Reimbursement Source Reservation",
-        filters={"active_source_key": res_key, "status": ["in", ("Draft", "Submitted")]},
-        fields=["name", "reimbursement_request", "status"],
-        limit=1,
-    )
-    if active_res:
-        issues.append({
-            "level": "blocked",
-            "message": f"发票已被报销单 {active_res[0].reimbursement_request} 占用",
-        })
-        eligibility = "blocked"
-
-    # 3. 检查采购发票 (PI) 状态
-    matched_pi = row.get("matched_purchase_invoice")
-    if matched_pi:
-        pi_doc = frappe.db.get_value("Purchase Invoice", matched_pi, ["name", "docstatus", "outstanding_amount", "company", "supplier"], as_dict=True)
-        if not pi_doc:
-            issues.append({"level": "warning", "message": "关联的采购发票已不存在，将重新规划单据"})
-        elif pi_doc.docstatus != 1:
-            issues.append({"level": "blocked", "message": f"关联的采购发票 {matched_pi} 未提交(Draft/Cancelled)"})
-            eligibility = "blocked"
-        elif flt(pi_doc.outstanding_amount) <= 0.0001:
-            issues.append({"level": "warning", "message": f"关联的采购发票 {matched_pi} 已经全额结清"})
-    else:
-        # 没有 PI 时，预查供应商
-        seller_tax_id = (row.get("seller_tax_id") or "").strip()
-        seller_name = (row.get("seller_name") or "").strip()
-        supp_name = None
-        if seller_tax_id:
-            supp_name = frappe.db.get_value("Supplier", {"tax_id": seller_tax_id}, "name")
-        if not supp_name and seller_name:
-            supp_name = frappe.db.get_value("Supplier", {"supplier_name": seller_name}, "name") or (seller_name if frappe.db.exists("Supplier", seller_name) else None)
-
-        if not supp_name and eligibility != "blocked":
-            issues.append({"level": "warning", "message": f"销售方 [{seller_name or seller_tax_id}] 尚未在 ERP 供应商档案中建档"})
-            eligibility = "need_supplier"
-
-    return eligibility, issues
-
-
-@frappe.whitelist()
-def get_reimbursable_tax_invoices(
-    company: str,
-    filters: dict | str | None = None,
-    start: int = 0,
-    page_length: int = 50,
-) -> dict:
-    """Query reimbursable Tax Invoices for multi-selection."""
-    assert_company_access(company)
-    filters = _normalize_dict(filters)
-
-    start = max(int(start or 0), 0)
-    page_length = min(max(int(page_length or 50), 1), 100)
-
-    conditions = [
-        "company = %(company)s",
-        "business_status != '已废弃'",
-    ]
-    params: dict[str, Any] = {"company": company, "start": start, "page_length": page_length}
-
-    if filters.get("search"):
-        conditions.append("""(
-            invoice_no LIKE %(search)s
-            OR seller_name LIKE %(search)s
-            OR display_summary LIKE %(search)s
-        )""")
-        params["search"] = f"%{filters['search']}%"
-
-    if filters.get("from_date"):
-        conditions.append("issue_date >= %(from_date)s")
-        params["from_date"] = filters["from_date"]
-
-    if filters.get("to_date"):
-        conditions.append("issue_date <= %(to_date)s")
-        params["to_date"] = filters["to_date"]
-
-    if filters.get("invoice_type"):
-        conditions.append("invoice_type = %(invoice_type)s")
-        params["invoice_type"] = filters["invoice_type"]
-
-    if filters.get("pi_mode") == "has_pi":
-        conditions.append("matched_purchase_invoice IS NOT NULL AND matched_purchase_invoice != ''")
-    elif filters.get("pi_mode") == "need_pi":
-        conditions.append("(matched_purchase_invoice IS NULL OR matched_purchase_invoice = '')")
-
-    where_sql = " AND ".join(conditions)
-
-    # 统计总数与分类计数
-    count_sql = f"""
-        SELECT
-            COUNT(*) AS total_count,
-            SUM(CASE WHEN matched_purchase_invoice IS NOT NULL AND matched_purchase_invoice != '' THEN 1 ELSE 0 END) AS has_pi_count,
-            SUM(CASE WHEN (matched_purchase_invoice IS NULL OR matched_purchase_invoice = '') THEN 1 ELSE 0 END) AS need_pi_count
-        FROM `tabTax Invoice`
-        WHERE {where_sql}
-    """
-    counts = frappe.db.sql(count_sql, params, as_dict=True)[0]
-    total = counts.total_count or 0
-
-    # 获取列表记录
-    rows_sql = f"""
-        SELECT
-            name,
-            invoice_no,
-            issue_date,
-            invoice_type,
-            business_status,
-            match_status,
-            COALESCE(parse_status, '已解析') AS parse_status,
-            COALESCE(parse_warning, '') AS parse_warning,
-            COALESCE(seller_name, '') AS seller_name,
-            COALESCE(seller_tax_id, '') AS seller_tax_id,
-            COALESCE(display_summary, '') AS display_summary,
-            COALESCE(payable_total, 0) AS payable_total,
-            COALESCE(matched_purchase_invoice, '') AS matched_purchase_invoice
-        FROM `tabTax Invoice`
-        WHERE {where_sql}
-        ORDER BY issue_date DESC, name DESC
-        LIMIT %(start)s, %(page_length)s
-    """
-    raw_rows = frappe.db.sql(rows_sql, params, as_dict=True)
-
-    result_rows = []
-    ready_count = 0
-    review_count = 0
-    blocked_count = 0
-
-    for r in raw_rows:
-        eligibility, issues = _classify_tax_invoice_for_reimbursement(r, company)
-        if eligibility == "ready":
-            ready_count += 1
-        elif eligibility in ("need_supplier", "need_item"):
-            review_count += 1
-        else:
-            blocked_count += 1
-
-        masked_no = f"…{r.invoice_no[-8:]}" if len(r.invoice_no or "") > 8 else (r.invoice_no or "-")
-
-        result_rows.append({
-            "name": r.name,
-            "invoice_no": r.invoice_no,
-            "masked_invoice_no": masked_no,
-            "issue_date": str(r.issue_date or ""),
-            "invoice_type": r.invoice_type or "专用发票",
-            "seller_name": r.seller_name or "未指定",
-            "seller_tax_id": r.seller_tax_id or "",
-            "display_summary": r.display_summary or "发票明细",
-            "payable_total": flt(r.payable_total, 2),
-            "business_status": r.business_status or "待录入",
-            "parse_status": r.parse_status,
-            "match_status": r.match_status or "未匹配",
-            "matched_purchase_invoice": r.matched_purchase_invoice or "",
-            "erp_state": "has_pi" if r.matched_purchase_invoice else "need_pi",
-            "eligibility": eligibility,
-            "issues": issues,
-            "issue_count": len(issues),
-        })
-
-    return {
-        "rows": result_rows,
-        "total": total,
-        "ready_count": ready_count,
-        "review_count": review_count,
-        "blocked_count": blocked_count,
-    }
-
-
 # =========================================================================
-# 4. Preview Engine (Read-only Dry-run)
+# 4. Multi-Invoice Manual Entry Engine (Atomic POST)
 # =========================================================================
 
-def _resolve_warehouse_for_company(company: str, preferred: str | None = None) -> str:
-    """Determine receiving warehouse for stock items."""
-    if preferred and frappe.db.exists("Warehouse", preferred):
-        return preferred
-    if frappe.db.exists("Warehouse", f"Stores - {company}"):
-        return f"Stores - {company}"
-    if frappe.db.exists("Warehouse", f"Goods In Transit - {company}"):
-        return f"Goods In Transit - {company}"
-    whs = frappe.get_all("Warehouse", filters={"company": company, "is_group": 0}, pluck="name", limit=1)
-    return whs[0] if whs else ""
+VALID_INVOICE_TYPES = ("专用发票", "普通发票", "无发票")
 
-
-def _build_single_invoice_preview(
-    tax_inv_name: str,
-    company: str,
-    resolutions: dict,
-    auto_receive_stock: bool,
-) -> dict:
-    """Build dry-run preview and action plan for one Tax Invoice."""
-    tax_inv = frappe.get_doc("Tax Invoice", tax_inv_name)
-    issues = []
-    status = "ready"
-
-    # 1. 基础校验
-    if tax_inv.company != company:
-        issues.append({"level": "blocked", "message": f"发票所属公司({tax_inv.company})与报销公司不一致"})
-        status = "blocked"
-
-    if tax_inv.business_status in ("已废弃", "已对冲"):
-        issues.append({"level": "blocked", "message": f"发票状态为 {tax_inv.business_status}，禁止报销"})
-        status = "blocked"
-
-    # 2. 检查已有 PI 复用
-    pi_mode = "create"
-    pi_name = None
-    pi_supplier = None
-    pi_items = []
-    payable_amount = flt(tax_inv.payable_total, 2)
-
-    if tax_inv.matched_purchase_invoice:
-        pi_data = frappe.db.get_value(
-            "Purchase Invoice",
-            tax_inv.matched_purchase_invoice,
-            ["name", "company", "bill_no", "supplier", "docstatus", "outstanding_amount", "grand_total"],
-            as_dict=True,
-        )
-        if pi_data and pi_data.docstatus == 1 and pi_data.company == company:
-            pi_mode = "reuse"
-            pi_name = pi_data.name
-            pi_supplier = pi_data.supplier
-            # 可报销金额为当前待付金额
-            available_amt = min(payable_amount, flt(pi_data.outstanding_amount, 2))
-            if available_amt <= 0.0001:
-                issues.append({"level": "warning", "message": f"关联发票 {pi_name} 已无可报销待付额"})
-
-    # 3. 若需新建 PI，解析 Supplier 和 Items
-    if pi_mode == "create":
-        # 解析 Supplier
-        seller_tax_id = (tax_inv.seller_tax_id or "").strip()
-        seller_name = (tax_inv.seller_name or "").strip()
-        explicit_supp = (resolutions.get("suppliers") or {}).get(tax_inv_name)
-
-        if explicit_supp and frappe.db.exists("Supplier", explicit_supp):
-            pi_supplier = explicit_supp
-        elif seller_tax_id and frappe.db.exists("Supplier", {"tax_id": seller_tax_id}):
-            pi_supplier = frappe.db.get_value("Supplier", {"tax_id": seller_tax_id}, "name")
-        elif seller_name and frappe.db.exists("Supplier", {"supplier_name": seller_name}):
-            pi_supplier = frappe.db.get_value("Supplier", {"supplier_name": seller_name}, "name")
-        elif seller_name and frappe.db.exists("Supplier", seller_name):
-            pi_supplier = seller_name
-        else:
-            pi_supplier = None
-            issues.append({"level": "blocked", "message": f"未找到供应商 [{seller_name}]，请在档案建档或在解决栏指定"})
-            if status != "blocked":
-                status = "need_supplier"
-
-        # 解析 Item 明细
-        items_resolutions = (resolutions.get("items") or {}).get(tax_inv_name) or {}
-        wh_resolution = (resolutions.get("warehouses") or {}).get(tax_inv_name)
-        target_wh = _resolve_warehouse_for_company(company, wh_resolution)
-
-        raw_items = frappe.get_all(
-            "Tax Invoice Item",
-            filters={"parent": tax_inv.name},
-            fields=["name", "item_name", "spec_model", "unit", "quantity", "unit_price", "amount", "tax_rate_text", "tax_amount", "line_total"],
-            order_by="idx ASC",
-        )
-
-        has_stock = False
-        parsed_items = []
-        for it in raw_items:
-            raw_name = (it.item_name or "").strip()
-            item_code = items_resolutions.get(it.name) or items_resolutions.get(raw_name)
-
-            if not item_code:
-                if frappe.db.exists("Item", raw_name):
-                    item_code = raw_name
-                elif frappe.db.exists("Item", {"item_name": raw_name}):
-                    item_code = frappe.db.get_value("Item", {"item_name": raw_name}, "name")
-
-            item_meta = None
-            if item_code:
-                item_meta = frappe.db.get_value("Item", item_code, ["item_name", "stock_uom", "is_stock_item"], as_dict=True)
-
-            if not item_meta:
-                issues.append({"level": "blocked", "message": f"物料 [{raw_name}] 无法匹配到 ERP 物料编码"})
-                if status == "ready":
-                    status = "need_item"
-
-            is_stock = bool(item_meta.is_stock_item) if item_meta else False
-            if is_stock:
-                has_stock = True
-
-            qty = flt(it.quantity) or 1.0
-            amt = flt(it.amount) or flt(it.line_total)
-            rate = flt(it.unit_price) or (flt(amt / qty, 2) if qty else amt)
-            tax_rate = flt(str(it.tax_rate_text or "13").replace("%", ""))
-            tax_amt = flt(it.tax_amount) or flt(amt * (tax_rate / 100.0), 2)
-            total = flt(it.line_total) or flt(amt + tax_amt, 2)
-
-            parsed_items.append({
-                "tax_item_name": it.name,
-                "raw_item_name": raw_name,
-                "spec": it.spec_model or "",
-                "uom": it.unit or (item_meta.stock_uom if item_meta else "Nos"),
-                "qty": qty,
-                "rate": rate,
-                "amount": amt,
-                "tax_rate": tax_rate,
-                "tax_amount": tax_amt,
-                "line_total": total,
-                "item_code": item_code,
-                "is_stock_item": is_stock,
-                "warehouse": target_wh if is_stock else "",
-            })
-
-        pi_items = parsed_items
-        if has_stock and auto_receive_stock and not target_wh:
-            issues.append({"level": "blocked", "message": "发票包含库存品，但未找到可用仓库"})
-            if status == "ready":
-                status = "blocked"
-
-    return {
-        "tax_invoice": tax_inv.name,
-        "invoice_no": tax_inv.invoice_no,
-        "masked_invoice_no": f"…{tax_inv.invoice_no[-8:]}" if len(tax_inv.invoice_no or "") > 8 else tax_inv.invoice_no,
-        "issue_date": str(tax_inv.issue_date or ""),
-        "invoice_type": tax_inv.invoice_type or "专用发票",
-        "seller_name": tax_inv.seller_name or "",
-        "seller_tax_id": tax_inv.seller_tax_id or "",
-        "payable_total": payable_amount,
-        "status": status,
-        "purchase_invoice_mode": pi_mode,
-        "purchase_invoice": pi_name,
-        "supplier": pi_supplier,
-        "items": pi_items,
-        "issues": issues,
-    }
-
-
-def _build_reimbursement_preview(
-    company: str,
-    employee: str,
-    tax_invoice_names: list[str],
-    resolutions: dict,
-    auto_receive_stock: bool,
-) -> dict:
-    """Build full dry-run preview for all selected Tax Invoices."""
-    invoices_preview = []
-    suppliers_set = set()
-    grand_total = 0.0
-    existing_pi_count = 0
-    new_pi_count = 0
-    stock_inv_count = 0
-    blocking_count = 0
-    warning_count = 0
-
-    for name in tax_invoice_names:
-        plan = _build_single_invoice_preview(name, company, resolutions, auto_receive_stock)
-        invoices_preview.append(plan)
-
-        if plan["supplier"]:
-            suppliers_set.add(plan["supplier"])
-        grand_total += plan["payable_total"]
-
-        if plan["purchase_invoice_mode"] == "reuse":
-            existing_pi_count += 1
-        else:
-            new_pi_count += 1
-
-        if any(it.get("is_stock_item") for it in plan.get("items", [])):
-            stock_inv_count += 1
-
-        for iss in plan.get("issues", []):
-            if iss.get("level") == "blocked":
-                blocking_count += 1
-            else:
-                warning_count += 1
-
-    return {
-        "ready": (blocking_count == 0),
-        "blocking_count": blocking_count,
-        "warning_count": warning_count,
-        "summary": {
-            "invoice_count": len(invoices_preview),
-            "supplier_count": len(suppliers_set),
-            "grand_total": flt(grand_total, 2),
-            "existing_pi_count": existing_pi_count,
-            "new_pi_count": new_pi_count,
-            "stock_invoice_count": stock_inv_count,
-        },
-        "invoices": invoices_preview,
-    }
-
-
-@frappe.whitelist()
-def preview_tax_invoice_reimbursement(
-    company: str,
-    employee: str,
-    tax_invoice_names: Any,
-    resolutions: Any = None,
-    auto_receive_stock: int | bool = 1,
-) -> dict:
-    """Public read-only dry-run preview API."""
-    assert_company_access(company)
-    names = _normalize_name_list(tax_invoice_names)
-    if not names:
-        frappe.throw(_("请选择至少一张税局发票。"))
-
-    res_dict = _normalize_dict(resolutions)
-    return _build_reimbursement_preview(
-        company=company,
-        employee=employee,
-        tax_invoice_names=names,
-        resolutions=res_dict,
-        auto_receive_stock=bool(int(auto_receive_stock)),
-    )
-
-
-# =========================================================================
-# 5. Create Transaction Engine (Atomic POST)
-# =========================================================================
-
-def _reserve_tax_invoices(rr_name: str, invoice_plans: list[dict]) -> None:
-    """Create persistent Tax Invoice reservations to prevent concurrency/duplication."""
-    for plan in invoice_plans:
-        tax_inv_name = plan["tax_invoice"]
-        res = frappe.get_doc({
-            "doctype": "Reimbursement Source Reservation",
-            "reimbursement_request": rr_name,
-            "source_kind": "Tax Invoice",
-            "source_tax_invoice": tax_inv_name,
-            "active_source_key": f"TAXINV::{tax_inv_name}",
-            "reserved_amount": plan["payable_total"],
-            "status": "Draft",
-        })
-        try:
-            res.insert(ignore_permissions=True)
-        except frappe.DuplicateEntryError:
-            frappe.throw(_("发票 [{0}] 已被其它报销单占用，请刷新后重试。").format(tax_inv_name))
-
-
-def _create_purchase_package_from_tax_invoice(
-    invoice_plan: dict,
-    company: str,
-    posting_date: str,
-    auto_receive_stock: bool,
-) -> dict:
-    """Create PO + PR(if stock) + PI for one Tax Invoice."""
-    supplier_val = invoice_plan["supplier"]
-    bill_no_val = invoice_plan["invoice_no"]
-    bill_date_str = invoice_plan["issue_date"] or posting_date
-    invoice_type = invoice_plan["invoice_type"] or "专用发票"
-    items = invoice_plan["items"]
-
-    # 1. Purchase Order
-    po = frappe.new_doc("Purchase Order")
-    po.company = company
-    po.supplier = supplier_val
-    po.transaction_date = posting_date
-    po.schedule_date = posting_date
-    po.custom_biz_mode = "现金报销"
-
-    for it in items:
-        po_row = po.append("items", {
-            "item_code": it["item_code"],
-            "item_name": it["raw_item_name"],
-            "uom": it["uom"],
-            "stock_uom": it["uom"],
-            "qty": it["qty"],
-            "rate": it["rate"],
-            "amount": it["amount"],
-            "schedule_date": posting_date,
-            "warehouse": it["warehouse"] if it["is_stock_item"] else None,
-            "description": it["raw_item_name"],
-        })
-        if _meta_has("Purchase Order Item", "custom_spec_model"):
-            po_row.custom_spec_model = it["spec"]
-        if _meta_has("Purchase Order Item", "custom_tax_rate"):
-            po_row.custom_tax_rate = it["tax_rate"]
-        if _meta_has("Purchase Order Item", "custom_tax_amount"):
-            po_row.custom_tax_amount = it["tax_amount"]
-        if _meta_has("Purchase Order Item", "custom_total_amount"):
-            po_row.custom_total_amount = it["line_total"]
-
-    po.flags.ignore_permissions = True
-    po.insert()
-    po.submit()
-
-    # 2. Purchase Receipt (if stock item and auto_receive_stock)
-    pr_name = None
-    pr_item_map = {}
-    has_stock = any(it["is_stock_item"] for it in items)
-
-    if auto_receive_stock and has_stock:
-        pr = frappe.new_doc("Purchase Receipt")
-        pr.company = company
-        pr.supplier = supplier_val
-        pr.posting_date = posting_date
-        pr.custom_biz_mode = "现金报销"
-
-        for idx, it in enumerate(items):
-            if not it["is_stock_item"]:
-                continue
-            po_row = po.items[idx]
-            pr_row = pr.append("items", {
-                "item_code": it["item_code"],
-                "item_name": it["raw_item_name"],
-                "uom": it["uom"],
-                "stock_uom": it["uom"],
-                "qty": it["qty"],
-                "rate": it["rate"],
-                "amount": it["amount"],
-                "warehouse": it["warehouse"],
-                "purchase_order": po.name,
-                "purchase_order_item": po_row.name,
-                "description": it["raw_item_name"],
-            })
-            if _meta_has("Purchase Receipt Item", "custom_spec_model"):
-                pr_row.custom_spec_model = it["spec"]
-            if _meta_has("Purchase Receipt Item", "custom_tax_rate"):
-                pr_row.custom_tax_rate = it["tax_rate"]
-            if _meta_has("Purchase Receipt Item", "custom_tax_amount"):
-                pr_row.custom_tax_amount = it["tax_amount"]
-            if _meta_has("Purchase Receipt Item", "custom_total_amount"):
-                pr_row.custom_total_amount = it["line_total"]
-
-        if pr.items:
-            pr.flags.ignore_permissions = True
-            pr.insert()
-            pr.submit()
-            pr_name = pr.name
-            for p_item in pr.items:
-                pr_item_map[p_item.item_code] = p_item.name
-
-    # 3. Purchase Invoice
-    pi = frappe.new_doc("Purchase Invoice")
-    pi.company = company
-    pi.supplier = supplier_val
-    pi.bill_no = bill_no_val
-    pi.bill_date = bill_date_str
-    pi.posting_date = posting_date
-    pi.custom_biz_mode = "现金报销"
-    if _meta_has("Purchase Invoice", "custom_invoice_type"):
-        pi.custom_invoice_type = invoice_type
-
-    for idx, it in enumerate(items):
-        po_row = po.items[idx]
-        pi_row = pi.append("items", {
-            "item_code": it["item_code"],
-            "item_name": it["raw_item_name"],
-            "uom": it["uom"],
-            "stock_uom": it["uom"],
-            "qty": it["qty"],
-            "rate": it["rate"],
-            "amount": it["amount"],
-            "purchase_order": po.name,
-            "po_detail": po_row.name,
-            "purchase_receipt": pr_name if (it["is_stock_item"] and pr_name) else None,
-            "pr_detail": pr_item_map.get(it["item_code"]) if (it["is_stock_item"] and pr_name) else None,
-            "description": it["raw_item_name"],
-        })
-        if _meta_has("Purchase Invoice Item", "custom_spec_model"):
-            pi_row.custom_spec_model = it["spec"]
-        if _meta_has("Purchase Invoice Item", "custom_tax_rate"):
-            pi_row.custom_tax_rate = it["tax_rate"]
-        if _meta_has("Purchase Invoice Item", "custom_tax_amount"):
-            pi_row.custom_tax_amount = it["tax_amount"]
-        if _meta_has("Purchase Invoice Item", "custom_total_amount"):
-            pi_row.custom_total_amount = it["line_total"]
-
-    pi.flags.ignore_permissions = True
-    pi.insert()
-    pi.submit()
-
-    # Link back to Tax Invoice
-    frappe.db.set_value("Tax Invoice", invoice_plan["tax_invoice"], {
-        "matched_purchase_invoice": pi.name,
-        "match_status": "已匹配",
-        "business_status": "已录入",
-    }, update_modified=False)
-
-    return {
-        "po_name": po.name,
-        "pr_name": pr_name,
-        "pi_name": pi.name,
-    }
-
-
-def _attach_source_tax_invoice_to_rr(rr, tax_invoice_names: list[str]) -> None:
-    """Map and attach source_tax_invoice link to RR child rows."""
-    tax_rows = frappe.get_all(
-        "Tax Invoice",
-        filters={"name": ["in", tax_invoice_names]},
-        fields=["name", "invoice_no", "matched_purchase_invoice"],
-    )
-
-    by_pi = {}
-    by_bill_no = {}
-    for r in tax_rows:
-        if r.matched_purchase_invoice:
-            by_pi[r.matched_purchase_invoice] = r.name
-        if r.invoice_no:
-            by_bill_no[r.invoice_no] = r.name
-
-    pi_names = list({row.source_pi for row in rr.invoice_items if row.source_pi})
-    pi_bill_map = {}
-    if pi_names:
-        for p in frappe.get_all("Purchase Invoice", filters={"name": ["in", pi_names]}, fields=["name", "bill_no"]):
-            pi_bill_map[p.name] = p.bill_no
-
-    for row in rr.invoice_items:
-        t_name = by_pi.get(row.source_pi)
-        if not t_name and row.source_pi:
-            b_no = pi_bill_map.get(row.source_pi)
-            t_name = by_bill_no.get(b_no)
-        if t_name:
-            row.source_tax_invoice = t_name
-
-
-@frappe.whitelist(methods=["POST"])
-def create_tax_invoice_reimbursement(
-    company: str,
-    employee: str,
-    posting_date: str,
-    tax_invoice_names: Any,
-    title: str | None = None,
-    resolutions: Any = None,
-    auto_receive_stock: int | bool = 1,
-) -> dict:
-    """Create multi-tax-invoice reimbursement bundle atomically."""
-    assert_company_access(company)
-    names = _normalize_name_list(tax_invoice_names)
-    if not names:
-        frappe.throw(_("请选择至少一张发票。"))
-
-    res_dict = _normalize_dict(resolutions)
-    auto_receive_stock = bool(int(auto_receive_stock))
-    posting_date = posting_date or nowdate()
-
-    # 1. 严格二次预检（服务器事实）
-    preview = _build_reimbursement_preview(
-        company=company,
-        employee=employee,
-        tax_invoice_names=names,
-        resolutions=res_dict,
-        auto_receive_stock=auto_receive_stock,
-    )
-
-    if preview["blocking_count"] > 0:
-        frappe.throw(_("当前仍有 {0} 项阻断问题未解决，不能创建报销。").format(preview["blocking_count"]))
-
-    # Resolve Employee name
-    emp_name = frappe.db.get_value("Employee", employee, "employee_name") or employee
-
-    # 2. 创建 Reimbursement Request Draft
-    rr = frappe.new_doc("Reimbursement Request")
-    rr.company = company
-    rr.employee = employee
-    rr.employee_name = emp_name
-    rr.posting_date = posting_date
-    rr.custom_biz_mode = "现金报销"
-    rr.title = title or f"现金报销-{emp_name}-{posting_date} ({len(names)}张发票)"
-    rr.flags.ignore_permissions = True
-    rr.insert()
-
-    # 3. 创建发票占用 (Reservation)
-    _reserve_tax_invoices(rr.name, preview["invoices"])
-
-    # 4. 逐张发票生成采购链或复用已有的 PI
-    reused_pi_names = []
-    created_po_names = []
-    created_pr_names = []
-    created_pi_names = []
-    all_pi_item_names = []
-
-    for inv_plan in preview["invoices"]:
-        if inv_plan["purchase_invoice_mode"] == "reuse":
-            pi_name = inv_plan["purchase_invoice"]
-            reused_pi_names.append(pi_name)
-        else:
-            package = _create_purchase_package_from_tax_invoice(
-                invoice_plan=inv_plan,
-                company=company,
-                posting_date=posting_date,
-                auto_receive_stock=auto_receive_stock,
-            )
-            pi_name = package["pi_name"]
-            created_pi_names.append(pi_name)
-            if package.get("po_name"):
-                created_po_names.append(package["po_name"])
-            if package.get("pr_name"):
-                created_pr_names.append(package["pr_name"])
-
-        # 收集 PI 明细 ID 用于导入 RR
-        pi_items = frappe.get_all("Purchase Invoice Item", filters={"parent": pi_name}, pluck="name")
-        all_pi_item_names.extend(pi_items)
-
-    # 5. 调用核心 service 将所有 PI items 导入 RR
-    from ashan_cn_procurement.reimbursement.service import import_purchase_invoice_items
-    import_purchase_invoice_items(
-        reimbursement_request_name=rr.name,
-        purchase_invoice_item_names=all_pi_item_names,
-    )
-
-    # 6. 回填 source_tax_invoice
-    rr.reload()
-    _attach_source_tax_invoice_to_rr(rr, names)
-    rr.flags.ignore_permissions = True
-    rr.save()
-
-    # 7. 提交 RR (推进状态与占用声明周期)
-    rr.submit()
-
-    # 8. 刷新关联单据详情
-    try:
-        from ashan_cn_procurement.overrides.document_details import update_doc_details
-        update_doc_details(rr)
-        if rr.get("custom_doc_details"):
-            frappe.db.set_value("Reimbursement Request", rr.name, "custom_doc_details", rr.custom_doc_details, update_modified=False)
-    except Exception:
-        pass
-
-    return {
-        "success": True,
-        "rr_name": rr.name,
-        "invoice_count": len(names),
-        "grand_total": flt(rr.total_amount, 2),
-        "reused_pi_names": reused_pi_names,
-        "created_po_names": created_po_names,
-        "created_pr_names": created_pr_names,
-        "created_pi_names": created_pi_names,
-    }
-
-
-# =========================================================================
-# 6. Backward Compatibility Stub (Deprecated)
-# =========================================================================
 
 def _ensure_supplier(supplier_name: str) -> str:
-    """Ensure supplier exists in ERPNext Supplier DocType (Deprecated helper)."""
+    """Ensure supplier exists in ERPNext Supplier DocType, create if missing."""
     supplier_name = (supplier_name or "").strip()
     if not supplier_name:
         return "其它供应商"
@@ -1227,21 +453,349 @@ def _ensure_supplier(supplier_name: str) -> str:
     return supplier_name
 
 
+def _resolve_warehouse_for_company(company: str, preferred: str | None = None) -> str:
+    """Determine receiving warehouse for stock items."""
+    if preferred and frappe.db.exists("Warehouse", preferred):
+        return preferred
+    if frappe.db.exists("Warehouse", f"Stores - {company}"):
+        return f"Stores - {company}"
+    if frappe.db.exists("Warehouse", f"Goods In Transit - {company}"):
+        return f"Goods In Transit - {company}"
+    whs = frappe.get_all("Warehouse", filters={"company": company, "is_group": 0}, pluck="name", limit=1)
+    return whs[0] if whs else ""
+
+
 @frappe.whitelist(methods=["POST"])
-def create_self_service_reimbursement_bundle(
+def create_manual_multi_invoice_reimbursement(
     company: str,
-    employee: str | None = None,
-    supplier: str | None = None,
-    bill_no: str | None = None,
-    bill_date: str | None = None,
-    invoice_type: str | None = "专用发票",
-    warehouse: str | None = None,
+    employee: str,
+    posting_date: str | None = None,
+    title: str | None = None,
     auto_receive_stock: int | bool = 1,
-    items: list[dict] | str | None = None,
+    invoices: list[dict] | str | None = None,
 ) -> dict:
-    """[DEPRECATED] Single-invoice entry bundle kept for legacy compatibility."""
+    """Create multi-invoice reimbursement bundle: PO -> PR(stock) -> PI -> RR."""
     assert_company_access(company)
+
+    if isinstance(invoices, str):
+        invoices = json.loads(invoices) or []
+    if not invoices:
+        frappe.throw(_("请添加至少一张报销发票。"))
+
+    auto_receive_stock = bool(int(auto_receive_stock))
+    posting_date_str = posting_date or nowdate()
+
+    # Resolve Employee
+    emp_doc_name = None
+    if employee:
+        emp_match = frappe.db.get_value("Employee", {"name": employee}, "name") or frappe.db.get_value("Employee", {"employee_name": employee}, "name")
+        if emp_match:
+            emp_doc_name = emp_match
+
+    if not emp_doc_name:
+        user_emp = frappe.db.get_value("Employee", {"user_id": frappe.session.user, "company": company}, "name")
+        emp_doc_name = user_emp or frappe.db.get_value("Employee", {"company": company}, "name") or ""
+
+    employee_name = frappe.db.get_value("Employee", emp_doc_name, "employee_name") or (employee or "员工")
+
+    default_warehouse = _resolve_warehouse_for_company(company)
+
+    created_po_names = []
+    created_pr_names = []
+    created_pi_names = []
+    all_rr_item_rows = []
+
+    # 1. 逐张发票校验并生成采购链
+    for inv_idx, inv in enumerate(invoices, 1):
+        inv_type = (inv.get("invoice_type") or "专用发票").strip()
+        if inv_type not in VALID_INVOICE_TYPES:
+            inv_type = "专用发票"
+
+        supplier_raw = (inv.get("supplier") or "").strip()
+        if not supplier_raw:
+            supplier_raw = "零星报销供应商" if inv_type == "无发票" else "报销商户"
+
+        supplier_val = _ensure_supplier(supplier_raw)
+
+        bill_no_raw = (inv.get("invoice_no") or "").strip()
+        if not bill_no_raw:
+            bill_no_raw = f"REIM-NOINV-{posting_date_str.replace('-', '')}-{inv_idx:02d}" if inv_type == "无发票" else f"REIM-INV-{posting_date_str.replace('-', '')}-{inv_idx:02d}"
+
+        bill_date_str = (inv.get("invoice_date") or "").strip() or posting_date_str
+
+        items = inv.get("items") or []
+        if not items:
+            frappe.throw(_("发票 [{0}] (商户: {1}) 至少需要录入一行有效的明细。").format(bill_no_raw, supplier_raw))
+
+        validated_items = []
+        has_stock_items = False
+
+        for row_idx, row in enumerate(items, 1):
+            item_code_raw = (row.get("item_code") or "").strip()
+            item_name_raw = (row.get("item_name") or item_code_raw or "").strip()
+
+            if not item_code_raw and not item_name_raw:
+                frappe.throw(_("发票 [{0}] 第 {1} 行物料名称不能为空。").format(bill_no_raw, row_idx))
+
+            # 尝试在 Item 档案中查找或匹配
+            item_meta = None
+            resolved_code = None
+            if item_code_raw and frappe.db.exists("Item", item_code_raw):
+                resolved_code = item_code_raw
+            elif item_name_raw and frappe.db.exists("Item", item_name_raw):
+                resolved_code = item_name_raw
+            elif item_name_raw and frappe.db.exists("Item", {"item_name": item_name_raw}):
+                resolved_code = frappe.db.get_value("Item", {"item_name": item_name_raw}, "name")
+
+            if resolved_code:
+                item_meta = frappe.db.get_value("Item", resolved_code, ["item_name", "stock_uom", "is_stock_item"], as_dict=True)
+            else:
+                # 允许作为费用/非库存项目
+                resolved_code = item_code_raw or item_name_raw
+
+            qty = flt(row.get("qty") or 1.0)
+            rate = flt(row.get("rate") or 0.0)
+            amount = flt(row.get("amount") or (qty * rate))
+
+            if qty <= 0 or rate <= 0 or amount <= 0:
+                frappe.throw(
+                    _("发票 [{0}] 第 {1} 行 [{2}] 的数量({3})、单价(¥{4:.2f})或金额(¥{5:.2f})必须大于0！根据财务纪律，单价与金额严禁为0。").format(
+                        bill_no_raw, row_idx, item_name_raw or resolved_code, qty, rate, amount
+                    )
+                )
+
+            # 税率：普通发票或无发票默认税率为 0
+            if inv_type in ("普通发票", "无发票"):
+                tax_rate = 0.0
+            else:
+                tax_rate = flt(row.get("tax_rate") or 13.0)
+
+            tax_amount = flt(amount * (tax_rate / 100.0), 2)
+            line_total = flt(amount + tax_amount, 2)
+
+            is_stock = bool(item_meta.is_stock_item) if item_meta else False
+            if is_stock:
+                has_stock_items = True
+
+            validated_items.append({
+                "idx": row_idx,
+                "item_code": resolved_code,
+                "item_name": item_name_raw or (item_meta.item_name if item_meta else resolved_code),
+                "spec": (row.get("spec") or "").strip(),
+                "uom": (row.get("uom") or "").strip() or (item_meta.stock_uom if item_meta else "Nos"),
+                "qty": qty,
+                "rate": rate,
+                "amount": amount,
+                "tax_rate": tax_rate,
+                "tax_amount": tax_amount,
+                "line_total": line_total,
+                "remarks": (row.get("remarks") or "").strip(),
+                "is_stock_item": is_stock,
+                "warehouse": default_warehouse if is_stock else None,
+            })
+
+        # --- 生成发票对应的 PO ---
+        po = frappe.new_doc("Purchase Order")
+        po.company = company
+        po.supplier = supplier_val
+        po.transaction_date = posting_date_str
+        po.schedule_date = posting_date_str
+        po.custom_biz_mode = "现金报销"
+
+        for it in validated_items:
+            po_row = po.append("items", {
+                "item_code": it["item_code"],
+                "item_name": it["item_name"],
+                "uom": it["uom"],
+                "stock_uom": it["uom"],
+                "qty": it["qty"],
+                "rate": it["rate"],
+                "amount": it["amount"],
+                "schedule_date": posting_date_str,
+                "warehouse": it["warehouse"],
+                "description": it["remarks"] or it["item_name"],
+            })
+            if _meta_has("Purchase Order Item", "custom_spec_model"):
+                po_row.custom_spec_model = it["spec"]
+            if _meta_has("Purchase Order Item", "custom_line_remark"):
+                po_row.custom_line_remark = it["remarks"]
+            if _meta_has("Purchase Order Item", "custom_tax_rate"):
+                po_row.custom_tax_rate = it["tax_rate"]
+            if _meta_has("Purchase Order Item", "custom_tax_amount"):
+                po_row.custom_tax_amount = it["tax_amount"]
+            if _meta_has("Purchase Order Item", "custom_total_amount"):
+                po_row.custom_total_amount = it["line_total"]
+
+        po.flags.ignore_permissions = True
+        po.insert()
+        po.submit()
+        created_po_names.append(po.name)
+
+        # --- 生成发票对应的 PR (若库存品) ---
+        pr_name = None
+        pr_item_map = {}
+        if auto_receive_stock and has_stock_items:
+            pr = frappe.new_doc("Purchase Receipt")
+            pr.company = company
+            pr.supplier = supplier_val
+            pr.posting_date = posting_date_str
+            pr.custom_biz_mode = "现金报销"
+
+            for idx, it in enumerate(validated_items):
+                if not it["is_stock_item"]:
+                    continue
+                po_row = po.items[idx]
+                pr_row = pr.append("items", {
+                    "item_code": it["item_code"],
+                    "item_name": it["item_name"],
+                    "uom": it["uom"],
+                    "stock_uom": it["uom"],
+                    "qty": it["qty"],
+                    "rate": it["rate"],
+                    "amount": it["amount"],
+                    "warehouse": it["warehouse"],
+                    "purchase_order": po.name,
+                    "purchase_order_item": po_row.name,
+                    "description": it["remarks"] or it["item_name"],
+                })
+                if _meta_has("Purchase Receipt Item", "custom_spec_model"):
+                    pr_row.custom_spec_model = it["spec"]
+                if _meta_has("Purchase Receipt Item", "custom_line_remark"):
+                    pr_row.custom_line_remark = it["remarks"]
+                if _meta_has("Purchase Receipt Item", "custom_tax_rate"):
+                    pr_row.custom_tax_rate = it["tax_rate"]
+                if _meta_has("Purchase Receipt Item", "custom_tax_amount"):
+                    pr_row.custom_tax_amount = it["tax_amount"]
+                if _meta_has("Purchase Receipt Item", "custom_total_amount"):
+                    pr_row.custom_total_amount = it["line_total"]
+
+            if pr.items:
+                pr.flags.ignore_permissions = True
+                pr.insert()
+                pr.submit()
+                pr_name = pr.name
+                created_pr_names.append(pr.name)
+                for p_item in pr.items:
+                    pr_item_map[p_item.item_code] = p_item.name
+
+        # --- 生成发票对应的 PI ---
+        pi = frappe.new_doc("Purchase Invoice")
+        pi.company = company
+        pi.supplier = supplier_val
+        pi.bill_no = bill_no_raw
+        pi.bill_date = bill_date_str
+        pi.posting_date = posting_date_str
+        pi.custom_biz_mode = "现金报销"
+        if _meta_has("Purchase Invoice", "custom_invoice_type"):
+            pi.custom_invoice_type = inv_type
+
+        for idx, it in enumerate(validated_items):
+            po_row = po.items[idx]
+            pi_row = pi.append("items", {
+                "item_code": it["item_code"],
+                "item_name": it["item_name"],
+                "uom": it["uom"],
+                "stock_uom": it["uom"],
+                "qty": it["qty"],
+                "rate": it["rate"],
+                "amount": it["amount"],
+                "purchase_order": po.name,
+                "po_detail": po_row.name,
+                "purchase_receipt": pr_name if (it["is_stock_item"] and pr_name) else None,
+                "pr_detail": pr_item_map.get(it["item_code"]) if (it["is_stock_item"] and pr_name) else None,
+                "description": it["remarks"] or it["item_name"],
+            })
+            if _meta_has("Purchase Invoice Item", "custom_spec_model"):
+                pi_row.custom_spec_model = it["spec"]
+            if _meta_has("Purchase Invoice Item", "custom_line_remark"):
+                pi_row.custom_line_remark = it["remarks"]
+            if _meta_has("Purchase Invoice Item", "custom_tax_rate"):
+                pi_row.custom_tax_rate = it["tax_rate"]
+            if _meta_has("Purchase Invoice Item", "custom_tax_amount"):
+                pi_row.custom_tax_amount = it["tax_amount"]
+            if _meta_has("Purchase Invoice Item", "custom_total_amount"):
+                pi_row.custom_total_amount = it["line_total"]
+
+        pi.flags.ignore_permissions = True
+        pi.insert()
+        pi.submit()
+        created_pi_names.append(pi.name)
+
+        # 收集该发票明细行供汇总进入 RR
+        for idx, it in enumerate(validated_items):
+            pi_item_row = pi.items[idx]
+            all_rr_item_rows.append({
+                "item_name": it["item_name"],
+                "description": it["spec"],
+                "qty": it["qty"],
+                "rate": it["rate"],
+                "amount": it["line_total"],  # 报销金额为价税合计
+                "invoice_no": bill_no_raw,
+                "supplier": supplier_val,
+                "source_pi": pi.name,
+                "source_pi_item": pi_item_row.name,
+                "custom_line_remark": it["remarks"],
+                "invoice_type": inv_type,
+                "invoice_date": bill_date_str,
+                "tax_rate": it["tax_rate"],
+                "tax_amount": it["tax_amount"],
+            })
+
+    # 2. 创建 Reimbursement Request (Submitted)
+    rr = frappe.new_doc("Reimbursement Request")
+    rr.company = company
+    rr.title = title or f"现金报销-{employee_name}-{posting_date_str} ({len(invoices)}张发票)"
+    if emp_doc_name:
+        rr.employee = emp_doc_name
+    if employee_name:
+        rr.employee_name = employee_name
+    rr.posting_date = posting_date_str
+    rr.custom_biz_mode = "现金报销"
+
+    for r_it in all_rr_item_rows:
+        row_dict = {
+            "item_name": r_it["item_name"],
+            "description": r_it["description"],
+            "qty": r_it["qty"],
+            "rate": r_it["rate"],
+            "amount": r_it["amount"],
+            "invoice_no": r_it["invoice_no"],
+            "supplier": r_it["supplier"],
+            "source_pi": r_it["source_pi"],
+            "source_pi_item": r_it["source_pi_item"],
+        }
+        if _meta_has("Reimbursement Invoice Item", "custom_line_remark"):
+            row_dict["custom_line_remark"] = r_it["custom_line_remark"]
+        if _meta_has("Reimbursement Invoice Item", "invoice_type"):
+            row_dict["invoice_type"] = r_it["invoice_type"]
+        if _meta_has("Reimbursement Invoice Item", "invoice_date"):
+            row_dict["invoice_date"] = r_it["invoice_date"]
+        if _meta_has("Reimbursement Invoice Item", "tax_rate"):
+            row_dict["tax_rate"] = r_it["tax_rate"]
+        if _meta_has("Reimbursement Invoice Item", "tax_amount"):
+            row_dict["tax_amount"] = r_it["tax_amount"]
+
+        rr.append("invoice_items", row_dict)
+
+    rr.flags.ignore_permissions = True
+    rr.insert()
+    rr.submit()
+
+    # 3. 刷新 custom_doc_details
+    try:
+        from ashan_cn_procurement.overrides.document_details import update_doc_details
+        update_doc_details(rr)
+        if rr.get("custom_doc_details"):
+            frappe.db.set_value("Reimbursement Request", rr.name, "custom_doc_details", rr.custom_doc_details, update_modified=False)
+    except Exception:
+        pass
+
     return {
         "success": True,
-        "message": "Deprecated",
+        "rr_name": rr.name,
+        "invoice_count": len(invoices),
+        "grand_total": flt(rr.total_amount, 2),
+        "created_po_names": created_po_names,
+        "created_pr_names": created_pr_names,
+        "created_pi_names": created_pi_names,
     }
