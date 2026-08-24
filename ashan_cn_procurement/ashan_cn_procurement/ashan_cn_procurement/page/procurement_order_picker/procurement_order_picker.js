@@ -41,7 +41,7 @@ class ProcurementOrderPickerCenter {
                 name: "采购申请",
                 banner_title: "当前：采购申请",
                 banner_desc: "查看与管理已提报的采购申请明细及单据。如需修改请点击申请单号进入单据修改，或点击【+ 新建物料申请单】快速录入。",
-                sub_label: "待办采购申请",
+                sub_label: "待提申请",
                 icon: "📋",
                 btn_label: "",
             },
@@ -50,7 +50,7 @@ class ProcurementOrderPickerCenter {
                 name: "采购订货",
                 banner_title: "当前：采购订货",
                 banner_desc: "勾选待订需求明细或单号，系统自动按建议供应商智能拆单合并生成正式采购订单 (Purchase Order)。",
-                sub_label: "待订货需求明细",
+                sub_label: "待采购",
                 icon: "🛒",
                 btn_label: "🚀 生成采购订单",
             },
@@ -59,7 +59,7 @@ class ProcurementOrderPickerCenter {
                 name: "采购入库",
                 banner_title: "当前：采购入库",
                 banner_desc: "勾选待收货订单明细，弹窗核对或调整实收数量与仓库，生成并正式发布采购入库单 (Purchase Receipt)。",
-                sub_label: "待收货订单明细",
+                sub_label: "待入库",
                 icon: "📦",
                 btn_label: "🚀 生成采购入库单",
             },
@@ -68,7 +68,7 @@ class ProcurementOrderPickerCenter {
                 name: "采购开票",
                 banner_title: "当前：采购开票",
                 banner_desc: "勾选已入库物料明细，弹窗录入发票号码、日期与税额，生成并正式发布采购发票 (Purchase Invoice)。",
-                sub_label: "待开票入库明细",
+                sub_label: "待开票",
                 icon: "🧾",
                 btn_label: "🚀 生成采购发票",
             },
@@ -77,7 +77,7 @@ class ProcurementOrderPickerCenter {
                 name: "报销付款",
                 banner_title: "当前：报销付款",
                 banner_desc: "勾选待报销发票明细，弹窗核对报销人与金额，生成并正式发布报销付款申请 (Reimbursement Request)。",
-                sub_label: "待报销付款发票",
+                sub_label: "待报销",
                 icon: "💰",
                 btn_label: "🚀 生成报销申请单",
             },
@@ -410,11 +410,8 @@ class ProcurementOrderPickerCenter {
             const data = this.kpis[key] || { count: 0 };
             const is_active = this.active_stage === key;
 
-            let num_text = data.count || 0;
-            let sub_text = cfg.sub_label;
-            if (key === "pi_to_rr" && data.amount !== undefined) {
-                sub_text = `待报销: ${this.fmt_money(data.amount)}`;
-            }
+            const num_text = data.count || 0;
+            const sub_text = cfg.sub_label || "";
 
             const html = `
                 <div class="picker-kpi-card ${is_active ? 'active' : ''}" data-stage="${key}">

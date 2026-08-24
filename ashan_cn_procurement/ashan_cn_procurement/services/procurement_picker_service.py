@@ -2363,25 +2363,42 @@ def get_procurement_picker_overview_kpis(company: str | None = None) -> dict:
           AND (pri.amount - COALESCE(pri.billed_amt, 0)) > 0.01
     """, (companies,))[0][0] or 0
 
-    pi_stats = frappe.db.sql("""
-        SELECT COUNT(name), COALESCE(SUM(outstanding_amount), 0)
+    # Step 5: Purchase Invoices pending reimbursement (deducting active reservations)
+    active_res = []
+    if frappe.db.exists("DocType", "Reimbursement Source Reservation"):
+        active_res = frappe.get_all(
+            "Reimbursement Source Reservation",
+            filters={"status": ["in", ["Draft", "Submitted"]]},
+            fields=["source_purchase_invoice", "reserved_amount"],
+        )
+    reserved_by_pi = defaultdict(float)
+    for res in active_res:
+        reserved_by_pi[res.source_purchase_invoice] += flt(res.reserved_amount)
+
+    raw_pis = frappe.db.sql("""
+        SELECT name, outstanding_amount
         FROM `tabPurchase Invoice`
         WHERE docstatus = 1
           AND company IN %s
-          AND outstanding_amount > 0
-    """, (companies,))[0]
+          AND outstanding_amount > 0.0001
+    """, (companies,), as_dict=True)
 
-    pi_count = pi_stats[0] or 0
-    pi_amount = flt(pi_stats[1] or 0)
+    pi_count = 0
+    pi_amount = 0.0
+    for pi_row in raw_pis:
+        net_outstanding = max(0.0, flt(pi_row.outstanding_amount) - reserved_by_pi.get(pi_row.name, 0.0))
+        if net_outstanding > 0.0001:
+            pi_count += 1
+            pi_amount += net_outstanding
 
     return {
         "companies": companies,
         "kpis": {
-            "item_to_mr": {"count": mr_pending_docs_count, "label": "待办采购申请"},
-            "mr_to_po": {"count": mr_count, "label": "待订货需求明细"},
-            "po_to_pr": {"count": po_count, "label": "待收货订单明细"},
-            "pr_to_pi": {"count": pr_count, "label": "待开票入库明细"},
-            "pi_to_rr": {"count": pi_count, "amount": pi_amount, "label": "待报销付款发票"},
+            "item_to_mr": {"count": mr_pending_docs_count, "label": "待提申请"},
+            "mr_to_po": {"count": mr_count, "label": "待采购"},
+            "po_to_pr": {"count": po_count, "label": "待入库"},
+            "pr_to_pi": {"count": pr_count, "label": "待开票"},
+            "pi_to_rr": {"count": pi_count, "amount": pi_amount, "label": "待报销"},
         }
     }
 
