@@ -779,7 +779,6 @@ class ProcurementOrderPickerCenter {
                     <th>供应商</th>
                     <th>采购订单号</th>
                     <th>订单日期</th>
-                    <th>承诺交期</th>
                     <th>收货仓库</th>
                     <th>单据明细</th>
                     <th>待收项数</th>
@@ -787,14 +786,12 @@ class ProcurementOrderPickerCenter {
                     <th>待收金额</th>
                     <th>订单总额</th>
                     <th>🔗 关联入库单</th>
-                    <th>订单状态</th>
                 `;
             } else {
                 ths += `
                     <th>供应商</th>
                     <th>采购订单号</th>
                     <th>订单日期</th>
-                    <th>承诺交期</th>
                     <th>物料代码/名称</th>
                     <th>收货仓库</th>
                     <th>订购总数</th>
@@ -857,7 +854,7 @@ class ProcurementOrderPickerCenter {
                     <th>发票代码/号码</th>
                     <th>物料/费用项目</th>
                     <th>单位</th>
-                    <th>数量</th>
+                    <th>开票数量</th>
                     <th>单价</th>
                     <th>明细金额</th>
                     <th>开票日期</th>
@@ -1020,7 +1017,6 @@ class ProcurementOrderPickerCenter {
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
                         <td><span class="picker-source-docname picker-doc-clickable-link" data-doctype="Purchase Order" data-name="${r.po_name}" title="点击查看详情与操作">${frappe.utils.escape_html(r.po_name)}</span></td>
                         <td>${r.po_date || "-"}</td>
-                        <td>${r.schedule_date || "-"}</td>
                         <td>${frappe.utils.escape_html(r.warehouse || "-")}</td>
                         <td>${doc_badges(r.custom_doc_details)}</td>
                         <td class="picker-qty-cell">${r.pending_item_count || 0}</td>
@@ -1028,14 +1024,12 @@ class ProcurementOrderPickerCenter {
                         <td class="picker-money-cell cell-row-amt">${this.fmt_money(r.pending_amount)}</td>
                         <td class="picker-money-cell">${this.fmt_money(r.grand_total)}</td>
                         <td>${render_linked_badges(r.linked_pr_names, "purchase-receipt")}</td>
-                        <td><span class="ashan-status-badge ashan-status-blue">${frappe.utils.escape_html(r.status || "")}</span></td>
                     `;
                 } else {
                     tr_html += `
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
                         <td><span class="picker-source-docname picker-doc-clickable-link" data-doctype="Purchase Order" data-name="${r.po_name}" title="点击查看详情与操作">${frappe.utils.escape_html(r.po_name)}</span></td>
                         <td>${r.po_date || "-"}</td>
-                        <td>${r.schedule_date || "-"}</td>
                         <td><span class="ashan-tag-badge">${frappe.utils.escape_html(r.item_code)}</span> ${frappe.utils.escape_html(r.item_name || "")}</td>
                         <td>${frappe.utils.escape_html(r.warehouse || "-")}</td>
                         <td class="picker-qty-cell">${r.qty}</td>
@@ -1078,11 +1072,14 @@ class ProcurementOrderPickerCenter {
                 }
             } else if (stage === "pi_to_rr") {
                 if (mode === "doc") {
+                    const inv_type_badge = r.invoice_type === "专用发票"
+                        ? `<span class="ashan-status-badge ashan-status-purple">专用发票</span>`
+                        : `<span class="ashan-status-badge ashan-status-blue">普通发票</span>`;
                     tr_html += `
                         <td><span class="picker-source-docname picker-doc-clickable-link" data-doctype="Purchase Invoice" data-name="${r.pi_name}" title="点击查看详情与操作">${frappe.utils.escape_html(r.pi_name)}</span></td>
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
-                        <td><span class="picker-badge-invoice-type">${frappe.utils.escape_html(r.bill_no || "未填")}</span></td>
-                        <td><span class="ashan-status-badge ashan-status-blue">${frappe.utils.escape_html(r.invoice_type || "普通发票")}</span></td>
+                        <td><span class="ashan-tag-badge ashan-tag-blue">${frappe.utils.escape_html(r.bill_no || "未填")}</span></td>
+                        <td>${inv_type_badge}</td>
                         <td>${doc_badges(r.custom_doc_details)}</td>
                         <td>${r.bill_date || r.posting_date || "-"}</td>
                         <td>${frappe.utils.escape_html(r.owner || "-")}</td>
@@ -1095,8 +1092,8 @@ class ProcurementOrderPickerCenter {
                     tr_html += `
                         <td><span class="picker-source-docname picker-doc-clickable-link" data-doctype="Purchase Invoice" data-name="${r.pi_name}" title="点击查看详情与操作">${frappe.utils.escape_html(r.pi_name)}</span></td>
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
-                        <td><span class="picker-badge-invoice-type">${frappe.utils.escape_html(r.bill_no || "未填")}</span></td>
-                        <td><strong>${frappe.utils.escape_html(r.item_code)}</strong> ${frappe.utils.escape_html(r.item_name || "")}</td>
+                        <td><span class="ashan-tag-badge ashan-tag-blue">${frappe.utils.escape_html(r.bill_no || "未填")}</span></td>
+                        <td><span class="ashan-tag-badge">${frappe.utils.escape_html(r.item_code)}</span> ${frappe.utils.escape_html(r.item_name || "")}</td>
                         <td>${frappe.utils.escape_html(r.uom || "")}</td>
                         <td class="picker-qty-cell">${r.qty}</td>
                         <td class="picker-money-cell">${this.fmt_money(r.rate)}</td>
@@ -1177,15 +1174,15 @@ class ProcurementOrderPickerCenter {
         } else if (stage === "po_to_pr") {
             if (mode === "doc") {
                 foot_html += `
-                    <td colspan="7"></td>
+                    <td colspan="6"></td>
                     <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
                     <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
                     <td class="picker-money-cell">${this.fmt_money(total_grand)}</td>
-                    <td colspan="2"></td>
+                    <td></td>
                 `;
             } else {
                 foot_html += `
-                    <td colspan="6"></td>
+                    <td colspan="5"></td>
                     <td colspan="2"></td>
                     <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
                     <td></td>
