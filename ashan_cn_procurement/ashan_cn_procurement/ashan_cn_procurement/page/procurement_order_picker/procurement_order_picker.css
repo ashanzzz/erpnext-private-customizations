@@ -762,18 +762,18 @@
     border-right: none;
 }
 
-.picker-modal-item-table th:nth-child(1) { width: 34px; text-align: center; }
-.picker-modal-item-table th:nth-child(2) { width: 12%; min-width: 110px; }
-.picker-modal-item-table th:nth-child(3) { width: 13%; min-width: 120px; }
-.picker-modal-item-table th:nth-child(4) { width: 9%; min-width: 85px; }
-.picker-modal-item-table th:nth-child(5) { width: 7%; min-width: 70px; text-align: right; }
-.picker-modal-item-table th:nth-child(6) { width: 7.5%; min-width: 75px; text-align: right; }
-.picker-modal-item-table th:nth-child(7) { width: 8%; min-width: 80px; text-align: right; }
-.picker-modal-item-table th:nth-child(8) { width: 5.5%; min-width: 55px; text-align: right; }
-.picker-modal-item-table th:nth-child(9) { width: 7.5%; min-width: 75px; text-align: right; }
-.picker-modal-item-table th:nth-child(10) { width: 8.5%; min-width: 85px; text-align: right; }
+.picker-modal-item-table th:nth-child(1) { width: 32px; text-align: center; }
+.picker-modal-item-table th:nth-child(2) { width: 9%; min-width: 95px; }
+.picker-modal-item-table th:nth-child(3) { width: 11%; min-width: 105px; }
+.picker-modal-item-table th:nth-child(4) { width: 8%; min-width: 80px; }
+.picker-modal-item-table th:nth-child(5) { width: 7.5%; min-width: 75px; text-align: right; }
+.picker-modal-item-table th:nth-child(6) { width: 8.5%; min-width: 80px; text-align: right; }
+.picker-modal-item-table th:nth-child(7) { width: 9%; min-width: 85px; text-align: right; }
+.picker-modal-item-table th:nth-child(8) { width: 6%; min-width: 55px; text-align: right; }
+.picker-modal-item-table th:nth-child(9) { width: 8.5%; min-width: 80px; text-align: right; }
+.picker-modal-item-table th:nth-child(10) { width: 9.5%; min-width: 90px; text-align: right; }
 .picker-modal-item-table th:nth-child(11) { width: auto; min-width: 110px; }
-.picker-modal-item-table th:nth-child(12) { width: 46px; text-align: center; }
+.picker-modal-item-table th:nth-child(12) { width: 42px; text-align: center; }
 
 .picker-modal-item-table td {
     padding: 6px 6px;
@@ -808,9 +808,22 @@
     transition: all 0.15s ease;
 }
 
+.modal-input-readonly {
+    background: #f8fafc !important;
+    color: #475569 !important;
+    cursor: default !important;
+    border-color: #e2e8f0 !important;
+    user-select: text;
+}
+
+.modal-input-readonly:focus {
+    border-color: #cbd5e1 !important;
+    box-shadow: none !important;
+}
+
 .modal-input-code:focus,
-.modal-input-name:focus,
-.modal-input-spec:focus,
+.modal-input-name:not(.modal-input-readonly):focus,
+.modal-input-spec:not(.modal-input-readonly):focus,
 .modal-input-qty:focus,
 .modal-input-rate:focus,
 .modal-input-amount:focus,

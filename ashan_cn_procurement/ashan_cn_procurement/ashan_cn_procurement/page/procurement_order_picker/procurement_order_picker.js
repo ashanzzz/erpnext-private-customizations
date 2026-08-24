@@ -756,7 +756,6 @@ class ProcurementOrderPickerCenter {
                     <th>订购总数</th>
                     <th>已收数</th>
                     <th>未收数量</th>
-                    <th>本次实收数</th>
                     <th>采购单价</th>
                     <th>待收金额</th>
                     <th>🔗 关联入库单</th>
@@ -786,7 +785,6 @@ class ProcurementOrderPickerCenter {
                     <th>实收总数</th>
                     <th>已开票数</th>
                     <th>未结数量</th>
-                    <th>本次开票数</th>
                     <th>入库单价</th>
                     <th>待开票金额</th>
                     <th>关联订单</th>
@@ -989,7 +987,6 @@ class ProcurementOrderPickerCenter {
                         <td><span class="ashan-status-badge ashan-status-blue">${frappe.utils.escape_html(r.status || "")}</span></td>
                     `;
                 } else {
-                    const input_val = is_completed ? 0 : (r.this_qty || r.pending_qty);
                     tr_html += `
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
                         <td><span class="picker-source-docname picker-doc-clickable-link" data-doctype="Purchase Order" data-name="${r.po_name}" title="点击查看详情与操作">${frappe.utils.escape_html(r.po_name)}</span></td>
@@ -1000,9 +997,6 @@ class ProcurementOrderPickerCenter {
                         <td class="picker-qty-cell">${r.qty}</td>
                         <td class="picker-qty-cell">${r.received_qty}</td>
                         <td class="picker-qty-cell"><strong>${r.pending_qty}</strong></td>
-                        <td>
-                            <input type="number" class="picker-input-qty" step="0.01" min="0.01" max="${r.pending_qty}" value="${input_val}" ${is_completed ? 'disabled' : ''}>
-                        </td>
                         <td class="picker-money-cell">${this.fmt_money(r.rate)}</td>
                         <td class="picker-money-cell cell-row-amt">${this.fmt_money(r.pending_amount)}</td>
                         <td>${render_linked_badges(r.linked_pr_names, "purchase-receipt")}</td>
@@ -1023,7 +1017,6 @@ class ProcurementOrderPickerCenter {
                         <td>${render_linked_badges(r.linked_pi_names, "purchase-invoice")}</td>
                     `;
                 } else {
-                    const input_val = is_completed ? 0 : (r.this_qty || r.pending_qty);
                     tr_html += `
                         <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
                         <td><span class="picker-source-docname picker-doc-clickable-link" data-doctype="Purchase Receipt" data-name="${r.pr_name}" title="点击查看详情与操作">${frappe.utils.escape_html(r.pr_name)}</span></td>
@@ -1033,9 +1026,6 @@ class ProcurementOrderPickerCenter {
                         <td class="picker-qty-cell">${r.qty}</td>
                         <td class="picker-qty-cell">${r.billed_qty}</td>
                         <td class="picker-qty-cell"><strong>${r.pending_qty}</strong></td>
-                        <td>
-                            <input type="number" class="picker-input-qty" step="0.01" min="0.01" max="${r.pending_qty}" value="${input_val}" ${is_completed ? 'disabled' : ''}>
-                        </td>
                         <td class="picker-money-cell">${this.fmt_money(r.rate)}</td>
                         <td class="picker-money-cell cell-row-amt">${this.fmt_money(r.pending_amount)}</td>
                         <td>${frappe.utils.escape_html(r.purchase_order || "-")}</td>
@@ -1268,35 +1258,7 @@ class ProcurementOrderPickerCenter {
             return;
         }
 
-        let stage_inputs = "";
-        if (stage === "mr_to_po") {
-            stage_inputs = `
-                <div class="picker-filter-group">
-                    <input type="text" class="picker-filter-input" id="picker-opt-supplier" placeholder="统一指定供应商(可选)">
-                </div>
-            `;
-        } else if (stage === "po_to_pr") {
-            stage_inputs = `
-                <div class="picker-filter-group">
-                    <input type="text" class="picker-filter-input" id="picker-opt-warehouse" placeholder="统一指定入库仓库(可选)">
-                </div>
-            `;
-        } else if (stage === "pr_to_pi") {
-            stage_inputs = `
-                <div class="picker-filter-group">
-                    <input type="text" class="picker-filter-input" id="picker-opt-bill-no" placeholder="发票号码(纸质/金税)">
-                </div>
-            `;
-        } else if (stage === "pi_to_rr") {
-            stage_inputs = `
-                <div class="picker-filter-group">
-                    <input type="text" class="picker-filter-input" id="picker-opt-applicant" placeholder="报销申请人(邮箱/员工)">
-                </div>
-            `;
-        }
-
         const count_unit = mode === "doc" ? "单" : "行";
-        const fill_max_btn = mode === "detail" ? `<button class="picker-btn-secondary" id="picker-fill-max-btn">填充最大待办数</button>` : "";
 
         const html = `
             <div class="picker-summary-text">
@@ -1308,8 +1270,6 @@ class ProcurementOrderPickerCenter {
                 <button class="picker-btn-secondary" id="picker-select-all-btn">全选本页</button>
                 <button class="picker-btn-secondary" id="picker-clear-sel-btn">清空选择</button>
                 <button class="picker-btn-secondary" id="picker-batch-delete-btn" ${sel_count === 0 ? 'disabled' : ''}>🗑️ 删除所选</button>
-                ${fill_max_btn}
-                ${stage_inputs}
                 <button class="picker-btn-primary" id="picker-submit-btn" ${sel_count === 0 ? 'disabled' : ''}>
                     ${cfg.btn_label}${target_comp_suffix}
                 </button>
@@ -1519,10 +1479,10 @@ class ProcurementOrderPickerCenter {
                             </div>
                         </td>
                         <td>
-                            <input type="text" class="modal-input-name" placeholder="物料名称..." value="${frappe.utils.escape_html(row.item_name || '')}">
+                            <input type="text" class="modal-input-name modal-input-readonly" readonly tabindex="-1" placeholder="自动带出物料名称..." value="${frappe.utils.escape_html(row.item_name || '')}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-spec" placeholder="规格型号..." value="${frappe.utils.escape_html(row.spec || '')}">
+                            <input type="text" class="modal-input-spec modal-input-readonly" readonly tabindex="-1" placeholder="自动带出规格型号..." value="${frappe.utils.escape_html(row.spec || '')}">
                         </td>
                         <td>
                             <input type="number" step="any" min="0" class="modal-input-qty" value="${row.qty}">
@@ -2288,10 +2248,10 @@ class ProcurementOrderPickerCenter {
                             </div>
                         </td>
                         <td>
-                            <input type="text" class="modal-input-name" placeholder="物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
+                            <input type="text" class="modal-input-name modal-input-readonly" readonly tabindex="-1" placeholder="自动带出物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-spec" placeholder="规格型号..." value="${frappe.utils.escape_html(r.spec || '')}">
+                            <input type="text" class="modal-input-spec modal-input-readonly" readonly tabindex="-1" placeholder="自动带出规格型号..." value="${frappe.utils.escape_html(r.spec || '')}">
                         </td>
                         <td>
                             <input type="number" step="any" min="0" class="modal-input-qty" value="${r.qty}">
@@ -3162,10 +3122,10 @@ class ProcurementOrderPickerCenter {
                             <div class="picker-suggest-dropdown" id="suggest-dd-po-create-${idx}"></div>
                         </td>
                         <td>
-                            <input type="text" class="modal-input-name" placeholder="物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
+                            <input type="text" class="modal-input-name modal-input-readonly" readonly tabindex="-1" placeholder="物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-spec" placeholder="规格型号..." value="${frappe.utils.escape_html(r.spec || '')}">
+                            <input type="text" class="modal-input-spec modal-input-readonly" readonly tabindex="-1" placeholder="规格型号..." value="${frappe.utils.escape_html(r.spec || '')}">
                         </td>
                         <td>
                             <input type="number" step="any" min="0.0001" class="modal-input-qty" value="${r.qty}">
@@ -3603,10 +3563,10 @@ class ProcurementOrderPickerCenter {
                             <div class="picker-suggest-dropdown" id="suggest-dd-pr-create-${idx}"></div>
                         </td>
                         <td>
-                            <input type="text" class="modal-input-name" placeholder="物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
+                            <input type="text" class="modal-input-name modal-input-readonly" readonly tabindex="-1" placeholder="物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-spec" placeholder="规格型号..." value="${frappe.utils.escape_html(r.spec || '')}">
+                            <input type="text" class="modal-input-spec modal-input-readonly" readonly tabindex="-1" placeholder="规格型号..." value="${frappe.utils.escape_html(r.spec || '')}">
                         </td>
                         <td>
                             <input type="number" step="any" min="0.0001" class="modal-input-qty" value="${r.qty}">
@@ -3930,10 +3890,10 @@ class ProcurementOrderPickerCenter {
                             <div class="picker-suggest-dropdown" id="suggest-dd-pi-create-${idx}"></div>
                         </td>
                         <td>
-                            <input type="text" class="modal-input-name" placeholder="物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
+                            <input type="text" class="modal-input-name modal-input-readonly" readonly tabindex="-1" placeholder="物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-spec" placeholder="规格型号..." value="${frappe.utils.escape_html(r.spec || '')}">
+                            <input type="text" class="modal-input-spec modal-input-readonly" readonly tabindex="-1" placeholder="规格型号..." value="${frappe.utils.escape_html(r.spec || '')}">
                         </td>
                         <td>
                             <input type="number" step="any" min="0.0001" class="modal-input-qty" value="${r.qty}">
