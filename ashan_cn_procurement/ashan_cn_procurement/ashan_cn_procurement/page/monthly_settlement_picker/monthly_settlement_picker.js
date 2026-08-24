@@ -4,7 +4,7 @@
 frappe.pages["monthly-settlement-picker"].on_page_load = function (wrapper) {
     var page = frappe.ui.make_app_page({
         parent: wrapper,
-        title: __("月结入库补录"),
+        title: __("月结补录"),
         single_column: true,
     });
 
@@ -39,7 +39,7 @@ class MonthlySettlementPicker {
                 <!-- Top Header & Company Selector -->
                 <div class="picker-top-bar">
                     <div class="picker-title-group">
-                        <h2>月结入库补录</h2>
+                        <h2>📅 月结补录</h2>
                         <div class="picker-subtitle">月结采购入库录入与待开票跟踪</div>
                     </div>
                     <div class="picker-company-group">
@@ -266,9 +266,22 @@ class MonthlySettlementPicker {
         });
 
         // Table drill-down
-        $("#monthly-table-tbody").on("click", ".picker-clickable-doc", function () {
+        $("#monthly-table-tbody").on("click", ".picker-clickable-doc", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
             const dt = $(this).data("doctype");
             const dn = $(this).data("name");
+            if (dt && dn) {
+                self.show_doc_detail_modal(dt, dn);
+            }
+        });
+
+        $("#monthly-table-tbody").on("click", "tr[data-doctype][data-name]", function (e) {
+            if ($(e.target).closest("input, button, a, .picker-clickable-doc").length) {
+                return;
+            }
+            const dt = $(this).attr("data-doctype");
+            const dn = $(this).attr("data-name");
             if (dt && dn) {
                 self.show_doc_detail_modal(dt, dn);
             }
@@ -498,7 +511,7 @@ class MonthlySettlementPicker {
             const is_checked = this.selected_items.has(r.pri_name) ? "checked" : "";
 
             tbody_html += `
-                <tr>
+                <tr class="ashan-row-clickable" data-doctype="Purchase Receipt" data-name="${frappe.utils.escape_html(r.pr_name)}">
                     <td class="picker-col-sticky-1 picker-col-idx">${idx + 1}</td>
                     <td class="picker-col-sticky-2 picker-col-chk">
                         <input type="checkbox" class="picker-row-checkbox" data-key="${r.pri_name}" ${is_checked} />
@@ -630,7 +643,7 @@ class MonthlySettlementPicker {
             const is_checked = this.selected_items.has(r.pr_name) ? "checked" : "";
 
             tbody_html += `
-                <tr>
+                <tr class="ashan-row-clickable" data-doctype="Purchase Receipt" data-name="${frappe.utils.escape_html(r.pr_name)}">
                     <td class="picker-col-sticky-1 picker-col-idx">${idx + 1}</td>
                     <td class="picker-col-sticky-2 picker-col-chk">
                         <input type="checkbox" class="picker-row-checkbox" data-key="${r.pr_name}" ${is_checked} />
@@ -1125,6 +1138,7 @@ class MonthlySettlementPicker {
             const d = new frappe.ui.Dialog({
                 title: `${doc.doctype_label || doctype}: ${frappe.utils.escape_html(name)}`,
                 size: "large",
+                static: Number(doc.docstatus) === 0,
                 fields: [{ fieldtype: "HTML", fieldname: "detail_html" }],
                 primary_action_label: __("打印单据"),
                 primary_action: function () {
@@ -1138,6 +1152,17 @@ class MonthlySettlementPicker {
 
             d.fields_dict.detail_html.$wrapper.html(html);
             d.show();
+
+            const is_draft = Number(doc.docstatus) === 0;
+            if (is_draft) {
+                d.$wrapper.attr("data-backdrop", "static").attr("data-keyboard", "false");
+            }
+            if (is_draft && doc.can_write) {
+                d.add_custom_action(__("编辑草稿"), () => {
+                    d.hide();
+                    frappe.set_route("Form", doc.doctype, doc.name);
+                });
+            }
         } catch (e) {
             frappe.dom.unfreeze();
             console.error("Failed to load document details:", e);

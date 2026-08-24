@@ -11,7 +11,7 @@
   "istable": 0,
   "module": "Ashan CN Procurement",
   "page_name": "procurement-order-picker",
-  "title": "常规采购流程",
+  "title": "采购申请",
   "standard": "Yes",
   "doctype": "Page",
   "roles": [

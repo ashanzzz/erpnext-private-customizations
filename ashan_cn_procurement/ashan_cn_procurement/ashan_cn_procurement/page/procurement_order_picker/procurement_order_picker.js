@@ -4,7 +4,7 @@
 frappe.pages["procurement-order-picker"].on_page_load = function (wrapper) {
     const page = frappe.ui.make_app_page({
         parent: wrapper,
-        title: __("常规采购流程"),
+        title: __("采购申请"),
         single_column: true,
     });
     $(page.wrapper).find(".page-head").hide();
@@ -101,7 +101,7 @@ class ProcurementOrderPickerCenter {
                 <!-- Top Header & Company Dropdown -->
                 <div class="picker-top-bar">
                     <div class="picker-title-group">
-                        <h2>🛒 常规采购流程</h2>
+                        <h2>🛒 采购申请</h2>
                         <div class="picker-subtitle">采购申请、订货、入库、开票与报销付款</div>
                     </div>
                     <div class="picker-company-group">
@@ -356,6 +356,19 @@ class ProcurementOrderPickerCenter {
                 self.show_doc_detail_modal(dt, nm);
             }
         });
+
+        // A table row is the primary inspection target.  Explicit controls keep
+        // their own behavior, so selection and document links never open twice.
+        $(this.page.body).on("click", "#picker-table-tbody tr[data-doctype][data-name]", function (e) {
+            if ($(e.target).closest("input, button, a, .picker-doc-clickable-link").length) {
+                return;
+            }
+            const dt = $(this).attr("data-doctype");
+            const nm = $(this).attr("data-name");
+            if (dt && nm) {
+                self.show_doc_detail_modal(dt, nm);
+            }
+        });
     }
 
     sync_route_params() {
@@ -466,8 +479,8 @@ class ProcurementOrderPickerCenter {
                 <div class="picker-filter-group">
                     <label>采购状态:</label>
                     <div class="picker-status-btn-group" data-filter="match_status">
-                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">待提申请</button>
-                        <button type="button" class="picker-status-btn ${ms === 'completed' ? 'active' : ''}" data-value="completed">已提申请</button>
+                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">🟡 待提申请</button>
+                        <button type="button" class="picker-status-btn ${ms === 'completed' ? 'active' : ''}" data-value="completed">🟢 已提申请</button>
                         <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">全部采购申请</button>
                     </div>
                 </div>
@@ -486,8 +499,8 @@ class ProcurementOrderPickerCenter {
                 <div class="picker-filter-group">
                     <label>关联状态:</label>
                     <div class="picker-status-btn-group" data-filter="match_status">
-                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">待采购</button>
-                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">已订购</button>
+                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">🟡 待采购</button>
+                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">🟢 已订购</button>
                         <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">全部采购申请</button>
                     </div>
                 </div>
@@ -516,8 +529,8 @@ class ProcurementOrderPickerCenter {
                 <div class="picker-filter-group">
                     <label>关联状态:</label>
                     <div class="picker-status-btn-group" data-filter="match_status">
-                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">待入库</button>
-                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">已入库</button>
+                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">🟡 待入库</button>
+                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">🟢 已入库</button>
                         <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">全部采购订单</button>
                     </div>
                 </div>
@@ -544,8 +557,8 @@ class ProcurementOrderPickerCenter {
                 <div class="picker-filter-group">
                     <label>关联状态:</label>
                     <div class="picker-status-btn-group" data-filter="match_status">
-                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">待开票</button>
-                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">已开票</button>
+                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">🟡 待开票</button>
+                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">🟢 已开票</button>
                         <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">全部采购入库单</button>
                     </div>
                 </div>
@@ -572,8 +585,8 @@ class ProcurementOrderPickerCenter {
                 <div class="picker-filter-group">
                     <label>关联状态:</label>
                     <div class="picker-status-btn-group" data-filter="match_status">
-                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">待报销</button>
-                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">已生成报销</button>
+                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">🟡 待报销</button>
+                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">🟢 已生成报销</button>
                         <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">全部采购发票</button>
                     </div>
                 </div>
@@ -927,8 +940,19 @@ class ProcurementOrderPickerCenter {
                 ? `disabled title="该单据/明细已全部处理完成"`
                 : `${is_selected ? 'checked' : ''}`;
 
+            const primary_doc = {
+                item_to_mr: { doctype: "Material Request", name: r.mr_name },
+                mr_to_po: { doctype: "Material Request", name: r.mr_name },
+                po_to_pr: { doctype: "Purchase Order", name: r.po_name },
+                pr_to_pi: { doctype: "Purchase Receipt", name: r.pr_name },
+                pi_to_rr: { doctype: "Purchase Invoice", name: r.pi_name },
+            }[stage] || {};
+            const primary_doc_attrs = primary_doc.name
+                ? `data-doctype="${primary_doc.doctype}" data-name="${frappe.utils.escape_html(primary_doc.name)}"`
+                : "";
+
             let tr_html = `
-                <tr class="${is_selected ? 'row-selected' : ''} ${is_completed ? 'picker-row-completed' : ''} ${is_hidden_by_lock ? 'picker-row-company-hidden' : ''}" data-key="${key}" data-company="${frappe.utils.escape_html(r.company || '')}">
+                <tr class="ashan-row-clickable ${is_selected ? 'row-selected' : ''} ${is_completed ? 'picker-row-completed' : ''} ${is_hidden_by_lock ? 'picker-row-company-hidden' : ''}" data-key="${key}" data-company="${frappe.utils.escape_html(r.company || '')}" ${primary_doc_attrs}>
                     <td class="picker-col-sticky-1">${idx + 1}</td>
                     <td class="picker-col-sticky-2">
                         <input type="checkbox" class="picker-row-checkbox" data-key="${key}" ${checkbox_attr}>
@@ -1958,6 +1982,10 @@ class ProcurementOrderPickerCenter {
 
     render_doc_detail_dialog(doc) {
         const self = this;
+        const is_draft = Number(doc.docstatus) === 0;
+        const can_edit_draft = is_draft && Boolean(doc.can_quick_edit) && Boolean(doc.can_write);
+        const can_delete_draft = is_draft && Boolean(doc.can_delete);
+        const form_button_label = is_draft && Boolean(doc.can_write) ? "编辑草稿" : "查看完整单据";
         const doctype_labels = {
             "Material Request": "采购申请单",
             "Purchase Order": "采购订单",
@@ -2134,25 +2162,26 @@ class ProcurementOrderPickerCenter {
                 <!-- Action Toolbar -->
                 <div class="picker-modal-footer-bar">
                     <div>
-                        ${doc.can_delete ? `
+                        ${can_delete_draft ? `
                             <button class="picker-btn-danger-del" id="picker-modal-del-btn">
-                                删除单据
+                                删除草稿
                             </button>
-                        ` : `
-                            <span class="picker-no-delete-perm-hint">(当前账号无删除权限)</span>
-                        `}
+                        ` : ''}
                     </div>
                     <div class="picker-modal-actions-right">
-                        ${doc.can_quick_edit ? `
+                        ${can_edit_draft ? `
                             <button class="picker-btn-action-view" id="picker-modal-edit-btn">
-                                ✏️ 修改${dt_label}
+                                编辑草稿
                             </button>
                         ` : ''}
                         <button class="picker-btn-action-view" id="picker-modal-print-btn">
                             打印单据
                         </button>
                         <button class="picker-btn-action-view" id="picker-modal-goto-form-btn">
-                            ✏️ 完整编辑页面
+                            ${form_button_label}
+                        </button>
+                        <button class="picker-btn-action-view" id="picker-modal-close-btn">
+                            关闭
                         </button>
                     </div>
                 </div>
@@ -2169,12 +2198,20 @@ class ProcurementOrderPickerCenter {
                 }
             ],
             size: "large",
+            static: is_draft,
         });
 
         d.$wrapper.addClass("picker-doc-detail-modal");
         d.show();
 
         const $w = d.$wrapper;
+        if (is_draft) {
+            $w.attr("data-backdrop", "static").attr("data-keyboard", "false");
+        }
+
+        $w.on("click", "#picker-modal-close-btn", function () {
+            d.hide();
+        });
 
         // Goto Form page button
         $w.on("click", "#picker-modal-goto-form-btn", function () {

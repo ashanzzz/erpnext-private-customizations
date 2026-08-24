@@ -4,7 +4,7 @@
 frappe.pages["wire-transfer-picker"].on_page_load = function (wrapper) {
     const page = frappe.ui.make_app_page({
         parent: wrapper,
-        title: __("自办电汇采购"),
+        title: __("自办电汇"),
         single_column: true,
     });
 
@@ -47,7 +47,7 @@ class WireTransferPicker {
                 <!-- Top Header & Company Dropdown -->
                 <div class="picker-top-bar">
                     <div class="picker-title-group">
-                        <h2>自办电汇采购</h2>
+                        <h2>⚡ 自办电汇</h2>
                         <div class="picker-subtitle">发票录入、采购入库与付款申请闭环</div>
                     </div>
                     <div class="picker-company-group">
@@ -66,7 +66,7 @@ class WireTransferPicker {
                     <div class="picker-section-main">
                         <div class="picker-section-heading">
                             <div class="picker-section-title">
-                                <span>自办电汇采购</span>
+                                <span>自办电汇</span>
                             </div>
                             <div class="picker-section-desc">录入自办电汇发票后，系统依次生成采购订单、采购入库单、采购发票和电汇付款申请。</div>
                         </div>
@@ -306,6 +306,17 @@ class WireTransferPicker {
                 self.show_doc_detail_modal(dt, nm);
             }
         });
+
+        $(this.page.body).on("click", "#wire-table-tbody tr[data-doctype][data-name]", function (e) {
+            if ($(e.target).closest("input, button, a, .picker-doc-clickable-link").length) {
+                return;
+            }
+            const dt = $(this).attr("data-doctype");
+            const nm = $(this).attr("data-name");
+            if (dt && nm) {
+                self.show_doc_detail_modal(dt, nm);
+            }
+        });
     }
 
     async refresh_all() {
@@ -466,7 +477,7 @@ class WireTransferPicker {
             const is_selected = this.selected_map.has(key);
 
             let tr_html = `
-                <tr data-key="${key}" class="${is_selected ? 'row-selected' : ''}">
+                <tr data-key="${key}" data-doctype="Purchase Invoice" data-name="${frappe.utils.escape_html(r.pi_name)}" class="ashan-row-clickable ${is_selected ? 'row-selected' : ''}">
                     <td class="picker-col-sticky-1">${idx + 1}</td>
                     <td class="picker-col-sticky-2">
                         <input type="checkbox" class="picker-row-checkbox" data-key="${key}" ${is_selected ? 'checked' : ''} />
@@ -1011,6 +1022,7 @@ class WireTransferPicker {
             const d = new frappe.ui.Dialog({
                 title: `${doc.doctype_label || doctype}: ${frappe.utils.escape_html(name)}`,
                 size: "large",
+                static: Number(doc.docstatus) === 0,
                 fields: [{ fieldtype: "HTML", fieldname: "detail_html" }],
                 primary_action_label: __("打印单据"),
                 primary_action: function () {
@@ -1085,6 +1097,17 @@ class WireTransferPicker {
 
             d.fields_dict.detail_html.$wrapper.html(html);
             d.show();
+
+            const is_draft = Number(doc.docstatus) === 0;
+            if (is_draft) {
+                d.$wrapper.attr("data-backdrop", "static").attr("data-keyboard", "false");
+            }
+            if (is_draft && doc.can_write) {
+                d.add_custom_action(__("编辑草稿"), () => {
+                    d.hide();
+                    frappe.set_route("Form", doc.doctype, doc.name);
+                });
+            }
         } catch (e) {
             frappe.dom.unfreeze();
             console.error("Failed to load document details:", e);

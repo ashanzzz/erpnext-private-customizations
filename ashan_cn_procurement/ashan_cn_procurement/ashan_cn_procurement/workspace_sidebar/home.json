@@ -32,7 +32,7 @@
       "doctype": "Workspace Sidebar Item"
     },
     {
-      "label": "常规采购流程",
+      "label": "采购申请",
       "link_type": "Page",
       "type": "Link",
       "link_to": "procurement-order-picker",
@@ -44,7 +44,7 @@
       "doctype": "Workspace Sidebar Item"
     },
     {
-      "label": "自办电汇采购",
+      "label": "自办电汇",
       "link_type": "Page",
       "type": "Link",
       "link_to": "wire-transfer-picker",
@@ -56,7 +56,7 @@
       "doctype": "Workspace Sidebar Item"
     },
     {
-      "label": "月结入库补录",
+      "label": "月结补录",
       "link_type": "Page",
       "type": "Link",
       "link_to": "monthly-settlement-picker",
@@ -68,7 +68,7 @@
       "doctype": "Workspace Sidebar Item"
     },
     {
-      "label": "现金报销申请",
+      "label": "报销申请",
       "link_type": "Page",
       "type": "Link",
       "link_to": "reimbursement-picker",

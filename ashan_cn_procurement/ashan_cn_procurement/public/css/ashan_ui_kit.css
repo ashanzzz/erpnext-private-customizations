@@ -1158,6 +1158,14 @@
     display: none !important;
 }
 
+/* Row-level inspection is consistent across Ashan transaction workbenches. */
+.ashan-row-clickable {
+    cursor: pointer;
+}
+
+.ashan-row-clickable:hover > td {
+    background-color: #f8fafc;
+}
 
 
 

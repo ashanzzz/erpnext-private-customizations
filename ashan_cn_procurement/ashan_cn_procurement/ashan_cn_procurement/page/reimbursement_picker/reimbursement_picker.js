@@ -4,7 +4,7 @@
 frappe.pages["reimbursement-picker"].on_page_load = function (wrapper) {
     var page = frappe.ui.make_app_page({
         parent: wrapper,
-        title: __("现金报销申请"),
+        title: __("报销申请"),
         single_column: true,
     });
 
@@ -52,6 +52,7 @@ class ReimbursementPicker {
             dialog: null,
             is_edit: false,
             current_rr_name: null,
+            can_delete: false,
             company: null,
             posting_date: null,
             title: "",
@@ -91,7 +92,7 @@ class ReimbursementPicker {
                 <!-- Top Header & Company Selector -->
                 <div class="picker-top-bar">
                     <div class="picker-title-group">
-                        <h2>现金报销申请</h2>
+                        <h2>🧾 报销申请</h2>
                         <div class="picker-subtitle">多发票录入、采购单据生成与报销付款闭环</div>
                     </div>
                     <div class="picker-company-group">
@@ -147,7 +148,7 @@ class ReimbursementPicker {
                     <div class="picker-section-main">
                         <div class="picker-section-heading">
                             <div class="picker-section-title">
-                                <span>现金报销申请</span>
+                                <span>报销申请</span>
                             </div>
                             <div class="picker-section-desc">一张报销单可录入多张发票；系统生成关联采购发票、入库单和报销申请单。</div>
                         </div>
@@ -290,12 +291,31 @@ class ReimbursementPicker {
             me.confirm_delete_reimbursement(rrName);
         });
 
-        $("#reim-data-table").on("click", ".picker-clickable-doc", function () {
+        $("#reim-data-table").on("click", ".picker-clickable-doc", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
             const rrName = $(this).data("rr-name");
-            me.open_manage_reimbursement_modal(rrName);
+            const docstatus = $(this).closest("tr").data("docstatus");
+            me.open_reimbursement_row(rrName, docstatus);
+        });
+
+        $("#reim-data-table").on("click", "#reim-table-body tr[data-rr-name]", function (e) {
+            if ($(e.target).closest("input, button, a").length) {
+                return;
+            }
+            me.open_reimbursement_row($(this).data("rr-name"), $(this).data("docstatus"));
         });
 
         this.sync_scrollbars();
+    }
+
+    open_reimbursement_row(rrName, docstatus) {
+        if (!rrName) return;
+        if (Number(docstatus) === 0) {
+            this.open_manage_reimbursement_modal(rrName);
+            return;
+        }
+        this.show_reimbursement_detail_by_name(rrName);
     }
 
     sync_scrollbars() {
@@ -456,7 +476,7 @@ class ReimbursementPicker {
             const tagClass = r.is_draft ? "reim-tag-draft" : "picker-status-tag";
 
             return `
-                <tr class="${rowClass}" data-rr-name="${r.rr_name}">
+                <tr class="ashan-row-clickable ${rowClass}" data-rr-name="${r.rr_name}" data-docstatus="${r.docstatus}">
                     <td class="picker-col-sticky-1 text-center font-bold text-muted">${idx + 1}</td>
                     <td class="picker-col-sticky-2">
                         <span class="${r.is_draft ? 'picker-clickable-doc' : 'font-mono font-bold'}" ${r.is_draft ? `data-rr-name="${r.rr_name}" title="点击编辑草稿"` : ''}>${r.rr_name}</span>
@@ -480,7 +500,7 @@ class ReimbursementPicker {
                         <span class="${tagClass}">${r.status_label}</span>
                     </td>
                     <td><span class="text-muted text-xs font-mono">${r.linked_pis || '-'}</span></td>
-                    <td class="text-center">${r.is_draft ? `<button type="button" class="reim-btn-delete-doc" data-rr-name="${r.rr_name}" title="删除草稿及关联草稿单据">删除</button>` : '-'}</td>
+                    <td class="text-center">${r.is_draft && r.can_delete ? `<button type="button" class="reim-btn-delete-doc" data-rr-name="${r.rr_name}" title="删除草稿及关联草稿单据">删除</button>` : '-'}</td>
                 </tr>
             `;
         }).join("");
@@ -540,7 +560,7 @@ class ReimbursementPicker {
             totalAmt += flt(r.amount);
 
             return `
-                <tr class="${r.docstatus === 0 ? 'reim-row-draft' : ''}">
+                <tr class="ashan-row-clickable ${r.docstatus === 0 ? 'reim-row-draft' : ''}" data-rr-name="${r.rr_name}" data-docstatus="${r.docstatus}">
                     <td class="picker-col-sticky-1 text-center font-bold text-muted">${idx + 1}</td>
                     <td class="picker-col-sticky-2">
                         <span class="${r.docstatus === 0 ? 'picker-clickable-doc' : 'font-mono font-bold'}" ${r.docstatus === 0 ? `data-rr-name="${r.rr_name}" title="点击编辑草稿"` : ''}>${r.rr_name}</span>
@@ -556,7 +576,7 @@ class ReimbursementPicker {
                     <td class="text-right font-mono font-bold text-primary">${format_currency(r.amount)}</td>
                     <td class="text-center"><span class="${r.docstatus === 0 ? 'reim-tag-draft' : 'picker-status-tag'}">${r.status_label}</span></td>
                     <td><span class="text-muted font-mono text-xs">${r.source_pi}</span></td>
-                    <td class="text-center">${r.docstatus === 0 ? `<button type="button" class="reim-btn-delete-doc" data-rr-name="${r.rr_name}" title="删除草稿及关联草稿单据">删除</button>` : '-'}</td>
+                    <td class="text-center">${r.docstatus === 0 && r.can_delete ? `<button type="button" class="reim-btn-delete-doc" data-rr-name="${r.rr_name}" title="删除草稿及关联草稿单据">删除</button>` : '-'}</td>
                 </tr>
             `;
         }).join("");
@@ -586,9 +606,6 @@ class ReimbursementPicker {
     }
 
     async open_manage_reimbursement_modal(rrName) {
-        this.reset_creation_state(true, rrName);
-        this.show_reimbursement_dialog(__(`报销单管理 · ${rrName}`));
-
         try {
             const r = await frappe.call({
                 method: REIM_API.get_detail,
@@ -596,11 +613,15 @@ class ReimbursementPicker {
             });
             if (r.message) {
                 const data = r.message;
-                if (data.docstatus !== 0) {
-                    this.close_dialog();
-                    frappe.msgprint(__("已提交报销单不可直接修改或删除；如需作废，请走审批后的作废重开流程。"));
+                // Current draft editing replaces the old draft bundle atomically;
+                // it therefore requires both write and delete permission.
+                if (Number(data.docstatus) !== 0 || !data.can_write || !data.can_delete) {
+                    this.show_reimbursement_detail_dialog(data);
                     return;
                 }
+                this.reset_creation_state(true, rrName);
+                this.creation.can_delete = Boolean(data.can_delete);
+                this.show_reimbursement_dialog(__(`报销单管理 · ${rrName}`));
                 this.creation.company = data.company;
                 this.creation.posting_date = data.posting_date;
                 this.creation.title = data.title;
@@ -624,9 +645,93 @@ class ReimbursementPicker {
         }
     }
 
+    async show_reimbursement_detail_by_name(rrName) {
+        try {
+            const r = await frappe.call({
+                method: REIM_API.get_detail,
+                args: { rr_name: rrName },
+            });
+            if (r.message) {
+                this.show_reimbursement_detail_dialog(r.message);
+            }
+        } catch (e) {
+            console.error("Failed to load reimbursement detail:", e);
+        }
+    }
+
+    show_reimbursement_detail_dialog(data) {
+        const isDraft = Number(data.docstatus) === 0;
+        const invoiceHtml = (data.invoices || []).map((invoice, invoiceIndex) => {
+            const itemRows = (invoice.items || []).map((item, itemIndex) => `
+                <tr>
+                    <td class="text-center">${itemIndex + 1}</td>
+                    <td>${frappe.utils.escape_html(item.item_name || "-")}</td>
+                    <td>${frappe.utils.escape_html(item.spec || "-")}</td>
+                    <td>${frappe.utils.escape_html(item.uom || "-")}</td>
+                    <td class="text-right qifu-money-cell">${flt(item.qty).toFixed(2)}</td>
+                    <td class="text-right qifu-money-cell">${format_currency(item.rate)}</td>
+                    <td class="text-right qifu-money-cell">${format_currency(item.amount)}</td>
+                    <td class="text-right">${flt(item.tax_rate).toFixed(2)}%</td>
+                    <td class="text-right qifu-money-cell">${format_currency(item.tax_amount)}</td>
+                    <td class="text-right qifu-money-cell font-bold">${format_currency(item.line_total)}</td>
+                    <td>${frappe.utils.escape_html(item.remarks || "-")}</td>
+                </tr>
+            `).join("") || '<tr><td colspan="11" class="text-center text-muted">无物料明细</td></tr>';
+            return `
+                <section class="picker-doc-flow-card">
+                    <div class="picker-doc-flow-title">发票 ${invoiceIndex + 1}：${frappe.utils.escape_html(invoice.invoice_no || "系统自动编号")}</div>
+                    <div class="picker-doc-meta-grid">
+                        <div class="picker-doc-meta-item"><span class="picker-doc-meta-label">发票类型</span><span class="picker-doc-meta-val">${frappe.utils.escape_html(invoice.invoice_type || "-")}</span></div>
+                        <div class="picker-doc-meta-item"><span class="picker-doc-meta-label">供应商</span><span class="picker-doc-meta-val">${frappe.utils.escape_html(invoice.supplier || "-")}</span></div>
+                        <div class="picker-doc-meta-item"><span class="picker-doc-meta-label">开票日期</span><span class="picker-doc-meta-val">${frappe.utils.escape_html(invoice.invoice_date || "-")}</span></div>
+                    </div>
+                    <div class="picker-detail-table-wrap">
+                        <table class="picker-data-table">
+                            <thead><tr><th>#</th><th>物料名称</th><th>规格</th><th>单位</th><th class="text-right">数量</th><th class="text-right">单价</th><th class="text-right">不含税金额</th><th class="text-right">税率</th><th class="text-right">税额</th><th class="text-right">价税合计</th><th>备注</th></tr></thead>
+                            <tbody>${itemRows}</tbody>
+                        </table>
+                    </div>
+                </section>
+            `;
+        }).join("") || '<div class="picker-doc-empty-state">无发票明细</div>';
+
+        const d = new frappe.ui.Dialog({
+            title: __("报销单详情 · {0}", [data.rr_name]),
+            size: "large",
+            static: isDraft,
+            fields: [{
+                fieldtype: "HTML",
+                fieldname: "detail_html",
+                options: `
+                    <div class="picker-doc-modal-container">
+                        <div class="picker-doc-meta-card">
+                            <div class="picker-doc-meta-header"><div class="picker-doc-title-box"><span class="picker-doc-title-text">${frappe.utils.escape_html(data.title || "现金报销")}</span><span class="ashan-status-badge ${isDraft ? 'ashan-status-amber' : 'ashan-status-green'}">${isDraft ? '待提交草稿' : '已提交只读'}</span></div></div>
+                            <div class="picker-doc-meta-grid">
+                                <div class="picker-doc-meta-item"><span class="picker-doc-meta-label">所属公司</span><span class="picker-doc-meta-val">${frappe.utils.escape_html(data.company || "-")}</span></div>
+                                <div class="picker-doc-meta-item"><span class="picker-doc-meta-label">申请日期</span><span class="picker-doc-meta-val">${frappe.utils.escape_html(data.posting_date || "-")}</span></div>
+                                <div class="picker-doc-meta-item"><span class="picker-doc-meta-label">报销总额</span><span class="picker-doc-meta-val picker-meta-val-highlight">${format_currency(data.total_amount)}</span></div>
+                                <div class="picker-doc-meta-item"><span class="picker-doc-meta-label">待结款金额</span><span class="picker-doc-meta-val">${format_currency(data.outstanding_amount)}</span></div>
+                            </div>
+                        </div>
+                        ${invoiceHtml}
+                    </div>
+                `,
+            }],
+            secondary_action_label: __("关闭"),
+            secondary_action() {
+                d.hide();
+            },
+        });
+        d.show();
+        if (isDraft) {
+            d.$wrapper.attr("data-backdrop", "static").attr("data-keyboard", "false");
+        }
+    }
+
     reset_creation_state(isEdit = false, rrName = null) {
         this.creation.is_edit = isEdit;
         this.creation.current_rr_name = rrName;
+        this.creation.can_delete = false;
         this.creation.company = this.active_company !== "All" ? this.active_company : (this.companies[0] || null);
         this.creation.posting_date = frappe.datetime.get_today();
         this.creation.title = "";
@@ -673,7 +778,7 @@ class ReimbursementPicker {
             d.add_custom_action(__("暂存草稿"), () => {
                 me.submit_manual_reimbursement(1);
             }, "reim-btn-save-draft");
-        } else {
+        } else if (this.creation.can_delete) {
             d.add_custom_action(__("删除整单"), () => {
                 me.confirm_delete_reimbursement(me.creation.current_rr_name, () => {
                     d.hide();

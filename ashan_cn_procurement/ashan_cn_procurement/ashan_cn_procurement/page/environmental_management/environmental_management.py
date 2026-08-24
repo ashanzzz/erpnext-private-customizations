@@ -3,6 +3,13 @@
 
 import frappe
 from frappe.utils import add_months, getdate, nowdate, date_diff, cint
+from ashan_cn_procurement.services.procurement_picker_service import assert_company_access
+
+
+def _assert_env_permission(permission, doc=None):
+	"""Enforce DocType permission for every environmental ledger mutation."""
+	if not frappe.has_permission("Environmental Compliance Item", permission, doc=doc):
+		frappe.throw("您没有执行该环保台账操作的权限。", frappe.PermissionError)
 
 
 @frappe.whitelist()
@@ -12,6 +19,8 @@ def get_environmental_dashboard_data(tab_type="inspection", company=None, status
 	tab_type: 'waste' (危废管理) | 'inspection' (环保定期检测)
 	"""
 	tab_type = tab_type or "inspection"
+	if company and company != "全部":
+		assert_company_access(company)
 
 	# 1. 构造基础过滤条件
 	base_filters = {"is_active": 1}
@@ -21,7 +30,7 @@ def get_environmental_dashboard_data(tab_type="inspection", company=None, status
 		base_filters["env_type"] = ["!=", "危废"]
 
 	# 读取当前 Tab 下所有有效记录（用于计算 KPI 统计）
-	all_tab_items = frappe.get_all(
+	all_tab_items = frappe.get_list(
 		"Environmental Compliance Item",
 		filters=base_filters,
 		fields=[
@@ -33,7 +42,9 @@ def get_environmental_dashboard_data(tab_type="inspection", company=None, status
 
 	# 确保内存中数据刷新为最新状态
 	today = getdate(nowdate())
+	can_write = frappe.has_permission("Environmental Compliance Item", "write")
 	for item in all_tab_items:
+		item.can_write = can_write
 		if item.last_done_date and item.cycle_months and cint(item.cycle_months) > 0:
 			item.next_due_date = add_months(getdate(item.last_done_date), cint(item.cycle_months))
 
@@ -129,11 +140,12 @@ def get_environmental_dashboard_data(tab_type="inspection", company=None, status
 			"message": banner_msg
 		},
 		"items": filtered_items,
-		"companies": company_list
+		"companies": company_list,
+		"can_create": frappe.has_permission("Environmental Compliance Item", "create")
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def quick_create_env_item(
 	title,
 	company,
@@ -159,6 +171,8 @@ def quick_create_env_item(
 		frappe.throw("请填写上次检测/处理日期")
 	if not cycle_months or cint(cycle_months) <= 0:
 		frappe.throw("周期必须为大于 0 的月数")
+	_assert_env_permission("create")
+	assert_company_access(company)
 
 	doc = frappe.new_doc("Environmental Compliance Item")
 	doc.title = title
@@ -181,7 +195,7 @@ def quick_create_env_item(
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def quick_update_env_item(
 	name,
 	title,
@@ -199,6 +213,10 @@ def quick_update_env_item(
 	弹窗快捷编辑环保/危废事项
 	"""
 	doc = frappe.get_doc("Environmental Compliance Item", name)
+	_assert_env_permission("write", doc)
+	assert_company_access(doc.company)
+	if company != doc.company:
+		assert_company_access(company)
 	doc.title = title
 	doc.company = company
 	doc.env_type = env_type
@@ -218,7 +236,7 @@ def quick_update_env_item(
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def record_env_action(name, action_date, cycle_months=None, latest_report=None, remarks=None):
 	"""
 	弹窗登记本次检测 / 本次危废处理
@@ -228,6 +246,8 @@ def record_env_action(name, action_date, cycle_months=None, latest_report=None, 
 		frappe.throw("请填写本次检测/处理日期")
 
 	doc = frappe.get_doc("Environmental Compliance Item", name)
+	_assert_env_permission("write", doc)
+	assert_company_access(doc.company)
 	doc.last_done_date = action_date
 
 	if cycle_months and cint(cycle_months) > 0:
@@ -251,7 +271,7 @@ def record_env_action(name, action_date, cycle_months=None, latest_report=None, 
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def upload_env_report(name, latest_report):
 	"""
 	弹窗快速上传/补录检测报告或转移凭证
@@ -260,6 +280,8 @@ def upload_env_report(name, latest_report):
 		frappe.throw("请选择要上传的文件")
 
 	doc = frappe.get_doc("Environmental Compliance Item", name)
+	_assert_env_permission("write", doc)
+	assert_company_access(doc.company)
 	doc.latest_report = latest_report
 	doc.save()
 

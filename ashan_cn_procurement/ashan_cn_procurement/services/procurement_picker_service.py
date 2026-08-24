@@ -477,6 +477,10 @@ def update_quick_material_request(
 
     mr = frappe.get_doc("Material Request", name)
     assert_company_access(mr.company)
+    if mr.docstatus != 0:
+        frappe.throw(_("已提交采购申请单仅可查看；如需更正，请按作废或重开流程处理。"))
+    if not frappe.has_permission("Material Request", "write", mr):
+        frappe.throw(_("您没有编辑该采购申请单的权限。"), frappe.PermissionError)
 
     # 1. Check if any downstream Purchase Order exists
     linked_po_items = frappe.db.sql("""
@@ -490,11 +494,6 @@ def update_quick_material_request(
     if linked_po_items:
         po_names = list({r.parent for r in linked_po_items})
         frappe.throw(_("该采购申请单已生成下游采购订单（{0}），禁止直接修改。若需修改请先删除或撤销关联的采购订单。").format(", ".join(po_names)))
-
-    # 2. Reset docstatus to 0 to allow direct table modification
-    if mr.docstatus == 1:
-        frappe.db.set_value("Material Request", name, "docstatus", 0)
-        mr.reload()
 
     if company:
         mr.company = company
@@ -583,9 +582,7 @@ def update_quick_material_request(
     if not mr.items:
         frappe.throw(_("未能录入有效的物料明细。"))
 
-    mr.flags.ignore_permissions = True
     mr.save()
-    mr.submit()
 
     return {
         "success": True,
@@ -593,7 +590,7 @@ def update_quick_material_request(
         "company": mr.company,
         "item_count": len(mr.items),
         "total_amount": total_amount,
-        "message": _("成功更新并正式发布采购申请单：{0}").format(mr.name),
+        "message": _("成功保存采购申请单草稿：{0}").format(mr.name),
     }
 
 
@@ -1103,6 +1100,10 @@ def update_quick_purchase_order(
 
     po = frappe.get_doc("Purchase Order", name)
     assert_company_access(po.company)
+    if po.docstatus != 0:
+        frappe.throw(_("已提交采购订单仅可查看；如需更正，请按作废或重开流程处理。"))
+    if not frappe.has_permission("Purchase Order", "write", po):
+        frappe.throw(_("您没有编辑该采购订单的权限。"), frappe.PermissionError)
 
     # 检查下游是否已有已提交的入库单或发票
     has_downstream = (
@@ -1114,11 +1115,6 @@ def update_quick_purchase_order(
 
     if isinstance(items, str):
         items = frappe.parse_json(items) or []
-
-    was_submitted = (po.docstatus == 1)
-    if was_submitted:
-        frappe.db.set_value("Purchase Order", name, "docstatus", 0)
-        po.reload()
 
     if supplier:
         po.supplier = supplier
@@ -1199,10 +1195,7 @@ def update_quick_purchase_order(
 
             po.append("items", row_dict)
 
-    po.flags.ignore_permissions = True
     po.save()
-    if was_submitted:
-        po.submit()
 
     return {
         "success": True,
@@ -1210,7 +1203,7 @@ def update_quick_purchase_order(
         "company": po.company,
         "item_count": len(po.items),
         "grand_total": flt(po.grand_total or po.total),
-        "message": _("成功更新并正式发布采购订单：{0}").format(po.name),
+        "message": _("成功保存采购订单草稿：{0}").format(po.name),
     }
 
 
@@ -2427,6 +2420,8 @@ def get_document_details(doctype: str, name: str) -> dict:
 
     doc = frappe.get_doc(doctype, name)
     assert_company_access(doc.company)
+    if not frappe.has_permission(doctype, "read", doc):
+        frappe.throw(_("您没有查看该单据的权限。"), frappe.PermissionError)
 
     status_str = doc.get("status") or ("Draft" if doc.docstatus == 0 else ("Submitted" if doc.docstatus == 1 else "Cancelled"))
     date_str = str(doc.get("transaction_date") or doc.get("posting_date") or doc.get("bill_date") or doc.creation)[:10]
@@ -2611,10 +2606,14 @@ def get_document_details(doctype: str, name: str) -> dict:
                     "date": str(pi_row.posting_date or ""),
                 })
 
-    can_delete = frappe.has_permission(doctype, "delete", doc)
+    is_draft = cint(doc.docstatus) == 0
+    can_write = frappe.has_permission(doctype, "write", doc)
+    # Submitted procurement documents are financial / inventory evidence.
+    # They must remain read-only in the picker and cannot be deleted in place.
+    can_delete = is_draft and frappe.has_permission(doctype, "delete", doc)
     can_cancel = frappe.has_permission(doctype, "cancel", doc) if doc.docstatus == 1 else True
     can_quick_edit = False
-    if doctype in ("Material Request", "Purchase Order") and not linked_downstream and frappe.has_permission(doctype, "read", doc):
+    if is_draft and doctype in ("Material Request", "Purchase Order") and not linked_downstream and can_write:
         can_quick_edit = True
 
     return {
@@ -2636,6 +2635,7 @@ def get_document_details(doctype: str, name: str) -> dict:
         "items": items,
         "linked_upstream": linked_upstream,
         "linked_downstream": linked_downstream,
+        "can_write": can_write,
         "can_delete": can_delete,
         "can_cancel": can_cancel,
         "can_quick_edit": can_quick_edit,
@@ -2742,6 +2742,8 @@ def preview_document_cascade_deletion(doctype: str, name: str) -> dict:
             missing_permissions.append(f"【{dt_label}】{nm} (缺少删除权限)")
         if not has_cancel:
             missing_permissions.append(f"【{dt_label}】{nm} (缺少撤单权限)")
+        if d.docstatus != 0:
+            missing_permissions.append(f"【{dt_label}】{nm} (已提交或已取消单据不允许在工作台直接删除)")
 
         cascade_list.append({
             "doctype": dt,
@@ -2820,4 +2822,3 @@ def delete_procurement_document(doctype: str, name: str, cascade: bool | int | s
         "deleted_docs": deleted_docs,
         "message": _("成功删除 {0} 张单据：<br>{1}").format(len(deleted_docs), "<br>".join(deleted_docs)),
     }
-

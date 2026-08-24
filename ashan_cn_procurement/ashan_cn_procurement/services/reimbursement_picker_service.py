@@ -242,6 +242,8 @@ def get_reimbursement_picker_doc_summary_rows(
     raw_docs = frappe.db.sql(sql, params, as_dict=True)
 
     rows = []
+    can_write = frappe.has_permission("Reimbursement Request", "write")
+    can_delete = frappe.has_permission("Reimbursement Request", "delete")
     for idx, d in enumerate(raw_docs, 1):
         outstanding = flt(d.outstanding_amount)
         is_draft = False
@@ -288,6 +290,8 @@ def get_reimbursement_picker_doc_summary_rows(
             "paid_amount": max(0.0, flt(d.total_amount) - outstanding),
             "doc_details": details_text,
             "linked_pis": d.linked_pis or "-",
+            "can_write": can_write,
+            "can_delete": is_draft and can_delete,
         })
 
     return {
@@ -379,6 +383,8 @@ def get_reimbursement_picker_rows(
     raw_items = frappe.db.sql(sql, params, as_dict=True)
 
     rows = []
+    can_write = frappe.has_permission("Reimbursement Request", "write")
+    can_delete = frappe.has_permission("Reimbursement Request", "delete")
     for idx, it in enumerate(raw_items, 1):
         outstanding = flt(it.outstanding_amount)
         if it.docstatus == 0:
@@ -407,6 +413,8 @@ def get_reimbursement_picker_rows(
             "invoice_type": it.invoice_type or "专用发票",
             "invoice_date": str(it.invoice_date or ""),
             "status_label": status_label,
+            "can_write": can_write,
+            "can_delete": it.docstatus == 0 and can_delete,
         })
 
     return {
@@ -919,6 +927,8 @@ def get_reimbursement_detail_for_edit(rr_name: str) -> dict:
 
     rr = frappe.get_doc("Reimbursement Request", rr_name)
     assert_company_access(rr.company)
+    if not frappe.has_permission("Reimbursement Request", "read", rr):
+        frappe.throw(_("您没有查看该报销单的权限。"), frappe.PermissionError)
 
     invoices_map = {}
     for item in rr.invoice_items:
@@ -962,6 +972,8 @@ def get_reimbursement_detail_for_edit(rr_name: str) -> dict:
         "total_amount": flt(rr.total_amount, 2),
         "outstanding_amount": flt(rr.outstanding_amount, 2),
         "invoices": list(invoices_map.values()),
+        "can_write": frappe.has_permission("Reimbursement Request", "write", rr),
+        "can_delete": rr.docstatus == 0 and frappe.has_permission("Reimbursement Request", "delete", rr),
     }
 
 
@@ -973,6 +985,8 @@ def delete_reimbursement_bundle(rr_name: str) -> dict:
 
     rr = frappe.get_doc("Reimbursement Request", rr_name)
     assert_company_access(rr.company)
+    if not frappe.has_permission("Reimbursement Request", "delete", rr):
+        frappe.throw(_("您没有删除该报销草稿的权限。"), frappe.PermissionError)
     if rr.docstatus != 0:
         frappe.throw(_("已提交报销单不允许直接删除。请按审批流程作废重开，以保留财务审计链。"))
 

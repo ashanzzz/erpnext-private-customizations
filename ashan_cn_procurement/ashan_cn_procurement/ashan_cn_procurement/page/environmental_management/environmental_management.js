@@ -239,6 +239,7 @@ class EnvironmentalManagement {
     render_all() {
         this.render_kpi_and_banner();
         this.render_companies_dropdown();
+        this.$container.find('#btn-add-env-item').toggle(Boolean(this.data?.can_create));
         this.render_table();
     }
 
@@ -337,6 +338,16 @@ class EnvironmentalManagement {
             const statusBadge = self.get_status_badge(it.status, it.days_remaining);
             const remainingBadge = self.get_remaining_badge(it.days_remaining);
             const reportCell = self.get_report_cell(it);
+            const rowActions = it.can_write ? `
+                <div class="row-actions">
+                    <button class="btn-act btn-act-primary btn-record-action" data-name="${it.name}" title="登记本次处理">
+                        ${isWaste ? '登记处理' : '登记检测'}
+                    </button>
+                    <button class="btn-act btn-act-secondary btn-edit-item" data-name="${it.name}" title="编辑事项">
+                        编辑
+                    </button>
+                </div>
+            ` : '<span class="text-muted">只读</span>';
 
             let rowHtml = '';
             if (isWaste) {
@@ -357,14 +368,7 @@ class EnvironmentalManagement {
                         <div>${it.responsible_person ? `<span class="user-tag">👤 ${frappe.utils.escape_html(it.responsible_person)}</span>` : '<span class="text-muted">—</span>'}</div>
                     </td>
                     <td style="text-align: center;">
-                        <div class="row-actions">
-                            <button class="btn-act btn-act-primary btn-record-action" data-name="${it.name}" title="登记本次处理">
-                                📝 登记处理
-                            </button>
-                            <button class="btn-act btn-act-secondary btn-edit-item" data-name="${it.name}" title="编辑事项">
-                                ✏️
-                            </button>
-                        </div>
+                        ${rowActions}
                     </td>
                 </tr>
                 `;
@@ -387,14 +391,7 @@ class EnvironmentalManagement {
                         <div>${it.responsible_person ? `<span class="user-tag">👤 ${frappe.utils.escape_html(it.responsible_person)}</span>` : '<span class="text-muted">—</span>'}</div>
                     </td>
                     <td style="text-align: center;">
-                        <div class="row-actions">
-                            <button class="btn-act btn-act-primary btn-record-action" data-name="${it.name}" title="登记本次检测">
-                                📝 登记检测
-                            </button>
-                            <button class="btn-act btn-act-secondary btn-edit-item" data-name="${it.name}" title="编辑事项">
-                                ✏️
-                            </button>
-                        </div>
+                        ${rowActions}
                     </td>
                 </tr>
                 `;
@@ -419,6 +416,10 @@ class EnvironmentalManagement {
                 e.stopPropagation();
                 const name = $(this).attr('data-name');
                 self.open_upload_report_dialog(name);
+            });
+
+            $row.find('.report-link').on('click', function(e) {
+                e.stopPropagation();
             });
 
             // 点击整行查看详情弹窗
@@ -468,13 +469,14 @@ class EnvironmentalManagement {
                     </a>
                 </div>
             `;
-        } else {
+        } else if (it.can_write) {
             return `
                 <button class="btn-report-pending btn-upload-report" data-name="${it.name}" title="点击快速上传报告">
                     ⚠️ 待上传
                 </button>
             `;
         }
+        return '<span class="text-muted">未上传</span>';
     }
 
     get_type_class(env_type) {
@@ -490,6 +492,10 @@ class EnvironmentalManagement {
         const self = this;
         const it = (this.data?.items || []).find(x => x.name === name);
         if (!it) return;
+        if (!it.can_write) {
+            frappe.msgprint('当前账号仅可查看该事项。');
+            return;
+        }
 
         const isWaste = (it.env_type === '危废');
         const titleText = isWaste ? `🛢️ 登记本次危废处理 — ${it.title}` : `🧪 登记本次环保检测 — ${it.title}`;
@@ -498,6 +504,7 @@ class EnvironmentalManagement {
 
         const dlg = new frappe.ui.Dialog({
             title: titleText,
+            static: true,
             fields: [
                 {
                     fieldtype: 'HTML',
@@ -557,7 +564,10 @@ class EnvironmentalManagement {
                 });
             }
         });
+        dlg.set_secondary_action_label('关闭');
+        dlg.set_secondary_action(() => dlg.hide());
         dlg.show();
+        dlg.$wrapper.attr('data-backdrop', 'static').attr('data-keyboard', 'false');
     }
 
     // ─── 弹窗 2: 上传/补录报告附件 ───────────────────────────
@@ -565,12 +575,17 @@ class EnvironmentalManagement {
         const self = this;
         const it = (this.data?.items || []).find(x => x.name === name);
         if (!it) return;
+        if (!it.can_write) {
+            frappe.msgprint('当前账号仅可查看该事项。');
+            return;
+        }
 
         const isWaste = (it.env_type === '危废');
         const fileLabel = isWaste ? '危废转移凭证文件' : '环保检测报告 (PDF/图片)';
 
         const dlg = new frappe.ui.Dialog({
             title: `📄 上传报告凭证 — ${it.title}`,
+            static: true,
             fields: [
                 {
                     fieldtype: 'HTML',
@@ -611,12 +626,19 @@ class EnvironmentalManagement {
                 });
             }
         });
+        dlg.set_secondary_action_label('关闭');
+        dlg.set_secondary_action(() => dlg.hide());
         dlg.show();
+        dlg.$wrapper.attr('data-backdrop', 'static').attr('data-keyboard', 'false');
     }
 
     // ─── 弹窗 3: 快捷新建环保/危废事项 ───────────────────────
     open_quick_create_dialog() {
         const self = this;
+        if (!this.data?.can_create) {
+            frappe.msgprint('当前账号没有新建环保事项的权限。');
+            return;
+        }
         const isWaste = (this.currentTab === 'waste');
 
         const defaultType = isWaste ? '危废' : '废气';
@@ -625,6 +647,7 @@ class EnvironmentalManagement {
 
         const dlg = new frappe.ui.Dialog({
             title: isWaste ? '➕ 新增危废管理事项' : '➕ 新增环保定期检测项目',
+            static: true,
             fields: [
                 {
                     fieldname: 'title',
@@ -723,7 +746,10 @@ class EnvironmentalManagement {
                 });
             }
         });
+        dlg.set_secondary_action_label('关闭');
+        dlg.set_secondary_action(() => dlg.hide());
         dlg.show();
+        dlg.$wrapper.attr('data-backdrop', 'static').attr('data-keyboard', 'false');
     }
 
     // ─── 弹窗 4: 编辑环保/危废事项 ───────────────────────────
@@ -731,12 +757,17 @@ class EnvironmentalManagement {
         const self = this;
         const it = (this.data?.items || []).find(x => x.name === name);
         if (!it) return;
+        if (!it.can_write) {
+            frappe.msgprint('当前账号仅可查看该事项。');
+            return;
+        }
 
         const isWaste = (it.env_type === '危废');
         const typeOptions = '废气\n废水\n噪声\n其他\n危废';
 
         const dlg = new frappe.ui.Dialog({
             title: `✏️ 编辑环保事项 — ${it.title}`,
+            static: true,
             fields: [
                 {
                     fieldname: 'title',
@@ -831,7 +862,10 @@ class EnvironmentalManagement {
                 });
             }
         });
+        dlg.set_secondary_action_label('关闭');
+        dlg.set_secondary_action(() => dlg.hide());
         dlg.show();
+        dlg.$wrapper.attr('data-backdrop', 'static').attr('data-keyboard', 'false');
     }
 
     // ─── 弹窗 5: 点击整行快速查看与处理 ──────────────────────
@@ -868,15 +902,21 @@ class EnvironmentalManagement {
                     `
                 }
             ],
-            primary_action_label: actionBtnLabel,
+            primary_action_label: it.can_write ? actionBtnLabel : undefined,
             primary_action() {
-                dlg.hide();
-                self.open_record_action_dialog(it.name);
+                if (it.can_write) {
+                    dlg.hide();
+                    self.open_record_action_dialog(it.name);
+                }
             },
-            secondary_action_label: '✏️ 编辑配置',
+            secondary_action_label: it.can_write ? '编辑配置' : '关闭',
             secondary_action() {
-                dlg.hide();
-                self.open_edit_dialog(it.name);
+                if (it.can_write) {
+                    dlg.hide();
+                    self.open_edit_dialog(it.name);
+                } else {
+                    dlg.hide();
+                }
             }
         });
         dlg.show();
