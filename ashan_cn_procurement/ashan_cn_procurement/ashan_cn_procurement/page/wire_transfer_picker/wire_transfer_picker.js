@@ -93,11 +93,11 @@ class WireTransferPicker {
                     </div>
                     <div class="picker-filter-group">
                         <label>发票号码:</label>
-                        <input type="text" class="picker-input" data-filter="bill_no" placeholder="发票代码/号码..." />
+                        <input type="text" class="picker-input" data-filter="bill_no" placeholder="发票号码..." />
                     </div>
                     <div class="picker-filter-group">
-                        <label>物料编码/名称:</label>
-                        <input type="text" class="picker-input" data-filter="item_code" placeholder="物料代码/名称..." />
+                        <label>物料名称:</label>
+                        <input type="text" class="picker-input" data-filter="item_code" placeholder="物料名称/编码..." />
                     </div>
                     <div class="picker-filter-group">
                         <label>经手人:</label>
@@ -403,7 +403,7 @@ class WireTransferPicker {
             ths += `
                 <th>采购发票号</th>
                 <th>供应商</th>
-                <th>发票代码/号码</th>
+                <th>发票号码</th>
                 <th>票据类型</th>
                 <th>单据明细</th>
                 <th>开票日期</th>
@@ -418,8 +418,9 @@ class WireTransferPicker {
             ths += `
                 <th>采购发票号</th>
                 <th>供应商</th>
-                <th>发票代码/号码</th>
-                <th>物料代码/名称</th>
+                <th>发票号码</th>
+                <th>物料名称</th>
+                <th>规格</th>
                 <th>单位</th>
                 <th>数量</th>
                 <th>单价</th>
@@ -441,7 +442,8 @@ class WireTransferPicker {
         $tbody.empty();
 
         if (!this.table_data || this.table_data.length === 0) {
-            const col_span = this.view_mode === "doc" ? 15 : 17;
+            const is_all = this.active_company === "All";
+            const col_span = this.view_mode === "doc" ? (is_all ? 16 : 15) : (is_all ? 18 : 17);
             $tbody.html(`
                 <tr>
                     <td colspan="${col_span}">
@@ -496,7 +498,8 @@ class WireTransferPicker {
                     <td><span class="picker-source-docname picker-doc-clickable-link" data-doctype="Purchase Invoice" data-name="${r.pi_name}">${frappe.utils.escape_html(r.pi_name)}</span></td>
                     <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
                     <td><span class="ashan-tag-badge ashan-tag-blue">${frappe.utils.escape_html(r.bill_no || "未填")}</span></td>
-                    <td><span class="ashan-tag-badge">${frappe.utils.escape_html(r.item_code)}</span> ${frappe.utils.escape_html(r.item_name || "")}</td>
+                    <td><span class="font-medium text-slate-800">${frappe.utils.escape_html(r.item_name || r.item_code || "-")}</span></td>
+                    <td><span class="text-slate-600 text-xs">${frappe.utils.escape_html(r.spec || "-")}</span></td>
                     <td>${frappe.utils.escape_html(r.uom || "")}</td>
                     <td class="picker-qty-cell">${r.qty}</td>
                     <td class="picker-money-cell">${this.fmt_money(r.rate)}</td>
@@ -544,7 +547,7 @@ class WireTransferPicker {
             `;
         } else {
             foot_html += `
-                <td colspan="3"></td>
+                <td colspan="6"></td>
                 <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
                 <td></td>
                 <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
