@@ -8,6 +8,7 @@ frappe.pages["monthly-settlement-picker"].on_page_load = function (wrapper) {
         single_column: true,
     });
 
+    $(page.wrapper).find(".page-head").hide();
     wrapper.monthly_picker = new MonthlySettlementPicker(page);
 };
 
@@ -401,71 +402,71 @@ class MonthlySettlementPicker {
         const thead_html = `
             <tr>
                 <th class="picker-col-sticky-1">
-                    <span class="picker-th-badge">SEQ</span>
+                    <span class="picker-th-badge">定位</span>
                     <span class="picker-th-title">#</span>
                 </th>
                 <th class="picker-col-sticky-2 picker-col-chk">
-                    <span class="picker-th-badge">SEL</span>
+                    <span class="picker-th-badge">选择</span>
                     <span class="picker-th-title">选择</span>
                 </th>
                 <th class="picker-col-sticky-3 picker-col-company">
-                    <span class="picker-th-badge">CORP</span>
+                    <span class="picker-th-badge">公司</span>
                     <span class="picker-th-title">所属公司</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">RECEIPT</span>
+                    <span class="picker-th-badge">单据</span>
                     <span class="picker-th-title">入库单号</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">VENDOR</span>
+                    <span class="picker-th-badge">供应商</span>
                     <span class="picker-th-title">供应商</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">STATUS</span>
+                    <span class="picker-th-badge">状态</span>
                     <span class="picker-th-title">开票状态</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">ITEM</span>
+                    <span class="picker-th-badge">物料</span>
                     <span class="picker-th-title">物料</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">SPEC</span>
+                    <span class="picker-th-badge">规格</span>
                     <span class="picker-th-title">规格</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">UNIT</span>
+                    <span class="picker-th-badge">单位</span>
                     <span class="picker-th-title">单位</span>
                 </th>
                 <th class="text-right">
-                    <span class="picker-th-badge">QTY</span>
+                    <span class="picker-th-badge">数量</span>
                     <span class="picker-th-title">入库数量</span>
                 </th>
                 <th class="text-right">
-                    <span class="picker-th-badge">RATE</span>
+                    <span class="picker-th-badge">单价</span>
                     <span class="picker-th-title">单价</span>
                 </th>
                 <th class="text-right">
-                    <span class="picker-th-badge">AMOUNT</span>
+                    <span class="picker-th-badge">金额</span>
                     <span class="picker-th-title">金额</span>
                 </th>
                 <th class="text-right">
-                    <span class="picker-th-badge">UNBILLED</span>
+                    <span class="picker-th-badge">未开票</span>
                     <span class="picker-th-title">待开票金额</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">WH</span>
+                    <span class="picker-th-badge">仓库</span>
                     <span class="picker-th-title">入库仓库</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">PO</span>
+                    <span class="picker-th-badge">订单</span>
                     <span class="picker-th-title">关联订单</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">PI</span>
+                    <span class="picker-th-badge">发票</span>
                     <span class="picker-th-title">关联发票</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">DATE</span>
+                    <span class="picker-th-badge">日期</span>
                     <span class="picker-th-title">入库日期</span>
                 </th>
             </tr>
@@ -547,59 +548,59 @@ class MonthlySettlementPicker {
         const thead_html = `
             <tr>
                 <th class="picker-col-sticky-1">
-                    <span class="picker-th-badge">SEQ</span>
+                    <span class="picker-th-badge">定位</span>
                     <span class="picker-th-title">#</span>
                 </th>
                 <th class="picker-col-sticky-2 picker-col-chk">
-                    <span class="picker-th-badge">SEL</span>
+                    <span class="picker-th-badge">选择</span>
                     <span class="picker-th-title">选择</span>
                 </th>
                 <th class="picker-col-sticky-3 picker-col-company">
-                    <span class="picker-th-badge">CORP</span>
+                    <span class="picker-th-badge">公司</span>
                     <span class="picker-th-title">所属公司</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">RECEIPT</span>
+                    <span class="picker-th-badge">单据</span>
                     <span class="picker-th-title">入库单号</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">VENDOR</span>
+                    <span class="picker-th-badge">供应商</span>
                     <span class="picker-th-title">供应商</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">STATUS</span>
+                    <span class="picker-th-badge">状态</span>
                     <span class="picker-th-title">状态</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">DETAILS</span>
+                    <span class="picker-th-badge">概览</span>
                     <span class="picker-th-title">单据明细</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">DATE</span>
+                    <span class="picker-th-badge">日期</span>
                     <span class="picker-th-title">入库日期</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">OWNER</span>
+                    <span class="picker-th-badge">经手人</span>
                     <span class="picker-th-title">录单人</span>
                 </th>
                 <th class="text-right">
-                    <span class="picker-th-badge">ITEMS</span>
+                    <span class="picker-th-badge">明细</span>
                     <span class="picker-th-title">行数</span>
                 </th>
                 <th class="text-right">
-                    <span class="picker-th-badge">AMOUNT</span>
+                    <span class="picker-th-badge">金额</span>
                     <span class="picker-th-title">入库总额</span>
                 </th>
                 <th class="text-right">
-                    <span class="picker-th-badge">UNBILLED</span>
+                    <span class="picker-th-badge">未开票</span>
                     <span class="picker-th-title">待开票金额</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">LINKED PO</span>
+                    <span class="picker-th-badge">关联订单</span>
                     <span class="picker-th-title">关联订单</span>
                 </th>
                 <th>
-                    <span class="picker-th-badge">LINKED PI</span>
+                    <span class="picker-th-badge">关联发票</span>
                     <span class="picker-th-title">关联发票</span>
                 </th>
             </tr>

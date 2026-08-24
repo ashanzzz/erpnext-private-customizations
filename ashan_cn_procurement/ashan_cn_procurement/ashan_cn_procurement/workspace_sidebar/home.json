@@ -32,7 +32,7 @@
       "doctype": "Workspace Sidebar Item"
     },
     {
-      "label": "采购全流程工作台",
+      "label": "常规采购流程",
       "link_type": "Page",
       "type": "Link",
       "link_to": "procurement-order-picker",

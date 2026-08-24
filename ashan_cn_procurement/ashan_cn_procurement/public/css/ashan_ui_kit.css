@@ -1148,6 +1148,16 @@
     font-weight: 700;
 }
 
+/* ==========================================================================
+   Clean Single-Header View (Hide Redundant Native Breadcrumbs)
+   ========================================================================== */
+[data-page-route="procurement-order-picker"] .page-head,
+[data-page-route="wire-transfer-picker"] .page-head,
+[data-page-route="monthly-settlement-picker"] .page-head,
+[data-page-route="reimbursement-picker"] .page-head {
+    display: none !important;
+}
+
 
 
 

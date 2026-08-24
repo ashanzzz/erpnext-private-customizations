@@ -4,9 +4,10 @@
 frappe.pages["procurement-order-picker"].on_page_load = function (wrapper) {
     const page = frappe.ui.make_app_page({
         parent: wrapper,
-        title: __("采购全流程工作台"),
+        title: __("常规采购流程"),
         single_column: true,
     });
+    $(page.wrapper).find(".page-head").hide();
     new ProcurementOrderPickerCenter(page);
 };
 
@@ -100,7 +101,7 @@ class ProcurementOrderPickerCenter {
                 <!-- Top Header & Company Dropdown -->
                 <div class="picker-top-bar">
                     <div class="picker-title-group">
-                        <h2>采购全流程工作台</h2>
+                        <h2>🛒 常规采购流程</h2>
                         <div class="picker-subtitle">采购申请、订货、入库、开票与报销付款</div>
                     </div>
                     <div class="picker-company-group">

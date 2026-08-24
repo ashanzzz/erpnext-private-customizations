@@ -8,6 +8,7 @@ frappe.pages["reimbursement-picker"].on_page_load = function (wrapper) {
         single_column: true,
     });
 
+    $(page.wrapper).find(".page-head").hide();
     wrapper.reim_picker = new ReimbursementPicker(page);
 };
 
