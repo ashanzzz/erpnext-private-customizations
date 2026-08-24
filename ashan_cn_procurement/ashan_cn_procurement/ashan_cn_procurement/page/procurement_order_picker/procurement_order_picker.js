@@ -1543,25 +1543,27 @@ class ProcurementOrderPickerCenter {
                     fieldname: "items_html",
                     options: `
                         <div>
-                            <table class="picker-modal-item-table">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>物料代码</th>
-                                        <th>物料名称</th>
-                                        <th>规格</th>
-                                        <th>数量</th>
-                                        <th>参考单价</th>
-                                        <th>不含税金额</th>
-                                        <th>税率 %</th>
-                                        <th>税额</th>
-                                        <th>含税总价</th>
-                                        <th>备注</th>
-                                        <th>操作</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="picker-modal-item-tbody"></tbody>
-                            </table>
+                            <div class="picker-modal-item-table-wrap">
+                                <table class="picker-modal-item-table picker-table-12cols">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>物料代码</th>
+                                            <th>物料名称</th>
+                                            <th>规格</th>
+                                            <th>数量</th>
+                                            <th>参考单价</th>
+                                            <th>不含税金额</th>
+                                            <th>税率 %</th>
+                                            <th>税额</th>
+                                            <th>含税总价</th>
+                                            <th>备注</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="picker-modal-item-tbody"></tbody>
+                                </table>
+                            </div>
                             <button class="picker-modal-add-btn" id="picker-modal-add-row-btn">➕ 添加一行物料</button>
 
                             <div class="picker-modal-summary-bar">
@@ -2312,25 +2314,27 @@ class ProcurementOrderPickerCenter {
                     fieldname: "items_html",
                     options: `
                         <div>
-                            <table class="picker-modal-item-table">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>物料代码</th>
-                                        <th>物料名称</th>
-                                        <th>规格</th>
-                                        <th>数量</th>
-                                        <th>参考单价</th>
-                                        <th>不含税金额</th>
-                                        <th>税率 %</th>
-                                        <th>税额</th>
-                                        <th>含税总价</th>
-                                        <th>备注</th>
-                                        <th>操作</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="picker-modal-item-tbody"></tbody>
-                            </table>
+                            <div class="picker-modal-item-table-wrap">
+                                <table class="picker-modal-item-table picker-table-12cols">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>物料代码</th>
+                                            <th>物料名称</th>
+                                            <th>规格</th>
+                                            <th>数量</th>
+                                            <th>参考单价</th>
+                                            <th>不含税金额</th>
+                                            <th>税率 %</th>
+                                            <th>税额</th>
+                                            <th>含税总价</th>
+                                            <th>备注</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="picker-modal-item-tbody"></tbody>
+                                </table>
+                            </div>
                             <button class="picker-modal-add-btn" id="picker-modal-add-row-btn">➕ 添加一行物料</button>
 
                             <div class="picker-modal-summary-bar">
@@ -3194,25 +3198,27 @@ class ProcurementOrderPickerCenter {
                     fieldname: "items_html",
                     options: `
                         <div>
-                            <table class="picker-modal-item-table">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>物料代码</th>
-                                        <th>物料名称</th>
-                                        <th>规格</th>
-                                        <th>数量</th>
-                                        <th>参考单价</th>
-                                        <th>不含税金额</th>
-                                        <th>税率 %</th>
-                                        <th>税额</th>
-                                        <th>含税总价</th>
-                                        <th>备注</th>
-                                        <th>操作</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="picker-modal-item-tbody"></tbody>
-                            </table>
+                            <div class="picker-modal-item-table-wrap">
+                                <table class="picker-modal-item-table picker-table-12cols">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>物料代码</th>
+                                            <th>物料名称</th>
+                                            <th>规格</th>
+                                            <th>数量</th>
+                                            <th>参考单价</th>
+                                            <th>不含税金额</th>
+                                            <th>税率 %</th>
+                                            <th>税额</th>
+                                            <th>含税总价</th>
+                                            <th>备注</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="picker-modal-item-tbody"></tbody>
+                                </table>
+                            </div>
                             <button class="picker-modal-add-btn" id="picker-modal-add-row-btn">➕ 添加一行物料</button>
 
                             <div class="picker-modal-summary-bar">
@@ -3643,25 +3649,27 @@ class ProcurementOrderPickerCenter {
                     fieldname: "items_html",
                     options: `
                         <div>
-                            <table class="picker-modal-item-table">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>物料代码</th>
-                                        <th>物料名称</th>
-                                        <th>规格</th>
-                                        <th>实收数量</th>
-                                        <th>参考单价</th>
-                                        <th>不含税金额</th>
-                                        <th>税率 %</th>
-                                        <th>税额</th>
-                                        <th>含税总价</th>
-                                        <th>备注</th>
-                                        <th>操作</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="picker-modal-item-tbody"></tbody>
-                            </table>
+                            <div class="picker-modal-item-table-wrap">
+                                <table class="picker-modal-item-table picker-table-12cols">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>物料代码</th>
+                                            <th>物料名称</th>
+                                            <th>规格</th>
+                                            <th>实收数量</th>
+                                            <th>参考单价</th>
+                                            <th>不含税金额</th>
+                                            <th>税率 %</th>
+                                            <th>税额</th>
+                                            <th>含税总价</th>
+                                            <th>备注</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="picker-modal-item-tbody"></tbody>
+                                </table>
+                            </div>
                             <button class="picker-modal-add-btn" id="picker-modal-add-row-btn">➕ 添加一行物料</button>
 
                             <div class="picker-modal-summary-bar">
@@ -3968,25 +3976,27 @@ class ProcurementOrderPickerCenter {
                     fieldname: "items_html",
                     options: `
                         <div>
-                            <table class="picker-modal-item-table">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>物料代码</th>
-                                        <th>物料名称</th>
-                                        <th>规格</th>
-                                        <th>开票数量</th>
-                                        <th>单价</th>
-                                        <th>不含税金额</th>
-                                        <th>税率 %</th>
-                                        <th>税额</th>
-                                        <th>含税总价</th>
-                                        <th>备注</th>
-                                        <th>操作</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="picker-modal-item-tbody"></tbody>
-                            </table>
+                            <div class="picker-modal-item-table-wrap">
+                                <table class="picker-modal-item-table picker-table-12cols">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>物料代码</th>
+                                            <th>物料名称</th>
+                                            <th>规格</th>
+                                            <th>开票数量</th>
+                                            <th>单价</th>
+                                            <th>不含税金额</th>
+                                            <th>税率 %</th>
+                                            <th>税额</th>
+                                            <th>含税总价</th>
+                                            <th>备注</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="picker-modal-item-tbody"></tbody>
+                                </table>
+                            </div>
                             <button class="picker-modal-add-btn" id="picker-modal-add-row-btn">➕ 添加一行物料</button>
 
                             <div class="picker-modal-summary-bar">
@@ -4135,20 +4145,22 @@ class ProcurementOrderPickerCenter {
                     fieldname: "invoices_html",
                     options: `
                         <div>
-                            <table class="picker-modal-item-table">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>发票单号</th>
-                                        <th>供应商</th>
-                                        <th>开票/过账日期</th>
-                                        <th>发票总额</th>
-                                        <th>未付金额</th>
-                                        <th>本次报销金额</th>
-                                    </tr>
-                                </thead>
-                                <tbody>${rows_html}</tbody>
-                            </table>
+                            <div class="picker-modal-item-table-wrap">
+                                <table class="picker-modal-item-table picker-table-invoices">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>发票单号</th>
+                                            <th>供应商</th>
+                                            <th>开票/过账日期</th>
+                                            <th>发票总额</th>
+                                            <th>未付金额</th>
+                                            <th>本次报销金额</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>${rows_html}</tbody>
+                                </table>
+                            </div>
 
                             <div class="picker-modal-summary-bar">
                                 <span>合计汇总:</span>

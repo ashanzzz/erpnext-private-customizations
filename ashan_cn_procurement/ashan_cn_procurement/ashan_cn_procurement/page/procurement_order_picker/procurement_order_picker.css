@@ -734,52 +734,96 @@
     padding: 16px 20px;
 }
 
-.picker-modal-item-table {
+.picker-modal-item-table-wrap {
     width: 100%;
-    min-width: 1020px;
-    border-collapse: separate;
-    border-spacing: 0;
+    overflow-x: auto;
     margin-top: 8px;
     margin-bottom: 8px;
-    font-size: 12px;
-    background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 6px;
+    background: #ffffff;
+}
+
+.picker-modal-item-table {
+    width: 100%;
+    min-width: 1060px;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12px;
+    background: #ffffff;
+    margin: 0;
+    border: none;
 }
 
 .picker-modal-item-table th {
     background: #f8fafc;
-    padding: 8px 10px;
+    padding: 8px 8px;
     border-bottom: 1px solid #cbd5e1;
     border-right: 1px solid #f1f5f9;
     text-align: left;
     font-weight: 700;
     color: #334155;
     white-space: nowrap;
+    box-sizing: border-box;
 }
 
 .picker-modal-item-table th:last-child {
     border-right: none;
 }
 
-.picker-modal-item-table th:nth-child(1) { width: 32px; text-align: center; }
-.picker-modal-item-table th:nth-child(2) { width: 9%; min-width: 95px; }
-.picker-modal-item-table th:nth-child(3) { width: 11%; min-width: 105px; }
-.picker-modal-item-table th:nth-child(4) { width: 8%; min-width: 80px; }
-.picker-modal-item-table th:nth-child(5) { width: 7.5%; min-width: 75px; text-align: right; }
-.picker-modal-item-table th:nth-child(6) { width: 8.5%; min-width: 80px; text-align: right; }
-.picker-modal-item-table th:nth-child(7) { width: 9%; min-width: 85px; text-align: right; }
-.picker-modal-item-table th:nth-child(8) { width: 6%; min-width: 55px; text-align: right; }
-.picker-modal-item-table th:nth-child(9) { width: 8.5%; min-width: 80px; text-align: right; }
-.picker-modal-item-table th:nth-child(10) { width: 9.5%; min-width: 90px; text-align: right; }
-.picker-modal-item-table th:nth-child(11) { width: auto; min-width: 110px; }
-.picker-modal-item-table th:nth-child(12) { width: 42px; text-align: center; }
+/* 12列物料明细表精准固定比例：物料代码15%，物料名称13%，规格9%，给数值与备注充裕空间 */
+.picker-modal-item-table.picker-table-12cols th:nth-child(1),
+.picker-modal-item-table th:nth-child(1) { width: 36px; min-width: 36px; max-width: 36px; text-align: center; }
+
+.picker-modal-item-table.picker-table-12cols th:nth-child(2),
+.picker-modal-item-table th:nth-child(2) { width: 15%; min-width: 130px; }
+
+.picker-modal-item-table.picker-table-12cols th:nth-child(3),
+.picker-modal-item-table th:nth-child(3) { width: 13%; min-width: 115px; }
+
+.picker-modal-item-table.picker-table-12cols th:nth-child(4),
+.picker-modal-item-table th:nth-child(4) { width: 9%; min-width: 80px; }
+
+.picker-modal-item-table.picker-table-12cols th:nth-child(5),
+.picker-modal-item-table th:nth-child(5) { width: 7.5%; min-width: 70px; text-align: right; }
+
+.picker-modal-item-table.picker-table-12cols th:nth-child(6),
+.picker-modal-item-table th:nth-child(6) { width: 8%; min-width: 75px; text-align: right; }
+
+.picker-modal-item-table.picker-table-12cols th:nth-child(7),
+.picker-modal-item-table th:nth-child(7) { width: 8.5%; min-width: 80px; text-align: right; }
+
+.picker-modal-item-table.picker-table-12cols th:nth-child(8),
+.picker-modal-item-table th:nth-child(8) { width: 5.5%; min-width: 55px; text-align: right; }
+
+.picker-modal-item-table.picker-table-12cols th:nth-child(9),
+.picker-modal-item-table th:nth-child(9) { width: 8%; min-width: 75px; text-align: right; }
+
+.picker-modal-item-table.picker-table-12cols th:nth-child(10),
+.picker-modal-item-table th:nth-child(10) { width: 9%; min-width: 85px; text-align: right; }
+
+.picker-modal-item-table.picker-table-12cols th:nth-child(11),
+.picker-modal-item-table th:nth-child(11) { width: auto; min-width: 120px; }
+
+.picker-modal-item-table.picker-table-12cols th:nth-child(12),
+.picker-modal-item-table th:nth-child(12) { width: 44px; min-width: 44px; max-width: 44px; text-align: center; }
+
+/* 报销发票清单表 (7列) */
+.picker-modal-item-table.picker-table-invoices th:nth-child(1) { width: 36px; min-width: 36px; max-width: 36px; text-align: center; }
+.picker-modal-item-table.picker-table-invoices th:nth-child(2) { width: 22%; min-width: 150px; }
+.picker-modal-item-table.picker-table-invoices th:nth-child(3) { width: 24%; min-width: 160px; }
+.picker-modal-item-table.picker-table-invoices th:nth-child(4) { width: 12%; min-width: 95px; }
+.picker-modal-item-table.picker-table-invoices th:nth-child(5) { width: 14%; min-width: 95px; text-align: right; }
+.picker-modal-item-table.picker-table-invoices th:nth-child(6) { width: 14%; min-width: 95px; text-align: right; }
+.picker-modal-item-table.picker-table-invoices th:nth-child(7) { width: 14%; min-width: 95px; text-align: right; }
 
 .picker-modal-item-table td {
-    padding: 6px 6px;
+    padding: 5px 6px;
     border-bottom: 1px solid #f1f5f9;
     border-right: 1px solid #f8fafc;
     vertical-align: middle;
+    box-sizing: border-box;
 }
 
 .picker-modal-item-table td:last-child {
