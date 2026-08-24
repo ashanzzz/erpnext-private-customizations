@@ -248,6 +248,12 @@ class ReimbursementPicker {
     bind_global_events() {
         const me = this;
 
+        window.addEventListener("beforeunload", () => {
+            if (me.creation.dialog && !me.creation.is_edit) {
+                me.save_local_draft();
+            }
+        });
+
         $("#reim-company-select").on("change", function () {
             me.active_company = $(this).val();
             me.refresh_all();
@@ -633,6 +639,7 @@ class ReimbursementPicker {
 
         const isEdit = this.creation.is_edit;
         const me = this;
+
         const d = new frappe.ui.Dialog({
             title: title,
             size: "extra-large",
@@ -645,6 +652,12 @@ class ReimbursementPicker {
             ],
             primary_action_label: isEdit ? __("💾 保存修改并过账") : __("🚀 确认创建并过账"),
             primary_action: () => this.submit_manual_reimbursement(0),
+        });
+
+        // 显式配置底部取消 / 关闭次级操作按钮
+        d.set_secondary_action_label(__("✕ 关闭"));
+        d.set_secondary_action(() => {
+            me.close_and_save_draft();
         });
 
         if (!isEdit) {
@@ -664,6 +677,14 @@ class ReimbursementPicker {
 
         d.$wrapper.attr("data-backdrop", "static").attr("data-keyboard", "false");
 
+        // 显式在 modal-header 注入右上角关闭按钮
+        const $modalHeader = d.$wrapper.find(".modal-header");
+        $modalHeader.find(".reim-modal-header-close-btn").remove();
+        const $closeBtn = $(`<button type="button" class="reim-modal-header-close-btn" title="关闭窗口 (自动保存草稿)">✕</button>`);
+        $closeBtn.on("click", () => {
+            me.close_and_save_draft();
+        });
+        $modalHeader.append($closeBtn);
 
         const $wrapper = d.fields_dict.root_html.$wrapper;
         this.creation.$wrapper = $wrapper;
@@ -671,6 +692,22 @@ class ReimbursementPicker {
 
         this.populate_company_dropdown($wrapper);
         this.bind_creation_dialog_events($wrapper);
+    }
+
+    close_and_save_draft() {
+        if (!this.creation.is_edit) {
+            this.save_local_draft();
+            frappe.show_alert({ message: __("✓ 已为您自动保存本地草稿"), indicator: "blue" });
+        }
+        if (this.creation.dialog) {
+            try {
+                this.creation.dialog.hide();
+                this.creation.dialog.$wrapper.remove();
+            } catch (e) {}
+            this.creation.dialog = null;
+        }
+        $(".modal, .modal-backdrop").remove();
+        $("body").removeClass("modal-open");
     }
 
     populate_company_dropdown($wrapper) {
@@ -769,7 +806,8 @@ class ReimbursementPicker {
     bind_creation_dialog_events($wrapper) {
         const me = this;
 
-        $wrapper.on("change input", "input, select", function () {
+        // Bulletproof Auto-Save: input, keyup, change, blur, focusout
+        $wrapper.on("input keyup change blur focusout", "input, select, textarea", function () {
             me.trigger_auto_save_draft();
         });
 
@@ -785,15 +823,18 @@ class ReimbursementPicker {
 
         $wrapper.on("change", "#modal-reim-company", function () {
             me.creation.company = $(this).val();
+            me.trigger_auto_save_draft();
         });
 
         $wrapper.on("click", "#modal-reim-add-inv-btn", function () {
             me.add_invoice_card();
+            me.save_local_draft();
         });
 
         $wrapper.on("click", ".reim-btn-delete-inv", function () {
             const invId = $(this).closest(".reim-inv-card").data("inv-id");
             me.remove_invoice_card(invId);
+            me.save_local_draft();
         });
 
         // Change Invoice Type
@@ -821,11 +862,13 @@ class ReimbursementPicker {
                 me.handle_row_calc("tax_rate", $(this), invId);
             });
             me.recalculate_invoice(invId);
+            me.save_local_draft();
         });
 
         $wrapper.on("click", ".reim-btn-add-item-row", function () {
             const invId = $(this).closest(".reim-inv-card").data("inv-id");
             me.add_item_row(invId);
+            me.save_local_draft();
         });
 
         $wrapper.on("click", ".reim-btn-delete-row", function () {
@@ -833,6 +876,7 @@ class ReimbursementPicker {
             const invId = $(this).closest(".reim-inv-card").data("inv-id");
             $row.remove();
             me.recalculate_invoice(invId);
+            me.save_local_draft();
         });
 
         // 1. 物料模糊搜索与智能下拉
@@ -903,7 +947,7 @@ class ReimbursementPicker {
             $row.find(".modal-row-uom").val(uom || "个");
 
             $wrapper.find(".picker-suggest-dropdown").removeClass("is-open");
-            me.trigger_auto_save_draft();
+            me.save_local_draft();
         });
 
         $wrapper.on("click", ".reim-suggest-create-item-btn", function (e) {
@@ -968,7 +1012,7 @@ class ReimbursementPicker {
             $card.find(".modal-inv-supplier-input").val(suppName);
             $wrapper.find(".picker-suggest-dropdown").removeClass("is-open");
             me.recalculate_all();
-            me.trigger_auto_save_draft();
+            me.save_local_draft();
         });
 
         $wrapper.on("click", ".reim-suggest-create-supp-btn", function (e) {
@@ -1035,13 +1079,13 @@ class ReimbursementPicker {
         if (this.draftTimer) clearTimeout(this.draftTimer);
         this.draftTimer = setTimeout(() => {
             this.save_local_draft();
-        }, 500);
+        }, 150);
     }
 
     save_local_draft() {
         if (this.creation.is_edit) return;
         const payload = this.collect_dialog_payload();
-        if (payload && payload.invoices && payload.invoices.length) {
+        if (payload && (payload.title || (payload.invoices && payload.invoices.length))) {
             localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(payload));
         }
     }
@@ -1176,7 +1220,7 @@ class ReimbursementPicker {
                         $row.find(".modal-row-uom").val(it.uom || "个");
 
                         frappe.show_alert({ message: __(`物料 [${it.item_code}] ${it.item_name} 已成功创建并回填！`), indicator: "green" });
-                        me.trigger_auto_save_draft();
+                        me.save_local_draft();
                     }
                 } catch (err) {
                     console.error("Quick create item error:", err);
@@ -1208,7 +1252,7 @@ class ReimbursementPicker {
                         $card.find(".modal-inv-supplier-input").val(supp.supplier_name);
                         me.recalculate_all();
                         frappe.show_alert({ message: __(`供应商 [${supp.supplier_name}] 已成功创建并回填！`), indicator: "green" });
-                        me.trigger_auto_save_draft();
+                        me.save_local_draft();
                     }
                 } catch (err) {
                     console.error("Quick create supplier error:", err);
@@ -1254,7 +1298,7 @@ class ReimbursementPicker {
         if (triggerField !== "line_total") $row.find(".modal-row-line-total-input").val(lineTotal ? lineTotal.toFixed(2) : "");
 
         this.recalculate_invoice(invId);
-        this.trigger_auto_save_draft();
+        this.save_local_draft();
     }
 
     add_invoice_card(initData = null) {
@@ -1375,7 +1419,7 @@ class ReimbursementPicker {
         }
         $(`#reim-inv-card-${invId}`).remove();
         this.recalculate_all();
-        this.trigger_auto_save_draft();
+        this.save_local_draft();
     }
 
     add_item_row(invId, initItem = null) {

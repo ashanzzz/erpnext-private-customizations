@@ -9,19 +9,19 @@ app_license = "mit"
 # ------------------
 
 app_include_css = [
-    "/assets/ashan_cn_procurement/css/ashan_cn_procurement.css?v=20260824.30",
+    "/assets/ashan_cn_procurement/css/ashan_cn_procurement.css?v=20260824.31",
     # Versioned so Desk never keeps an obsolete global component definition
     # after a UI-kit deployment.  The file itself remains a shared static asset.
-    "/assets/ashan_cn_procurement/css/ashan_ui_kit.css?v=20260824.30",
+    "/assets/ashan_cn_procurement/css/ashan_ui_kit.css?v=20260824.31",
 ]
 
 # 全局仅加载真正的全站能力。
 # Purchase Invoice / Reimbursement Request 的脚本改为 doctype_js，
 # 避免在全 Desk 重复注册表单事件。
 app_include_js = [
-    "/assets/ashan_cn_procurement/js/ashan_ui_kit.js?v=20260824.30",
+    "/assets/ashan_cn_procurement/js/ashan_ui_kit.js?v=20260824.31",
     "/assets/ashan_cn_procurement/js/ashan_cn_translations.js",
-    "/assets/ashan_cn_procurement/js/ashan_cn_sidebar_v2.js?v=20260824.30",
+    "/assets/ashan_cn_procurement/js/ashan_cn_sidebar_v2.js?v=20260824.31",
     "/assets/ashan_cn_procurement/js/doc_details_list.js",
 ]
 

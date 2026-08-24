@@ -91,13 +91,29 @@
 
 5. **企业级 Autocomplete 选单与新建浮层标准 (Enterprise Suggest Dropdown & Fast Creation Standard)**：
    - **拒绝简陋原生 datalist 与笨重大弹窗**：所有单据明细、录单弹窗中的物料选择、供应商选择，严禁使用原生 `<datalist>` 或死板的臃肿控件；
-   - **统一高质感浮层架构**：统一采用 `.picker-suggest-wrapper` + `.picker-suggest-dropdown` 浮层体系，基于 `getBoundingClientRect()` 实现 Fixed 视口定位与动态跟随；
+   - **统一高质感浮层架构**：统一采用 `.picker-suggest-wrapper` + `.picker-suggest-dropdown` / `.ashan-suggest-wrapper` + `.ashan-suggest-dropdown` 浮层体系，基于 `getBoundingClientRect()` 实现 Fixed 视口定位与动态跟随；
    - **双行高密度信息呈现**：
      - 上方：物料/供应商代码（`.picker-suggest-code`，粗体蓝字 `#1e40af`）；
      - 下方：物料全称 + 规格单位（`.picker-suggest-name`，微灰色 `#475569`）；
      - 右侧：参考单价（`.picker-suggest-price`，绿色等宽字体 `#059669`）；
    - **标准化底部快捷新建栏**：
      - 下拉菜单底部常驻 `➕ 新建物料 (Create Item)` 或 `➕ 新建供应商 (Create Supplier)`（`.picker-suggest-create-btn`），点击直接弹出标准创建窗口或无缝新建，选定后自动回填。
+
+6. **弹窗防误触与显式退出导航标准 (Modal Anti-Misclick & Explicit Navigation Standard)**：
+   - **防误触背景拦截**：所有录单、编辑与审批弹窗必须配置 `backdrop: "static"`（或 `static: true`），禁止用户在录单过程中因误触外部遮罩背景导致弹窗意外关闭和数据丢失；
+   - **显式双重安全退出通道**：
+     - **右上角标准关闭按钮**：弹窗右上角必须常驻醒目的 `✕` 关闭按钮（`.ashan-modal-close-btn` / `.reim-modal-header-close-btn`），悬浮呈微红反馈；
+     - **底部明确取消/关闭按钮**：弹窗底部 Footer 必须显式配置【`✕ 取消`】或【`✕ 关闭`】次级按钮（`set_secondary_action`）；
+   - **安全退出自动暂存**：用户点击任何关闭退出入口时，若表单中包含已输入数据，系统必须在 DOM 销毁前自动同步完成草稿缓存，并弹出轻提示告知用户草稿已保全。
+
+7. **全场景实时自动保存与草稿恢复引擎 (Bulletproof Auto-Save & Draft Engine)**：
+   - **全生命周期无缝感知**：自动保存必须覆盖以下所有交互动作：
+     - 字符键入（`input` / `keyup`）：防抖 150ms 自动保存；
+     - 单元格切换与失焦（`blur` / `change` / `focusout`）：换行或切换填写空格时即时保存；
+     - 结构化动作（新增行、删除行、新增卡片、删除卡片、下拉选中、快速新建回填）：立即同步保存；
+     - 页面刷新与关闭（`window.beforeunload`）：离开页面前同步写入 `localStorage`；
+   - **草稿自动恢复与重置**：重新打开录单弹窗时，自动检测有效草稿并完整恢复全部卡片、行项目、金额、税率、规格与备注，顶部展示高质感恢复提示条，并提供一键重置草稿功能。
+
 
 ---
 
