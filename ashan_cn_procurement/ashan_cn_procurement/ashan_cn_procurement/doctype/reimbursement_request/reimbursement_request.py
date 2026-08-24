@@ -14,6 +14,8 @@ from ashan_cn_procurement.reimbursement.service import (
 class ReimbursementRequest(Document):
     def validate(self):
         self._update_totals()
+        if self.docstatus == 1 and not self.get("invoice_items"):
+            frappe.throw(frappe._("提交报销单时必须包含至少一条有效的报销明细！"))
         if not self.is_new():
             release_removed_reservations(self)
 

@@ -1417,10 +1417,15 @@ class ReimbursementPicker {
 
     async submit_manual_reimbursement(isDraft = 0) {
         const $titleInput = $("#modal-reim-title");
-        const titleVal = $titleInput.val() ? $titleInput.val().trim() : "";
+        let titleVal = $titleInput.val() ? $titleInput.val().trim() : "";
+
+        // 草稿：不强制填写任何字段，标题为空则自动生成
         if (!titleVal) {
-            flash_field_error($titleInput, "请填写报销标题");
-            return;
+            if (!isDraft) {
+                flash_field_error($titleInput, "请填写报销标题");
+                return;
+            }
+            titleVal = `草稿报销-${frappe.datetime.get_today()}`;
         }
 
         const company = $("#modal-reim-company").val();
@@ -1445,17 +1450,18 @@ class ReimbursementPicker {
             const invoiceNo = $noInput.val().trim();
             const invoiceDate = $card.find(".modal-inv-date-input").val() || dateVal;
 
-            if (!supplier && invType !== "无发票") {
-                flash_field_error($suppInput, `发票 #${cardIdx} 请填写供应商名称`);
-                hasErrors = true;
-                return false;
-            }
-
-            // 强校验：专用发票与普通发票的发票号码必填
-            if (!isDraft && (invType === "专用发票" || invType === "普通发票") && !invoiceNo) {
-                flash_field_error($noInput, `发票 #${cardIdx} (${invType}) 必须填写发票号码`);
-                hasErrors = true;
-                return false;
+            // 正式提交时校验供应商与发票号
+            if (!isDraft) {
+                if (!supplier && invType !== "无发票") {
+                    flash_field_error($suppInput, `发票 #${cardIdx} 请填写供应商名称`);
+                    hasErrors = true;
+                    return false;
+                }
+                if ((invType === "专用发票" || invType === "普通发票") && !invoiceNo) {
+                    flash_field_error($noInput, `发票 #${cardIdx} (${invType}) 必须填写发票号码`);
+                    hasErrors = true;
+                    return false;
+                }
             }
 
             const items = [];
@@ -1476,53 +1482,57 @@ class ReimbursementPicker {
                 const $remarksInput = $row.find(".modal-row-remarks");
                 const remarks = $remarksInput.val().trim();
 
-                // 🌟 智能忽略完全空白行：若物料名称为空且单价为 0 且无备注，直接跳过忽略！
+                // 草稿：所有空行直接忽略，不做任何必填校验
                 if (!itemName && rate <= 0 && !remarks) {
                     return; // 跳过空行
                 }
 
-                // 否则说明用户打算录入这一行，执行必填检查与红色闪烁提示
-                if (!itemName) {
-                    flash_field_error($itemInput, `发票 #${cardIdx} 第 ${rowIdx + 1} 行请填写物料名称`);
-                    hasErrors = true;
-                    return false;
+                // 正式提交时：有物料名称且数量/单价/备注必填
+                if (!isDraft) {
+                    if (!itemName) {
+                        flash_field_error($itemInput, `发票 #${cardIdx} 第 ${rowIdx + 1} 行请填写物料名称`);
+                        hasErrors = true;
+                        return false;
+                    }
+                    if (qty <= 0 || rate <= 0 || amount <= 0) {
+                        flash_field_error($rateInput, `发票 #${cardIdx} 第 ${rowIdx + 1} 行【${itemName}】数量与单价必须大于 0`);
+                        hasErrors = true;
+                        return false;
+                    }
+                    if (!remarks) {
+                        flash_field_error($remarksInput, `发票 #${cardIdx} 第 ${rowIdx + 1} 行【${itemName}】备注为必填项，请填写用途或明细说明`);
+                        hasErrors = true;
+                        return false;
+                    }
                 }
 
-                if (!isDraft && (qty <= 0 || rate <= 0 || amount <= 0)) {
-                    flash_field_error($rateInput, `发票 #${cardIdx} 第 ${rowIdx + 1} 行【${itemName}】数量与单价必须大于 0`);
-                    hasErrors = true;
-                    return false;
+                // 草稿：有物料名才加入 payload
+                if (itemName) {
+                    items.push({
+                        item_code: itemCode || itemName,
+                        item_name: itemName,
+                        spec: spec,
+                        uom: uom,
+                        qty: qty,
+                        rate: rate,
+                        amount: amount,
+                        tax_rate: taxRate,
+                        tax_amount: taxAmount,
+                        remarks: remarks,
+                    });
                 }
-
-                // 🌟 备注必填校验
-                if (!isDraft && !remarks) {
-                    flash_field_error($remarksInput, `发票 #${cardIdx} 第 ${rowIdx + 1} 行【${itemName}】备注为必填项，请填写用途或明细说明`);
-                    hasErrors = true;
-                    return false;
-                }
-
-                items.push({
-                    item_code: itemCode || itemName,
-                    item_name: itemName,
-                    spec: spec,
-                    uom: uom,
-                    qty: qty,
-                    rate: rate,
-                    amount: amount,
-                    tax_rate: taxRate,
-                    tax_amount: taxAmount,
-                    remarks: remarks,
-                });
             });
 
             if (hasErrors) return false;
 
-            if (!items.length) {
+            // 正式提交时至少需要 1 行明细
+            if (!isDraft && !items.length) {
                 frappe.msgprint(__(`发票 #${cardIdx} 至少需要录入一行有效的明细。`));
                 hasErrors = true;
                 return false;
             }
 
+            // 草稿：不管有没有明细，都加入 payload（后端会宽容处理）
             invoicePayload.push({
                 invoice_type: invType,
                 supplier: supplier,
@@ -1532,7 +1542,10 @@ class ReimbursementPicker {
             });
         });
 
-        if (hasErrors || !invoicePayload.length) return;
+        if (hasErrors) return;
+
+        // 正式提交时至少需要一张发票
+        if (!isDraft && !invoicePayload.length) return;
 
         const isEdit = this.creation.is_edit;
         const rrName = this.creation.current_rr_name;

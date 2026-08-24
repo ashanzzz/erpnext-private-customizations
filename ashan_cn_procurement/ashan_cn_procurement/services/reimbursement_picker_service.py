@@ -59,14 +59,17 @@ def get_reimbursement_picker_overview_kpis(company: str | None = None) -> dict:
     comp_list = target_companies
 
     # 1. 待结款报销单数量 (包含已提交待结款与草稿)
-    pending_rr_count = frappe.db.count(
-        "Reimbursement Request",
-        filters={
-            "company": ["in", comp_list],
-            "docstatus": ["in", [0, 1]],
-            "outstanding_amount": [">", 0],
-        },
+    pending_rr_res = frappe.db.sql(
+        """
+        SELECT COUNT(name) AS cnt
+        FROM `tabReimbursement Request`
+        WHERE company IN %(comps)s
+          AND (docstatus = 0 OR (docstatus = 1 AND outstanding_amount > 0))
+        """,
+        {"comps": comp_list},
+        as_dict=True,
     )
+    pending_rr_count = pending_rr_res[0].cnt if pending_rr_res else 0
 
     # 2. 关联采购发票数量 (现金报销业务)
     pi_count = frappe.db.count(
@@ -145,7 +148,7 @@ def get_reimbursement_picker_doc_summary_rows(
 
     match_status = filters.get("match_status", "pending")
     if match_status == "pending":
-        where_clauses.append("rr.outstanding_amount > 0")
+        where_clauses.append("(rr.outstanding_amount > 0 OR rr.docstatus = 0)")
     elif match_status == "completed":
         where_clauses.append("rr.outstanding_amount <= 0.0001 AND rr.docstatus = 1")
     elif match_status == "draft":
@@ -599,8 +602,11 @@ def _create_manual_multi_invoice_reimbursement_inner(
         except Exception as e:
             frappe.throw(_("发票数据格式错误：{0}").format(str(e)))
 
-    if not invoices or not isinstance(invoices, list):
+    if not is_draft and (not invoices or not isinstance(invoices, list)):
         frappe.throw(_("请至少录入一张有效的发票信息。"))
+
+    if not invoices or not isinstance(invoices, list):
+        invoices = []
 
     posting_date_str = str(posting_date or nowdate())
     auto_receive_stock = bool(int(auto_receive_stock))
@@ -639,7 +645,7 @@ def _create_manual_multi_invoice_reimbursement_inner(
                 bill_no_raw = f"REIM-NOINV-{posting_date_str.replace('-', '')}-{inv_idx:02d}"
 
         items = inv.get("items") or []
-        if not items:
+        if not items and not is_draft:
             frappe.throw(_("发票 #{0} 没有任何物料明细。").format(inv_idx))
 
         validated_items = []
@@ -692,8 +698,12 @@ def _create_manual_multi_invoice_reimbursement_inner(
                 "warehouse": default_warehouse if is_stock else None,
             })
 
+        # 正式提交时不允许空明细；草稿则直接跳过该发票卡片（不生成 PI）
         if not validated_items:
-            frappe.throw(_("发票 #{0} 没有任何有效的物料明细。").format(inv_idx))
+            if not is_draft:
+                frappe.throw(_("发票 #{0} 没有任何有效的物料明细。").format(inv_idx))
+            else:
+                continue  # 草稿空发票卡片：直接跳过，不创建 PI
 
         # --- 生成发票对应的 PR (若包含库存品，直接建单，不依赖 PO) ---
         pr_name = None
@@ -834,6 +844,8 @@ def _create_manual_multi_invoice_reimbursement_inner(
         rr.append("invoice_items", row_dict)
 
     rr.flags.ignore_permissions = True
+    if is_draft:
+        rr.flags.ignore_mandatory = True
     rr.insert()
     if not is_draft:
         rr.submit()
