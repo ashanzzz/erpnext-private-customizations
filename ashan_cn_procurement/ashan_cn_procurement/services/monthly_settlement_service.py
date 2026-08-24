@@ -197,7 +197,7 @@ def get_monthly_settlement_picker_rows(
     rows = []
     for idx, it in enumerate(raw_items, 1):
         unbilled = max(0.0, flt(it.unbilled_amount))
-        status_label = "🟡 待开票" if unbilled > 0.0001 else "🟢 已开票"
+        status_label = "待开票" if unbilled > 0.0001 else "已开票"
 
         rows.append({
             "idx": idx,
@@ -339,7 +339,7 @@ def get_monthly_settlement_doc_summary_rows(
     rows = []
     for idx, d in enumerate(raw_docs, 1):
         unbilled = max(0.0, flt(d.unbilled_amount))
-        status_label = "🟡 待开票" if unbilled > 0.0001 else "🟢 已开票"
+        status_label = "待开票" if unbilled > 0.0001 else "已开票"
 
         rows.append({
             "idx": idx,

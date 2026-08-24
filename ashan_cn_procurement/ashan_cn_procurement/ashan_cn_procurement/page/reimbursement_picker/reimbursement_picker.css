@@ -79,7 +79,7 @@
 /* --- 4-Step KPI Cards Grid --- */
 .picker-kpi-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 12px;
 }
 
@@ -98,7 +98,6 @@
 
 .picker-kpi-card:hover {
     border-color: #fbbf24;
-    transform: translateY(-1px);
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
@@ -461,11 +460,14 @@
 
 .picker-data-table th,
 .picker-data-table td {
-    padding: 8px 10px;
+    height: 38px;
+    padding: 7px 10px;
     border-bottom: 1px solid #f1f5f9;
     border-right: 1px solid #f1f5f9;
     white-space: nowrap;
     vertical-align: middle;
+    line-height: 18px;
+    box-sizing: border-box;
 }
 
 .picker-data-table thead th {
@@ -478,6 +480,38 @@
     font-size: 11px;
     font-weight: 700;
     color: #1e293b;
+}
+
+.picker-col-sticky-1,
+.picker-col-sticky-2 {
+    position: sticky;
+    z-index: 5;
+    background: inherit;
+}
+
+.picker-col-sticky-1 {
+    left: 0;
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    text-align: center;
+}
+
+.picker-col-sticky-2 {
+    left: 44px;
+    min-width: clamp(110px, 10vw, 160px);
+    box-shadow: 3px 0 6px rgba(0, 0, 0, 0.05);
+}
+
+.picker-data-table thead th.picker-col-sticky-1,
+.picker-data-table thead th.picker-col-sticky-2 {
+    z-index: 15;
+    background: #f8fafc;
+}
+
+.picker-data-table tbody tr {
+    height: 38px;
+    background: #ffffff;
 }
 
 .picker-data-table tbody tr:hover {

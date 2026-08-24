@@ -730,6 +730,63 @@
 .ashan-smart-cell-idx { text-align: center; font-weight: 700; color: #64748b; }
 .ashan-smart-btn-del { color: #ef4444; padding: 2px 6px; }
 
+/*
+   Procurement entry tables: compact numeric columns keep their scanability,
+   while real-world text fields can use the remaining viewport width.  These
+   classes are intentionally opt-in so older pages keep their current layout.
+*/
+.ashan-col-code {
+    width: clamp(110px, 10vw, 160px);
+    min-width: 110px;
+}
+
+.ashan-col-name {
+    width: 18%;
+    min-width: clamp(200px, 18vw, 360px);
+}
+
+.ashan-col-spec {
+    width: 18%;
+    min-width: clamp(220px, 20vw, 400px);
+}
+
+.ashan-col-remarks {
+    width: 20%;
+    min-width: clamp(260px, 24vw, 460px);
+}
+
+.ashan-col-quantity {
+    width: clamp(88px, 7vw, 108px);
+    min-width: 88px;
+    text-align: right;
+}
+
+.ashan-col-money {
+    width: clamp(112px, 9vw, 144px);
+    min-width: 112px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.ashan-col-rate {
+    width: clamp(76px, 6vw, 96px);
+    min-width: 76px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.ashan-col-status {
+    width: max-content;
+    min-width: 96px;
+    text-align: center;
+}
+
+.ashan-col-action {
+    width: max-content;
+    min-width: 64px;
+    text-align: center;
+}
+
 /* ==========================================================================
    Enterprise Autocomplete Suggest Dropdown (Pillar 2 Standard)
    ========================================================================== */
@@ -1090,7 +1147,6 @@
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
     font-weight: 700;
 }
-
 
 
 

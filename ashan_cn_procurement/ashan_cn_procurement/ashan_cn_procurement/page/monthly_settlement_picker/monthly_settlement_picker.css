@@ -79,7 +79,7 @@
 /* --- 4-Step KPI Cards Grid --- */
 .picker-kpi-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 12px;
 }
 
@@ -98,7 +98,6 @@
 
 .picker-kpi-card:hover {
     border-color: #55efc4;
-    transform: translateY(-1px);
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
@@ -461,11 +460,14 @@
 
 .picker-data-table th,
 .picker-data-table td {
-    padding: 8px 10px;
+    height: 38px;
+    padding: 7px 10px;
     border-bottom: 1px solid #f1f5f9;
     border-right: 1px solid #f1f5f9;
     white-space: nowrap;
     vertical-align: middle;
+    line-height: 18px;
+    box-sizing: border-box;
 }
 
 .picker-data-table thead th {
@@ -478,6 +480,76 @@
     font-size: 11px;
     font-weight: 700;
     color: #1e293b;
+}
+
+.picker-data-table thead th.picker-col-sticky-1,
+.picker-data-table thead th.picker-col-sticky-2,
+.picker-data-table thead th.picker-col-sticky-3 {
+    z-index: 15;
+    background: #f8fafc;
+}
+
+.picker-col-sticky-1,
+.picker-col-sticky-2,
+.picker-col-sticky-3 {
+    position: sticky;
+    z-index: 5;
+    background: inherit;
+}
+
+.picker-col-sticky-1 {
+    left: 0;
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    text-align: center;
+}
+
+.picker-col-sticky-2 {
+    left: 44px;
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    padding: 0 !important;
+    text-align: center;
+}
+
+.picker-col-sticky-3 {
+    left: 88px;
+    min-width: clamp(150px, 16vw, 260px);
+    box-shadow: 3px 0 6px rgba(0, 0, 0, 0.05);
+}
+
+.picker-row-checkbox {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    vertical-align: middle;
+    accent-color: var(--ashan-color-primary, #1e40af);
+}
+
+.picker-th-badge,
+.picker-th-title {
+    display: block;
+}
+
+.picker-th-badge {
+    color: var(--ashan-color-slate-500, #64748b);
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 11px;
+}
+
+.picker-th-title {
+    color: var(--ashan-color-slate-800, #1e293b);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 15px;
+}
+
+.picker-data-table tbody tr {
+    height: 38px;
+    background: #ffffff;
 }
 
 .picker-data-table tbody tr:hover {

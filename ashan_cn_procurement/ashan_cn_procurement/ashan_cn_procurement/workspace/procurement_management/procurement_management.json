@@ -13,17 +13,11 @@
   "hide_custom": 1,
   "public": 1,
   "is_hidden": 0,
-  "content": "[{\"id\": \"hdr_main_procurement_management\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h3\\\"><b>采购与供应链</b></span>\", \"col\": 12}}, {\"id\": \"hdr_flow_procurement_management\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"text-muted small\\\"><b>标准采购工作流</b></span>\", \"col\": 12}}, {\"id\": \"sc_0_procurement_workflow\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"采购流程总览\", \"col\": 2}}, {\"id\": \"sc_1_material_request\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"①采购申请\", \"col\": 2}}, {\"id\": \"sc_2_purchase_order\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"②采购订单\", \"col\": 2}}, {\"id\": \"sc_3_purchase_receipt\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"③采购入库\", \"col\": 2}}, {\"id\": \"sc_4_purchase_invoice\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"④采购发票\", \"col\": 2}}, {\"id\": \"sc_5_reimbursement_request\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"⑤报销申请\", \"col\": 2}}, {\"id\": \"card_master_procurement\", \"type\": \"card\", \"data\": {\"card_name\": \"采购基础资料\", \"col\": 6}}, {\"id\": \"card_execution_procurement\", \"type\": \"card\", \"data\": {\"card_name\": \"执行与付款\", \"col\": 6}}]",
+  "content": "[{\"id\": \"hdr_main_procurement_management\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h3\\\"><b>采购与供应链</b></span>\", \"col\": 12}}, {\"id\": \"hdr_flow_procurement_management\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"text-muted small\\\"><b>标准采购工作流</b></span>\", \"col\": 12}}, {\"id\": \"sc_1_material_request\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"①采购申请\", \"col\": 2}}, {\"id\": \"sc_2_purchase_order\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"②采购订单\", \"col\": 2}}, {\"id\": \"sc_3_purchase_receipt\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"③采购入库\", \"col\": 2}}, {\"id\": \"sc_4_purchase_invoice\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"④采购发票\", \"col\": 2}}, {\"id\": \"sc_5_reimbursement_request\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"⑤报销申请\", \"col\": 2}}, {\"id\": \"card_master_procurement\", \"type\": \"card\", \"data\": {\"card_name\": \"采购基础资料\", \"col\": 6}}, {\"id\": \"card_execution_procurement\", \"type\": \"card\", \"data\": {\"card_name\": \"执行与付款\", \"col\": 6}}]",
   "doctype": "Workspace",
   "number_cards": [],
   "charts": [],
   "shortcuts": [
-    {
-      "type": "Page",
-      "link_to": "procurement-workflow",
-      "label": "采购流程总览",
-      "doctype": "Workspace Shortcut"
-    },
     {
       "type": "DocType",
       "link_to": "Material Request",

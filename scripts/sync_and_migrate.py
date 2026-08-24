@@ -2,8 +2,27 @@ import os
 import sys
 import tarfile
 import tempfile
+from pathlib import Path
+
 import paramiko
-from dotenv import load_dotenv
+
+
+def load_local_env() -> None:
+    """Load simple KEY=VALUE pairs from the workspace .env without a dependency."""
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    if not env_path.exists():
+        return
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        value = value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, value)
+
 
 if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
     try:
@@ -12,7 +31,7 @@ if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
-load_dotenv()
+load_local_env()
 
 LAN_HOST = os.getenv('UNRAID_SSH_HOST', '192.168.8.11')
 TAILSCALE_HOST = os.getenv('UNRAID_TAILSCALE_HOST', '100.80.0.4')
@@ -36,6 +55,30 @@ def run_cmd(client, cmd):
         except Exception:
             print("ERR:", err.encode('ascii', errors='replace').decode('ascii'))
     return out, err
+
+
+def clear_confirmed_orphan_migrate_lock(client):
+    """Remove only a confirmed orphan migration lock from the target site."""
+    lock_path = "sites/site1.local/locks/bench_migrate.lock"
+    workdir = "/home/frappe/frappe-bench"
+    lock_out, _ = run_cmd(
+        client,
+        f"docker exec -u frappe -w {workdir} erpnext16 sh -lc \"test -e {lock_path} && echo lock-present || true\"",
+    )
+    if "lock-present" not in lock_out:
+        return
+
+    process_out, _ = run_cmd(
+        client,
+        f"docker exec -u frappe -w {workdir} erpnext16 sh -lc \"ps -eo args= | grep -F 'bench --site site1.local migrate' | grep -v grep || true\"",
+    )
+    if process_out.strip():
+        raise RuntimeError("检测到仍在运行的 bench migrate，拒绝移除迁移锁。")
+
+    run_cmd(
+        client,
+        f"docker exec -u frappe -w {workdir} erpnext16 rm -f {lock_path}",
+    )
 
 def connect_ssh():
     client = paramiko.SSHClient()
@@ -84,7 +127,7 @@ run_cmd(client, "docker exec erpnext16 chown -R frappe:frappe /home/frappe/frapp
 # 4. 执行 bench migrate
 print("Running bench migrate...")
 for attempt in range(1, 4):
-    run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 rm -f sites/site1.local/locks/bench_migrate.lock")
+    clear_confirmed_orphan_migrate_lock(client)
     out, err = run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench --site site1.local migrate")
     combined = (out or "") + (err or "")
     if "LockTimeoutError" not in combined and "QueryDeadlockError" not in combined and "OperationalError" not in combined and "Traceback" not in combined:

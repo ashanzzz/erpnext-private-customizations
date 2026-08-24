@@ -246,14 +246,14 @@ def get_reimbursement_picker_doc_summary_rows(
         outstanding = flt(d.outstanding_amount)
         is_draft = False
         if d.docstatus == 0:
-            status_label = "🟡 待提交草稿"
+            status_label = "待提交草稿"
             doc_status = "Draft"
             is_draft = True
         elif outstanding > 0.0001:
-            status_label = "🟡 待结款"
+            status_label = "待结款"
             doc_status = "Submitted"
         else:
-            status_label = "🟢 已结清"
+            status_label = "已结清"
             doc_status = "Completed"
 
         suppliers_list = [s for s in (d.raw_suppliers or "").split("||") if s.strip()]
@@ -382,11 +382,11 @@ def get_reimbursement_picker_rows(
     for idx, it in enumerate(raw_items, 1):
         outstanding = flt(it.outstanding_amount)
         if it.docstatus == 0:
-            status_label = "🟡 待提交草稿"
+            status_label = "待提交草稿"
         elif outstanding > 0.0001:
-            status_label = "🟡 待结款"
+            status_label = "待结款"
         else:
-            status_label = "🟢 已结清"
+            status_label = "已结清"
 
         rows.append({
             "idx": idx,
@@ -413,7 +413,7 @@ def get_reimbursement_picker_rows(
         "rows": rows,
         "total_count": len(rows),
         "total_amount": sum(r["amount"] for r in rows),
-        "total_outstanding": sum(flt(r["amount"]) for r in rows if r["status_label"] != "🟢 已结清"),
+        "total_outstanding": sum(flt(r["amount"]) for r in rows if r["status_label"] != "已结清"),
     }
 
 
@@ -967,15 +967,31 @@ def get_reimbursement_detail_for_edit(rr_name: str) -> dict:
 
 @frappe.whitelist(methods=["POST"])
 def delete_reimbursement_bundle(rr_name: str) -> dict:
-    """Safely delete or cancel a reimbursement request and linked PI & PR (NO PO)."""
+    """Delete an unsubmitted reimbursement draft and its unsubmitted draft chain."""
     if not frappe.db.exists("Reimbursement Request", rr_name):
         return {"success": True, "deleted_rr": rr_name}
 
     rr = frappe.get_doc("Reimbursement Request", rr_name)
     assert_company_access(rr.company)
+    if rr.docstatus != 0:
+        frappe.throw(_("已提交报销单不允许直接删除。请按审批流程作废重开，以保留财务审计链。"))
 
     # 1. 查找关联的采购发票
     pi_names = list(set([item.source_pi for item in rr.invoice_items if item.source_pi]))
+
+    # Preflight all downstream records before deleting anything.  A submitted
+    # document is a financial record, never a candidate for cascade removal.
+    for pi_name in pi_names:
+        if not frappe.db.exists("Purchase Invoice", pi_name):
+            continue
+        pi = frappe.get_doc("Purchase Invoice", pi_name)
+        if pi.docstatus != 0:
+            frappe.throw(_("关联采购发票 {0} 已提交，不能删除报销草稿。").format(pi_name))
+        for pr_name in {p_item.purchase_receipt for p_item in pi.items if p_item.purchase_receipt}:
+            if not frappe.db.exists("Purchase Receipt", pr_name):
+                continue
+            if frappe.get_doc("Purchase Receipt", pr_name).docstatus != 0:
+                frappe.throw(_("关联采购入库单 {0} 已提交，不能删除报销草稿。").format(pr_name))
 
     # 2. 清理可能存在的预留/占用记录
     try:
@@ -992,13 +1008,7 @@ def delete_reimbursement_bundle(rr_name: str) -> dict:
     except Exception:
         pass
 
-    # 3. 取消/删除报销单
-    if rr.docstatus == 1:
-        rr.flags.ignore_permissions = True
-        try:
-            rr.cancel()
-        except Exception:
-            pass
+    # 3. Draft-only deletion after the full preflight has passed.
     frappe.delete_doc("Reimbursement Request", rr.name, force=True, ignore_permissions=True)
 
     # 4. 级联取消/删除生成的关联采购发票与入库单 (不涉及 PO)
@@ -1008,23 +1018,11 @@ def delete_reimbursement_bundle(rr_name: str) -> dict:
                 pi = frappe.get_doc("Purchase Invoice", pi_name)
                 pr_names = list(set([p_it.purchase_receipt for p_it in pi.items if p_it.purchase_receipt]))
 
-                if pi.docstatus == 1:
-                    pi.flags.ignore_permissions = True
-                    try:
-                        pi.cancel()
-                    except Exception:
-                        pass
                 frappe.delete_doc("Purchase Invoice", pi.name, force=True, ignore_permissions=True)
 
                 for pr_name in pr_names:
                     if frappe.db.exists("Purchase Receipt", pr_name):
                         pr = frappe.get_doc("Purchase Receipt", pr_name)
-                        if pr.docstatus == 1:
-                            pr.flags.ignore_permissions = True
-                            try:
-                                pr.cancel()
-                            except Exception:
-                                pass
                         frappe.delete_doc("Purchase Receipt", pr.name, force=True, ignore_permissions=True)
             except Exception as e:
                 frappe.log_error(f"Error cascading delete PI {pi_name}: {e}")

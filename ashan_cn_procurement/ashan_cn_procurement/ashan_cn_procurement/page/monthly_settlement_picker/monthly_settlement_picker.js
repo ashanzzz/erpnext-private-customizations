@@ -4,7 +4,7 @@
 frappe.pages["monthly-settlement-picker"].on_page_load = function (wrapper) {
     var page = frappe.ui.make_app_page({
         parent: wrapper,
-        title: __("📅 采购全流程选单生单中心"),
+        title: __("月结入库补录"),
         single_column: true,
     });
 
@@ -38,13 +38,13 @@ class MonthlySettlementPicker {
                 <!-- Top Header & Company Selector -->
                 <div class="picker-top-bar">
                     <div class="picker-title-group">
-                        <h2>📅 采购全流程选单生单中心</h2>
-                        <div class="picker-subtitle">月结补录</div>
+                        <h2>月结入库补录</h2>
+                        <div class="picker-subtitle">月结采购入库录入与待开票跟踪</div>
                     </div>
                     <div class="picker-company-group">
                         <label class="picker-company-label" for="monthly-company-select">所属公司:</label>
                         <select id="monthly-company-select" class="picker-company-select">
-                            <option value="All">🌐 全部公司 (汇聚视图)</option>
+                            <option value="All">全部公司</option>
                         </select>
                     </div>
                 </div>
@@ -54,7 +54,6 @@ class MonthlySettlementPicker {
                     <div class="picker-kpi-card active" data-step="pr_pending">
                         <div class="picker-kpi-header">
                             <span class="picker-kpi-title">月结待开票</span>
-                            <span class="picker-kpi-icon">📦</span>
                         </div>
                         <div class="picker-kpi-body">
                             <div class="picker-kpi-number" id="monthly-kpi-pending-items">0</div>
@@ -64,7 +63,6 @@ class MonthlySettlementPicker {
                     <div class="picker-kpi-card" data-step="po">
                         <div class="picker-kpi-header">
                             <span class="picker-kpi-title">采购订单</span>
-                            <span class="picker-kpi-icon">🛒</span>
                         </div>
                         <div class="picker-kpi-body">
                             <div class="picker-kpi-number" id="monthly-kpi-po-count">0</div>
@@ -74,7 +72,6 @@ class MonthlySettlementPicker {
                     <div class="picker-kpi-card" data-step="pr_total">
                         <div class="picker-kpi-header">
                             <span class="picker-kpi-title">月结入库</span>
-                            <span class="picker-kpi-icon">📋</span>
                         </div>
                         <div class="picker-kpi-body">
                             <div class="picker-kpi-number" id="monthly-kpi-pr-count">0</div>
@@ -84,7 +81,6 @@ class MonthlySettlementPicker {
                     <div class="picker-kpi-card" data-step="unbilled_amt">
                         <div class="picker-kpi-header">
                             <span class="picker-kpi-title">待开票金额</span>
-                            <span class="picker-kpi-icon">💰</span>
                         </div>
                         <div class="picker-kpi-body">
                             <div class="picker-kpi-number" id="monthly-kpi-unbilled-amt">¥ 0.00</div>
@@ -96,12 +92,11 @@ class MonthlySettlementPicker {
                 <!-- Section Context Banner -->
                 <div class="picker-section-banner" id="monthly-section-banner">
                     <div class="picker-section-main">
-                        <div class="picker-section-icon">📅</div>
                         <div class="picker-section-heading">
                             <div class="picker-section-title">
-                                <span>月结补录 · 极速录单与自动过账中心</span>
+                                <span>月结入库补录</span>
                             </div>
-                            <div class="picker-section-desc">录入月结入库单明细，系统全自动生成并提交关联采购订单 (PO) ➔ 采购入库单 (PR)。发票后续按月集中开具。</div>
+                            <div class="picker-section-desc">录入月结入库明细后，系统生成采购订单和采购入库单；发票后续按月集中开具。</div>
                         </div>
                     </div>
                     <div class="picker-section-badge" id="monthly-total-summary-badge">
@@ -114,9 +109,9 @@ class MonthlySettlementPicker {
                     <div class="picker-filter-group">
                         <label>开票状态:</label>
                         <div class="picker-status-btn-group" id="monthly-status-btn-group">
-                            <button type="button" class="picker-status-btn active" data-status="pending">🟡 仅待开票入库</button>
-                            <button type="button" class="picker-status-btn" data-status="completed">🟢 仅已开票入库</button>
-                            <button type="button" class="picker-status-btn" data-status="all">🌐 全部入库单据</button>
+                            <button type="button" class="picker-status-btn active" data-status="pending">待开票入库</button>
+                            <button type="button" class="picker-status-btn" data-status="completed">已开票入库</button>
+                            <button type="button" class="picker-status-btn" data-status="all">全部入库单据</button>
                         </div>
                     </div>
                     <div class="picker-filter-group">
@@ -129,7 +124,7 @@ class MonthlySettlementPicker {
                     </div>
                     <div class="picker-filter-group">
                         <label>物料编码/名称:</label>
-                        <input type="text" class="picker-input" data-filter="item_code" placeholder="物料代码/名称..." />
+                        <input type="text" class="picker-input" data-filter="item_code" placeholder="搜索物料..." />
                     </div>
                     <div class="picker-filter-group">
                         <label>经手人:</label>
@@ -141,8 +136,8 @@ class MonthlySettlementPicker {
                 <div class="picker-action-bar">
                     <div class="picker-summary-text">
                         <div class="picker-view-switch-group">
-                            <button type="button" class="picker-view-btn active" data-mode="detail">📑 明细视图</button>
-                            <button type="button" class="picker-view-btn" data-mode="doc">📦 单号视图</button>
+                            <button type="button" class="picker-view-btn active" data-mode="detail">明细视图</button>
+                            <button type="button" class="picker-view-btn" data-mode="doc">单号视图</button>
                         </div>
                         <span>已选 <strong class="picker-summary-highlight" id="monthly-selected-count">0</strong> 项</span>
                         <span>本次总计: <strong class="picker-summary-highlight" id="monthly-selected-amount">¥ 0.00</strong></span>
@@ -150,7 +145,7 @@ class MonthlySettlementPicker {
                     <div class="picker-btn-group">
                         <button type="button" class="picker-btn-sub" id="monthly-select-all-btn">全选本页</button>
                         <button type="button" class="picker-btn-sub" id="monthly-clear-sel-btn">清空选择</button>
-                        <button type="button" class="monthly-btn-create-pr" id="monthly-open-create-modal-btn">📅 + 新建月结入库补录</button>
+                        <button type="button" class="monthly-btn-create-pr" id="monthly-open-create-modal-btn">新建月结入库补录</button>
                     </div>
                 </div>
 
@@ -186,7 +181,7 @@ class MonthlySettlementPicker {
                 const $select = $("#monthly-company-select");
                 $select.empty();
                 if (this.companies.length > 1) {
-                    $select.append(`<option value="All">🌐 全部公司 (汇聚视图)</option>`);
+                    $select.append(`<option value="All">全部公司</option>`);
                 }
                 this.companies.forEach((c) => {
                     $select.append(`<option value="${c.name}">${frappe.utils.escape_html(c.company_name || c.name)}</option>`);
@@ -229,12 +224,12 @@ class MonthlySettlementPicker {
         });
 
         // View mode switch
-        $(".picker-view-switch-group").on("click", ".picker-view-btn", function () {
+        $(this.page.body).find(".picker-view-switch-group").on("click", ".picker-view-btn", function () {
             $(this).siblings().removeClass("active");
             $(this).addClass("active");
             self.view_mode = $(this).data("mode");
             self.selected_items.clear();
-            self.render_table();
+            self.load_table_data();
         });
 
         // Select All / Clear Select
@@ -366,12 +361,13 @@ class MonthlySettlementPicker {
     }
 
     async load_table_data() {
+        const request_id = (this._table_request_id || 0) + 1;
+        this._table_request_id = request_id;
         const method = this.view_mode === "detail"
             ? "ashan_cn_procurement.services.monthly_settlement_service.get_monthly_settlement_picker_rows"
             : "ashan_cn_procurement.services.monthly_settlement_service.get_monthly_settlement_doc_summary_rows";
 
         try {
-            frappe.dom.freeze(__("正在加载月结补录数据..."));
             const r = await frappe.call({
                 method: method,
                 args: {
@@ -379,15 +375,14 @@ class MonthlySettlementPicker {
                     filters: this.get_current_filters(),
                 },
             });
-            frappe.dom.unfreeze();
-
+            if (request_id !== this._table_request_id) return;
             if (r.message) {
                 this.cached_rows = r.message.rows || [];
                 $("#monthly-total-summary-badge").text(`统计: ${this.cached_rows.length} 笔`);
                 this.render_table();
             }
         } catch (e) {
-            frappe.dom.unfreeze();
+            if (request_id !== this._table_request_id) return;
             console.error("Failed to load table data:", e);
         }
     }
@@ -405,15 +400,15 @@ class MonthlySettlementPicker {
     render_detail_view() {
         const thead_html = `
             <tr>
-                <th class="qifu-col-sticky-1">
+                <th class="picker-col-sticky-1">
                     <span class="picker-th-badge">SEQ</span>
                     <span class="picker-th-title">#</span>
                 </th>
-                <th class="picker-col-chk">
+                <th class="picker-col-sticky-2 picker-col-chk">
                     <span class="picker-th-badge">SEL</span>
                     <span class="picker-th-title">选择</span>
                 </th>
-                <th>
+                <th class="picker-col-sticky-3 picker-col-company">
                     <span class="picker-th-badge">CORP</span>
                     <span class="picker-th-title">所属公司</span>
                 </th>
@@ -431,11 +426,11 @@ class MonthlySettlementPicker {
                 </th>
                 <th>
                     <span class="picker-th-badge">ITEM</span>
-                    <span class="picker-th-title">物料代码/名称</span>
+                    <span class="picker-th-title">物料</span>
                 </th>
                 <th>
                     <span class="picker-th-badge">SPEC</span>
-                    <span class="picker-th-title">规格型号</span>
+                    <span class="picker-th-title">规格</span>
                 </th>
                 <th>
                     <span class="picker-th-badge">UNIT</span>
@@ -481,8 +476,7 @@ class MonthlySettlementPicker {
             $("#monthly-table-tbody").html(`
                 <tr>
                     <td colspan="17" class="picker-empty-state">
-                        <div class="picker-empty-icon">📅</div>
-                        <div class="picker-empty-text">当前暂无月结补录单据记录，点击上方【📅 + 新建月结入库补录】即可极速录单！</div>
+                        <div class="picker-empty-text">当前暂无月结入库补录记录，点击上方“新建月结入库补录”即可录入。</div>
                     </td>
                 </tr>
             `);
@@ -504,11 +498,11 @@ class MonthlySettlementPicker {
 
             tbody_html += `
                 <tr>
-                    <td class="qifu-col-sticky-1 picker-col-idx">${idx + 1}</td>
-                    <td class="picker-col-chk">
+                    <td class="picker-col-sticky-1 picker-col-idx">${idx + 1}</td>
+                    <td class="picker-col-sticky-2 picker-col-chk">
                         <input type="checkbox" class="picker-row-checkbox" data-key="${r.pri_name}" ${is_checked} />
                     </td>
-                    <td>${frappe.utils.escape_html(r.company)}</td>
+                    <td class="picker-col-sticky-3 picker-col-company">${frappe.utils.escape_html(r.company)}</td>
                     <td>
                         <span class="picker-clickable-doc" data-doctype="Purchase Receipt" data-name="${r.pr_name}">
                             ${frappe.utils.escape_html(r.pr_name)}
@@ -552,15 +546,15 @@ class MonthlySettlementPicker {
     render_doc_view() {
         const thead_html = `
             <tr>
-                <th class="qifu-col-sticky-1">
+                <th class="picker-col-sticky-1">
                     <span class="picker-th-badge">SEQ</span>
                     <span class="picker-th-title">#</span>
                 </th>
-                <th class="picker-col-chk">
+                <th class="picker-col-sticky-2 picker-col-chk">
                     <span class="picker-th-badge">SEL</span>
                     <span class="picker-th-title">选择</span>
                 </th>
-                <th>
+                <th class="picker-col-sticky-3 picker-col-company">
                     <span class="picker-th-badge">CORP</span>
                     <span class="picker-th-title">所属公司</span>
                 </th>
@@ -616,7 +610,6 @@ class MonthlySettlementPicker {
             $("#monthly-table-tbody").html(`
                 <tr>
                     <td colspan="14" class="picker-empty-state">
-                        <div class="picker-empty-icon">📅</div>
                         <div class="picker-empty-text">当前暂无月结补录单据记录</div>
                     </td>
                 </tr>
@@ -637,11 +630,11 @@ class MonthlySettlementPicker {
 
             tbody_html += `
                 <tr>
-                    <td class="qifu-col-sticky-1 picker-col-idx">${idx + 1}</td>
-                    <td class="picker-col-chk">
+                    <td class="picker-col-sticky-1 picker-col-idx">${idx + 1}</td>
+                    <td class="picker-col-sticky-2 picker-col-chk">
                         <input type="checkbox" class="picker-row-checkbox" data-key="${r.pr_name}" ${is_checked} />
                     </td>
-                    <td>${frappe.utils.escape_html(r.company)}</td>
+                    <td class="picker-col-sticky-3 picker-col-company">${frappe.utils.escape_html(r.company)}</td>
                     <td>
                         <span class="picker-clickable-doc" data-doctype="Purchase Receipt" data-name="${r.pr_name}">
                             ${frappe.utils.escape_html(r.pr_name)}
@@ -720,17 +713,22 @@ class MonthlySettlementPicker {
         const self = this;
 
         const d = new frappe.ui.Dialog({
-            title: __("📅 新建月结入库补录 · 极速录单与自动过账"),
+            title: __("新建月结入库补录"),
             size: "extra-large",
+            static: true,
             fields: [
                 {
                     fieldtype: "HTML",
                     fieldname: "form_html",
                 },
             ],
-            primary_action_label: __("🚀 立即生成入库单并过账 (PO+PR)"),
+            primary_action_label: __("生成并过账"),
             primary_action: async function () {
                 await self.submit_create_monthly_receipt(d);
+            },
+            secondary_action_label: __("关闭"),
+            secondary_action: function () {
+                d.hide();
             },
         });
 
@@ -746,7 +744,7 @@ class MonthlySettlementPicker {
                 <div class="ashan-smart-section">
                     <div class="ashan-smart-section-header">
                         <div class="ashan-smart-section-title">
-                            <span>🏢 1. 月结业务上下文与基本信息</span>
+                            <span>月结业务信息</span>
                         </div>
                     </div>
                     <div class="ashan-smart-grid-4">
@@ -775,10 +773,10 @@ class MonthlySettlementPicker {
                 <div class="ashan-smart-section">
                     <div class="ashan-smart-section-header">
                         <div class="ashan-smart-section-title">
-                            <span>📑 2. 月结入库物料明细清单</span>
+                            <span>物料明细</span>
                         </div>
                         <div class="ashan-smart-section-tools">
-                            <button type="button" class="btn btn-default btn-xs" id="modal-monthly-add-row-btn">➕ 添加物料行</button>
+                            <button type="button" class="btn btn-default btn-xs" id="modal-monthly-add-row-btn">添加物料行</button>
                         </div>
                     </div>
 
@@ -787,18 +785,18 @@ class MonthlySettlementPicker {
                             <thead>
                                 <tr>
                                     <th class="ashan-col-w40">#</th>
-                                    <th class="ashan-col-w160">物料代码 <span class="req">*</span></th>
-                                    <th class="ashan-col-w180">物料名称</th>
-                                    <th class="ashan-col-w120">规格型号</th>
+                                    <th class="ashan-col-code">物料代码 <span class="req">*</span></th>
+                                    <th class="ashan-col-name">物料名称</th>
+                                    <th class="ashan-col-spec">规格</th>
                                     <th class="ashan-col-w70">单位</th>
-                                    <th class="ashan-col-w80">数量 <span class="req">*</span></th>
-                                    <th class="ashan-col-w90">单价 (元) <span class="req">*</span></th>
-                                    <th class="ashan-col-w70">税率(%)</th>
-                                    <th class="ashan-col-w95">金额 (元)</th>
-                                    <th class="ashan-col-w85">税额 (元)</th>
-                                    <th class="ashan-col-w105">价税合计</th>
-                                    <th class="ashan-col-w140">用途/备注</th>
-                                    <th class="ashan-col-w45">操作</th>
+                                    <th class="ashan-col-quantity">数量 <span class="req">*</span></th>
+                                    <th class="ashan-col-money">单价 <span class="req">*</span></th>
+                                    <th class="ashan-col-rate">税率</th>
+                                    <th class="ashan-col-money">不含税金额</th>
+                                    <th class="ashan-col-money">税额</th>
+                                    <th class="ashan-col-money">价税合计</th>
+                                    <th class="ashan-col-remarks">备注</th>
+                                    <th class="ashan-col-action">操作</th>
                                 </tr>
                             </thead>
                             <tbody id="modal-monthly-items-tbody"></tbody>
@@ -809,8 +807,8 @@ class MonthlySettlementPicker {
                 <!-- Section 3: Live Financial Summary & Discipline Bar -->
                 <div class="ashan-smart-summary-bar">
                     <div class="ashan-smart-tip-box">
-                        <span class="ashan-smart-tip-badge">🛡️ 财务纪律</span>
-                        <span>单价与金额严禁为 0。系统将全自动生成并过账关联采购订单 (PO) 与入库单 (PR)。</span>
+                        <span class="ashan-smart-tip-badge">财务纪律</span>
+                        <span>单价与金额不得为 0。系统将自动生成并过账关联采购订单与入库单。</span>
                     </div>
                     <div class="ashan-smart-kpi-group">
                         <div class="ashan-smart-kpi-item">
@@ -864,6 +862,10 @@ class MonthlySettlementPicker {
                     const msg = item_info.message;
                     $tr.find(".monthly-item-name").val(msg.item_name || code);
                     $tr.find(".monthly-item-uom").val(msg.stock_uom || "Nos");
+                    const $spec = $tr.find(".monthly-item-spec");
+                    if (!$spec.val().trim()) {
+                        $spec.val(msg.description || "");
+                    }
                     if (flt(msg.standard_rate) > 0 && flt($tr.find(".monthly-item-rate").val()) === 0) {
                         $tr.find(".monthly-item-rate").val(flt(msg.standard_rate).toFixed(2));
                     }
@@ -890,7 +892,7 @@ class MonthlySettlementPicker {
                 <td class="ashan-smart-cell-idx">${row_idx}</td>
                 <td><input type="text" class="ashan-smart-cell-input monthly-item-code" placeholder="输入物料代码..." /></td>
                 <td><input type="text" class="ashan-smart-cell-input monthly-item-name" placeholder="物料名称" /></td>
-                <td><input type="text" class="ashan-smart-cell-input monthly-item-spec" placeholder="规格型号" /></td>
+                <td><input type="text" class="ashan-smart-cell-input monthly-item-spec" placeholder="规格" /></td>
                 <td><input type="text" class="ashan-smart-cell-input monthly-item-uom text-center" value="Nos" /></td>
                 <td><input type="number" class="ashan-smart-cell-input monthly-item-qty text-right font-bold" value="1" min="0.001" step="any" /></td>
                 <td><input type="number" class="ashan-smart-cell-input monthly-item-rate text-right font-bold" value="0.00" min="0.01" step="any" /></td>
@@ -898,7 +900,7 @@ class MonthlySettlementPicker {
                 <td><input type="number" class="ashan-smart-cell-input monthly-item-amt text-right font-bold" value="0.00" readonly /></td>
                 <td><input type="number" class="ashan-smart-cell-input monthly-item-tax-amt text-right" value="0.00" readonly /></td>
                 <td><input type="number" class="ashan-smart-cell-input monthly-item-total text-right font-bold text-success" value="0.00" readonly /></td>
-                <td><input type="text" class="ashan-smart-cell-input monthly-item-remarks" placeholder="备注用途..." /></td>
+                <td><input type="text" class="ashan-smart-cell-input monthly-item-remarks" placeholder="备注" /></td>
                 <td class="text-center">
                     <button type="button" class="btn btn-xs btn-default monthly-row-delete-btn ashan-smart-btn-del" title="删除此行">✕</button>
                 </td>
@@ -1016,7 +1018,7 @@ class MonthlySettlementPicker {
             if (r.message && r.message.success) {
                 dialog.hide();
                 frappe.show_alert({
-                    message: `🎉 成功生成月结入库单！入库单：${r.message.pr_name}`,
+                    message: `成功生成月结入库单！入库单：${r.message.pr_name}`,
                     indicator: "green",
                 }, 5);
 
@@ -1090,7 +1092,7 @@ class MonthlySettlementPicker {
                                     <th>#</th>
                                     <th>物料代码</th>
                                     <th>物料名称</th>
-                                    <th>规格型号</th>
+                                    <th>规格</th>
                                     <th>单位</th>
                                     <th class="text-right">数量</th>
                                     <th class="text-right">单价</th>
@@ -1098,7 +1100,7 @@ class MonthlySettlementPicker {
                                     <th class="text-right">税率</th>
                                     <th class="text-right">税额</th>
                                     <th class="text-right">价税合计</th>
-                                    <th>备注/用途</th>
+                                    <th>备注</th>
                                 </tr>
                             </thead>
                             <tbody>${items_tbody}</tbody>

@@ -4,7 +4,7 @@
 frappe.pages["procurement-order-picker"].on_page_load = function (wrapper) {
     const page = frappe.ui.make_app_page({
         parent: wrapper,
-        title: __("采购全流程选单中心"),
+        title: __("采购全流程工作台"),
         single_column: true,
     });
     new ProcurementOrderPickerCenter(page);
@@ -49,10 +49,10 @@ class ProcurementOrderPickerCenter {
                 id: "mr_to_po",
                 name: "采购订货",
                 banner_title: "当前：采购订货",
-                banner_desc: "勾选待订需求明细或单号，系统自动按建议供应商智能拆单合并生成正式采购订单 (Purchase Order)。",
+                banner_desc: "勾选待需求明细或单号，系统自动按建议供应商智能拆单合并生成正式采购订单 (Purchase Order)。",
                 sub_label: "待采购",
                 icon: "🛒",
-                btn_label: "🚀 生成采购订单",
+                btn_label: "生成采购订单",
             },
             po_to_pr: {
                 id: "po_to_pr",
@@ -61,7 +61,7 @@ class ProcurementOrderPickerCenter {
                 banner_desc: "勾选待收货订单明细，弹窗核对或调整实收数量与仓库，生成并正式发布采购入库单 (Purchase Receipt)。",
                 sub_label: "待入库",
                 icon: "📦",
-                btn_label: "🚀 生成采购入库单",
+                btn_label: "生成采购入库单",
             },
             pr_to_pi: {
                 id: "pr_to_pi",
@@ -70,7 +70,7 @@ class ProcurementOrderPickerCenter {
                 banner_desc: "勾选已入库物料明细，弹窗录入发票号码、日期与税额，生成并正式发布采购发票 (Purchase Invoice)。",
                 sub_label: "待开票",
                 icon: "🧾",
-                btn_label: "🚀 生成采购发票",
+                btn_label: "生成采购发票",
             },
             pi_to_rr: {
                 id: "pi_to_rr",
@@ -79,7 +79,7 @@ class ProcurementOrderPickerCenter {
                 banner_desc: "勾选待报销发票明细，弹窗核对报销人与金额，生成并正式发布报销付款申请 (Reimbursement Request)。",
                 sub_label: "待报销",
                 icon: "💰",
-                btn_label: "🚀 生成报销申请单",
+                btn_label: "生成报销申请单",
             },
         };
 
@@ -100,13 +100,13 @@ class ProcurementOrderPickerCenter {
                 <!-- Top Header & Company Dropdown -->
                 <div class="picker-top-bar">
                     <div class="picker-title-group">
-                        <h2>🛒 采购全流程选单生单中心</h2>
-                        <div class="picker-subtitle">常规采购</div>
+                        <h2>采购全流程工作台</h2>
+                        <div class="picker-subtitle">采购申请、订货、入库、开票与报销付款</div>
                     </div>
                     <div class="picker-company-group">
                         <label class="picker-company-label" for="picker-company-select">所属公司:</label>
                         <select class="picker-company-select" id="picker-company-select">
-                            <option value="All">🌐 全部公司 (汇聚视图)</option>
+                            <option value="All">全部公司</option>
                         </select>
                     </div>
                 </div>
@@ -160,7 +160,7 @@ class ProcurementOrderPickerCenter {
         const $select = $("#picker-company-select");
         $select.empty();
 
-        $select.append(`<option value="All" ${this.active_company === 'All' ? 'selected' : ''}>🌐 全部公司 (汇聚视图)</option>`);
+        $select.append(`<option value="All" ${this.active_company === 'All' ? 'selected' : ''}>全部公司</option>`);
 
         this.companies.forEach((comp) => {
             const is_selected = this.active_company === comp;
@@ -420,7 +420,6 @@ class ProcurementOrderPickerCenter {
                 <div class="picker-kpi-card ${is_active ? 'active' : ''}" data-stage="${key}">
                     <div class="picker-kpi-header">
                         <div class="picker-kpi-title">${cfg.name}</div>
-                        <div class="picker-kpi-icon">${cfg.icon}</div>
                     </div>
                     <div class="picker-kpi-body">
                         <div class="picker-kpi-number">${num_text}</div>
@@ -466,9 +465,9 @@ class ProcurementOrderPickerCenter {
                 <div class="picker-filter-group">
                     <label>采购状态:</label>
                     <div class="picker-status-btn-group" data-filter="match_status">
-                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">🟡 仅待订购需求</button>
-                        <button type="button" class="picker-status-btn ${ms === 'completed' ? 'active' : ''}" data-value="completed">🟢 仅已全部订购</button>
-                        <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">🌐 全部申请单据</button>
+                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">待提申请</button>
+                        <button type="button" class="picker-status-btn ${ms === 'completed' ? 'active' : ''}" data-value="completed">已提申请</button>
+                        <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">全部采购申请</button>
                     </div>
                 </div>
                 <div class="picker-filter-group">
@@ -477,7 +476,7 @@ class ProcurementOrderPickerCenter {
                 </div>
                 <div class="picker-filter-group">
                     <label>物料编码/名称:</label>
-                    <input type="text" class="picker-filter-input" data-filter="item_code" placeholder="物料代码/名称..." value="${this.filters[stage].item_code || ''}">
+                    <input type="text" class="picker-filter-input" data-filter="item_code" placeholder="搜索物料..." value="${this.filters[stage].item_code || ''}">
                 </div>
             `;
         } else if (stage === "mr_to_po") {
@@ -486,9 +485,9 @@ class ProcurementOrderPickerCenter {
                 <div class="picker-filter-group">
                     <label>关联状态:</label>
                     <div class="picker-status-btn-group" data-filter="match_status">
-                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">🟡 仅待订需求</button>
-                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">🟢 仅已订需求</button>
-                        <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">🌐 全部需求单据</button>
+                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">待采购</button>
+                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">已订购</button>
+                        <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">全部采购申请</button>
                     </div>
                 </div>
                 <div class="picker-filter-group">
@@ -516,9 +515,9 @@ class ProcurementOrderPickerCenter {
                 <div class="picker-filter-group">
                     <label>关联状态:</label>
                     <div class="picker-status-btn-group" data-filter="match_status">
-                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">🟡 仅待收订单</button>
-                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">🟢 仅已收订单</button>
-                        <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">🌐 全部采购订单</button>
+                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">待入库</button>
+                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">已入库</button>
+                        <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">全部采购订单</button>
                     </div>
                 </div>
                 <div class="picker-filter-group">
@@ -544,9 +543,9 @@ class ProcurementOrderPickerCenter {
                 <div class="picker-filter-group">
                     <label>关联状态:</label>
                     <div class="picker-status-btn-group" data-filter="match_status">
-                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">🟡 仅待开票</button>
-                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">🟢 仅已开票</button>
-                        <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">🌐 全部入库单据</button>
+                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">待开票</button>
+                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">已开票</button>
+                        <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">全部采购入库单</button>
                     </div>
                 </div>
                 <div class="picker-filter-group">
@@ -572,9 +571,9 @@ class ProcurementOrderPickerCenter {
                 <div class="picker-filter-group">
                     <label>关联状态:</label>
                     <div class="picker-status-btn-group" data-filter="match_status">
-                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">🟡 仅待报销发票</button>
-                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">🟢 仅已报销发票</button>
-                        <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">🌐 全部发票单据</button>
+                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">待报销</button>
+                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">已生成报销</button>
+                        <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">全部采购发票</button>
                     </div>
                 </div>
                 <div class="picker-filter-group">
@@ -627,6 +626,8 @@ class ProcurementOrderPickerCenter {
     async load_table_data() {
         const stage = this.active_stage;
         const mode = this.view_modes[stage] || "detail";
+        const request_id = (this._table_request_id || 0) + 1;
+        this._table_request_id = request_id;
         let method = "";
 
         if (stage === "item_to_mr") {
@@ -659,6 +660,7 @@ class ProcurementOrderPickerCenter {
                     filters: this.filters[stage],
                 },
             });
+            if (request_id !== this._table_request_id) return;
             if (r && r.message) {
                 this.table_data = r.message.rows || [];
                 this.selected_map.clear();
@@ -732,12 +734,12 @@ class ProcurementOrderPickerCenter {
                 ths += `
                     <th>申请单号</th>
                     <th>物料代码</th>
-                    <th>物料名称/规格</th>
+                    <th>物料信息</th>
                     <th>物料分组</th>
                     <th>单位</th>
                     <th>申请数</th>
                     <th>参考单价</th>
-                    <th>用途/规格备注</th>
+                    <th>备注</th>
                 `;
             }
         } else if (stage === "mr_to_po") {
@@ -751,7 +753,7 @@ class ProcurementOrderPickerCenter {
                     <th>待订总数</th>
                     <th>预估金额</th>
                     <th>建议供应商</th>
-                    <th>🔗 关联采购订单</th>
+                    <th>关联采购订单</th>
                     <th>制单人</th>
                 `;
             } else {
@@ -759,7 +761,7 @@ class ProcurementOrderPickerCenter {
                     <th>采购申请单号</th>
                     <th>期望到货日</th>
                     <th>物料代码</th>
-                    <th>物料名称/规格</th>
+                    <th>物料信息</th>
                     <th>单位</th>
                     <th>申请总数</th>
                     <th>已订数</th>
@@ -770,7 +772,7 @@ class ProcurementOrderPickerCenter {
                     <th>含税总价</th>
                     <th>备注</th>
                     <th>建议供应商</th>
-                    <th>🔗 关联采购订单</th>
+                    <th>关联采购订单</th>
                 `;
             }
         } else if (stage === "po_to_pr") {
@@ -785,21 +787,21 @@ class ProcurementOrderPickerCenter {
                     <th>待收总数</th>
                     <th>待收金额</th>
                     <th>订单总额</th>
-                    <th>🔗 关联入库单</th>
+                    <th>关联入库单</th>
                 `;
             } else {
                 ths += `
                     <th>供应商</th>
                     <th>采购订单号</th>
                     <th>订单日期</th>
-                    <th>物料代码/名称</th>
+                    <th>物料</th>
                     <th>收货仓库</th>
                     <th>订购总数</th>
                     <th>已收数</th>
                     <th>未收数量</th>
                     <th>采购单价</th>
                     <th>待收金额</th>
-                    <th>🔗 关联入库单</th>
+                    <th>关联入库单</th>
                 `;
             }
         } else if (stage === "pr_to_pi") {
@@ -814,14 +816,14 @@ class ProcurementOrderPickerCenter {
                     <th>待开票金额</th>
                     <th>入库单总额</th>
                     <th>关联订单</th>
-                    <th>🔗 关联采购发票</th>
+                    <th>关联采购发票</th>
                 `;
             } else {
                 ths += `
                     <th>供应商</th>
                     <th>采购入库单号</th>
                     <th>过账日期</th>
-                    <th>物料代码/名称</th>
+                    <th>物料</th>
                     <th>单位</th>
                     <th>实收总数</th>
                     <th>已开票数</th>
@@ -829,7 +831,7 @@ class ProcurementOrderPickerCenter {
                     <th>入库单价</th>
                     <th>待开票金额</th>
                     <th>关联订单</th>
-                    <th>🔗 关联采购发票</th>
+                    <th>关联采购发票</th>
                 `;
             }
         } else if (stage === "pi_to_rr") {
@@ -837,7 +839,7 @@ class ProcurementOrderPickerCenter {
                 ths += `
                     <th>采购发票号</th>
                     <th>供应商</th>
-                    <th>发票代码/号码</th>
+                    <th>发票号码</th>
                     <th>票据类型</th>
                     <th>单据明细</th>
                     <th>开票日期</th>
@@ -845,7 +847,7 @@ class ProcurementOrderPickerCenter {
                     <th>发票总额</th>
                     <th>已付金额</th>
                     <th>待报销余额</th>
-                    <th>🔗 关联报销单</th>
+                    <th>关联报销单</th>
                 `;
             } else {
                 ths += `
@@ -859,7 +861,7 @@ class ProcurementOrderPickerCenter {
                     <th>明细金额</th>
                     <th>开票日期</th>
                     <th>待报销余额</th>
-                    <th>🔗 关联报销单</th>
+                    <th>关联报销单</th>
                 `;
             }
         }
@@ -877,7 +879,7 @@ class ProcurementOrderPickerCenter {
                 <tr>
                     <td colspan="${col_span}">
                         <div class="picker-empty-state">
-                            <div class="picker-empty-icon">🎉</div>
+                            <div class="picker-empty-icon">无记录</div>
                             <div>当前没有符合条件的记录</div>
                         </div>
                     </td>
@@ -905,7 +907,7 @@ class ProcurementOrderPickerCenter {
             const dt = slug_map[slug] || "Purchase Order";
             const names = names_str.split(/[、,]/).map(s => s.trim()).filter(Boolean);
             if (!names.length) return `<span class="picker-no-link">-</span>`;
-            return names.map(n => `<span class="picker-linked-badge picker-doc-clickable-link" data-doctype="${dt}" data-name="${frappe.utils.escape_html(n)}" title="点击弹窗查看单据详情与操作">🔗 ${frappe.utils.escape_html(n)}</span>`).join(" ");
+            return names.map(n => `<span class="picker-linked-badge picker-doc-clickable-link" data-doctype="${dt}" data-name="${frappe.utils.escape_html(n)}" title="点击弹窗查看单据详情与操作">${frappe.utils.escape_html(n)}</span>`).join(" ");
         };
 
         this.table_data.forEach((r, idx) => {
@@ -952,7 +954,7 @@ class ProcurementOrderPickerCenter {
             if (stage === "item_to_mr") {
                 if (mode === "doc") {
                     tr_html += `
-                        <td><span class="picker-linked-badge picker-doc-clickable-link" data-doctype="Material Request" data-name="${r.mr_name}" title="点击弹窗查看单据详情与操作">📋 ${frappe.utils.escape_html(r.mr_name)}</span></td>
+                        <td><span class="picker-linked-badge picker-doc-clickable-link" data-doctype="Material Request" data-name="${r.mr_name}" title="点击弹窗查看单据详情与操作">${frappe.utils.escape_html(r.mr_name)}</span></td>
                         <td>${r.transaction_date || "-"}</td>
                         <td>${frappe.utils.escape_html(r.department || "-")}</td>
                         <td>${doc_badges(r.custom_doc_details)}</td>
@@ -963,7 +965,7 @@ class ProcurementOrderPickerCenter {
                     `;
                 } else {
                     tr_html += `
-                        <td><span class="picker-linked-badge picker-doc-clickable-link" data-doctype="Material Request" data-name="${r.mr_name}" title="点击弹窗查看单据详情与操作">📋 ${frappe.utils.escape_html(r.mr_name)}</span></td>
+                        <td><span class="picker-linked-badge picker-doc-clickable-link" data-doctype="Material Request" data-name="${r.mr_name}" title="点击弹窗查看单据详情与操作">${frappe.utils.escape_html(r.mr_name)}</span></td>
                         <td><strong>${frappe.utils.escape_html(r.item_code)}</strong></td>
                         <td>${frappe.utils.escape_html(r.item_name || r.item_code)}</td>
                         <td>${frappe.utils.escape_html(r.item_group || "")}</td>
@@ -1238,7 +1240,7 @@ class ProcurementOrderPickerCenter {
     update_company_lock_ui(is_locking = false) {
         if (is_locking && this.locked_company && this.active_company === "All") {
             frappe.show_alert({
-                message: __("💡 已按【{0}】锁定选单生单范围（已自动隐藏其他公司明细，取消勾选后恢复全量视图）", [frappe.utils.escape_html(this.locked_company)]),
+                message: __("已按【{0}】锁定选单生单范围（已自动隐藏其他公司明细，取消勾选后恢复全量视图）", [frappe.utils.escape_html(this.locked_company)]),
                 indicator: "orange"
             }, 5);
         }
@@ -1298,8 +1300,8 @@ class ProcurementOrderPickerCenter {
 
         const view_switch_html = `
             <div class="picker-view-switch-group">
-                <button class="picker-view-btn ${mode === 'detail' ? 'active' : ''}" data-mode="detail">📑 明细视图</button>
-                <button class="picker-view-btn ${mode === 'doc' ? 'active' : ''}" data-mode="doc">📦 单号视图</button>
+                <button class="picker-view-btn ${mode === 'detail' ? 'active' : ''}" data-mode="detail">明细视图</button>
+                <button class="picker-view-btn ${mode === 'doc' ? 'active' : ''}" data-mode="doc">单号视图</button>
             </div>
         `;
 
@@ -1312,9 +1314,8 @@ class ProcurementOrderPickerCenter {
                 <div class="picker-btn-group">
                     <button class="picker-btn-secondary" id="picker-select-all-btn">全选本页</button>
                     <button class="picker-btn-secondary" id="picker-clear-sel-btn">清空选择</button>
-                    <button class="picker-btn-secondary" id="picker-batch-delete-btn" ${sel_count === 0 ? 'disabled' : ''}>🗑️ 删除所选</button>
+                    <button class="picker-btn-secondary" id="picker-batch-delete-btn" ${sel_count === 0 ? 'disabled' : ''}>删除所选</button>
                     <button class="picker-btn-create-mr" id="picker-create-mr-btn">
-                        <span>➕</span>
                         <span>新建物料申请单</span>
                     </button>
                 </div>
@@ -1335,7 +1336,7 @@ class ProcurementOrderPickerCenter {
             <div class="picker-btn-group">
                 <button class="picker-btn-secondary" id="picker-select-all-btn">全选本页</button>
                 <button class="picker-btn-secondary" id="picker-clear-sel-btn">清空选择</button>
-                <button class="picker-btn-secondary" id="picker-batch-delete-btn" ${sel_count === 0 ? 'disabled' : ''}>🗑️ 删除所选</button>
+                <button class="picker-btn-secondary" id="picker-batch-delete-btn" ${sel_count === 0 ? 'disabled' : ''}>删除所选</button>
                 <button class="picker-btn-primary" id="picker-submit-btn" ${sel_count === 0 ? 'disabled' : ''}>
                     ${cfg.btn_label}${target_comp_suffix}
                 </button>
@@ -1548,7 +1549,7 @@ class ProcurementOrderPickerCenter {
                             <input type="text" class="modal-input-name modal-input-readonly" readonly tabindex="-1" placeholder="自动带出物料名称..." value="${frappe.utils.escape_html(row.item_name || '')}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-spec modal-input-readonly" readonly tabindex="-1" placeholder="自动带出规格型号..." value="${frappe.utils.escape_html(row.spec || '')}">
+                            <input type="text" class="modal-input-spec modal-input-readonly" readonly tabindex="-1" placeholder="自动带出规格..." value="${frappe.utils.escape_html(row.spec || '')}">
                         </td>
                         <td>
                             <input type="number" step="any" min="0" class="modal-input-qty" value="${row.qty}">
@@ -1645,7 +1646,7 @@ class ProcurementOrderPickerCenter {
                     `,
                 },
             ],
-            primary_action_label: __("🚀 正式提交物料申请单"),
+            primary_action_label: __("正式提交物料申请单"),
             primary_action: async () => {
                 const vals = d.get_values();
                 if (!vals) return;
@@ -1671,7 +1672,7 @@ class ProcurementOrderPickerCenter {
                         d.hide();
                         const mr_name = res.message.name;
                         frappe.show_alert({
-                            message: __("🎉 成功创建并正式发布采购申请单：<b>{0}</b>", [mr_name]),
+                            message: __("成功创建并正式发布采购申请单：<b>{0}</b>", [mr_name]),
                             indicator: "green",
                         }, 6);
                         this.refresh_all();
@@ -1903,7 +1904,7 @@ class ProcurementOrderPickerCenter {
             .join("");
 
         const d = new frappe.ui.Dialog({
-            title: __("🎉 成功生成 {0} 张{1}", [docs_created.length, doc_title]),
+            title: __("成功生成 {0} 张{1}", [docs_created.length, doc_title]),
             fields: [
                 {
                     fieldtype: "HTML",
@@ -1918,7 +1919,7 @@ class ProcurementOrderPickerCenter {
                     `,
                 },
             ],
-            primary_action_label: __("🔍 就地查看第一张单据"),
+            primary_action_label: __("查看第一张单据"),
             primary_action: () => {
                 d.hide();
                 self.show_doc_detail_modal(dt_name, docs_created[0].name);
@@ -2046,7 +2047,7 @@ class ProcurementOrderPickerCenter {
 
         const flow_section_html = (upstream_html || downstream_html) ? `
             <div class="picker-doc-flow-card">
-                <div class="picker-doc-flow-title">🔗 上下游业务全链路追溯（点击可就地平滑穿透查看）</div>
+                <div class="picker-doc-flow-title">上下游业务全链路追溯（点击可就地平滑穿透查看）</div>
                 <div class="picker-doc-flow-list">
                     ${upstream_html}
                     ${downstream_html}
@@ -2054,7 +2055,7 @@ class ProcurementOrderPickerCenter {
             </div>
         ` : `
             <div class="picker-doc-flow-card">
-                <div class="picker-doc-flow-title picker-flow-empty-hint">🔗 当前单据无关联上下游单据（独立单据）</div>
+                <div class="picker-doc-flow-title picker-flow-empty-hint">当前单据无关联上下游单据（独立单据）</div>
             </div>
         `;
 
@@ -2134,7 +2135,7 @@ class ProcurementOrderPickerCenter {
                     <div>
                         ${doc.can_delete ? `
                             <button class="picker-btn-danger-del" id="picker-modal-del-btn">
-                                🗑️ 删除单据
+                                删除单据
                             </button>
                         ` : `
                             <span class="picker-no-delete-perm-hint">(当前账号无删除权限)</span>
@@ -2147,7 +2148,7 @@ class ProcurementOrderPickerCenter {
                             </button>
                         ` : ''}
                         <button class="picker-btn-action-view" id="picker-modal-print-btn">
-                            🖨️ 打印单据
+                            打印单据
                         </button>
                         <button class="picker-btn-action-view" id="picker-modal-goto-form-btn">
                             ✏️ 完整编辑页面
@@ -2158,7 +2159,7 @@ class ProcurementOrderPickerCenter {
         `;
 
         const d = new frappe.ui.Dialog({
-            title: __("🔍 单据详情与操作 · {0} {1}", [dt_label, doc.name]),
+            title: __("单据详情与操作 · {0} {1}", [dt_label, doc.name]),
             fields: [
                 {
                     fieldtype: "HTML",
@@ -2363,7 +2364,7 @@ class ProcurementOrderPickerCenter {
                             <input type="text" class="modal-input-name modal-input-readonly" readonly tabindex="-1" placeholder="自动带出物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-spec modal-input-readonly" readonly tabindex="-1" placeholder="自动带出规格型号..." value="${frappe.utils.escape_html(r.spec || '')}">
+                            <input type="text" class="modal-input-spec modal-input-readonly" readonly tabindex="-1" placeholder="自动带出规格..." value="${frappe.utils.escape_html(r.spec || '')}">
                         </td>
                         <td>
                             <input type="number" step="any" min="0" class="modal-input-qty" value="${r.qty}">
@@ -2460,7 +2461,7 @@ class ProcurementOrderPickerCenter {
                     `,
                 },
             ],
-            primary_action_label: __("💾 保存修改并正式发布"),
+            primary_action_label: __("保存修改并正式发布"),
             primary_action: async () => {
                 const vals = d.get_values();
                 if (!vals) return;
@@ -2487,7 +2488,7 @@ class ProcurementOrderPickerCenter {
                         d.hide();
                         if (parent_dialog) parent_dialog.hide();
                         frappe.show_alert({
-                            message: __("🎉 成功更新并正式发布采购申请单：{0}", [doc.name]),
+                            message: __("成功更新并正式发布采购申请单：{0}", [doc.name]),
                             indicator: "green",
                         });
                         this.refresh_all();
@@ -2798,7 +2799,7 @@ class ProcurementOrderPickerCenter {
                             <input type="text" class="modal-input-name" placeholder="物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-spec" placeholder="规格型号..." value="${frappe.utils.escape_html(r.spec || '')}">
+                            <input type="text" class="modal-input-spec" placeholder="规格..." value="${frappe.utils.escape_html(r.spec || '')}">
                         </td>
                         <td>
                             <input type="number" step="any" min="0.0001" class="modal-input-qty" value="${r.qty}">
@@ -2901,7 +2902,7 @@ class ProcurementOrderPickerCenter {
                     `,
                 },
             ],
-            primary_action_label: __("💾 保存修改并正式发布"),
+            primary_action_label: __("保存修改并正式发布"),
             primary_action: async () => {
                 const vals = d.get_values();
                 if (!vals) return;
@@ -2928,7 +2929,7 @@ class ProcurementOrderPickerCenter {
                         d.hide();
                         if (parent_dialog) parent_dialog.hide();
                         frappe.show_alert({
-                            message: __("🎉 成功更新并正式发布采购订单：{0}", [doc.name]),
+                            message: __("成功更新并正式发布采购订单：{0}", [doc.name]),
                             indicator: "green",
                         });
                         this.refresh_all();
@@ -3244,7 +3245,7 @@ class ProcurementOrderPickerCenter {
                             <input type="text" class="modal-input-name modal-input-readonly" readonly tabindex="-1" placeholder="物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-spec modal-input-readonly" readonly tabindex="-1" placeholder="规格型号..." value="${frappe.utils.escape_html(r.spec || '')}">
+                            <input type="text" class="modal-input-spec modal-input-readonly" readonly tabindex="-1" placeholder="规格..." value="${frappe.utils.escape_html(r.spec || '')}">
                         </td>
                         <td>
                             <input type="number" step="any" min="0.0001" class="modal-input-qty" value="${r.qty}">
@@ -3279,7 +3280,7 @@ class ProcurementOrderPickerCenter {
         };
 
         const d = new frappe.ui.Dialog({
-            title: __("🚀 新建采购订单 · 选单创建与明细核算"),
+            title: __("新建采购订单 · 选单创建与明细核算"),
             fields: [
                 {
                     fieldtype: "Select",
@@ -3348,7 +3349,7 @@ class ProcurementOrderPickerCenter {
                     `,
                 },
             ],
-            primary_action_label: __("🚀 立即生成并正式提交采购订单"),
+            primary_action_label: __("立即生成并正式提交采购订单"),
             primary_action: async () => {
                 const vals = d.get_values();
                 if (!vals) return;
@@ -3387,7 +3388,7 @@ class ProcurementOrderPickerCenter {
                         const order_names = (res.message.orders || []).map((o) => o.name).filter(Boolean);
                         const first_po = order_names[0];
                         frappe.show_alert({
-                            message: __("🎉 成功生成并正式提交采购订单 <b>{0}</b>{1}", [
+                            message: __("成功生成并正式提交采购订单 <b>{0}</b>{1}", [
                                 first_po || "",
                                 order_names.length > 1 ? ` 等共 ${order_names.length} 张单据` : "",
                             ]),
@@ -3707,7 +3708,7 @@ class ProcurementOrderPickerCenter {
                             <input type="text" class="modal-input-name modal-input-readonly" readonly tabindex="-1" placeholder="物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-spec modal-input-readonly" readonly tabindex="-1" placeholder="规格型号..." value="${frappe.utils.escape_html(r.spec || '')}">
+                            <input type="text" class="modal-input-spec modal-input-readonly" readonly tabindex="-1" placeholder="规格..." value="${frappe.utils.escape_html(r.spec || '')}">
                         </td>
                         <td>
                             <input type="number" step="any" min="0.0001" class="modal-input-qty" value="${r.qty}">
@@ -3742,7 +3743,7 @@ class ProcurementOrderPickerCenter {
         };
 
         const d = new frappe.ui.Dialog({
-            title: __("📦 新建采购入库单 · 选单创建与明细核算"),
+            title: __("新建采购入库单 · 选单创建与明细核算"),
             fields: [
                 {
                     fieldtype: "Select",
@@ -3819,7 +3820,7 @@ class ProcurementOrderPickerCenter {
                     `,
                 },
             ],
-            primary_action_label: __("🚀 立即生成并正式提交入库单"),
+            primary_action_label: __("立即生成并正式提交入库单"),
             primary_action: async () => {
                 const vals = d.get_values();
                 if (!vals) return;
@@ -3858,7 +3859,7 @@ class ProcurementOrderPickerCenter {
                         const receipt_names = (res.message.receipts || []).map((r) => r.name).filter(Boolean);
                         const first_pr = receipt_names[0];
                         frappe.show_alert({
-                            message: __("🎉 成功生成并正式提交采购入库单 <b>{0}</b>{1}", [
+                            message: __("成功生成并正式提交采购入库单 <b>{0}</b>{1}", [
                                 first_pr || "",
                                 receipt_names.length > 1 ? ` 等共 ${receipt_names.length} 张单据` : "",
                             ]),
@@ -4056,7 +4057,7 @@ class ProcurementOrderPickerCenter {
                             <input type="text" class="modal-input-name modal-input-readonly" readonly tabindex="-1" placeholder="物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-spec modal-input-readonly" readonly tabindex="-1" placeholder="规格型号..." value="${frappe.utils.escape_html(r.spec || '')}">
+                            <input type="text" class="modal-input-spec modal-input-readonly" readonly tabindex="-1" placeholder="规格..." value="${frappe.utils.escape_html(r.spec || '')}">
                         </td>
                         <td>
                             <input type="number" step="any" min="0.0001" class="modal-input-qty" value="${r.qty}">
@@ -4091,7 +4092,7 @@ class ProcurementOrderPickerCenter {
         };
 
         const d = new frappe.ui.Dialog({
-            title: __("🧾 新建采购发票 · 选单创建与明细核算"),
+            title: __("新建采购发票 · 选单创建与明细核算"),
             fields: [
                 {
                     fieldtype: "Select",
@@ -4174,7 +4175,7 @@ class ProcurementOrderPickerCenter {
                     `,
                 },
             ],
-            primary_action_label: __("🚀 立即生成并正式提交采购发票"),
+            primary_action_label: __("立即生成并正式提交采购发票"),
             primary_action: async () => {
                 const vals = d.get_values();
                 if (!vals) return;
@@ -4230,7 +4231,7 @@ class ProcurementOrderPickerCenter {
                         const invoice_names = (res.message.invoices || []).map((i) => i.name).filter(Boolean);
                         const first_pi = invoice_names[0];
                         frappe.show_alert({
-                            message: __("🎉 成功生成并正式提交采购发票 <b>{0}</b>{1}", [
+                            message: __("成功生成并正式提交采购发票 <b>{0}</b>{1}", [
                                 first_pi || "",
                                 invoice_names.length > 1 ? ` 等共 ${invoice_names.length} 张单据` : "",
                             ]),
@@ -4306,7 +4307,7 @@ class ProcurementOrderPickerCenter {
         const total_claim = selected_items.reduce((s, it) => s + flt(it.this_amount || it.net_available_amount || it.outstanding_amount), 0);
 
         const d = new frappe.ui.Dialog({
-            title: __("💰 新建报销付款申请 · 选单创建与明细核算"),
+            title: __("新建报销付款申请 · 选单创建与明细核算"),
             fields: [
                 {
                     fieldtype: "Select",
@@ -4374,7 +4375,7 @@ class ProcurementOrderPickerCenter {
                     `,
                 },
             ],
-            primary_action_label: __("🚀 立即生成并正式提交报销申请"),
+            primary_action_label: __("立即生成并正式提交报销申请"),
             primary_action: async () => {
                 const vals = d.get_values();
                 if (!vals) return;
@@ -4395,7 +4396,7 @@ class ProcurementOrderPickerCenter {
                         d.hide();
                         const rr_name = res.message.reimbursement_name;
                         frappe.show_alert({
-                            message: __("🎉 成功生成并正式提交报销付款申请 <b>{0}</b>！", [rr_name]),
+                            message: __("成功生成并正式提交报销付款申请 <b>{0}</b>！", [rr_name]),
                             indicator: "green",
                         }, 6);
                         self.refresh_all();
@@ -4427,7 +4428,7 @@ class ProcurementOrderPickerCenter {
 
             if (!preview.can_delete) {
                 frappe.msgprint({
-                    title: __("🚨 权限不足，无法删除"),
+                    title: __("权限不足，无法删除"),
                     indicator: "red",
                     message: __("您缺少以下关联单据的删除或撤单权限：<br><br>") + preview.missing_permissions.map(p => `• <strong>${frappe.utils.escape_html(p)}</strong>`).join("<br>")
                 });
@@ -4477,23 +4478,23 @@ class ProcurementOrderPickerCenter {
                     options: `
                         <div class="picker-cascade-box">
                             <div class="picker-cascade-warning-alert">
-                                <strong>🚨 警告：检测到该单据已生成下游关联业务单据！</strong><br>
+                                <strong>警告：检测到该单据已生成下游关联业务单据！</strong><br>
                                 若继续删除，系统将按照业务依赖严格逆序（最下游 ➔ 最上游）依次执行<strong>撤销提交、还原库存/已订数量、彻底删除单据</strong>。
                             </div>
                             <div class="picker-cascade-target-heading">
-                                📋 将连带逆序删除以下全部 ${preview.cascade_count} 张单据：
+                                将连带逆序删除以下全部 ${preview.cascade_count} 张单据：
                             </div>
                             <ul class="picker-cascade-tree-list">
                                 ${tree_items_html}
                             </ul>
                             <div class="picker-cascade-security-hint">
-                                🛡️ 系统已完成全链路权限校验：当前用户对上述全部单据均拥有删除与撤单权限。
+                                系统已完成全链路权限校验：当前用户对上述全部单据均拥有删除与撤单权限。
                             </div>
                         </div>
                     `,
                 }
             ],
-            primary_action_label: __("🚨 确认连带删除全部 {0} 张单据", [preview.cascade_count]),
+            primary_action_label: __("确认连带删除全部 {0} 张单据", [preview.cascade_count]),
             primary_action: async () => {
                 cascade_dialog.hide();
                 await self.execute_document_deletion(preview.target_doc.doctype, preview.target_doc.name, true, parent_dialog);

@@ -11,7 +11,7 @@
   "istable": 0,
   "module": "Ashan CN Procurement",
   "page_name": "monthly-settlement-picker",
-  "title": "月结补录选单生单中心",
+  "title": "月结入库补录",
   "standard": "Yes",
   "doctype": "Page",
   "roles": [
