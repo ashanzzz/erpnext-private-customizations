@@ -582,8 +582,7 @@ def _ensure_item(item_name: str, uom: str = "个", spec: str = "") -> str:
     return item_doc.name
 
 
-@frappe.whitelist(methods=["POST"])
-def create_manual_multi_invoice_reimbursement(
+def _create_manual_multi_invoice_reimbursement_inner(
     company: str,
     posting_date: str | None = None,
     title: str | None = None,
@@ -654,7 +653,7 @@ def create_manual_multi_invoice_reimbursement(
             rate = flt(row.get("rate") or 0.0)
             tax_rate = flt(row.get("tax_rate") or 0.0)
 
-            if inv_type == "普通发票" or inv_type == "无发票":
+            if inv_type == "无发票":
                 tax_rate = 0.0
 
             if not is_draft and (qty <= 0.0 or rate <= 0.0):
@@ -845,6 +844,34 @@ def create_manual_multi_invoice_reimbursement(
         "created_pr_names": created_pr_names,
         "created_pi_names": created_pi_names,
     }
+
+
+@frappe.whitelist(methods=["POST"])
+def create_manual_multi_invoice_reimbursement(
+    company: str,
+    posting_date: str | None = None,
+    title: str | None = None,
+    auto_receive_stock: int | bool = 1,
+    is_draft: int | bool = 0,
+    invoices: str | list | None = None,
+) -> dict:
+    """Whitelisted wrapper for multi-invoice reimbursement with deadlock resilience."""
+    import time
+    for attempt in range(3):
+        try:
+            return _create_manual_multi_invoice_reimbursement_inner(
+                company=company,
+                posting_date=posting_date,
+                title=title,
+                auto_receive_stock=auto_receive_stock,
+                is_draft=is_draft,
+                invoices=invoices,
+            )
+        except frappe.QueryDeadlockError:
+            if attempt < 2:
+                time.sleep(0.3)
+                continue
+            raise
 
 
 # =========================================================================

@@ -943,19 +943,22 @@
 .reim-segmented-control {
     display: inline-flex;
     background: #f1f5f9;
-    padding: 3px;
+    padding: 2px;
     border-radius: 6px;
     border: 1px solid #cbd5e1;
-    gap: 3px;
+    gap: 2px;
     align-items: center;
+    white-space: nowrap;
+    width: max-content;
+    flex-shrink: 0;
 }
 
 .ashan-segment-btn,
 .reim-segment-btn {
     border: none;
     background: transparent;
-    padding: 4px 10px;
-    font-size: 11px;
+    padding: 5px 12px;
+    font-size: 12px;
     font-weight: 600;
     color: #64748b;
     border-radius: 4px;
@@ -963,14 +966,16 @@
     transition: all 0.15s ease;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
+    white-space: nowrap;
     user-select: none;
+    line-height: 1.2;
 }
 
 .ashan-segment-btn:hover,
 .reim-segment-btn:hover {
     color: #1e293b;
-    background: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.7);
 }
 
 .ashan-segment-btn.active,

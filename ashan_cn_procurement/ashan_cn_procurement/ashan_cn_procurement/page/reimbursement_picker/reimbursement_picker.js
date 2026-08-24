@@ -867,7 +867,8 @@ class ReimbursementPicker {
             } else if (val === "普通发票") {
                 $noInput.prop("placeholder", "输入发票号码 (必填)...").prop("disabled", false);
                 $noReq.removeClass("reim-v2-hidden");
-                $card.find(".modal-row-tax-rate").val("0").prop("disabled", true);
+                // 普通发票也可以填写税率，仅无发票不可填写
+                $card.find(".modal-row-tax-rate").prop("disabled", false);
             } else {
                 $noInput.prop("placeholder", "输入发票号码 (必填)...").prop("disabled", false);
                 $noReq.removeClass("reim-v2-hidden");
@@ -1121,6 +1122,17 @@ class ReimbursementPicker {
 
         this.creation.is_syncing_draft = true;
         try {
+            // If already created a draft doc in this session, delete previous draft bundle first
+            if (this.creation.current_rr_name) {
+                try {
+                    await frappe.call({
+                        method: REIM_API.delete_bundle,
+                        type: "POST",
+                        args: { rr_name: this.creation.current_rr_name },
+                    });
+                } catch (e) {}
+            }
+
             const r = await frappe.call({
                 method: REIM_API.create_manual,
                 type: "POST",
@@ -1134,7 +1146,7 @@ class ReimbursementPicker {
                 },
             });
             if (r.message && r.message.success) {
-                // Dynamically update KPI and rows without blocking input!
+                this.creation.current_rr_name = r.message.rr_name;
                 this.load_kpis();
                 this.load_rows();
             }
@@ -1391,9 +1403,9 @@ class ReimbursementPicker {
                     <div class="reim-v2-field-group">
                         <label>发票类型<span class="req">*</span></label>
                         <div class="reim-segmented-control modal-inv-type-segmented" data-inv-id="${invId}">
-                            <button type="button" class="reim-segment-btn ${initType === '专用发票' ? 'active' : ''}" data-value="专用发票">💎 专用发票</button>
-                            <button type="button" class="reim-segment-btn ${initType === '普通发票' ? 'active' : ''}" data-value="普通发票">📄 普通发票</button>
-                            <button type="button" class="reim-segment-btn ${initType === '无发票' ? 'active' : ''}" data-value="无发票">🚫 无发票</button>
+                            <button type="button" class="reim-segment-btn ${initType === '专用发票' ? 'active' : ''}" data-value="专用发票">专用发票</button>
+                            <button type="button" class="reim-segment-btn ${initType === '普通发票' ? 'active' : ''}" data-value="普通发票">普通发票</button>
+                            <button type="button" class="reim-segment-btn ${initType === '无发票' ? 'active' : ''}" data-value="无发票">无发票</button>
                         </div>
                         <input type="hidden" class="modal-inv-type-value" value="${initType}" />
                     </div>
@@ -1485,7 +1497,7 @@ class ReimbursementPicker {
         const rowIdx = $tbody.find("tr").length + 1;
         const invType = $card.find(".modal-inv-type-value").val() || "专用发票";
         const defaultTaxRate = invType === "专用发票" ? "13" : "0";
-        const isTaxDisabled = invType !== "专用发票" ? "disabled" : "";
+        const isTaxDisabled = invType === "无发票" ? "disabled" : "";
 
         const nameVal = initItem ? initItem.item_name : "";
         const specVal = initItem ? (initItem.spec || "-") : "自动带出";
@@ -1613,6 +1625,10 @@ class ReimbursementPicker {
     }
 
     async submit_manual_reimbursement(isDraft = 0) {
+        if (this.draftTimer) {
+            clearTimeout(this.draftTimer);
+            this.draftTimer = null;
+        }
         const company = $("#modal-reim-company").val();
         if (!company) {
             frappe.msgprint(__("请选择所属公司。"));
@@ -1716,7 +1732,7 @@ class ReimbursementPicker {
         $btn.prop("disabled", true).text(__("🚀 正在创建单据..."));
 
         try {
-            if (isEdit && rrName) {
+            if (rrName) {
                 await frappe.call({
                     method: REIM_API.delete_bundle,
                     type: "POST",
