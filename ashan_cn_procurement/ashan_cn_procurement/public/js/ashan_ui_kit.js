@@ -251,5 +251,29 @@
                 }
             });
         },
+
+        /**
+         * 6. 统一大宽表表头/主体鼠标滚轮转横向滚动能力 (Mousewheel-to-Horizontal Scroll)
+         * 当用户在表头或表格区域上下拨动鼠标滚轮时，若容器存在横向溢出，自动转换为横向滚动。
+         * @param {jQuery|HTMLElement|string} container 滚动容器元素
+         * @param {jQuery|HTMLElement|string} triggerEl 触发元素（如 thead 或整个 table）
+         */
+        enableMousewheelHorizontalScroll: function (container, triggerEl) {
+            const $container = $(container);
+            const $trigger = triggerEl ? $(triggerEl) : $container;
+
+            $trigger.on("wheel", function (e) {
+                const raw = e.originalEvent || e;
+                const dy = raw.deltaY;
+                const dx = raw.deltaX;
+                if (Math.abs(dy) > Math.abs(dx) && dy !== 0) {
+                    const el = $container[0];
+                    if (el && el.scrollWidth > el.clientWidth) {
+                        el.scrollLeft += dy;
+                        e.preventDefault();
+                    }
+                }
+            });
+        },
     };
 })();

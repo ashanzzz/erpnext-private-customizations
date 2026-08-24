@@ -238,6 +238,39 @@ class ProcurementOrderPickerCenter {
             is_syncing_main = false;
         });
 
+        // Mousewheel-to-Horizontal Scroll: 滚轮在表头或表格区域滚动时自动转换为横向滚动
+        const handle_wheel_to_horizontal = function (e) {
+            const raw_e = e.originalEvent || e;
+            const delta_y = raw_e.deltaY;
+            const delta_x = raw_e.deltaX;
+            if (Math.abs(delta_y) > Math.abs(delta_x) && delta_y !== 0) {
+                const el = $table_scroll[0];
+                if (el && el.scrollWidth > el.clientWidth) {
+                    el.scrollLeft += delta_y;
+                    e.preventDefault();
+                }
+            }
+        };
+
+        $table_scroll.on("wheel", handle_wheel_to_horizontal);
+        $top_scroll.on("wheel", handle_wheel_to_horizontal);
+        $(this.page.body).on("wheel", "#picker-table-thead, #picker-top-scrollbar, #picker-main-table-scroll", handle_wheel_to_horizontal);
+
+        // 弹窗内的物料明细大宽表也挂载滑轮横向滚动
+        $(document).on("wheel", ".picker-modal-item-table-wrap, .picker-modal-item-table thead", function (e) {
+            const raw_e = e.originalEvent || e;
+            const delta_y = raw_e.deltaY;
+            const delta_x = raw_e.deltaX;
+            if (Math.abs(delta_y) > Math.abs(delta_x) && delta_y !== 0) {
+                const $wrap = $(this).closest(".picker-modal-item-table-wrap");
+                const el = $wrap[0];
+                if (el && el.scrollWidth > el.clientWidth) {
+                    el.scrollLeft += delta_y;
+                    e.preventDefault();
+                }
+            }
+        });
+
         // Row Checkbox Click
         $(this.page.body).on("change", ".picker-row-checkbox", function () {
             const key = $(this).attr("data-key");
