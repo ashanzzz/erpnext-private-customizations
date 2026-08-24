@@ -6,8 +6,8 @@ frappe.listview_settings['Purchase Order'] = {
     add_fields: ["custom_doc_details", "supplier_name", "transaction_date", "grand_total", "status"],
 
     onload: function(listview) {
-        listview.page.add_inner_button(__("🛒 选单创建订单"), function() {
-            frappe.set_route("procurement-order-picker", "?stage=po");
+        listview.page.add_inner_button(__("收货入库"), function() {
+            frappe.set_route("material-receipt-workbench", "po_to_pr");
         });
     },
 

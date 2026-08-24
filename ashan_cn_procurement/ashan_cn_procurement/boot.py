@@ -20,6 +20,27 @@ SYSTEM_MANAGEMENT_URLS = {
     "/desk/system-settings",
 }
 
+PROCUREMENT_PAGE_ROLES = {
+    "material-request-workbench": {
+        "Purchase Manager",
+        "Purchase User",
+        "Stock Manager",
+        "Stock User",
+    },
+    "procurement-execution-workbench": {
+        "Purchase Manager",
+        "Purchase User",
+        "Accounts Manager",
+        "Accounts User",
+    },
+    "material-receipt-workbench": {"Stock Manager", "Stock User"},
+    "procurement-order-picker": {
+        "Purchase Manager",
+        "Stock Manager",
+        "Accounts Manager",
+    },
+}
+
 
 def _resolve_login_home_route(roles):
     """Return one canonical Desk route for the user's business roles."""
@@ -77,6 +98,7 @@ def boot_session(bootinfo):
     """
     user = frappe.session.user
     roles = frappe.get_roles(user) if user else []
+    role_set = set(roles)
     is_system_manager = "System Manager" in roles or "Administrator" in roles
     home_route = _resolve_login_home_route(roles)
     bootinfo.ashan_is_system_manager = is_system_manager
@@ -107,6 +129,10 @@ def boot_session(bootinfo):
                 if not is_system_manager and sidebar_name in BUSINESS_SIDEBAR_NAMES:
                     if it.get("label") == SYSTEM_MANAGEMENT_LABEL or url in SYSTEM_MANAGEMENT_URLS:
                         continue
+
+                required_roles = PROCUREMENT_PAGE_ROLES.get(link_to)
+                if required_roles and not is_system_manager and not role_set.intersection(required_roles):
+                    continue
 
 
                 if "property-settlement-workbench" in link_to or "property-settlement-workbench" in url:

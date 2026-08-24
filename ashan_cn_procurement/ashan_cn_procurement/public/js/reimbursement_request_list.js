@@ -6,8 +6,8 @@ frappe.listview_settings['Reimbursement Request'] = {
     add_fields: ["custom_doc_details", "title", "applicant", "posting_date", "total_tax_inclusive_amount", "status"],
 
     onload: function(listview) {
-        listview.page.add_inner_button(__("💰 选单创建报销"), function() {
-            frappe.set_route("procurement-order-picker", "?stage=rr");
+        listview.page.add_inner_button(__("采购总览"), function() {
+            frappe.set_route("procurement-order-picker", "pi_to_rr");
         });
     },
 

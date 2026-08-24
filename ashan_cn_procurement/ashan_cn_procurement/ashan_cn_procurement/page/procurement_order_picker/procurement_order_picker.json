@@ -11,7 +11,7 @@
   "istable": 0,
   "module": "Ashan CN Procurement",
   "page_name": "procurement-order-picker",
-  "title": "采购申请",
+  "title": "采购总览",
   "standard": "Yes",
   "doctype": "Page",
   "roles": [
@@ -22,19 +22,10 @@
       "role": "Purchase Manager"
     },
     {
-      "role": "Purchase User"
-    },
-    {
       "role": "Stock Manager"
     },
     {
-      "role": "Stock User"
-    },
-    {
       "role": "Accounts Manager"
-    },
-    {
-      "role": "Accounts User"
     }
   ]
 }

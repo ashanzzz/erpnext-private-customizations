@@ -24,6 +24,7 @@ from ashan_cn_procurement.services.procurement_picker_service import (
     get_pending_reimbursement_invoices,
     make_reimbursement_from_invoices,
     get_procurement_picker_overview_kpis,
+    get_procurement_workbench_context,
 )
 
 
@@ -46,6 +47,22 @@ class TestProcurementPicker(unittest.TestCase):
         self.assertIn("po_to_pr", res_all["kpis"])
         self.assertIn("pr_to_pi", res_all["kpis"])
         self.assertIn("pi_to_rr", res_all["kpis"])
+
+        request_context = get_procurement_workbench_context("request")
+        self.assertEqual(request_context["allowed_stages"], ["item_to_mr"])
+        request_kpis = get_procurement_picker_overview_kpis("All", "request")
+        self.assertEqual(set(request_kpis["kpis"]), {"item_to_mr"})
+
+        execution_context = get_procurement_workbench_context("execution")
+        self.assertEqual(
+            execution_context["allowed_stages"],
+            ["mr_to_po", "pr_to_pi", "pi_to_rr"],
+        )
+        execution_kpis = get_procurement_picker_overview_kpis("All", "execution")
+        self.assertEqual(
+            set(execution_kpis["kpis"]),
+            {"mr_to_po", "pr_to_pi", "pi_to_rr"},
+        )
 
     def test_02_all_10_dual_views_smoke(self):
         """Verify query endpoints for all 5 stages in both Detail View and Doc View."""

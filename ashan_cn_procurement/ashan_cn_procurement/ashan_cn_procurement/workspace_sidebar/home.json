@@ -32,7 +32,43 @@
       "doctype": "Workspace Sidebar Item"
     },
     {
-      "label": "采购申请",
+      "label": "物料申请",
+      "link_type": "Page",
+      "type": "Link",
+      "link_to": "material-request-workbench",
+      "child": 1,
+      "collapsible": 0,
+      "indent": 0,
+      "keep_closed": 0,
+      "show_arrow": 0,
+      "doctype": "Workspace Sidebar Item"
+    },
+    {
+      "label": "采购执行",
+      "link_type": "Page",
+      "type": "Link",
+      "link_to": "procurement-execution-workbench",
+      "child": 1,
+      "collapsible": 0,
+      "indent": 0,
+      "keep_closed": 0,
+      "show_arrow": 0,
+      "doctype": "Workspace Sidebar Item"
+    },
+    {
+      "label": "收货入库",
+      "link_type": "Page",
+      "type": "Link",
+      "link_to": "material-receipt-workbench",
+      "child": 1,
+      "collapsible": 0,
+      "indent": 0,
+      "keep_closed": 0,
+      "show_arrow": 0,
+      "doctype": "Workspace Sidebar Item"
+    },
+    {
+      "label": "采购总览",
       "link_type": "Page",
       "type": "Link",
       "link_to": "procurement-order-picker",

@@ -39,11 +39,13 @@ PORT = int(os.getenv('UNRAID_SSH_PORT', '22'))
 USER = os.getenv('UNRAID_SSH_USER', 'root')
 PASSWORD = os.getenv('UNRAID_SSH_PASSWORD', '')
 
-def run_cmd(client, cmd):
+def run_cmd(client, cmd, *, check=True):
+    """Run a remote command and fail on a non-zero exit status by default."""
     print(f">> {cmd}")
     stdin, stdout, stderr = client.exec_command(cmd)
     out = stdout.read().decode('utf-8', errors='replace')
     err = stderr.read().decode('utf-8', errors='replace')
+    exit_status = stdout.channel.recv_exit_status()
     if out:
         try:
             print(out)
@@ -54,21 +56,23 @@ def run_cmd(client, cmd):
             print("ERR:", err)
         except Exception:
             print("ERR:", err.encode('ascii', errors='replace').decode('ascii'))
-    return out, err
+    if check and exit_status != 0:
+        raise RuntimeError(f"远程命令执行失败（退出码 {exit_status}）：{cmd}")
+    return out, err, exit_status
 
 
 def clear_confirmed_orphan_migrate_lock(client):
     """Remove only a confirmed orphan migration lock from the target site."""
     lock_path = "sites/site1.local/locks/bench_migrate.lock"
     workdir = "/home/frappe/frappe-bench"
-    lock_out, _ = run_cmd(
+    lock_out, _, _ = run_cmd(
         client,
         f"docker exec -u frappe -w {workdir} erpnext16 sh -lc \"test -e {lock_path} && echo lock-present || true\"",
     )
     if "lock-present" not in lock_out:
         return
 
-    process_out, _ = run_cmd(
+    process_out, _, _ = run_cmd(
         client,
         f"docker exec -u frappe -w {workdir} erpnext16 sh -lc \"ps -eo args= | grep -F 'bench --site site1.local migrate' | grep -v grep || true\"",
     )
@@ -128,10 +132,18 @@ run_cmd(client, "docker exec erpnext16 chown -R frappe:frappe /home/frappe/frapp
 print("Running bench migrate...")
 for attempt in range(1, 4):
     clear_confirmed_orphan_migrate_lock(client)
-    out, err = run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench --site site1.local migrate")
+    out, err, exit_status = run_cmd(
+        client,
+        "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench --site site1.local migrate",
+        check=False,
+    )
     combined = (out or "") + (err or "")
-    if "LockTimeoutError" not in combined and "QueryDeadlockError" not in combined and "OperationalError" not in combined and "Traceback" not in combined:
+    if exit_status == 0 and "Traceback" not in combined:
         break
+    if attempt == 3:
+        raise RuntimeError(
+            f"bench migrate 连续 {attempt} 次失败（最后退出码 {exit_status}）。"
+        )
     print(f"[WARN] Migrate attempt {attempt} failed, retrying in 3s...")
     import time
     time.sleep(3)
@@ -140,7 +152,24 @@ for attempt in range(1, 4):
 print("Building frontend assets...")
 run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench build --app ashan_cn_procurement")
 
-# 6. 清理缓存并重启容器重载 Python 模块
+# 6. 对已部署的采购工作台服务做只读健康检查
+print("Validating procurement workbench services...")
+run_cmd(
+    client,
+    "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 "
+    "bench --site site1.local execute "
+    "ashan_cn_procurement.services.procurement_picker_service.get_procurement_workbench_context "
+    "--kwargs '{\"workbench\":\"overview\"}'",
+)
+run_cmd(
+    client,
+    "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 "
+    "bench --site site1.local execute "
+    "ashan_cn_procurement.services.procurement_picker_service.get_procurement_picker_overview_kpis "
+    "--kwargs '{\"workbench\":\"request\"}'",
+)
+
+# 7. 清理缓存并重启容器重载 Python 模块
 print("Clearing cache & restarting container...")
 run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench --site site1.local clear-cache")
 run_cmd(client, "docker restart erpnext16")

@@ -1,6 +1,7 @@
 from unittest import TestCase
 
 from ashan_cn_procurement import hooks
+from ashan_cn_procurement.boot import PROCUREMENT_PAGE_ROLES
 
 
 class TestLoginLandingRoute(TestCase):
@@ -22,3 +23,13 @@ class TestLoginLandingRoute(TestCase):
 			hooks.role_home_page["System Manager"],
 			"desk/Workspaces/Home",
 		)
+
+	def test_procurement_workbenches_have_role_focused_navigation(self):
+		"""Keep requester, purchaser, receiver and manager entries separated."""
+		self.assertIn("Purchase User", PROCUREMENT_PAGE_ROLES["material-request-workbench"])
+		self.assertIn("Purchase User", PROCUREMENT_PAGE_ROLES["procurement-execution-workbench"])
+		self.assertEqual(
+			PROCUREMENT_PAGE_ROLES["material-receipt-workbench"],
+			{"Stock Manager", "Stock User"},
+		)
+		self.assertNotIn("Purchase User", PROCUREMENT_PAGE_ROLES["procurement-order-picker"])

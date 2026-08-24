@@ -31,6 +31,93 @@ from ashan_cn_procurement.services.authorization_service import (
 )
 
 
+PROCUREMENT_STAGE_DOCUMENTS = {
+    "item_to_mr": ("Material Request", "Material Request"),
+    "mr_to_po": ("Material Request", "Purchase Order"),
+    "po_to_pr": ("Purchase Order", "Purchase Receipt"),
+    "pr_to_pi": ("Purchase Receipt", "Purchase Invoice"),
+    "pi_to_rr": ("Purchase Invoice", "Reimbursement Request"),
+}
+
+PROCUREMENT_WORKBENCH_STAGES = {
+    "request": ("item_to_mr",),
+    "execution": ("mr_to_po", "pr_to_pi", "pi_to_rr"),
+    "receipt": ("po_to_pr",),
+    "overview": ("item_to_mr", "mr_to_po", "po_to_pr", "pr_to_pi", "pi_to_rr"),
+}
+
+PROCUREMENT_MANAGER_ROLES = {
+    "System Manager",
+    "Purchase Manager",
+    "Stock Manager",
+    "Accounts Manager",
+}
+
+
+def _is_procurement_manager() -> bool:
+    """Return whether the current user may perform procurement management actions."""
+    if frappe.session.user == "Administrator":
+        return True
+    return bool(set(frappe.get_roles(frappe.session.user)) & PROCUREMENT_MANAGER_ROLES)
+
+
+def _get_stage_capability(stage: str) -> dict:
+    """Return current-user permissions for one procurement lifecycle stage."""
+    if stage not in PROCUREMENT_STAGE_DOCUMENTS:
+        frappe.throw(_("不支持的采购流程阶段：{0}").format(stage))
+
+    source_doctype, target_doctype = PROCUREMENT_STAGE_DOCUMENTS[stage]
+    is_manager = _is_procurement_manager()
+    can_read = bool(frappe.has_permission(source_doctype, "read"))
+    can_create = can_read and bool(frappe.has_permission(target_doctype, "create"))
+    return {
+        "can_read": can_read,
+        "can_create": can_create,
+        "can_write": bool(frappe.has_permission(source_doctype, "write")),
+        "can_delete": is_manager and bool(frappe.has_permission(source_doctype, "delete")),
+    }
+
+
+def _assert_stage_access(stage: str, action: str = "read") -> None:
+    """Enforce stage permissions independently of Page visibility."""
+    capability = _get_stage_capability(stage)
+    capability_key = {
+        "read": "can_read",
+        "create": "can_create",
+        "write": "can_write",
+        "delete": "can_delete",
+    }.get(action)
+    if not capability_key:
+        frappe.throw(_("不支持的采购权限动作：{0}").format(action))
+    if not capability.get(capability_key):
+        frappe.throw(_("当前账号没有执行此采购阶段的权限。"), frappe.PermissionError)
+
+
+@frappe.whitelist()
+def get_procurement_workbench_context(workbench: str) -> dict:
+    """Return server-authoritative stages and actions for one role workbench."""
+    workbench_key = (workbench or "").strip().lower()
+    requested_stages = PROCUREMENT_WORKBENCH_STAGES.get(workbench_key)
+    if not requested_stages:
+        frappe.throw(_("不支持的采购工作台。"))
+
+    is_manager = _is_procurement_manager()
+    if workbench_key == "overview" and not is_manager:
+        frappe.throw(_("采购总览仅向管理人员开放。"), frappe.PermissionError)
+
+    capabilities = {stage: _get_stage_capability(stage) for stage in requested_stages}
+    allowed_stages = [stage for stage in requested_stages if capabilities[stage]["can_read"]]
+    if not allowed_stages:
+        frappe.throw(_("当前账号没有此工作台的业务权限。"), frappe.PermissionError)
+
+    return {
+        "workbench": workbench_key,
+        "allowed_stages": allowed_stages,
+        "capabilities": capabilities,
+        "is_manager": is_manager,
+    }
+
+
 @frappe.whitelist()
 def get_user_procurement_companies() -> dict:
     """Return the list of companies the current user is authorized to access."""
@@ -95,6 +182,7 @@ def search_picker_items(
     company: str | None = None,
 ) -> dict:
     """Search items for the quick Material Request modal with rates, UOM, and tax details."""
+    _assert_stage_access("item_to_mr", "read")
     companies = _resolve_companies(company)
     target_comp = companies[0] if companies else ""
     query_str = (query or "").strip()
@@ -157,6 +245,7 @@ def get_material_request_picker_rows(
     filters: dict | str | None = None,
 ) -> dict:
     """Query Material Request Items for Step 1 Detail View (Read-Only Detail)."""
+    _assert_stage_access("item_to_mr", "read")
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
@@ -232,6 +321,9 @@ def get_material_request_picker_rows(
 
     rows = []
     for r in raw_rows:
+        spec, remarks = extract_spec_and_remarks(r)
+        qty = flt(r.qty, 2)
+        rate = flt(r.rate, 2)
         rows.append({
             "mri_name": r.mri_name,
             "mr_name": r.mr_name,
@@ -244,10 +336,13 @@ def get_material_request_picker_rows(
             "description": r.description or "",
             "item_group": r.item_group or "",
             "uom": r.uom or "",
-            "qty": flt(r.qty, 2),
+            "qty": qty,
             "ordered_qty": flt(r.ordered_qty, 2),
             "pending_qty": max(flt(r.qty) - flt(r.ordered_qty), 0.0),
-            "rate": flt(r.rate, 2),
+            "rate": rate,
+            "amount": flt(qty * rate, 2),
+            "spec": spec,
+            "remarks": remarks,
             "supplier": r.default_supplier or "",
             "warehouse": r.warehouse or "",
             "docstatus": r.docstatus,
@@ -267,6 +362,7 @@ def get_material_request_doc_rows(
     filters: dict | str | None = None,
 ) -> dict:
     """Query Material Request Documents for Step 1 Header/Doc View."""
+    _assert_stage_access("item_to_mr", "read")
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
@@ -348,6 +444,7 @@ def quick_create_material_request(
     purpose: str | None = None,
 ) -> dict:
     """Quickly create a new Material Request (Purchase) from the lightweight modal with rates and taxes."""
+    _assert_stage_access("item_to_mr", "create")
     if isinstance(items, str):
         items = frappe.parse_json(items) or []
 
@@ -380,13 +477,17 @@ def quick_create_material_request(
         item_name = (it.get("item_name") or "").strip() or item_code
 
         if not frappe.db.exists("Item", item_code):
+            if not frappe.has_permission("Item", "create"):
+                frappe.throw(
+                    _("物料 {0} 不存在，且当前账号没有新建物料的权限。请先由物料管理员建立档案。").format(item_code),
+                    frappe.PermissionError,
+                )
             new_it = frappe.new_doc("Item")
             new_it.item_code = item_code
             new_it.item_name = item_name
             new_it.item_group = frappe.db.get_value("Item Group", {"is_group": 0}, "name") or "All Item Groups"
             new_it.stock_uom = it.get("uom") or "Nos"
             new_it.is_stock_item = 1
-            new_it.flags.ignore_permissions = True
             new_it.insert()
             item_doc = new_it
         else:
@@ -466,6 +567,7 @@ def update_quick_material_request(
     department: str | None = None,
 ) -> dict:
     """Update an existing Material Request before any Purchase Order is generated."""
+    _assert_stage_access("item_to_mr", "write")
     if not name:
         frappe.throw(_("缺少申请单号。"))
 
@@ -649,6 +751,7 @@ def get_pending_material_request_items(
     filters: dict | str | None = None,
 ) -> dict:
     """Query Material Request Items for Step 2 Detail View with match_status and linked POs."""
+    _assert_stage_access("mr_to_po", "read")
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
@@ -809,6 +912,7 @@ def get_pending_material_request_docs(
     filters: dict | str | None = None,
 ) -> dict:
     """Query Material Request Documents for Step 2 Doc View with match_status and linked POs."""
+    _assert_stage_access("mr_to_po", "read")
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
@@ -913,6 +1017,7 @@ def make_purchase_orders_from_mr_items(
     schedule_date: str | None = None,
 ) -> dict:
     """Generate Draft Purchase Order(s) grouped by Supplier from selected MR items or MR docs."""
+    _assert_stage_access("mr_to_po", "create")
     if isinstance(selected_items, str):
         selected_items = frappe.parse_json(selected_items) or []
 
@@ -1095,6 +1200,7 @@ def update_quick_purchase_order(
     items: list[dict] | str | None = None,
 ) -> dict:
     """Quick edit and update Purchase Order with 12-column live calculation fields."""
+    _assert_stage_access("mr_to_po", "write")
     if not frappe.db.exists("Purchase Order", name):
         frappe.throw(_("采购订单 {0} 不存在").format(name))
 
@@ -1217,6 +1323,7 @@ def get_pending_purchase_order_items(
     filters: dict | str | None = None,
 ) -> dict:
     """Query Purchase Order Items for Step 3 Detail View with match_status and linked PRs."""
+    _assert_stage_access("po_to_pr", "read")
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
@@ -1335,6 +1442,7 @@ def get_pending_purchase_order_docs(
     filters: dict | str | None = None,
 ) -> dict:
     """Query Purchase Order Documents for Step 3 Doc View with match_status and linked PRs."""
+    _assert_stage_access("po_to_pr", "read")
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
@@ -1426,6 +1534,7 @@ def make_purchase_receipts_from_po_items(
     posting_date: str | None = None,
 ) -> dict:
     """Generate Draft Purchase Receipt(s) grouped by Supplier from PO items or PO docs."""
+    _assert_stage_access("po_to_pr", "create")
     if isinstance(selected_items, str):
         selected_items = frappe.parse_json(selected_items) or []
 
@@ -1580,6 +1689,7 @@ def get_pending_purchase_receipt_items(
     filters: dict | str | None = None,
 ) -> dict:
     """Query Purchase Receipt Items for Step 4 Detail View with match_status and linked PIs."""
+    _assert_stage_access("pr_to_pi", "read")
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
@@ -1698,6 +1808,7 @@ def get_pending_purchase_receipt_docs(
     filters: dict | str | None = None,
 ) -> dict:
     """Query Purchase Receipt Documents for Step 4 Doc View with match_status and linked PIs."""
+    _assert_stage_access("pr_to_pi", "read")
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
@@ -1789,6 +1900,7 @@ def make_purchase_invoices_from_pr_items(
     invoice_type: str | None = "专用发票",
 ) -> dict:
     """Generate Draft Purchase Invoice(s) grouped by Supplier from PR items or PR docs."""
+    _assert_stage_access("pr_to_pi", "create")
     if isinstance(selected_items, str):
         selected_items = frappe.parse_json(selected_items) or []
 
@@ -1987,6 +2099,7 @@ def get_pending_reimbursement_invoice_items(
     filters: dict | str | None = None,
 ) -> dict:
     """Query Purchase Invoice Line Items for Step 5 Detail View with match_status and linked RRs."""
+    _assert_stage_access("pi_to_rr", "read")
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
@@ -2116,6 +2229,7 @@ def get_pending_reimbursement_invoices(
     filters: dict | str | None = None,
 ) -> dict:
     """Query Purchase Invoices for Step 5 Doc View with match_status and linked RRs."""
+    _assert_stage_access("pi_to_rr", "read")
     companies = _resolve_companies(company)
     if isinstance(filters, str):
         filters = frappe.parse_json(filters) or {}
@@ -2245,6 +2359,7 @@ def make_reimbursement_from_invoices(
     purpose: str | None = None,
 ) -> dict:
     """Generate Draft Reimbursement Request from selected unpaid Purchase Invoices or items."""
+    _assert_stage_access("pi_to_rr", "create")
     invoice_names = normalize_names(selected_invoices)
     if not invoice_names:
         frappe.throw(_("请选择至少一张采购发票。"))
@@ -2302,98 +2417,105 @@ def make_reimbursement_from_invoices(
 # =========================================================================
 
 @frappe.whitelist()
-def get_procurement_picker_overview_kpis(company: str | None = None) -> dict:
-    """Return aggregated KPI counts for all 5 procurement steps."""
+def get_procurement_picker_overview_kpis(
+    company: str | None = None,
+    workbench: str = "overview",
+) -> dict:
+    """Return only the KPI counts needed by the current role workbench."""
+    context = get_procurement_workbench_context(workbench)
+    allowed_stages = set(context["allowed_stages"])
     companies = _resolve_companies(company)
+    kpis: dict[str, dict] = {}
 
-    mr_pending_docs_count = frappe.db.sql("""
-        SELECT COUNT(DISTINCT mr.name)
-        FROM `tabMaterial Request` mr
-        WHERE mr.docstatus < 2
-          AND mr.material_request_type = 'Purchase'
-          AND mr.company IN %s
-          AND (
-              mr.docstatus = 0
-              OR (
-                  mr.status NOT IN ('Stopped', 'Cancelled', 'Transfer')
-                  AND EXISTS (
-                      SELECT 1 FROM `tabMaterial Request Item` mri
-                      WHERE mri.parent = mr.name
-                        AND (mri.qty - COALESCE(mri.ordered_qty, 0)) > 0.0001
+    if "item_to_mr" in allowed_stages:
+        count = frappe.db.sql("""
+            SELECT COUNT(DISTINCT mr.name)
+            FROM `tabMaterial Request` mr
+            WHERE mr.docstatus < 2
+              AND mr.material_request_type = 'Purchase'
+              AND mr.company IN %s
+              AND (
+                  mr.docstatus = 0
+                  OR (
+                      mr.status NOT IN ('Stopped', 'Cancelled', 'Transfer')
+                      AND EXISTS (
+                          SELECT 1 FROM `tabMaterial Request Item` mri
+                          WHERE mri.parent = mr.name
+                            AND (mri.qty - COALESCE(mri.ordered_qty, 0)) > 0.0001
+                      )
                   )
               )
-          )
-    """, (companies,))[0][0] or 0
+        """, (companies,))[0][0] or 0
+        kpis["item_to_mr"] = {"count": count, "label": "待提申请"}
 
-    mr_count = frappe.db.sql("""
-        SELECT COUNT(DISTINCT mri.name)
-        FROM `tabMaterial Request Item` mri
-        INNER JOIN `tabMaterial Request` mr ON mr.name = mri.parent
-        WHERE mr.docstatus = 1
-          AND mr.material_request_type = 'Purchase'
-          AND mr.company IN %s
-          AND mr.status NOT IN ('Stopped', 'Cancelled', 'Transfer')
-          AND (mri.qty - COALESCE(mri.ordered_qty, 0)) > 0.0001
-    """, (companies,))[0][0] or 0
+    if "mr_to_po" in allowed_stages:
+        count = frappe.db.sql("""
+            SELECT COUNT(DISTINCT mri.name)
+            FROM `tabMaterial Request Item` mri
+            INNER JOIN `tabMaterial Request` mr ON mr.name = mri.parent
+            WHERE mr.docstatus = 1
+              AND mr.material_request_type = 'Purchase'
+              AND mr.company IN %s
+              AND mr.status NOT IN ('Stopped', 'Cancelled', 'Transfer')
+              AND (mri.qty - COALESCE(mri.ordered_qty, 0)) > 0.0001
+        """, (companies,))[0][0] or 0
+        kpis["mr_to_po"] = {"count": count, "label": "待采购"}
 
-    po_count = frappe.db.sql("""
-        SELECT COUNT(DISTINCT poi.name)
-        FROM `tabPurchase Order Item` poi
-        INNER JOIN `tabPurchase Order` po ON po.name = poi.parent
-        WHERE po.docstatus = 1
-          AND po.company IN %s
-          AND po.status NOT IN ('Closed', 'Cancelled', 'Delivered')
-          AND (poi.qty - COALESCE(poi.received_qty, 0)) > 0.0001
-    """, (companies,))[0][0] or 0
+    if "po_to_pr" in allowed_stages:
+        count = frappe.db.sql("""
+            SELECT COUNT(DISTINCT poi.name)
+            FROM `tabPurchase Order Item` poi
+            INNER JOIN `tabPurchase Order` po ON po.name = poi.parent
+            WHERE po.docstatus = 1
+              AND po.company IN %s
+              AND po.status NOT IN ('Closed', 'Cancelled', 'Delivered')
+              AND (poi.qty - COALESCE(poi.received_qty, 0)) > 0.0001
+        """, (companies,))[0][0] or 0
+        kpis["po_to_pr"] = {"count": count, "label": "待入库"}
 
-    pr_count = frappe.db.sql("""
-        SELECT COUNT(DISTINCT pri.name)
-        FROM `tabPurchase Receipt Item` pri
-        INNER JOIN `tabPurchase Receipt` pr ON pr.name = pri.parent
-        WHERE pr.docstatus = 1
-          AND pr.company IN %s
-          AND pr.status NOT IN ('Closed', 'Cancelled', 'Return Issued')
-          AND (pri.amount - COALESCE(pri.billed_amt, 0)) > 0.01
-    """, (companies,))[0][0] or 0
+    if "pr_to_pi" in allowed_stages:
+        count = frappe.db.sql("""
+            SELECT COUNT(DISTINCT pri.name)
+            FROM `tabPurchase Receipt Item` pri
+            INNER JOIN `tabPurchase Receipt` pr ON pr.name = pri.parent
+            WHERE pr.docstatus = 1
+              AND pr.company IN %s
+              AND pr.status NOT IN ('Closed', 'Cancelled', 'Return Issued')
+              AND (pri.amount - COALESCE(pri.billed_amt, 0)) > 0.01
+        """, (companies,))[0][0] or 0
+        kpis["pr_to_pi"] = {"count": count, "label": "待开票"}
 
-    # Step 5: Purchase Invoices pending reimbursement (deducting active reservations)
-    active_res = []
-    if frappe.db.exists("DocType", "Reimbursement Source Reservation"):
-        active_res = frappe.get_all(
-            "Reimbursement Source Reservation",
-            filters={"status": ["in", ["Draft", "Submitted"]]},
-            fields=["source_purchase_invoice", "reserved_amount"],
-        )
-    reserved_by_pi = defaultdict(float)
-    for res in active_res:
-        reserved_by_pi[res.source_purchase_invoice] += flt(res.reserved_amount)
+    if "pi_to_rr" in allowed_stages:
+        reserved_by_pi = defaultdict(float)
+        if frappe.db.exists("DocType", "Reimbursement Source Reservation"):
+            active_reservations = frappe.get_all(
+                "Reimbursement Source Reservation",
+                filters={"status": ["in", ["Draft", "Submitted"]]},
+                fields=["source_purchase_invoice", "reserved_amount"],
+            )
+            for reservation in active_reservations:
+                reserved_by_pi[reservation.source_purchase_invoice] += flt(reservation.reserved_amount)
 
-    raw_pis = frappe.db.sql("""
-        SELECT name, outstanding_amount
-        FROM `tabPurchase Invoice`
-        WHERE docstatus = 1
-          AND company IN %s
-          AND outstanding_amount > 0.0001
-    """, (companies,), as_dict=True)
+        raw_invoices = frappe.db.sql("""
+            SELECT name, outstanding_amount
+            FROM `tabPurchase Invoice`
+            WHERE docstatus = 1
+              AND company IN %s
+              AND outstanding_amount > 0.0001
+        """, (companies,), as_dict=True)
+        count = 0
+        amount = 0.0
+        for invoice in raw_invoices:
+            available = max(
+                0.0,
+                flt(invoice.outstanding_amount) - reserved_by_pi.get(invoice.name, 0.0),
+            )
+            if available > 0.0001:
+                count += 1
+                amount += available
+        kpis["pi_to_rr"] = {"count": count, "amount": amount, "label": "待报销"}
 
-    pi_count = 0
-    pi_amount = 0.0
-    for pi_row in raw_pis:
-        net_outstanding = max(0.0, flt(pi_row.outstanding_amount) - reserved_by_pi.get(pi_row.name, 0.0))
-        if net_outstanding > 0.0001:
-            pi_count += 1
-            pi_amount += net_outstanding
-
-    return {
-        "companies": companies,
-        "kpis": {
-            "item_to_mr": {"count": mr_pending_docs_count, "label": "待提申请"},
-            "mr_to_po": {"count": mr_count, "label": "待采购"},
-            "po_to_pr": {"count": po_count, "label": "待入库"},
-            "pr_to_pi": {"count": pr_count, "label": "待开票"},
-            "pi_to_rr": {"count": pi_count, "amount": pi_amount, "label": "待报销"},
-        }
-    }
+    return {"companies": companies, "kpis": kpis}
 
 
 # =========================================================================
@@ -2610,7 +2732,7 @@ def get_document_details(doctype: str, name: str) -> dict:
     can_write = frappe.has_permission(doctype, "write", doc)
     # Submitted procurement documents are financial / inventory evidence.
     # They must remain read-only in the picker and cannot be deleted in place.
-    can_delete = is_draft and frappe.has_permission(doctype, "delete", doc)
+    can_delete = is_draft and _is_procurement_manager() and frappe.has_permission(doctype, "delete", doc)
     can_cancel = frappe.has_permission(doctype, "cancel", doc) if doc.docstatus == 1 else True
     can_quick_edit = False
     if is_draft and doctype in ("Material Request", "Purchase Order") and not linked_downstream and can_write:
@@ -2645,6 +2767,9 @@ def get_document_details(doctype: str, name: str) -> dict:
 @frappe.whitelist()
 def preview_document_cascade_deletion(doctype: str, name: str) -> dict:
     """Analyze full downstream dependency tree for cascading deletion and verify user permissions."""
+    if not _is_procurement_manager():
+        frappe.throw(_("只有采购管理人员可以删除采购流程单据。"), frappe.PermissionError)
+
     if doctype not in ALLOWED_PROCUREMENT_DOCTYPES:
         frappe.throw(_("不支持的单据类型：{0}").format(doctype))
 

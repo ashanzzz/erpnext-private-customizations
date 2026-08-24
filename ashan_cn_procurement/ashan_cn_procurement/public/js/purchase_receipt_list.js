@@ -6,8 +6,8 @@ frappe.listview_settings['Purchase Receipt'] = {
     add_fields: ["custom_doc_details", "supplier_name", "posting_date", "grand_total", "status"],
 
     onload: function(listview) {
-        listview.page.add_inner_button(__("📦 选单创建入库"), function() {
-            frappe.set_route("procurement-order-picker", "?stage=pr");
+        listview.page.add_inner_button(__("发票登记"), function() {
+            frappe.set_route("procurement-execution-workbench", "pr_to_pi");
         });
     },
 

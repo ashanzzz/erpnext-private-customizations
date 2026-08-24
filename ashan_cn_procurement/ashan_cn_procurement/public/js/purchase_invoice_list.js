@@ -4,8 +4,8 @@
 
 frappe.listview_settings['Purchase Invoice'] = {
     onload: function(listview) {
-        listview.page.add_inner_button(__("🧾 选单创建发票"), function() {
-            frappe.set_route("procurement-order-picker", "?stage=pi");
+        listview.page.add_inner_button(__("付款报销"), function() {
+            frappe.set_route("procurement-execution-workbench", "pi_to_rr");
         });
     }
 };
