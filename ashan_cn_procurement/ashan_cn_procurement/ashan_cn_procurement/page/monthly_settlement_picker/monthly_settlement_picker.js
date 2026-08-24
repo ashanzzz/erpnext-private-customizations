@@ -734,75 +734,101 @@ class MonthlySettlementPicker {
             },
         });
 
-        d.$wrapper.find(".modal-dialog").addClass("wire-create-modal");
+        d.$wrapper.find(".modal-dialog").addClass("ashan-smart-modal");
 
         const comp_options = this.companies.map((c) =>
             `<option value="${c.name}" ${c.name === (self.active_company === "All" ? self.companies[0]?.name : self.active_company) ? "selected" : ""}>${frappe.utils.escape_html(c.company_name || c.name)}</option>`
         ).join("");
 
         const form_html = `
-            <div class="monthly-modal-container">
-                <div class="monthly-modal-form-grid">
-                    <div class="monthly-modal-form-item">
-                        <label>所属公司 <span class="req">*</span></label>
-                        <select class="monthly-modal-input" id="modal-monthly-company">
-                            ${comp_options}
-                        </select>
+            <div class="ashan-smart-modal-body">
+                <!-- Section 1: Basic Info -->
+                <div class="ashan-smart-section">
+                    <div class="ashan-smart-section-header">
+                        <div class="ashan-smart-section-title">
+                            <span>🏢 1. 月结业务上下文与基本信息</span>
+                        </div>
                     </div>
-                    <div class="monthly-modal-form-item">
-                        <label>月结供应商名称 <span class="req">*</span></label>
-                        <input type="text" class="monthly-modal-input" id="modal-monthly-supplier" placeholder="输入或搜索月结供应商(如聚鑫、金普金)..." />
-                    </div>
-                    <div class="monthly-modal-form-item">
-                        <label>入库日期</label>
-                        <input type="date" class="monthly-modal-input" id="modal-monthly-date" value="${frappe.datetime.nowdate()}" />
-                    </div>
-                    <div class="monthly-modal-form-item">
-                        <label>收货目标仓库</label>
-                        <input type="text" class="monthly-modal-input" id="modal-monthly-warehouse" placeholder="默认 Goods In Transit / Stores..." />
+                    <div class="ashan-smart-grid-4">
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">所属公司 <span class="req">*</span></label>
+                            <select class="ashan-smart-control" id="modal-monthly-company">
+                                ${comp_options}
+                            </select>
+                        </div>
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">月结供应商 <span class="req">*</span></label>
+                            <input type="text" class="ashan-smart-control" id="modal-monthly-supplier" placeholder="搜索或输入供应商名称..." />
+                        </div>
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">入库日期</label>
+                            <input type="date" class="ashan-smart-control" id="modal-monthly-date" value="${frappe.datetime.nowdate()}" />
+                        </div>
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">收货目标仓库</label>
+                            <input type="text" class="ashan-smart-control" id="modal-monthly-warehouse" placeholder="默认 Goods In Transit / Stores..." />
+                        </div>
                     </div>
                 </div>
 
-                <!-- Items Grid -->
-                <div class="monthly-items-table-wrap">
-                    <table class="monthly-items-table" id="modal-monthly-items-table">
-                        <thead>
-                            <tr>
-                                <th class="monthly-col-idx-val">#</th>
-                                <th class="wire-col-item-code">物料代码 <span class="req">*</span></th>
-                                <th class="wire-col-item-name">物料名称</th>
-                                <th class="wire-col-spec">规格型号</th>
-                                <th class="monthly-col-uom">单位</th>
-                                <th class="monthly-col-qty">数量 <span class="req">*</span></th>
-                                <th class="monthly-col-rate">单价 (元) <span class="req">*</span></th>
-                                <th class="monthly-col-tax-rate">税率(%)</th>
-                                <th class="monthly-col-amt">金额 (元)</th>
-                                <th class="monthly-col-tax-amt">税额 (元)</th>
-                                <th class="monthly-col-total">价税合计</th>
-                                <th class="wire-col-remarks">用途/备注</th>
-                                <th class="monthly-col-op">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="modal-monthly-items-tbody"></tbody>
-                        <tfoot>
-                            <tr>
-                                <td colspan="5" class="text-right font-bold">合计:</td>
-                                <td class="text-right font-bold" id="modal-monthly-sum-qty">0.00</td>
-                                <td></td>
-                                <td></td>
-                                <td class="text-right font-bold qifu-money-cell" id="modal-monthly-sum-amt">¥ 0.00</td>
-                                <td class="text-right font-bold qifu-money-cell" id="modal-monthly-sum-tax">¥ 0.00</td>
-                                <td class="text-right font-bold qifu-money-cell text-primary" id="modal-monthly-sum-total">¥ 0.00</td>
-                                <td colspan="2"></td>
-                            </tr>
-                        </tfoot>
-                    </table>
+                <!-- Section 2: Items Details Table -->
+                <div class="ashan-smart-section">
+                    <div class="ashan-smart-section-header">
+                        <div class="ashan-smart-section-title">
+                            <span>📑 2. 月结入库物料明细清单</span>
+                        </div>
+                        <div class="ashan-smart-section-tools">
+                            <button type="button" class="btn btn-default btn-xs" id="modal-monthly-add-row-btn">➕ 添加物料行</button>
+                        </div>
+                    </div>
+
+                    <div class="ashan-smart-table-wrap">
+                        <table class="ashan-smart-table" id="modal-monthly-items-table">
+                            <thead>
+                                <tr>
+                                    <th class="ashan-col-w40">#</th>
+                                    <th class="ashan-col-w160">物料代码 <span class="req">*</span></th>
+                                    <th class="ashan-col-w180">物料名称</th>
+                                    <th class="ashan-col-w120">规格型号</th>
+                                    <th class="ashan-col-w70">单位</th>
+                                    <th class="ashan-col-w80">数量 <span class="req">*</span></th>
+                                    <th class="ashan-col-w90">单价 (元) <span class="req">*</span></th>
+                                    <th class="ashan-col-w70">税率(%)</th>
+                                    <th class="ashan-col-w95">金额 (元)</th>
+                                    <th class="ashan-col-w85">税额 (元)</th>
+                                    <th class="ashan-col-w105">价税合计</th>
+                                    <th class="ashan-col-w140">用途/备注</th>
+                                    <th class="ashan-col-w45">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-monthly-items-tbody"></tbody>
+                        </table>
+                    </div>
                 </div>
 
-                <div class="monthly-modal-action-bar">
-                    <button type="button" class="btn btn-default btn-sm" id="modal-monthly-add-row-btn">➕ 添加物料明细行</button>
-                    <div class="monthly-modal-tip">
-                        💡 提示：单价与金额严禁为 0，系统将为您全自动创建关联采购订单并完成入库单过账。
+                <!-- Section 3: Live Financial Summary & Discipline Bar -->
+                <div class="ashan-smart-summary-bar">
+                    <div class="ashan-smart-tip-box">
+                        <span class="ashan-smart-tip-badge">🛡️ 财务纪律</span>
+                        <span>单价与金额严禁为 0。系统将全自动生成并过账关联采购订单 (PO) 与入库单 (PR)。</span>
+                    </div>
+                    <div class="ashan-smart-kpi-group">
+                        <div class="ashan-smart-kpi-item">
+                            <span class="ashan-smart-kpi-label">入库总数</span>
+                            <span class="ashan-smart-kpi-value" id="modal-monthly-sum-qty">0.00</span>
+                        </div>
+                        <div class="ashan-smart-kpi-item">
+                            <span class="ashan-smart-kpi-label">不含税金额</span>
+                            <span class="ashan-smart-kpi-value" id="modal-monthly-sum-amt">¥ 0.00</span>
+                        </div>
+                        <div class="ashan-smart-kpi-item">
+                            <span class="ashan-smart-kpi-label">预估税额</span>
+                            <span class="ashan-smart-kpi-value" id="modal-monthly-sum-tax">¥ 0.00</span>
+                        </div>
+                        <div class="ashan-smart-kpi-item">
+                            <span class="ashan-smart-kpi-label">本次核算总额</span>
+                            <span class="ashan-smart-kpi-value grand-total text-success" id="modal-monthly-sum-total">¥ 0.00</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -861,20 +887,20 @@ class MonthlySettlementPicker {
         const row_idx = $tbody.find("tr").length + 1;
         const tr_html = `
             <tr>
-                <td class="monthly-col-idx-val">${row_idx}</td>
-                <td><input type="text" class="monthly-table-input monthly-item-code" placeholder="输入物料代码..." /></td>
-                <td><input type="text" class="monthly-table-input monthly-item-name" placeholder="物料名称" /></td>
-                <td><input type="text" class="monthly-table-input monthly-item-spec" placeholder="规格型号" /></td>
-                <td><input type="text" class="monthly-table-input monthly-item-uom monthly-col-uom" value="Nos" /></td>
-                <td><input type="number" class="monthly-table-input monthly-item-qty monthly-col-qty" value="1" min="0.001" step="any" /></td>
-                <td><input type="number" class="monthly-table-input monthly-item-rate monthly-col-rate" value="0.00" min="0.01" step="any" /></td>
-                <td><input type="number" class="monthly-table-input monthly-item-tax-rate monthly-col-tax-rate" value="13" min="0" max="100" /></td>
-                <td><input type="number" class="monthly-table-input monthly-item-amt monthly-col-amt" value="0.00" readonly /></td>
-                <td><input type="number" class="monthly-table-input monthly-item-tax-amt monthly-col-tax-amt" value="0.00" readonly /></td>
-                <td><input type="number" class="monthly-table-input monthly-item-total monthly-col-total" value="0.00" readonly /></td>
-                <td><input type="text" class="monthly-table-input monthly-item-remarks" placeholder="备注用途..." /></td>
-                <td class="monthly-col-op">
-                    <button type="button" class="btn btn-xs btn-danger monthly-row-delete-btn" title="删除此行">✕</button>
+                <td class="ashan-smart-cell-idx">${row_idx}</td>
+                <td><input type="text" class="ashan-smart-cell-input monthly-item-code" placeholder="输入物料代码..." /></td>
+                <td><input type="text" class="ashan-smart-cell-input monthly-item-name" placeholder="物料名称" /></td>
+                <td><input type="text" class="ashan-smart-cell-input monthly-item-spec" placeholder="规格型号" /></td>
+                <td><input type="text" class="ashan-smart-cell-input monthly-item-uom text-center" value="Nos" /></td>
+                <td><input type="number" class="ashan-smart-cell-input monthly-item-qty text-right font-bold" value="1" min="0.001" step="any" /></td>
+                <td><input type="number" class="ashan-smart-cell-input monthly-item-rate text-right font-bold" value="0.00" min="0.01" step="any" /></td>
+                <td><input type="number" class="ashan-smart-cell-input monthly-item-tax-rate text-center" value="13" min="0" max="100" /></td>
+                <td><input type="number" class="ashan-smart-cell-input monthly-item-amt text-right font-bold" value="0.00" readonly /></td>
+                <td><input type="number" class="ashan-smart-cell-input monthly-item-tax-amt text-right" value="0.00" readonly /></td>
+                <td><input type="number" class="ashan-smart-cell-input monthly-item-total text-right font-bold text-success" value="0.00" readonly /></td>
+                <td><input type="text" class="ashan-smart-cell-input monthly-item-remarks" placeholder="备注用途..." /></td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-xs btn-default monthly-row-delete-btn ashan-smart-btn-del" title="删除此行">✕</button>
                 </td>
             </tr>
         `;

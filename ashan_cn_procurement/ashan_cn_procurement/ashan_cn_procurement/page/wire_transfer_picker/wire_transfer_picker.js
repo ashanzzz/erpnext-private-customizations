@@ -652,89 +652,115 @@ class WireTransferPicker {
             },
         });
 
-        d.$wrapper.find(".modal-dialog").addClass("wire-create-modal");
+        d.$wrapper.find(".modal-dialog").addClass("ashan-smart-modal");
 
         let company_options = this.companies.map((c) => `<option value="${c.name}" ${c.name === default_company ? 'selected' : ''}>${frappe.utils.escape_html(c.company_name || c.name)}</option>`).join("");
 
         const form_html = `
-            <div class="wire-modal-header-form">
-                <div class="wire-modal-field">
-                    <label>所属公司 <span class="req">*</span></label>
-                    <select id="modal-wire-company" class="wire-form-control">
-                        ${company_options}
-                    </select>
-                </div>
-                <div class="wire-modal-field">
-                    <label>供应商名称 <span class="req">*</span></label>
-                    <input type="text" id="modal-wire-supplier" placeholder="输入或搜索供应商..." />
-                </div>
-                <div class="wire-modal-field">
-                    <label>发票号码 <span class="req">*</span></label>
-                    <input type="text" id="modal-wire-bill-no" placeholder="如 20268899..." />
-                </div>
-                <div class="wire-modal-field">
-                    <label>发票日期</label>
-                    <input type="date" id="modal-wire-bill-date" value="${frappe.datetime.nowdate()}" />
-                </div>
-                <div class="wire-modal-field">
-                    <label>发票类型</label>
-                    <select id="modal-wire-inv-type">
-                        <option value="专用发票" selected>专用发票 (增值税专票)</option>
-                        <option value="普通发票">普通发票 (增值税普票)</option>
-                    </select>
-                </div>
-                <div class="wire-modal-field">
-                    <label>默认目标仓库</label>
-                    <input type="text" id="modal-wire-warehouse" placeholder="默认 Goods In Transit..." />
-                </div>
-                <div class="wire-modal-checkbox-row">
-                    <label class="wire-modal-checkbox-label">
+            <div class="ashan-smart-modal-body">
+                <!-- Section 1: Basic Info -->
+                <div class="ashan-smart-section">
+                    <div class="ashan-smart-section-header">
+                        <div class="ashan-smart-section-title">
+                            <span>🏢 1. 电汇业务上下文与发票基本信息</span>
+                        </div>
+                    </div>
+                    <div class="ashan-smart-grid-4">
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">所属公司 <span class="req">*</span></label>
+                            <select id="modal-wire-company" class="ashan-smart-control">
+                                ${company_options}
+                            </select>
+                        </div>
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">供应商名称 <span class="req">*</span></label>
+                            <input type="text" class="ashan-smart-control" id="modal-wire-supplier" placeholder="输入或搜索供应商..." />
+                        </div>
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">发票号码 <span class="req">*</span></label>
+                            <input type="text" class="ashan-smart-control" id="modal-wire-bill-no" placeholder="如 20268899..." />
+                        </div>
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">发票日期</label>
+                            <input type="date" class="ashan-smart-control" id="modal-wire-bill-date" value="${frappe.datetime.nowdate()}" />
+                        </div>
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">发票类型</label>
+                            <select class="ashan-smart-control" id="modal-wire-inv-type">
+                                <option value="专用发票" selected>专用发票 (增值税专票)</option>
+                                <option value="普通发票">普通发票 (增值税普票)</option>
+                            </select>
+                        </div>
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">默认目标仓库</label>
+                            <input type="text" class="ashan-smart-control" id="modal-wire-warehouse" placeholder="默认 Goods In Transit..." />
+                        </div>
+                    </div>
+                    <div class="ashan-smart-toggle-box">
                         <input type="checkbox" id="modal-wire-auto-receive" checked />
-                        <span>⚡ 允许维护库存的物料自动生成采购入库单并完成过账 (默认开启)</span>
-                    </label>
+                        <span>⚡ 允许维护库存的物料系统全自动生成采购入库单并完成过账 (默认开启)</span>
+                    </div>
                 </div>
-            </div>
 
-            <!-- Items Table -->
-            <div class="wire-modal-item-table-wrap">
-                <table class="wire-modal-item-table" id="modal-wire-items-table">
-                    <thead>
-                        <tr>
-                            <th class="wire-col-idx">#</th>
-                            <th class="wire-col-item-code">物料代码 <span class="req">*</span></th>
-                            <th class="wire-col-item-name">物料名称</th>
-                            <th class="wire-col-spec">规格型号</th>
-                            <th class="wire-col-uom">单位</th>
-                            <th class="wire-col-qty">数量 <span class="req">*</span></th>
-                            <th class="wire-col-rate">单价 (元) <span class="req">*</span></th>
-                            <th class="wire-col-tax-rate">税率(%)</th>
-                            <th class="wire-col-amt">金额 (元)</th>
-                            <th class="wire-col-tax-amt">税额 (元)</th>
-                            <th class="wire-col-total">价税合计</th>
-                            <th class="wire-col-remarks">用途/备注</th>
-                            <th class="wire-col-op">操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="modal-wire-items-tbody"></tbody>
-                    <tfoot>
-                        <tr>
-                            <td colspan="5" class="wire-sum-label">合计:</td>
-                            <td id="modal-wire-sum-qty" class="wire-sum-num">0.00</td>
-                            <td></td>
-                            <td></td>
-                            <td id="modal-wire-sum-amt" class="wire-sum-num">¥ 0.00</td>
-                            <td id="modal-wire-sum-tax" class="wire-sum-num">¥ 0.00</td>
-                            <td id="modal-wire-sum-total" class="wire-sum-highlight">¥ 0.00</td>
-                            <td colspan="2"></td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
+                <!-- Section 2: Items Details Table -->
+                <div class="ashan-smart-section">
+                    <div class="ashan-smart-section-header">
+                        <div class="ashan-smart-section-title">
+                            <span>📑 2. 自办电汇物料明细清单</span>
+                        </div>
+                        <div class="ashan-smart-section-tools">
+                            <button type="button" class="btn btn-default btn-xs" id="modal-wire-add-row-btn">➕ 添加物料行</button>
+                        </div>
+                    </div>
 
-            <div class="wire-modal-action-bar">
-                <button type="button" class="btn btn-default btn-sm" id="modal-wire-add-row-btn">➕ 添加物料明细行</button>
-                <div class="wire-modal-tip">
-                    💡 提示：单价与金额严禁为 0，系统将为您全自动创建关联采购订单与入库单。
+                    <div class="ashan-smart-table-wrap">
+                        <table class="ashan-smart-table" id="modal-wire-items-table">
+                            <thead>
+                                <tr>
+                                    <th class="ashan-col-w40">#</th>
+                                    <th class="ashan-col-w160">物料代码 <span class="req">*</span></th>
+                                    <th class="ashan-col-w180">物料名称</th>
+                                    <th class="ashan-col-w120">规格型号</th>
+                                    <th class="ashan-col-w70">单位</th>
+                                    <th class="ashan-col-w80">数量 <span class="req">*</span></th>
+                                    <th class="ashan-col-w90">单价 (元) <span class="req">*</span></th>
+                                    <th class="ashan-col-w70">税率(%)</th>
+                                    <th class="ashan-col-w95">金额 (元)</th>
+                                    <th class="ashan-col-w85">税额 (元)</th>
+                                    <th class="ashan-col-w105">价税合计</th>
+                                    <th class="ashan-col-w140">用途/备注</th>
+                                    <th class="ashan-col-w45">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-wire-items-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Section 3: Live Financial Summary & Discipline Bar -->
+                <div class="ashan-smart-summary-bar">
+                    <div class="ashan-smart-tip-box">
+                        <span class="ashan-smart-tip-badge">🛡️ 财务纪律</span>
+                        <span>单价与金额严禁为 0。系统将全自动闭环生成 PO ➔ PR(若库存品) ➔ PI ➔ RR。</span>
+                    </div>
+                    <div class="ashan-smart-kpi-group">
+                        <div class="ashan-smart-kpi-item">
+                            <span class="ashan-smart-kpi-label">订购总数</span>
+                            <span class="ashan-smart-kpi-value" id="modal-wire-sum-qty">0.00</span>
+                        </div>
+                        <div class="ashan-smart-kpi-item">
+                            <span class="ashan-smart-kpi-label">不含税金额</span>
+                            <span class="ashan-smart-kpi-value" id="modal-wire-sum-amt">¥ 0.00</span>
+                        </div>
+                        <div class="ashan-smart-kpi-item">
+                            <span class="ashan-smart-kpi-label">预估税额</span>
+                            <span class="ashan-smart-kpi-value" id="modal-wire-sum-tax">¥ 0.00</span>
+                        </div>
+                        <div class="ashan-smart-kpi-item">
+                            <span class="ashan-smart-kpi-label">电汇总额 (价税合计)</span>
+                            <span class="ashan-smart-kpi-value grand-total text-primary" id="modal-wire-sum-total">¥ 0.00</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -792,20 +818,20 @@ class WireTransferPicker {
         const row_idx = $tbody.find("tr").length + 1;
         const tr_html = `
             <tr>
-                <td class="wire-col-idx-val">${row_idx}</td>
-                <td><input type="text" class="wire-table-input wire-item-code" placeholder="输入物料代码..." /></td>
-                <td><input type="text" class="wire-table-input wire-item-name" placeholder="物料名称" /></td>
-                <td><input type="text" class="wire-table-input wire-item-spec" placeholder="规格型号" /></td>
-                <td><input type="text" class="wire-table-input wire-item-uom wire-col-uom" value="Nos" /></td>
-                <td><input type="number" class="wire-table-input wire-item-qty wire-col-qty" value="1" min="0.001" step="any" /></td>
-                <td><input type="number" class="wire-table-input wire-item-rate wire-col-rate" value="0.00" min="0.01" step="any" /></td>
-                <td><input type="number" class="wire-table-input wire-item-tax-rate wire-col-tax-rate" value="13" min="0" max="100" /></td>
-                <td><input type="number" class="wire-table-input wire-item-amt wire-col-amt" value="0.00" readonly /></td>
-                <td><input type="number" class="wire-table-input wire-item-tax-amt wire-col-tax-amt" value="0.00" readonly /></td>
-                <td><input type="number" class="wire-table-input wire-item-total wire-col-total" value="0.00" readonly /></td>
-                <td><input type="text" class="wire-table-input wire-item-remarks" placeholder="备注用途..." /></td>
-                <td class="wire-col-op">
-                    <button type="button" class="btn btn-xs btn-danger wire-row-delete-btn" title="删除此行">✕</button>
+                <td class="ashan-smart-cell-idx">${row_idx}</td>
+                <td><input type="text" class="ashan-smart-cell-input wire-item-code" placeholder="输入物料代码..." /></td>
+                <td><input type="text" class="ashan-smart-cell-input wire-item-name" placeholder="物料名称" /></td>
+                <td><input type="text" class="ashan-smart-cell-input wire-item-spec" placeholder="规格型号" /></td>
+                <td><input type="text" class="ashan-smart-cell-input wire-item-uom text-center" value="Nos" /></td>
+                <td><input type="number" class="ashan-smart-cell-input wire-item-qty text-right font-bold" value="1" min="0.001" step="any" /></td>
+                <td><input type="number" class="ashan-smart-cell-input wire-item-rate text-right font-bold" value="0.00" min="0.01" step="any" /></td>
+                <td><input type="number" class="ashan-smart-cell-input wire-item-tax-rate text-center" value="13" min="0" max="100" /></td>
+                <td><input type="number" class="ashan-smart-cell-input wire-item-amt text-right font-bold" value="0.00" readonly /></td>
+                <td><input type="number" class="ashan-smart-cell-input wire-item-tax-amt text-right" value="0.00" readonly /></td>
+                <td><input type="number" class="ashan-smart-cell-input wire-item-total text-right font-bold text-primary" value="0.00" readonly /></td>
+                <td><input type="text" class="ashan-smart-cell-input wire-item-remarks" placeholder="备注用途..." /></td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-xs btn-default wire-row-delete-btn ashan-smart-btn-del" title="删除此行">✕</button>
                 </td>
             </tr>
         `;

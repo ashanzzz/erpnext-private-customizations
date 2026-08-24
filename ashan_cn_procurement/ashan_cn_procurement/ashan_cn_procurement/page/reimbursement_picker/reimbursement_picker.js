@@ -738,91 +738,116 @@ class ReimbursementPicker {
             },
         });
 
-        d.$wrapper.find(".modal-dialog").addClass("wire-create-modal");
+        d.$wrapper.find(".modal-dialog").addClass("ashan-smart-modal");
 
         const comp_options = this.companies.map((c) =>
             `<option value="${c.name}" ${c.name === (self.active_company === "All" ? self.companies[0]?.name : self.active_company) ? "selected" : ""}>${frappe.utils.escape_html(c.company_name || c.name)}</option>`
         ).join("");
 
         const form_html = `
-            <div class="reim-modal-container">
-                <div class="reim-modal-form-grid">
-                    <div class="reim-modal-form-item">
-                        <label>所属公司 <span class="req">*</span></label>
-                        <select class="reim-modal-input" id="modal-reim-company">
-                            ${comp_options}
-                        </select>
+            <div class="ashan-smart-modal-body">
+                <!-- Section 1: Basic Info -->
+                <div class="ashan-smart-section">
+                    <div class="ashan-smart-section-header">
+                        <div class="ashan-smart-section-title">
+                            <span>🏢 1. 报销申请上下文与发票基础信息</span>
+                        </div>
                     </div>
-                    <div class="reim-modal-form-item">
-                        <label>报销人员 (员工)</label>
-                        <input type="text" class="reim-modal-input" id="modal-reim-employee" placeholder="输入员工工号或姓名..." />
+                    <div class="ashan-smart-grid-4">
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">所属公司 <span class="req">*</span></label>
+                            <select class="ashan-smart-control" id="modal-reim-company">
+                                ${comp_options}
+                            </select>
+                        </div>
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">报销人员 (员工)</label>
+                            <input type="text" class="ashan-smart-control" id="modal-reim-employee" placeholder="输入员工工号或姓名..." />
+                        </div>
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">商户/供应商名称</label>
+                            <input type="text" class="ashan-smart-control" id="modal-reim-supplier" placeholder="商户/开票单位..." />
+                        </div>
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">发票号码</label>
+                            <input type="text" class="ashan-smart-control" id="modal-reim-invoice-no" placeholder="发票代码/号码..." />
+                        </div>
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">发票类型</label>
+                            <select class="ashan-smart-control" id="modal-reim-invoice-type">
+                                <option value="专用发票">专用发票</option>
+                                <option value="普通发票">普通发票</option>
+                            </select>
+                        </div>
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">开票/报销日期</label>
+                            <input type="date" class="ashan-smart-control" id="modal-reim-date" value="${frappe.datetime.nowdate()}" />
+                        </div>
                     </div>
-                    <div class="reim-modal-form-item">
-                        <label>商户/供应商名称</label>
-                        <input type="text" class="reim-modal-input" id="modal-reim-supplier" placeholder="商户/开票单位..." />
-                    </div>
-                    <div class="reim-modal-form-item">
-                        <label>发票号码</label>
-                        <input type="text" class="reim-modal-input" id="modal-reim-invoice-no" placeholder="发票代码/号码..." />
-                    </div>
-                    <div class="reim-modal-form-item">
-                        <label>发票类型</label>
-                        <select class="reim-modal-input" id="modal-reim-invoice-type">
-                            <option value="专用发票">专用发票</option>
-                            <option value="普通发票">普通发票</option>
-                        </select>
-                    </div>
-                    <div class="reim-modal-form-item">
-                        <label>开票/报销日期</label>
-                        <input type="date" class="reim-modal-input" id="modal-reim-date" value="${frappe.datetime.nowdate()}" />
+                    <div class="ashan-smart-toggle-box">
+                        <input type="checkbox" id="modal-reim-auto-stock" checked />
+                        <span>📦 若包含允许维护库存的物料，系统全自动生成采购入库单并完成过账 (默认开启)</span>
                     </div>
                 </div>
 
-                <div class="reim-modal-checkbox-label">
-                    <input type="checkbox" id="modal-reim-auto-stock" checked />
-                    <span>📦 若包含允许维护库存的物料，自动生成采购入库单并完成过账 (默认开启)</span>
+                <!-- Section 2: Items Details Table -->
+                <div class="ashan-smart-section">
+                    <div class="ashan-smart-section-header">
+                        <div class="ashan-smart-section-title">
+                            <span>📑 2. 报销物料与费用明细清单</span>
+                        </div>
+                        <div class="ashan-smart-section-tools">
+                            <button type="button" class="btn btn-default btn-xs" id="modal-reim-add-row-btn">➕ 添加明细行</button>
+                        </div>
+                    </div>
+
+                    <div class="ashan-smart-table-wrap">
+                        <table class="ashan-smart-table" id="modal-reim-items-table">
+                            <thead>
+                                <tr>
+                                    <th class="ashan-col-w40">#</th>
+                                    <th class="ashan-col-w160">物料/费用代码 <span class="req">*</span></th>
+                                    <th class="ashan-col-w180">名称说明</th>
+                                    <th class="ashan-col-w120">规格型号</th>
+                                    <th class="ashan-col-w70">单位</th>
+                                    <th class="ashan-col-w80">数量 <span class="req">*</span></th>
+                                    <th class="ashan-col-w90">单价 (元) <span class="req">*</span></th>
+                                    <th class="ashan-col-w70">税率(%)</th>
+                                    <th class="ashan-col-w95">金额 (元)</th>
+                                    <th class="ashan-col-w85">税额 (元)</th>
+                                    <th class="ashan-col-w105">价税合计</th>
+                                    <th class="ashan-col-w140">用途/备注</th>
+                                    <th class="ashan-col-w45">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-reim-items-tbody"></tbody>
+                        </table>
+                    </div>
                 </div>
 
-                <!-- Items Grid -->
-                <div class="reim-items-table-wrap">
-                    <table class="reim-items-table" id="modal-reim-items-table">
-                        <thead>
-                            <tr>
-                                <th class="reim-col-idx-val">#</th>
-                                <th class="wire-col-item-code">物料/费用代码 <span class="req">*</span></th>
-                                <th class="wire-col-item-name">名称说明</th>
-                                <th class="wire-col-spec">规格型号</th>
-                                <th class="reim-col-uom">单位</th>
-                                <th class="reim-col-qty">数量 <span class="req">*</span></th>
-                                <th class="reim-col-rate">单价 (元) <span class="req">*</span></th>
-                                <th class="reim-col-tax-rate">税率(%)</th>
-                                <th class="reim-col-amt">金额 (元)</th>
-                                <th class="reim-col-tax-amt">税额 (元)</th>
-                                <th class="reim-col-total">价税合计</th>
-                                <th class="wire-col-remarks">用途/备注</th>
-                                <th class="reim-col-op">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="modal-reim-items-tbody"></tbody>
-                        <tfoot>
-                            <tr>
-                                <td colspan="5" class="text-right font-bold">合计:</td>
-                                <td class="text-right font-bold" id="modal-reim-sum-qty">0.00</td>
-                                <td></td>
-                                <td></td>
-                                <td class="text-right font-bold qifu-money-cell" id="modal-reim-sum-amt">¥ 0.00</td>
-                                <td class="text-right font-bold qifu-money-cell" id="modal-reim-sum-tax">¥ 0.00</td>
-                                <td class="text-right font-bold qifu-money-cell text-primary" id="modal-reim-sum-total">¥ 0.00</td>
-                                <td colspan="2"></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-
-                <div class="reim-modal-action-bar">
-                    <button type="button" class="btn btn-default btn-sm" id="modal-reim-add-row-btn">➕ 添加报销明细行</button>
-                    <div class="reim-modal-tip">
-                        💡 提示：单价与金额严禁为 0，系统将为您全自动创建关联采购订单、入库单(若库存品)、采购发票并生成报销申请单。
+                <!-- Section 3: Live Financial Summary & Discipline Bar -->
+                <div class="ashan-smart-summary-bar">
+                    <div class="ashan-smart-tip-box">
+                        <span class="ashan-smart-tip-badge">🛡️ 财务纪律</span>
+                        <span>单价与金额严禁为 0。系统将全自动闭环生成 PO ➔ PR(若库存品) ➔ PI ➔ RR 报销单。</span>
+                    </div>
+                    <div class="ashan-smart-kpi-group">
+                        <div class="ashan-smart-kpi-item">
+                            <span class="ashan-smart-kpi-label">报销总数</span>
+                            <span class="ashan-smart-kpi-value" id="modal-reim-sum-qty">0.00</span>
+                        </div>
+                        <div class="ashan-smart-kpi-item">
+                            <span class="ashan-smart-kpi-label">不含税金额</span>
+                            <span class="ashan-smart-kpi-value" id="modal-reim-sum-amt">¥ 0.00</span>
+                        </div>
+                        <div class="ashan-smart-kpi-item">
+                            <span class="ashan-smart-kpi-label">预估税额</span>
+                            <span class="ashan-smart-kpi-value" id="modal-reim-sum-tax">¥ 0.00</span>
+                        </div>
+                        <div class="ashan-smart-kpi-item">
+                            <span class="ashan-smart-kpi-label">报销总额 (应付)</span>
+                            <span class="ashan-smart-kpi-value grand-total text-warning" id="modal-reim-sum-total">¥ 0.00</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -881,20 +906,20 @@ class ReimbursementPicker {
         const row_idx = $tbody.find("tr").length + 1;
         const tr_html = `
             <tr>
-                <td class="reim-col-idx-val">${row_idx}</td>
-                <td><input type="text" class="reim-table-input reim-item-code" placeholder="物料/费用代码..." /></td>
-                <td><input type="text" class="reim-table-input reim-item-name" placeholder="名称说明" /></td>
-                <td><input type="text" class="reim-table-input reim-item-spec" placeholder="规格型号" /></td>
-                <td><input type="text" class="reim-table-input reim-item-uom reim-col-uom" value="Nos" /></td>
-                <td><input type="number" class="reim-table-input reim-item-qty reim-col-qty" value="1" min="0.001" step="any" /></td>
-                <td><input type="number" class="reim-table-input reim-item-rate reim-col-rate" value="0.00" min="0.01" step="any" /></td>
-                <td><input type="number" class="reim-table-input reim-item-tax-rate reim-col-tax-rate" value="13" min="0" max="100" /></td>
-                <td><input type="number" class="reim-table-input reim-item-amt reim-col-amt" value="0.00" readonly /></td>
-                <td><input type="number" class="reim-table-input reim-item-tax-amt reim-col-tax-amt" value="0.00" readonly /></td>
-                <td><input type="number" class="reim-table-input reim-item-total reim-col-total" value="0.00" readonly /></td>
-                <td><input type="text" class="reim-table-input reim-item-remarks" placeholder="备注用途..." /></td>
-                <td class="reim-col-op">
-                    <button type="button" class="btn btn-xs btn-danger reim-row-delete-btn" title="删除此行">✕</button>
+                <td class="ashan-smart-cell-idx">${row_idx}</td>
+                <td><input type="text" class="ashan-smart-cell-input reim-item-code" placeholder="物料/费用代码..." /></td>
+                <td><input type="text" class="ashan-smart-cell-input reim-item-name" placeholder="名称说明" /></td>
+                <td><input type="text" class="ashan-smart-cell-input reim-item-spec" placeholder="规格型号" /></td>
+                <td><input type="text" class="ashan-smart-cell-input reim-item-uom text-center" value="Nos" /></td>
+                <td><input type="number" class="ashan-smart-cell-input reim-item-qty text-right font-bold" value="1" min="0.001" step="any" /></td>
+                <td><input type="number" class="ashan-smart-cell-input reim-item-rate text-right font-bold" value="0.00" min="0.01" step="any" /></td>
+                <td><input type="number" class="ashan-smart-cell-input reim-item-tax-rate text-center" value="13" min="0" max="100" /></td>
+                <td><input type="number" class="ashan-smart-cell-input reim-item-amt text-right font-bold" value="0.00" readonly /></td>
+                <td><input type="number" class="ashan-smart-cell-input reim-item-tax-amt text-right" value="0.00" readonly /></td>
+                <td><input type="number" class="ashan-smart-cell-input reim-item-total text-right font-bold text-warning" value="0.00" readonly /></td>
+                <td><input type="text" class="ashan-smart-cell-input reim-item-remarks" placeholder="备注用途..." /></td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-xs btn-default reim-row-delete-btn ashan-smart-btn-del" title="删除此行">✕</button>
                 </td>
             </tr>
         `;
