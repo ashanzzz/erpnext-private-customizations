@@ -411,22 +411,13 @@ def quick_create_material_request(
         )
 
         item_name = (it.get("item_name") or "").strip() or item_doc.item_name
-        item_spec = (it.get("spec") or "").strip()
-        item_remarks = (it.get("description") or "").strip()
-
-        desc_parts = []
-        if item_name and item_name != item_doc.item_code:
-            desc_parts.append(item_name)
-        if item_spec:
-            desc_parts.append(f"规格:{item_spec}")
-        if item_remarks:
-            desc_parts.append(item_remarks)
-        final_desc = " | ".join(desc_parts) if desc_parts else (item_doc.description or item_name)
+        item_spec = (it.get("spec") or it.get("custom_spec_model") or "").strip()
+        item_remarks = (it.get("remarks") or it.get("custom_line_remark") or it.get("description") or "").strip()
 
         row_dict = {
             "item_code": item_code,
             "item_name": item_name,
-            "description": final_desc,
+            "description": item_remarks or item_doc.description or item_name,
             "item_group": item_doc.item_group,
             "uom": uom,
             "stock_uom": item_doc.stock_uom or uom,
@@ -436,6 +427,10 @@ def quick_create_material_request(
             "schedule_date": schedule_date or str(getdate(nowdate())),
             "warehouse": item_wh,
         }
+        if _meta_has("Material Request Item", "custom_spec_model"):
+            row_dict["custom_spec_model"] = item_spec
+        if _meta_has("Material Request Item", "custom_line_remark"):
+            row_dict["custom_line_remark"] = item_remarks
         if _meta_has("Material Request Item", "custom_tax_rate"):
             row_dict["custom_tax_rate"] = tax_rate
         if _meta_has("Material Request Item", "custom_tax_amount"):
@@ -556,22 +551,13 @@ def update_quick_material_request(
         )
 
         item_name = (it.get("item_name") or "").strip() or item_doc.item_name
-        item_spec = (it.get("spec") or "").strip()
-        item_remarks = (it.get("description") or "").strip()
-
-        desc_parts = []
-        if item_name and item_name != item_doc.item_code:
-            desc_parts.append(item_name)
-        if item_spec:
-            desc_parts.append(f"规格:{item_spec}")
-        if item_remarks:
-            desc_parts.append(item_remarks)
-        final_desc = " | ".join(desc_parts) if desc_parts else (item_doc.description or item_name)
+        item_spec = (it.get("spec") or it.get("custom_spec_model") or "").strip()
+        item_remarks = (it.get("remarks") or it.get("custom_line_remark") or it.get("description") or "").strip()
 
         row_dict = {
             "item_code": item_code,
             "item_name": item_name,
-            "description": final_desc,
+            "description": item_remarks or item_doc.description or item_name,
             "item_group": item_doc.item_group,
             "uom": uom,
             "stock_uom": item_doc.stock_uom or uom,
@@ -581,6 +567,10 @@ def update_quick_material_request(
             "schedule_date": schedule_date or str(mr.schedule_date or getdate(nowdate())),
             "warehouse": item_wh,
         }
+        if _meta_has("Material Request Item", "custom_spec_model"):
+            row_dict["custom_spec_model"] = item_spec
+        if _meta_has("Material Request Item", "custom_line_remark"):
+            row_dict["custom_line_remark"] = item_remarks
         if _meta_has("Material Request Item", "custom_tax_rate"):
             row_dict["custom_tax_rate"] = tax_rate
         if _meta_has("Material Request Item", "custom_tax_amount"):
@@ -607,22 +597,49 @@ def update_quick_material_request(
     }
 
 
-def parse_description_parts(desc: str | None, item_name: str | None = None) -> tuple[str, str]:
-    """Parse unified description format 'ItemName | 规格:Spec | Remarks' into (spec, remarks)."""
-    if not desc:
-        return "", ""
-    parts = [p.strip() for p in desc.split(" | ") if p.strip()]
-    spec = ""
-    remarks_parts = []
-    for p in parts:
-        if p.startswith("规格:"):
-            spec = p[3:].strip()
-        elif item_name and p == item_name:
-            continue
-        else:
-            remarks_parts.append(p)
-    remarks = " | ".join(remarks_parts)
+def extract_spec_and_remarks(item_row: dict | Any) -> tuple[str, str]:
+    """Extract pure spec and pure remarks from item row with backward compatibility."""
+    if isinstance(item_row, dict):
+        spec = (item_row.get("custom_spec_model") or item_row.get("custom_item_spec") or item_row.get("spec") or "").strip()
+        remarks = (item_row.get("custom_line_remark") or item_row.get("remarks") or "").strip()
+        raw_desc = (item_row.get("description") or "").strip()
+        item_name = (item_row.get("item_name") or "").strip()
+        item_code = (item_row.get("item_code") or "").strip()
+    else:
+        spec = (getattr(item_row, "custom_spec_model", None) or getattr(item_row, "custom_item_spec", None) or getattr(item_row, "spec", None) or "").strip()
+        remarks = (getattr(item_row, "custom_line_remark", None) or getattr(item_row, "remarks", None) or "").strip()
+        raw_desc = (getattr(item_row, "description", None) or "").strip()
+        item_name = (getattr(item_row, "item_name", None) or "").strip()
+        item_code = (getattr(item_row, "item_code", None) or "").strip()
+
+    # If pure remarks is empty, sanitize from raw_desc
+    if not remarks and raw_desc:
+        if " | " in raw_desc:
+            parts = [p.strip() for p in raw_desc.split(" | ") if p.strip()]
+            clean_parts = []
+            for p in parts:
+                if p.startswith("规格:"):
+                    if not spec:
+                        spec = p[3:].strip()
+                elif item_name and p == item_name:
+                    continue
+                elif item_code and p == item_code:
+                    continue
+                else:
+                    clean_parts.append(p)
+            remarks = " | ".join(clean_parts)
+        elif raw_desc.startswith("规格:"):
+            if not spec:
+                spec = raw_desc[3:].strip()
+        elif raw_desc != item_name and raw_desc != item_code:
+            remarks = raw_desc
+
     return spec, remarks
+
+
+def parse_description_parts(desc: str | None, item_name: str | None = None) -> tuple[str, str]:
+    """Backward-compatible alias for extract_spec_and_remarks."""
+    return extract_spec_and_remarks({"description": desc, "item_name": item_name})
 
 
 # =========================================================================
@@ -706,6 +723,8 @@ def get_pending_material_request_items(
             mri.item_code,
             mri.item_name,
             mri.description,
+            COALESCE(mri.custom_spec_model, '') AS custom_spec_model,
+            COALESCE(mri.custom_line_remark, '') AS custom_line_remark,
             mri.item_group,
             COALESCE(mri.uom, mri.stock_uom, '') AS uom,
             COALESCE(mri.qty, 0) AS qty,
@@ -747,7 +766,7 @@ def get_pending_material_request_items(
         tax_amount = flt(amount * (tax_rate / 100.0), 2)
         total_amount = flt(amount + tax_amount, 2)
 
-        spec, remarks = parse_description_parts(r.description, r.item_name)
+        spec, remarks = extract_spec_and_remarks(r)
 
         rows.append({
             "mri_name": r.mri_name,
@@ -930,6 +949,8 @@ def make_purchase_orders_from_mr_items(
             mri.item_code,
             mri.item_name,
             mri.description,
+            COALESCE(mri.custom_spec_model, '') AS custom_spec_model,
+            COALESCE(mri.custom_line_remark, '') AS custom_line_remark,
             mri.item_group,
             mri.uom,
             mri.stock_uom,
@@ -985,8 +1006,8 @@ def make_purchase_orders_from_mr_items(
             "tax_rate": tax_rate,
             "tax_amount": tax_amount,
             "total_amount": total_amount,
-            "spec": user_row.get("spec") or "",
-            "description": user_row.get("description") or "",
+            "spec": user_row.get("spec") or db_row.custom_spec_model or "",
+            "description": user_row.get("remarks") or user_row.get("description") or db_row.custom_line_remark or "",
         })
 
     created_orders = []
@@ -1005,22 +1026,13 @@ def make_purchase_orders_from_mr_items(
             tax_rate = item_data["tax_rate"]
             tax_amount = item_data["tax_amount"]
             total_amount = item_data["total_amount"]
-            item_spec = item_data["spec"]
-            item_desc = item_data["description"]
-
-            desc_parts = []
-            if db_row.item_name:
-                desc_parts.append(db_row.item_name)
-            if item_spec:
-                desc_parts.append(f"规格:{item_spec}")
-            if item_desc and item_desc != db_row.item_name:
-                desc_parts.append(item_desc)
-            final_desc = " | ".join(desc_parts) if desc_parts else (db_row.description or db_row.item_name)
+            item_spec = (item_data["spec"] or "").strip()
+            item_remarks = (item_data["description"] or "").strip()
 
             row_dict = {
                 "item_code": db_row.item_code,
                 "item_name": db_row.item_name,
-                "description": final_desc,
+                "description": item_remarks or db_row.description or db_row.item_name,
                 "item_group": db_row.item_group,
                 "uom": db_row.uom or db_row.stock_uom,
                 "stock_uom": db_row.stock_uom,
@@ -1033,6 +1045,10 @@ def make_purchase_orders_from_mr_items(
                 "material_request_item": db_row.name,
             }
 
+            if _meta_has("Purchase Order Item", "custom_spec_model"):
+                row_dict["custom_spec_model"] = item_spec
+            if _meta_has("Purchase Order Item", "custom_line_remark"):
+                row_dict["custom_line_remark"] = item_remarks
             if _meta_has("Purchase Order Item", "custom_tax_rate"):
                 row_dict["custom_tax_rate"] = tax_rate
             if _meta_has("Purchase Order Item", "custom_tax_amount"):
@@ -1141,22 +1157,13 @@ def update_quick_purchase_order(
 
             old_it = old_items_map.get(item_code)
 
-            item_spec = (it.get("spec") or "").strip()
-            item_remarks = (it.get("description") or "").strip()
-
-            desc_parts = []
-            if item_name and item_name != getattr(item_doc, "item_code", ""):
-                desc_parts.append(item_name)
-            if item_spec:
-                desc_parts.append(f"规格:{item_spec}")
-            if item_remarks:
-                desc_parts.append(item_remarks)
-            final_desc = " | ".join(desc_parts) if desc_parts else (getattr(item_doc, "description", None) or item_name)
+            item_spec = (it.get("spec") or it.get("custom_spec_model") or "").strip()
+            item_remarks = (it.get("remarks") or it.get("custom_line_remark") or it.get("description") or "").strip()
 
             row_dict = {
                 "item_code": item_code,
                 "item_name": item_name,
-                "description": final_desc,
+                "description": item_remarks or getattr(item_doc, "description", None) or item_name,
                 "qty": qty,
                 "rate": rate,
                 "amount": amount,
@@ -1168,6 +1175,10 @@ def update_quick_purchase_order(
                 "material_request_item": getattr(old_it, "material_request_item", None),
             }
 
+            if _meta_has("Purchase Order Item", "custom_spec_model"):
+                row_dict["custom_spec_model"] = item_spec
+            if _meta_has("Purchase Order Item", "custom_line_remark"):
+                row_dict["custom_line_remark"] = item_remarks
             if _meta_has("Purchase Order Item", "custom_tax_rate"):
                 row_dict["custom_tax_rate"] = tax_rate
             if _meta_has("Purchase Order Item", "custom_tax_amount"):
@@ -1253,6 +1264,9 @@ def get_pending_purchase_order_items(
             poi.schedule_date,
             poi.item_code,
             poi.item_name,
+            poi.description,
+            COALESCE(poi.custom_spec_model, '') AS custom_spec_model,
+            COALESCE(poi.custom_line_remark, '') AS custom_line_remark,
             poi.item_group,
             COALESCE(poi.uom, poi.stock_uom, '') AS uom,
             poi.stock_uom,
@@ -1279,6 +1293,7 @@ def get_pending_purchase_order_items(
 
     rows = []
     for r in raw_items:
+        spec, remarks = extract_spec_and_remarks(r)
         rows.append({
             "poi_name": r.poi_name,
             "po_name": r.po_name,
@@ -1288,6 +1303,9 @@ def get_pending_purchase_order_items(
             "schedule_date": str(r.schedule_date or ""),
             "item_code": r.item_code,
             "item_name": r.item_name or r.item_code,
+            "spec": spec,
+            "remarks": remarks,
+            "description": remarks,
             "item_group": r.item_group or "",
             "uom": r.uom or "",
             "qty": flt(r.qty, 2),
@@ -1436,6 +1454,8 @@ def make_purchase_receipts_from_po_items(
             poi.item_code,
             poi.item_name,
             poi.description,
+            COALESCE(poi.custom_spec_model, '') AS custom_spec_model,
+            COALESCE(poi.custom_line_remark, '') AS custom_line_remark,
             poi.item_group,
             poi.uom,
             poi.stock_uom,
@@ -1495,10 +1515,10 @@ def make_purchase_receipts_from_po_items(
             this_qty = item_data["this_qty"]
             wh = item_data["warehouse"]
 
-            pr.append("items", {
+            pr_item_dict = {
                 "item_code": db_row.item_code,
                 "item_name": db_row.item_name,
-                "description": db_row.description or db_row.item_name,
+                "description": db_row.custom_line_remark or db_row.description or db_row.item_name,
                 "item_group": db_row.item_group,
                 "uom": db_row.uom or db_row.stock_uom,
                 "stock_uom": db_row.stock_uom,
@@ -1508,7 +1528,13 @@ def make_purchase_receipts_from_po_items(
                 "warehouse": wh,
                 "purchase_order": db_row.po_name,
                 "purchase_order_item": db_row.name,
-            })
+            }
+            if _meta_has("Purchase Receipt Item", "custom_spec_model"):
+                pr_item_dict["custom_spec_model"] = db_row.custom_spec_model
+            if _meta_has("Purchase Receipt Item", "custom_line_remark"):
+                pr_item_dict["custom_line_remark"] = db_row.custom_line_remark
+
+            pr.append("items", pr_item_dict)
 
         pr.flags.ignore_permissions = False
         pr.insert()
@@ -1587,6 +1613,9 @@ def get_pending_purchase_receipt_items(
             pr.posting_date AS pr_date,
             pri.item_code,
             pri.item_name,
+            pri.description,
+            COALESCE(pri.custom_spec_model, '') AS custom_spec_model,
+            COALESCE(pri.custom_line_remark, '') AS custom_line_remark,
             pri.item_group,
             COALESCE(pri.uom, pri.stock_uom, '') AS uom,
             pri.stock_uom,
@@ -1618,6 +1647,7 @@ def get_pending_purchase_receipt_items(
         unit_rate = flt(r.rate) or 1.0
         pending_qty = flt(r.pending_amount) / unit_rate if unit_rate else flt(r.qty)
         billed_qty = max(0.0, flt(r.qty) - pending_qty)
+        spec, remarks = extract_spec_and_remarks(r)
 
         rows.append({
             "pri_name": r.pri_name,
@@ -1627,6 +1657,9 @@ def get_pending_purchase_receipt_items(
             "pr_date": str(r.pr_date or ""),
             "item_code": r.item_code,
             "item_name": r.item_name or r.item_code,
+            "spec": spec,
+            "remarks": remarks,
+            "description": remarks,
             "item_group": r.item_group or "",
             "uom": r.uom or "",
             "qty": flt(r.qty, 2),
@@ -1774,6 +1807,8 @@ def make_purchase_invoices_from_pr_items(
             pri.item_code,
             pri.item_name,
             pri.description,
+            COALESCE(pri.custom_spec_model, '') AS custom_spec_model,
+            COALESCE(pri.custom_line_remark, '') AS custom_line_remark,
             pri.item_group,
             pri.uom,
             pri.stock_uom,
@@ -1794,6 +1829,8 @@ def make_purchase_invoices_from_pr_items(
 
     db_map = {r.name: r for r in db_items}
 
+    warehouse_override = filters.get("warehouse") if isinstance(filters, dict) else None
+
     # Group by (company, supplier)
     supplier_groups = defaultdict(list)
     for user_row in expanded_items:
@@ -1805,26 +1842,28 @@ def make_purchase_invoices_from_pr_items(
         row_company = db_row.company
         assert_company_access(row_company)
 
+        target_wh = (warehouse_override or "").strip() or user_row.get("warehouse") or db_row.warehouse
         this_qty = flt(user_row.get("this_qty"))
         if this_qty <= 0:
             this_qty = flt(db_row.qty)
-
-        user_rate = flt(user_row.get("rate")) if "rate" in user_row and user_row.get("rate") is not None else flt(db_row.rate)
-        user_remarks = user_row.get("description") or user_row.get("remarks") or ""
-        user_spec = user_row.get("spec") or ""
-        user_tax_rate = flt(user_row.get("tax_rate", 13.0))
-        user_tax_amount = flt(user_row.get("tax_amount", 0.0))
-        user_total_amount = flt(user_row.get("total_amount", 0.0))
+        
+        user_rate = flt(user_row.get("rate")) or flt(db_row.rate)
+        amount = flt(user_row.get("amount")) or flt(this_qty * user_rate, 2)
+        tax_rate = flt(user_row.get("tax_rate") or 13.0, 2)
+        tax_amount = flt(user_row.get("tax_amount") or (amount * (tax_rate / 100.0)), 2)
+        total_amount = flt(user_row.get("total_amount") or (amount + tax_amount), 2)
 
         supplier_groups[(row_company, db_row.supplier)].append({
             "db_row": db_row,
             "this_qty": this_qty,
             "rate": user_rate,
-            "spec": user_spec,
-            "remarks": user_remarks,
-            "tax_rate": user_tax_rate,
-            "tax_amount": user_tax_amount,
-            "total_amount": user_total_amount,
+            "amount": amount,
+            "tax_rate": tax_rate,
+            "tax_amount": tax_amount,
+            "total_amount": total_amount,
+            "spec": user_row.get("spec") or db_row.custom_spec_model or "",
+            "remarks": user_row.get("remarks") or user_row.get("description") or db_row.custom_line_remark or "",
+            "warehouse": target_wh,
         })
 
     created_invoices = []
@@ -1842,20 +1881,13 @@ def make_purchase_invoices_from_pr_items(
             db_row = item_data["db_row"]
             this_qty = item_data["this_qty"]
             user_rate = item_data["rate"]
-            user_spec = item_data["spec"]
-            user_remarks = item_data["remarks"]
-
-            desc_parts = [db_row.item_name]
-            if user_spec:
-                desc_parts.append(f"规格:{user_spec}")
-            if user_remarks:
-                desc_parts.append(user_remarks)
-            final_desc = " | ".join(desc_parts) if desc_parts else (db_row.description or db_row.item_name)
+            user_spec = (item_data["spec"] or "").strip()
+            user_remarks = (item_data["remarks"] or "").strip()
 
             row_dict = {
                 "item_code": db_row.item_code,
                 "item_name": db_row.item_name,
-                "description": final_desc,
+                "description": user_remarks or db_row.custom_line_remark or db_row.description or db_row.item_name,
                 "item_group": db_row.item_group,
                 "uom": db_row.uom or db_row.stock_uom,
                 "stock_uom": db_row.stock_uom,
@@ -1869,6 +1901,10 @@ def make_purchase_invoices_from_pr_items(
                 "po_detail": db_row.purchase_order_item,
             }
 
+            if _meta_has("Purchase Invoice Item", "custom_spec_model"):
+                row_dict["custom_spec_model"] = user_spec
+            if _meta_has("Purchase Invoice Item", "custom_line_remark"):
+                row_dict["custom_line_remark"] = user_remarks
             if _meta_has("Purchase Invoice Item", "custom_tax_rate"):
                 row_dict["custom_tax_rate"] = item_data["tax_rate"]
             if _meta_has("Purchase Invoice Item", "custom_tax_amount"):
@@ -1956,6 +1992,9 @@ def get_pending_reimbursement_invoice_items(
             pi.outstanding_amount,
             pii.item_code,
             pii.item_name,
+            pii.description,
+            COALESCE(pii.custom_spec_model, '') AS custom_spec_model,
+            COALESCE(pii.custom_line_remark, '') AS custom_line_remark,
             COALESCE(pii.uom, pii.stock_uom, '') AS uom,
             COALESCE(pii.qty, 1) AS qty,
             COALESCE(pii.rate, 0) AS rate,
@@ -1998,6 +2037,8 @@ def get_pending_reimbursement_invoice_items(
         if match_status == "linked" and not has_link and net_outstanding > 0.0001:
             continue
 
+        spec, remarks = extract_spec_and_remarks(it)
+
         rows.append({
             "pii_name": it.pii_name,
             "pi_name": it.pi_name,
@@ -2008,6 +2049,9 @@ def get_pending_reimbursement_invoice_items(
             "posting_date": str(it.posting_date) if it.posting_date else "",
             "item_code": it.item_code,
             "item_name": it.item_name or it.item_code,
+            "spec": spec,
+            "remarks": remarks,
+            "description": remarks,
             "uom": it.uom,
             "qty": flt(it.qty, 2),
             "rate": flt(it.rate, 2),
@@ -2329,18 +2373,7 @@ def get_document_details(doctype: str, name: str) -> dict:
         total_qty += q
         total_amount += (tot if tot > 0 else amt)
 
-        custom_spec = (it.get("custom_item_spec") or it.get("spec") or "").strip()
-        desc_raw = (it.get("description") or "").strip()
-        remarks = desc_raw
-        if not custom_spec and "规格:" in desc_raw:
-            parts = desc_raw.split(" | ")
-            clean_remarks = []
-            for p in parts:
-                if p.startswith("规格:"):
-                    custom_spec = p.replace("规格:", "").strip()
-                elif p != (it.get("item_name") or "") and p != (it.get("item_code") or ""):
-                    clean_remarks.append(p)
-            remarks = " | ".join(clean_remarks)
+        custom_spec, remarks = extract_spec_and_remarks(it)
 
         items.append({
             "idx": idx,

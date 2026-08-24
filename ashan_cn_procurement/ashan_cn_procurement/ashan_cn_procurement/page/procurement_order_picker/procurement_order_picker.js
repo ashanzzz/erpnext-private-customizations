@@ -1503,7 +1503,7 @@ class ProcurementOrderPickerCenter {
                             <input type="number" step="any" min="0" class="modal-input-total-amount" value="${flt(row.total_amount).toFixed(2)}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-remarks" placeholder="备注说明..." value="${frappe.utils.escape_html(row.description || '')}">
+                            <input type="text" class="modal-input-remarks" placeholder="备注说明..." value="${frappe.utils.escape_html(row.remarks || row.description || '')}">
                         </td>
                         <td class="picker-modal-cell-center">
                             <button class="picker-modal-del-btn" data-idx="${idx}">删除</button>
@@ -1751,7 +1751,10 @@ class ProcurementOrderPickerCenter {
 
         $wrap.on("input change", ".modal-input-remarks", function () {
             const idx = parseInt($(this).closest("tr").attr("data-idx"));
-            rows_data[idx].description = $(this).val();
+            const val = $(this).val();
+            rows_data[idx].description = val;
+            rows_data[idx].remarks = val;
+            rows_data[idx].custom_line_remark = val;
         });
 
         $wrap.on("input change", ".modal-input-qty", function () {
@@ -2315,7 +2318,7 @@ class ProcurementOrderPickerCenter {
                             <input type="number" step="any" min="0" class="modal-input-total-amount" value="${flt(r.total_amount).toFixed(2)}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-remarks" placeholder="备注说明..." value="${frappe.utils.escape_html(r.description || '')}">
+                            <input type="text" class="modal-input-remarks" placeholder="备注说明..." value="${frappe.utils.escape_html(r.remarks || r.description || '')}">
                         </td>
                         <td class="picker-modal-cell-center">
                             <button class="picker-modal-del-btn" data-idx="${idx}">删除</button>
@@ -2561,7 +2564,10 @@ class ProcurementOrderPickerCenter {
 
         $wrap.on("input change", ".modal-input-remarks", function () {
             const idx = parseInt($(this).closest("tr").attr("data-idx"));
-            rows_data[idx].description = $(this).val();
+            const val = $(this).val();
+            rows_data[idx].description = val;
+            rows_data[idx].remarks = val;
+            rows_data[idx].custom_line_remark = val;
         });
 
         $wrap.on("input change", ".modal-input-qty", function () {
@@ -2747,7 +2753,7 @@ class ProcurementOrderPickerCenter {
                             <input type="number" step="any" min="0" class="modal-input-total-amount" value="${flt(r.total_amount).toFixed(2)}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-remarks" placeholder="备注说明..." value="${frappe.utils.escape_html(r.description || '')}">
+                            <input type="text" class="modal-input-remarks" placeholder="备注说明..." value="${frappe.utils.escape_html(r.remarks || r.description || '')}">
                         </td>
                         <td class="picker-modal-cell-center">
                             <button class="picker-modal-del-btn" data-idx="${idx}">删除</button>
@@ -2998,7 +3004,10 @@ class ProcurementOrderPickerCenter {
 
         $wrap.on("input change", ".modal-input-remarks", function () {
             const idx = parseInt($(this).closest("tr").attr("data-idx"));
-            rows_data[idx].description = $(this).val();
+            const val = $(this).val();
+            rows_data[idx].description = val;
+            rows_data[idx].remarks = val;
+            rows_data[idx].custom_line_remark = val;
         });
 
         $wrap.on("input change", ".modal-input-qty", function () {
@@ -3190,7 +3199,7 @@ class ProcurementOrderPickerCenter {
                             <input type="number" step="any" min="0" class="modal-input-total-amount" value="${flt(r.total_amount).toFixed(2)}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-remarks modal-input-readonly" readonly tabindex="-1" placeholder="备注说明..." value="${frappe.utils.escape_html(r.description || '')}">
+                            <input type="text" class="modal-input-remarks modal-input-readonly" readonly tabindex="-1" placeholder="备注说明..." value="${frappe.utils.escape_html(r.remarks || r.description || '')}">
                         </td>
                         <td class="picker-modal-cell-center">
                             <button class="picker-modal-del-btn" data-idx="${idx}">删除</button>
@@ -3642,7 +3651,7 @@ class ProcurementOrderPickerCenter {
                             <input type="number" step="any" min="0" class="modal-input-total-amount" value="${flt(r.total_amount).toFixed(2)}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-remarks modal-input-readonly" readonly tabindex="-1" placeholder="备注说明..." value="${frappe.utils.escape_html(r.description || '')}">
+                            <input type="text" class="modal-input-remarks modal-input-readonly" readonly tabindex="-1" placeholder="备注说明..." value="${frappe.utils.escape_html(r.remarks || r.description || '')}">
                         </td>
                         <td class="picker-modal-cell-center">
                             <button class="picker-modal-del-btn" data-idx="${idx}">删除</button>
@@ -3980,7 +3989,7 @@ class ProcurementOrderPickerCenter {
                             <input type="number" step="any" min="0" class="modal-input-total-amount" value="${flt(r.total_amount).toFixed(2)}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-remarks modal-input-readonly" readonly tabindex="-1" placeholder="备注说明..." value="${frappe.utils.escape_html(r.description || '')}">
+                            <input type="text" class="modal-input-remarks modal-input-readonly" readonly tabindex="-1" placeholder="备注说明..." value="${frappe.utils.escape_html(r.remarks || r.description || '')}">
                         </td>
                         <td class="picker-modal-cell-center">
                             <button class="picker-modal-del-btn" data-idx="${idx}">删除</button>
