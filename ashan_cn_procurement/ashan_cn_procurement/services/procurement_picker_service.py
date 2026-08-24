@@ -2264,12 +2264,23 @@ def get_procurement_picker_overview_kpis(company: str | None = None) -> dict:
     """Return aggregated KPI counts for all 5 procurement steps."""
     companies = _resolve_companies(company)
 
-    mr_all_count = frappe.db.sql("""
+    mr_pending_docs_count = frappe.db.sql("""
         SELECT COUNT(DISTINCT mr.name)
         FROM `tabMaterial Request` mr
         WHERE mr.docstatus < 2
           AND mr.material_request_type = 'Purchase'
           AND mr.company IN %s
+          AND (
+              mr.docstatus = 0
+              OR (
+                  mr.status NOT IN ('Stopped', 'Cancelled', 'Transfer')
+                  AND EXISTS (
+                      SELECT 1 FROM `tabMaterial Request Item` mri
+                      WHERE mri.parent = mr.name
+                        AND (mri.qty - COALESCE(mri.ordered_qty, 0)) > 0.0001
+                  )
+              )
+          )
     """, (companies,))[0][0] or 0
 
     mr_count = frappe.db.sql("""
@@ -2317,7 +2328,7 @@ def get_procurement_picker_overview_kpis(company: str | None = None) -> dict:
     return {
         "companies": companies,
         "kpis": {
-            "item_to_mr": {"count": mr_all_count, "label": "采购申请单据"},
+            "item_to_mr": {"count": mr_pending_docs_count, "label": "待办采购申请"},
             "mr_to_po": {"count": mr_count, "label": "待订货需求明细"},
             "po_to_pr": {"count": po_count, "label": "待收货订单明细"},
             "pr_to_pi": {"count": pr_count, "label": "待开票入库明细"},

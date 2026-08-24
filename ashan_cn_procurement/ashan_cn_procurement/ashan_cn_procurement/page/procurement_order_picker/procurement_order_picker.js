@@ -41,7 +41,7 @@ class ProcurementOrderPickerCenter {
                 name: "采购申请",
                 banner_title: "当前：采购申请",
                 banner_desc: "查看与管理已提报的采购申请明细及单据。如需修改请点击申请单号进入单据修改，或点击【+ 新建物料申请单】快速录入。",
-                sub_label: "采购申请单据",
+                sub_label: "待办采购申请",
                 icon: "📋",
                 btn_label: "",
             },
@@ -432,11 +432,11 @@ class ProcurementOrderPickerCenter {
             filters_html = `
                 <div class="picker-filter-group">
                     <label>采购状态:</label>
-                    <select class="picker-filter-select" data-filter="match_status">
-                        <option value="pending" ${ms === 'pending' ? 'selected' : ''}>🟡 仅待订购需求 (未生成订单/未订完)</option>
-                        <option value="completed" ${ms === 'completed' ? 'selected' : ''}>🟢 仅已全部订购 (已生成订单)</option>
-                        <option value="all" ${ms === 'all' ? 'selected' : ''}>🌐 全部申请单据 (全量追溯)</option>
-                    </select>
+                    <div class="picker-status-btn-group" data-filter="match_status">
+                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">🟡 仅待订购需求</button>
+                        <button type="button" class="picker-status-btn ${ms === 'completed' ? 'active' : ''}" data-value="completed">🟢 仅已全部订购</button>
+                        <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">🌐 全部申请单据</button>
+                    </div>
                 </div>
                 <div class="picker-filter-group">
                     <label>申请单号:</label>
@@ -452,11 +452,11 @@ class ProcurementOrderPickerCenter {
             filters_html = `
                 <div class="picker-filter-group">
                     <label>关联状态:</label>
-                    <select class="picker-filter-select" data-filter="match_status">
-                        <option value="pending" ${ms === 'pending' ? 'selected' : ''}>🟡 仅待订需求 (未关联/待订)</option>
-                        <option value="linked" ${ms === 'linked' ? 'selected' : ''}>🟢 仅已订需求 (已关联PO)</option>
-                        <option value="all" ${ms === 'all' ? 'selected' : ''}>🌐 全部需求单据 (全量追溯)</option>
-                    </select>
+                    <div class="picker-status-btn-group" data-filter="match_status">
+                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">🟡 仅待订需求</button>
+                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">🟢 仅已订需求</button>
+                        <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">🌐 全部需求单据</button>
+                    </div>
                 </div>
                 <div class="picker-filter-group">
                     <label>关联订单号:</label>
@@ -482,11 +482,11 @@ class ProcurementOrderPickerCenter {
             filters_html = `
                 <div class="picker-filter-group">
                     <label>关联状态:</label>
-                    <select class="picker-filter-select" data-filter="match_status">
-                        <option value="pending" ${ms === 'pending' ? 'selected' : ''}>🟡 仅待收订单 (未关联/待收)</option>
-                        <option value="linked" ${ms === 'linked' ? 'selected' : ''}>🟢 仅已收订单 (已关联PR)</option>
-                        <option value="all" ${ms === 'all' ? 'selected' : ''}>🌐 全部采购订单 (全量追溯)</option>
-                    </select>
+                    <div class="picker-status-btn-group" data-filter="match_status">
+                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">🟡 仅待收订单</button>
+                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">🟢 仅已收订单</button>
+                        <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">🌐 全部采购订单</button>
+                    </div>
                 </div>
                 <div class="picker-filter-group">
                     <label>关联入库单:</label>
@@ -510,11 +510,11 @@ class ProcurementOrderPickerCenter {
             filters_html = `
                 <div class="picker-filter-group">
                     <label>关联状态:</label>
-                    <select class="picker-filter-select" data-filter="match_status">
-                        <option value="pending" ${ms === 'pending' ? 'selected' : ''}>🟡 仅待开票 (未关联/待开)</option>
-                        <option value="linked" ${ms === 'linked' ? 'selected' : ''}>🟢 仅已开票 (已关联PI)</option>
-                        <option value="all" ${ms === 'all' ? 'selected' : ''}>🌐 全部入库单据 (全量追溯)</option>
-                    </select>
+                    <div class="picker-status-btn-group" data-filter="match_status">
+                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">🟡 仅待开票</button>
+                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">🟢 仅已开票</button>
+                        <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">🌐 全部入库单据</button>
+                    </div>
                 </div>
                 <div class="picker-filter-group">
                     <label>关联发票号:</label>
@@ -538,11 +538,11 @@ class ProcurementOrderPickerCenter {
             filters_html = `
                 <div class="picker-filter-group">
                     <label>关联状态:</label>
-                    <select class="picker-filter-select" data-filter="match_status">
-                        <option value="pending" ${ms === 'pending' ? 'selected' : ''}>🟡 仅待报销发票 (未关联/未付清)</option>
-                        <option value="linked" ${ms === 'linked' ? 'selected' : ''}>🟢 仅已报销发票 (已关联RR)</option>
-                        <option value="all" ${ms === 'all' ? 'selected' : ''}>🌐 全部发票单据 (全量追溯)</option>
-                    </select>
+                    <div class="picker-status-btn-group" data-filter="match_status">
+                        <button type="button" class="picker-status-btn ${ms === 'pending' ? 'active' : ''}" data-value="pending">🟡 仅待报销发票</button>
+                        <button type="button" class="picker-status-btn ${ms === 'linked' ? 'active' : ''}" data-value="linked">🟢 仅已报销发票</button>
+                        <button type="button" class="picker-status-btn ${ms === 'all' ? 'active' : ''}" data-value="all">🌐 全部发票单据</button>
+                    </div>
                 </div>
                 <div class="picker-filter-group">
                     <label>关联报销单:</label>
@@ -566,9 +566,20 @@ class ProcurementOrderPickerCenter {
         $bar.html(filters_html);
 
         const self = this;
-        $bar.find(".picker-filter-input, .picker-filter-select").on("change input", function () {
+        $bar.find(".picker-filter-input").on("change input", function () {
             const key = $(this).attr("data-filter");
             self.filters[stage][key] = $(this).val();
+            self.debounce_reload();
+        });
+
+        $bar.find(".picker-status-btn").on("click", function (e) {
+            e.preventDefault();
+            const $group = $(this).closest(".picker-status-btn-group");
+            const key = $group.attr("data-filter") || "match_status";
+            const val = $(this).attr("data-value");
+            $group.find(".picker-status-btn").removeClass("active");
+            $(this).addClass("active");
+            self.filters[stage][key] = val;
             self.debounce_reload();
         });
     }
