@@ -631,7 +631,12 @@ def _create_manual_multi_invoice_reimbursement_inner(
                 frappe.throw(_("发票 #{0} ({1}) 必须填写发票号码！").format(inv_idx, inv_type))
 
         if inv_type == "无发票" or not bill_no_raw:
-            bill_no_raw = f"REIM-NOINV-{posting_date_str.replace('-', '')}-{inv_idx:02d}"
+            if is_draft and inv_type != "无发票":
+                # 草稿阶段未填发票号：使用含时间戳的唯一占位号，杜绝重复触发采购发票唯一性校验
+                import time as _time
+                bill_no_raw = f"REIM-DRAFT-{posting_date_str.replace('-', '')}-{int(_time.time() * 1000) % 1000000:06d}-{inv_idx:02d}"
+            else:
+                bill_no_raw = f"REIM-NOINV-{posting_date_str.replace('-', '')}-{inv_idx:02d}"
 
         items = inv.get("items") or []
         if not items:
