@@ -1000,6 +1000,30 @@
     font-weight: 700;
 }
 
+/* ==========================================================================
+   Required Field Error Flash Animation (Pillar 2)
+   ========================================================================== */
+@keyframes ashan-flash-red {
+    0%, 100% {
+        border-color: #ef4444;
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+        background-color: #fff8f8;
+    }
+    50% {
+        border-color: #cbd5e1;
+        box-shadow: none;
+        background-color: #ffffff;
+    }
+}
+
+.ashan-field-flash-error,
+.reim-field-flash-error {
+    animation: ashan-flash-red 0.8s ease-in-out 2;
+    border-color: #ef4444 !important;
+    background-color: #fff8f8 !important;
+}
+
+
 
 
 

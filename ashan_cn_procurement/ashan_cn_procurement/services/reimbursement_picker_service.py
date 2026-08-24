@@ -642,6 +642,13 @@ def _create_manual_multi_invoice_reimbursement_inner(
 
         for row_idx, row in enumerate(items, 1):
             item_name_raw = (row.get("item_name") or row.get("item_code") or "").strip()
+            qty = flt(row.get("qty") or 0.0)
+            rate = flt(row.get("rate") or 0.0)
+
+            # 智能忽略空行：若没有填写物料名称且单价为 0，直接跳过忽略
+            if not item_name_raw and rate <= 0.0:
+                continue
+
             if not item_name_raw:
                 frappe.throw(_("发票 #{0} 第 {1} 行物料名称不能为空。").format(inv_idx, row_idx))
 
@@ -649,10 +656,7 @@ def _create_manual_multi_invoice_reimbursement_inner(
             spec_raw = (row.get("spec") or "").strip()
             item_code_val = _ensure_item(item_name_raw, uom_raw, spec_raw)
 
-            qty = flt(row.get("qty") or 0.0)
-            rate = flt(row.get("rate") or 0.0)
             tax_rate = flt(row.get("tax_rate") or 0.0)
-
             if inv_type == "无发票":
                 tax_rate = 0.0
 
@@ -682,6 +686,9 @@ def _create_manual_multi_invoice_reimbursement_inner(
                 "is_stock_item": is_stock,
                 "warehouse": default_warehouse if is_stock else None,
             })
+
+        if not validated_items:
+            frappe.throw(_("发票 #{0} 没有任何有效的物料明细。").format(inv_idx))
 
         # --- 生成发票对应的 PR (若包含库存品，直接建单，不依赖 PO) ---
         pr_name = None

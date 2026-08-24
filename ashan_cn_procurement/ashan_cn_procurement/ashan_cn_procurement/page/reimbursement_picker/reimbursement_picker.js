@@ -22,10 +22,18 @@ const REIM_API = {
     quick_create_item: "ashan_cn_procurement.services.reimbursement_picker_service.quick_create_reimbursement_item",
     quick_create_supp: "ashan_cn_procurement.services.reimbursement_picker_service.quick_create_reimbursement_supplier",
     get_detail: "ashan_cn_procurement.services.reimbursement_picker_service.get_reimbursement_detail_for_edit",
-    delete_bundle: "ashan_cn_procurement.services.reimbursement_picker_service.delete_reimbursement_bundle",
+    delete_bundle: "ashan_cn_procurement.services.reimbursement_picker_service.delete_bundle_and_cancel_pi",
 };
 
-const DRAFT_STORAGE_KEY = "erp_reimbursement_manual_draft";
+function flash_field_error($el, msg) {
+    if (!$el || !$el.length) return;
+    $el.addClass("reim-field-flash-error");
+    $el.focus();
+    frappe.show_alert({ message: __(msg), indicator: "orange" });
+    setTimeout(() => {
+        $el.removeClass("reim-field-flash-error");
+    }, 2000);
+}
 
 class ReimbursementPicker {
     constructor(page) {
@@ -50,8 +58,6 @@ class ReimbursementPicker {
             invoices: [],
             invoice_counter: 0,
             $wrapper: null,
-            has_restored_draft: false,
-            is_syncing_draft: false,
         };
 
         this.init();
@@ -248,12 +254,6 @@ class ReimbursementPicker {
 
     bind_global_events() {
         const me = this;
-
-        window.addEventListener("beforeunload", () => {
-            if (me.creation.dialog && !me.creation.is_edit) {
-                me.save_local_draft();
-            }
-        });
 
         $("#reim-company-select").on("change", function () {
             me.active_company = $(this).val();
@@ -568,20 +568,13 @@ class ReimbursementPicker {
     }
 
     // =========================================================================
-    // Multi-Invoice Manual Entry & Edit Modal Engine (Segmented Control & Auto-Save)
+    // Multi-Invoice Manual Entry & Edit Modal Engine
     // =========================================================================
 
     open_create_reimbursement_modal() {
         this.reset_creation_state(false, null);
         this.show_reimbursement_dialog(__("🧾 新建现金报销 · 多发票卡片录单"));
-
-        // Check if local draft exists
-        const savedDraft = this.get_local_draft();
-        if (savedDraft && savedDraft.invoices && savedDraft.invoices.length) {
-            this.restore_from_draft(savedDraft);
-        } else {
-            this.add_invoice_card();
-        }
+        this.add_invoice_card();
     }
 
     async open_manage_reimbursement_modal(rrName) {
@@ -628,8 +621,6 @@ class ReimbursementPicker {
         this.creation.invoices = [];
         this.creation.invoice_counter = 0;
         this.creation.$wrapper = null;
-        this.creation.has_restored_draft = false;
-        this.creation.is_syncing_draft = false;
     }
 
     show_reimbursement_dialog(title) {
@@ -662,7 +653,7 @@ class ReimbursementPicker {
         // 显式配置底部取消 / 关闭次级操作按钮
         d.set_secondary_action_label(__("✕ 关闭"));
         d.set_secondary_action(() => {
-            me.close_and_save_draft();
+            me.close_dialog();
         });
 
         if (!isEdit) {
@@ -685,9 +676,9 @@ class ReimbursementPicker {
         // 显式在 modal-header 注入右上角关闭按钮
         const $modalHeader = d.$wrapper.find(".modal-header");
         $modalHeader.find(".reim-modal-header-close-btn").remove();
-        const $closeBtn = $(`<button type="button" class="reim-modal-header-close-btn" title="关闭窗口 (自动保存草稿)">✕</button>`);
+        const $closeBtn = $(`<button type="button" class="reim-modal-header-close-btn" title="关闭窗口">✕</button>`);
         $closeBtn.on("click", () => {
-            me.close_and_save_draft();
+            me.close_dialog();
         });
         $modalHeader.append($closeBtn);
 
@@ -699,14 +690,7 @@ class ReimbursementPicker {
         this.bind_creation_dialog_events($wrapper);
     }
 
-    close_and_save_draft() {
-        if (!this.creation.is_edit) {
-            this.save_local_draft();
-            const payload = this.collect_dialog_payload();
-            if (payload.title || payload.invoices.length) {
-                frappe.show_alert({ message: __("✓ 已为您自动保存本地草稿"), indicator: "blue" });
-            }
-        }
+    close_dialog() {
         if (this.creation.dialog) {
             try {
                 this.creation.dialog.hide();
@@ -733,14 +717,6 @@ class ReimbursementPicker {
     get_creation_dialog_html() {
         return `
             <div class="reim-v2-modal-container">
-                <!-- Draft Notification Banner (if restored) -->
-                <div class="reim-draft-banner reim-v2-hidden" id="reim-modal-draft-banner">
-                    <div class="reim-draft-banner-text">
-                        <span>📌 已为您自动恢复未提交的本地草稿内容。</span>
-                    </div>
-                    <button type="button" class="reim-btn-clear-draft" id="modal-clear-draft-btn">✕ 放弃草稿并重置</button>
-                </div>
-
                 <!-- Section 1: Business Context -->
                 <div class="reim-v2-section-card">
                     <div class="reim-v2-section-header">
@@ -771,7 +747,7 @@ class ReimbursementPicker {
                     <div class="reim-v2-section-header">
                         <div class="reim-v2-section-title">
                             <span>🧾 2. 发票列表与录单工作区</span>
-                            <span class="text-muted text-xs font-normal">（分段控件选择发票类型，专用/普通发票号码必填）</span>
+                            <span class="text-muted text-xs font-normal">（专用发票/普通发票号码必填，明细备注为必填项）</span>
                         </div>
                         <div>
                             <button type="button" class="reim-btn-add-inv-card" id="modal-reim-add-inv-btn">
@@ -789,7 +765,7 @@ class ReimbursementPicker {
                     <div class="reim-v2-summary-left">
                         <div class="reim-v2-discipline-badge">
                             <span>🛡️ 财务纪律</span>
-                            <span>发票号码与单价金额必填有效，1张发票对应1张采购发票并自动关联报销单</span>
+                            <span>发票号、单价与备注必填有效，1张发票对应1张采购发票并自动关联报销单</span>
                         </div>
                     </div>
                     <div class="reim-v2-summary-stats">
@@ -814,38 +790,20 @@ class ReimbursementPicker {
     bind_creation_dialog_events($wrapper) {
         const me = this;
 
-        // Bulletproof Auto-Save: input, keyup, change, blur, focusout
-        $wrapper.on("input keyup change blur focusout", "input, select, textarea", function () {
-            me.trigger_auto_save_draft();
-        });
-
-        $wrapper.on("click", "#modal-clear-draft-btn", function () {
-            me.clear_local_draft();
-            $("#reim-modal-draft-banner").addClass("reim-v2-hidden");
-            $("#modal-reim-title").val("");
-            $("#modal-reim-invoices-container").empty();
-            me.creation.invoice_counter = 0;
-            me.add_invoice_card();
-            frappe.show_alert({ message: __("本地草稿已清空并重置"), indicator: "blue" });
-        });
-
         $wrapper.on("change", "#modal-reim-company", function () {
             me.creation.company = $(this).val();
-            me.trigger_auto_save_draft();
         });
 
         $wrapper.on("click", "#modal-reim-add-inv-btn", function () {
             me.add_invoice_card();
-            me.save_local_draft();
         });
 
         $wrapper.on("click", ".reim-btn-delete-inv", function () {
             const invId = $(this).closest(".reim-inv-card").data("inv-id");
             me.remove_invoice_card(invId);
-            me.save_local_draft();
         });
 
-        // 🌟 分段控件 (Segmented Control) 点选切换发票类型
+        // 🌟 分段控件 (Segmented Control) 切换发票类型与默认税率联动
         $wrapper.on("click", ".reim-segment-btn", function () {
             const $btn = $(this);
             const $control = $btn.closest(".reim-segmented-control");
@@ -867,14 +825,22 @@ class ReimbursementPicker {
             } else if (val === "普通发票") {
                 $noInput.prop("placeholder", "输入发票号码 (必填)...").prop("disabled", false);
                 $noReq.removeClass("reim-v2-hidden");
-                // 普通发票也可以填写税率，仅无发票不可填写
+                // 普通发票允许填写税率，默认设为 1%
                 $card.find(".modal-row-tax-rate").prop("disabled", false);
+                $card.find(".modal-row-tax-rate").each(function () {
+                    if ($(this).val() === "0" || $(this).val() === "13" || !$(this).val()) {
+                        $(this).val("1");
+                    }
+                });
             } else {
                 $noInput.prop("placeholder", "输入发票号码 (必填)...").prop("disabled", false);
                 $noReq.removeClass("reim-v2-hidden");
+                // 专用发票默认 13%
                 $card.find(".modal-row-tax-rate").prop("disabled", false);
                 $card.find(".modal-row-tax-rate").each(function () {
-                    if ($(this).val() === "0" || !$(this).val()) $(this).val("13");
+                    if ($(this).val() === "0" || $(this).val() === "1" || !$(this).val()) {
+                        $(this).val("13");
+                    }
                 });
             }
 
@@ -882,13 +848,11 @@ class ReimbursementPicker {
                 me.handle_row_calc("tax_rate", $(this), invId);
             });
             me.recalculate_invoice(invId);
-            me.save_local_draft();
         });
 
         $wrapper.on("click", ".reim-btn-add-item-row", function () {
             const invId = $(this).closest(".reim-inv-card").data("inv-id");
             me.add_item_row(invId);
-            me.save_local_draft();
         });
 
         $wrapper.on("click", ".reim-btn-delete-row", function () {
@@ -896,7 +860,6 @@ class ReimbursementPicker {
             const invId = $(this).closest(".reim-inv-card").data("inv-id");
             $row.remove();
             me.recalculate_invoice(invId);
-            me.save_local_draft();
         });
 
         // 1. 物料模糊搜索与智能下拉
@@ -967,7 +930,6 @@ class ReimbursementPicker {
             $row.find(".modal-row-uom").val(uom || "个");
 
             $wrapper.find(".picker-suggest-dropdown").removeClass("is-open");
-            me.save_local_draft();
         });
 
         $wrapper.on("click", ".reim-suggest-create-item-btn", function (e) {
@@ -1032,7 +994,6 @@ class ReimbursementPicker {
             $card.find(".modal-inv-supplier-input").val(suppName);
             $wrapper.find(".picker-suggest-dropdown").removeClass("is-open");
             me.recalculate_all();
-            me.save_local_draft();
         });
 
         $wrapper.on("click", ".reim-suggest-create-supp-btn", function (e) {
@@ -1090,172 +1051,6 @@ class ReimbursementPicker {
         });
     }
 
-    // =========================================================================
-    // Local & Silent Server Draft Auto-Save Engine (Live Real-time Perception)
-    // =========================================================================
-
-    trigger_auto_save_draft() {
-        if (this.creation.is_edit) return; // Do not auto-save when editing existing doc
-        if (this.draftTimer) clearTimeout(this.draftTimer);
-        this.draftTimer = setTimeout(() => {
-            this.save_local_draft();
-            this.sync_server_draft_silently();
-        }, 500);
-    }
-
-    save_local_draft() {
-        if (this.creation.is_edit) return;
-        const payload = this.collect_dialog_payload();
-        if (payload && (payload.title || (payload.invoices && payload.invoices.length))) {
-            localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(payload));
-        }
-    }
-
-    async sync_server_draft_silently() {
-        if (this.creation.is_edit || this.creation.is_syncing_draft) return;
-        const payload = this.collect_dialog_payload();
-        if (!payload || !payload.title || !payload.invoices || !payload.invoices.length) return;
-
-        // Check if there is valid item in invoices
-        const hasValidItem = payload.invoices.some(inv => inv.items && inv.items.some(it => it.item_name && it.qty > 0 && it.rate > 0));
-        if (!hasValidItem) return;
-
-        this.creation.is_syncing_draft = true;
-        try {
-            // If already created a draft doc in this session, delete previous draft bundle first
-            if (this.creation.current_rr_name) {
-                try {
-                    await frappe.call({
-                        method: REIM_API.delete_bundle,
-                        type: "POST",
-                        args: { rr_name: this.creation.current_rr_name },
-                    });
-                } catch (e) {}
-            }
-
-            const r = await frappe.call({
-                method: REIM_API.create_manual,
-                type: "POST",
-                args: {
-                    company: payload.company,
-                    posting_date: payload.posting_date,
-                    title: payload.title,
-                    auto_receive_stock: payload.auto_receive_stock,
-                    is_draft: 1,
-                    invoices: JSON.stringify(payload.invoices),
-                },
-            });
-            if (r.message && r.message.success) {
-                this.creation.current_rr_name = r.message.rr_name;
-                this.load_kpis();
-                this.load_rows();
-            }
-        } catch (e) {
-            // Silently ignore background draft errors to not disrupt user typing
-        } finally {
-            this.creation.is_syncing_draft = false;
-        }
-    }
-
-    get_local_draft() {
-        try {
-            const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
-            return raw ? JSON.parse(raw) : null;
-        } catch (e) {
-            return null;
-        }
-    }
-
-    clear_local_draft() {
-        localStorage.removeItem(DRAFT_STORAGE_KEY);
-    }
-
-    restore_from_draft(draftData) {
-        if (!draftData) return;
-        this.creation.company = draftData.company || this.creation.company;
-        this.creation.posting_date = draftData.posting_date || frappe.datetime.get_today();
-        this.creation.title = draftData.title || "";
-
-        if (this.creation.$wrapper) {
-            $("#reim-modal-draft-banner").removeClass("reim-v2-hidden");
-            this.creation.$wrapper.find("#modal-reim-company").val(this.creation.company);
-            this.creation.$wrapper.find("#modal-reim-date").val(this.creation.posting_date);
-            this.creation.$wrapper.find("#modal-reim-title").val(this.creation.title);
-        }
-
-        if (draftData.invoices && draftData.invoices.length) {
-            draftData.invoices.forEach((inv) => {
-                this.add_invoice_card(inv);
-            });
-        } else {
-            this.add_invoice_card();
-        }
-    }
-
-    collect_dialog_payload() {
-        const company = $("#modal-reim-company").val();
-        const dateVal = $("#modal-reim-date").val() || frappe.datetime.get_today();
-        const titleVal = $("#modal-reim-title").val() ? $("#modal-reim-title").val().trim() : "";
-        const autoStock = $("#modal-reim-auto-stock").is(":checked") ? 1 : 0;
-
-        const invoices = [];
-        $(".reim-inv-card").each(function () {
-            const invType = $(this).find(".modal-inv-type-value").val() || "专用发票";
-            const supplier = $(this).find(".modal-inv-supplier-input").val().trim();
-            const invoiceNo = $(this).find(".modal-inv-no-input").val().trim();
-            const invoiceDate = $(this).find(".modal-inv-date-input").val() || dateVal;
-
-            const items = [];
-            $(this).find(".modal-inv-tbody tr").each(function () {
-                const itemCode = $(this).find(".modal-row-item-code").val().trim();
-                const itemName = $(this).find(".modal-row-item-name").val().trim() || $(this).find(".modal-row-item-input").val().trim();
-                const spec = $(this).find(".modal-row-spec").val().trim();
-                const uom = $(this).find(".modal-row-uom").val().trim() || "个";
-                const qty = flt($(this).find(".modal-row-qty").val() || 0);
-                const rate = flt($(this).find(".modal-row-rate").val() || 0);
-                const taxRate = flt($(this).find(".modal-row-tax-rate").val() || 0);
-                const amount = flt($(this).find(".modal-row-amount-input").val() || (qty * rate));
-                const taxAmount = flt($(this).find(".modal-row-tax-amount-input").val() || (amount * taxRate / 100));
-                const lineTotal = flt($(this).find(".modal-row-line-total-input").val() || (amount + taxAmount));
-                const remarks = $(this).find(".modal-row-remarks").val().trim();
-
-                if (itemName || qty > 0 || rate > 0) {
-                    items.push({
-                        item_code: itemCode || itemName,
-                        item_name: itemName,
-                        spec: spec,
-                        uom: uom,
-                        qty: qty,
-                        rate: rate,
-                        amount: amount,
-                        tax_rate: taxRate,
-                        tax_amount: taxAmount,
-                        line_total: lineTotal,
-                        remarks: remarks,
-                    });
-                }
-            });
-
-            if (supplier || invoiceNo || items.length) {
-                invoices.push({
-                    invoice_type: invType,
-                    supplier: supplier,
-                    invoice_no: invoiceNo,
-                    invoice_date: invoiceDate,
-                    items: items,
-                });
-            }
-        });
-
-        return {
-            company: company,
-            posting_date: dateVal,
-            title: titleVal,
-            auto_receive_stock: autoStock,
-            invoices: invoices,
-        };
-    }
-
     open_quick_create_item_dialog($row) {
         const me = this;
         const d = new frappe.ui.Dialog({
@@ -1287,7 +1082,6 @@ class ReimbursementPicker {
                         $row.find(".modal-row-uom").val(it.uom || "个");
 
                         frappe.show_alert({ message: __(`物料 [${it.item_code}] ${it.item_name} 已成功创建并回填！`), indicator: "green" });
-                        me.save_local_draft();
                     }
                 } catch (err) {
                     console.error("Quick create item error:", err);
@@ -1319,7 +1113,6 @@ class ReimbursementPicker {
                         $card.find(".modal-inv-supplier-input").val(supp.supplier_name);
                         me.recalculate_all();
                         frappe.show_alert({ message: __(`供应商 [${supp.supplier_name}] 已成功创建并回填！`), indicator: "green" });
-                        me.save_local_draft();
                     }
                 } catch (err) {
                     console.error("Quick create supplier error:", err);
@@ -1365,7 +1158,6 @@ class ReimbursementPicker {
         if (triggerField !== "line_total") $row.find(".modal-row-line-total-input").val(lineTotal ? lineTotal.toFixed(2) : "");
 
         this.recalculate_invoice(invId);
-        this.save_local_draft();
     }
 
     add_invoice_card(initData = null) {
@@ -1441,7 +1233,7 @@ class ReimbursementPicker {
                                 <th class="ashan-col-w90 text-right">金额(不含税)</th>
                                 <th class="ashan-col-w80 text-right">税额</th>
                                 <th class="ashan-col-w90 text-right">价税合计</th>
-                                <th class="ashan-col-w110">备注</th>
+                                <th class="ashan-col-w110">备注<span class="req">*</span></th>
                                 <th class="ashan-col-w40 text-center">操作</th>
                             </tr>
                         </thead>
@@ -1488,7 +1280,6 @@ class ReimbursementPicker {
         }
         $(`#reim-inv-card-${invId}`).remove();
         this.recalculate_all();
-        this.save_local_draft();
     }
 
     add_item_row(invId, initItem = null) {
@@ -1496,7 +1287,7 @@ class ReimbursementPicker {
         const $tbody = $card.find(".modal-inv-tbody");
         const rowIdx = $tbody.find("tr").length + 1;
         const invType = $card.find(".modal-inv-type-value").val() || "专用发票";
-        const defaultTaxRate = invType === "专用发票" ? "13" : "0";
+        const defaultTaxRate = invType === "专用发票" ? "13" : (invType === "普通发票" ? "1" : "0");
         const isTaxDisabled = invType === "无发票" ? "disabled" : "";
 
         const nameVal = initItem ? initItem.item_name : "";
@@ -1546,7 +1337,7 @@ class ReimbursementPicker {
                     <input type="number" step="any" class="reim-cell-input number font-bold text-primary modal-row-line-total-input" placeholder="0.00" value="${lineTotalVal}" />
                 </td>
                 <td>
-                    <input type="text" class="reim-cell-input modal-row-remarks" placeholder="备注..." value="${remarksVal}" />
+                    <input type="text" class="reim-cell-input modal-row-remarks" placeholder="必填用途/说明..." value="${remarksVal}" />
                 </td>
                 <td class="text-center">
                     <button type="button" class="reim-btn-delete-row" title="删除此行">✕</button>
@@ -1625,23 +1416,20 @@ class ReimbursementPicker {
     }
 
     async submit_manual_reimbursement(isDraft = 0) {
-        if (this.draftTimer) {
-            clearTimeout(this.draftTimer);
-            this.draftTimer = null;
+        const $titleInput = $("#modal-reim-title");
+        const titleVal = $titleInput.val() ? $titleInput.val().trim() : "";
+        if (!titleVal) {
+            flash_field_error($titleInput, "请填写报销标题");
+            return;
         }
+
         const company = $("#modal-reim-company").val();
         if (!company) {
-            frappe.msgprint(__("请选择所属公司。"));
+            flash_field_error($("#modal-reim-company"), "请选择所属公司");
             return;
         }
 
         const dateVal = $("#modal-reim-date").val() || frappe.datetime.get_today();
-        const titleVal = $("#modal-reim-title").val() ? $("#modal-reim-title").val().trim() : "";
-        if (!titleVal) {
-            frappe.msgprint(__("请填写报销标题。"));
-            return;
-        }
-
         const autoStock = $("#modal-reim-auto-stock").is(":checked") ? 1 : 0;
 
         const invoicePayload = [];
@@ -1649,45 +1437,66 @@ class ReimbursementPicker {
 
         $(".reim-inv-card").each(function (idx) {
             const cardIdx = idx + 1;
-            const invType = $(this).find(".modal-inv-type-value").val() || "专用发票";
-            const supplier = $(this).find(".modal-inv-supplier-input").val().trim();
-            const invoiceNo = $(this).find(".modal-inv-no-input").val().trim();
-            const invoiceDate = $(this).find(".modal-inv-date-input").val() || dateVal;
+            const $card = $(this);
+            const invType = $card.find(".modal-inv-type-value").val() || "专用发票";
+            const $suppInput = $card.find(".modal-inv-supplier-input");
+            const supplier = $suppInput.val().trim();
+            const $noInput = $card.find(".modal-inv-no-input");
+            const invoiceNo = $noInput.val().trim();
+            const invoiceDate = $card.find(".modal-inv-date-input").val() || dateVal;
 
             if (!supplier && invType !== "无发票") {
-                frappe.msgprint(__(`发票 #${cardIdx} 请填写供应商名称。`));
+                flash_field_error($suppInput, `发票 #${cardIdx} 请填写供应商名称`);
                 hasErrors = true;
                 return false;
             }
 
             // 强校验：专用发票与普通发票的发票号码必填
             if (!isDraft && (invType === "专用发票" || invType === "普通发票") && !invoiceNo) {
-                frappe.msgprint(__(`发票 #${cardIdx} (${invType}) 必须填写发票号码！`));
+                flash_field_error($noInput, `发票 #${cardIdx} (${invType}) 必须填写发票号码`);
                 hasErrors = true;
                 return false;
             }
 
             const items = [];
-            $(this).find(".modal-inv-tbody tr").each(function (rowIdx) {
-                const itemCode = $(this).find(".modal-row-item-code").val().trim();
-                const itemName = $(this).find(".modal-row-item-name").val().trim() || $(this).find(".modal-row-item-input").val().trim();
-                const spec = $(this).find(".modal-row-spec").val().trim();
-                const uom = $(this).find(".modal-row-uom").val().trim() || "个";
-                const qty = flt($(this).find(".modal-row-qty").val() || 0);
-                const rate = flt($(this).find(".modal-row-rate").val() || 0);
-                const taxRate = flt($(this).find(".modal-row-tax-rate").val() || 0);
-                const amount = flt($(this).find(".modal-row-amount-input").val() || (qty * rate));
-                const taxAmount = flt($(this).find(".modal-row-tax-amount-input").val() || (amount * taxRate / 100));
-                const remarks = $(this).find(".modal-row-remarks").val().trim();
+            $card.find(".modal-inv-tbody tr").each(function (rowIdx) {
+                const $row = $(this);
+                const itemCode = $row.find(".modal-row-item-code").val().trim();
+                const $itemInput = $row.find(".modal-row-item-input");
+                const itemName = $row.find(".modal-row-item-name").val().trim() || $itemInput.val().trim();
+                const spec = $row.find(".modal-row-spec").val().trim();
+                const uom = $row.find(".modal-row-uom").val().trim() || "个";
+                const $qtyInput = $row.find(".modal-row-qty");
+                const qty = flt($qtyInput.val() || 0);
+                const $rateInput = $row.find(".modal-row-rate");
+                const rate = flt($rateInput.val() || 0);
+                const taxRate = flt($row.find(".modal-row-tax-rate").val() || 0);
+                const amount = flt($row.find(".modal-row-amount-input").val() || (qty * rate));
+                const taxAmount = flt($row.find(".modal-row-tax-amount-input").val() || (amount * taxRate / 100));
+                const $remarksInput = $row.find(".modal-row-remarks");
+                const remarks = $remarksInput.val().trim();
 
+                // 🌟 智能忽略完全空白行：若物料名称为空且单价为 0 且无备注，直接跳过忽略！
+                if (!itemName && rate <= 0 && !remarks) {
+                    return; // 跳过空行
+                }
+
+                // 否则说明用户打算录入这一行，执行必填检查与红色闪烁提示
                 if (!itemName) {
-                    frappe.msgprint(__(`发票 #${cardIdx} 第 ${rowIdx + 1} 行物料名称不能为空。`));
+                    flash_field_error($itemInput, `发票 #${cardIdx} 第 ${rowIdx + 1} 行请填写物料名称`);
                     hasErrors = true;
                     return false;
                 }
 
                 if (!isDraft && (qty <= 0 || rate <= 0 || amount <= 0)) {
-                    frappe.msgprint(__(`发票 #${cardIdx} 第 ${rowIdx + 1} 行 [${itemName}] 的数量与单价必须大于0！根据财务纪律，严禁为0。`));
+                    flash_field_error($rateInput, `发票 #${cardIdx} 第 ${rowIdx + 1} 行【${itemName}】数量与单价必须大于 0`);
+                    hasErrors = true;
+                    return false;
+                }
+
+                // 🌟 备注必填校验
+                if (!isDraft && !remarks) {
+                    flash_field_error($remarksInput, `发票 #${cardIdx} 第 ${rowIdx + 1} 行【${itemName}】备注为必填项，请填写用途或明细说明`);
                     hasErrors = true;
                     return false;
                 }
@@ -1756,7 +1565,6 @@ class ReimbursementPicker {
             });
 
             if (r.message && r.message.success) {
-                this.clear_local_draft();
                 if (this.creation.dialog) {
                     try {
                         this.creation.dialog.hide();
