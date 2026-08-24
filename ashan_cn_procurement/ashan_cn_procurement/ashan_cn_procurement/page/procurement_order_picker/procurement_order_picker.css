@@ -772,7 +772,7 @@
     border-right: none;
 }
 
-/* 12列物料明细表精准固定比例：物料代码10%，物料名称16%，规格12%，备注约18%，给各字段充裕空间 */
+/* 12列物料明细表精准固定比例：物料代码10%，物料名称13%，规格10%，备注约23%，给备注更宽阔舒展空间 */
 .picker-modal-item-table.picker-table-12cols th:nth-child(1),
 .picker-modal-item-table th:nth-child(1) { width: 36px; min-width: 36px; max-width: 36px; text-align: center; }
 
@@ -780,34 +780,34 @@
 .picker-modal-item-table th:nth-child(2) { width: 10%; min-width: 90px; }
 
 .picker-modal-item-table.picker-table-12cols th:nth-child(3),
-.picker-modal-item-table th:nth-child(3) { width: 16%; min-width: 130px; }
+.picker-modal-item-table th:nth-child(3) { width: 13%; min-width: 110px; }
 
 .picker-modal-item-table.picker-table-12cols th:nth-child(4),
-.picker-modal-item-table th:nth-child(4) { width: 12%; min-width: 100px; }
+.picker-modal-item-table th:nth-child(4) { width: 10%; min-width: 90px; }
 
 .picker-modal-item-table.picker-table-12cols th:nth-child(5),
-.picker-modal-item-table th:nth-child(5) { width: 7.5%; min-width: 70px; text-align: right; }
+.picker-modal-item-table th:nth-child(5) { width: 6.5%; min-width: 65px; text-align: right; }
 
 .picker-modal-item-table.picker-table-12cols th:nth-child(6),
-.picker-modal-item-table th:nth-child(6) { width: 7.5%; min-width: 70px; text-align: right; }
+.picker-modal-item-table th:nth-child(6) { width: 6.5%; min-width: 65px; text-align: right; }
 
 .picker-modal-item-table.picker-table-12cols th:nth-child(7),
-.picker-modal-item-table th:nth-child(7) { width: 8%; min-width: 75px; text-align: right; }
+.picker-modal-item-table th:nth-child(7) { width: 7.5%; min-width: 70px; text-align: right; }
 
 .picker-modal-item-table.picker-table-12cols th:nth-child(8),
-.picker-modal-item-table th:nth-child(8) { width: 5%; min-width: 50px; text-align: right; }
+.picker-modal-item-table th:nth-child(8) { width: 4.5%; min-width: 45px; text-align: right; }
 
 .picker-modal-item-table.picker-table-12cols th:nth-child(9),
-.picker-modal-item-table th:nth-child(9) { width: 7.5%; min-width: 70px; text-align: right; }
+.picker-modal-item-table th:nth-child(9) { width: 6.5%; min-width: 65px; text-align: right; }
 
 .picker-modal-item-table.picker-table-12cols th:nth-child(10),
-.picker-modal-item-table th:nth-child(10) { width: 8.5%; min-width: 80px; text-align: right; }
+.picker-modal-item-table th:nth-child(10) { width: 7.5%; min-width: 70px; text-align: right; }
 
 .picker-modal-item-table.picker-table-12cols th:nth-child(11),
-.picker-modal-item-table th:nth-child(11) { width: auto; min-width: 130px; }
+.picker-modal-item-table th:nth-child(11) { width: auto; min-width: 180px; }
 
 .picker-modal-item-table.picker-table-12cols th:nth-child(12),
-.picker-modal-item-table th:nth-child(12) { width: 42px; min-width: 42px; max-width: 42px; text-align: center; }
+.picker-modal-item-table th:nth-child(12) { width: 40px; min-width: 40px; max-width: 40px; text-align: center; }
 
 /* 报销发票清单表 (7列) */
 .picker-modal-item-table.picker-table-invoices th:nth-child(1) { width: 36px; min-width: 36px; max-width: 36px; text-align: center; }

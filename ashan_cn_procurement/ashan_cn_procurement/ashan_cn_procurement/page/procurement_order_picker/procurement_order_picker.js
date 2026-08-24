@@ -3149,7 +3149,7 @@ class ProcurementOrderPickerCenter {
                             <input type="number" step="any" min="0" class="modal-input-total-amount" value="${flt(r.total_amount).toFixed(2)}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-remarks" placeholder="备注说明..." value="${frappe.utils.escape_html(r.description || '')}">
+                            <input type="text" class="modal-input-remarks modal-input-readonly" readonly tabindex="-1" placeholder="备注说明..." value="${frappe.utils.escape_html(r.description || '')}">
                         </td>
                         <td class="picker-modal-cell-center">
                             <button class="picker-modal-del-btn" data-idx="${idx}">删除</button>
@@ -3590,7 +3590,7 @@ class ProcurementOrderPickerCenter {
                             <input type="number" step="any" min="0" class="modal-input-total-amount" value="${flt(r.total_amount).toFixed(2)}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-remarks" placeholder="备注说明..." value="${frappe.utils.escape_html(r.description || '')}">
+                            <input type="text" class="modal-input-remarks modal-input-readonly" readonly tabindex="-1" placeholder="备注说明..." value="${frappe.utils.escape_html(r.description || '')}">
                         </td>
                         <td class="picker-modal-cell-center">
                             <button class="picker-modal-del-btn" data-idx="${idx}">删除</button>
@@ -3917,7 +3917,7 @@ class ProcurementOrderPickerCenter {
                             <input type="number" step="any" min="0" class="modal-input-total-amount" value="${flt(r.total_amount).toFixed(2)}">
                         </td>
                         <td>
-                            <input type="text" class="modal-input-remarks" placeholder="备注说明..." value="${frappe.utils.escape_html(r.description || '')}">
+                            <input type="text" class="modal-input-remarks modal-input-readonly" readonly tabindex="-1" placeholder="备注说明..." value="${frappe.utils.escape_html(r.description || '')}">
                         </td>
                         <td class="picker-modal-cell-center">
                             <button class="picker-modal-del-btn" data-idx="${idx}">删除</button>
