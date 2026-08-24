@@ -3121,9 +3121,8 @@ class ProcurementOrderPickerCenter {
                 const tr = `
                     <tr data-idx="${idx}">
                         <td class="picker-modal-cell-center">${idx + 1}</td>
-                        <td class="picker-suggest-wrapper">
-                            <input type="text" class="modal-input-code" placeholder="物料代码/搜索..." value="${frappe.utils.escape_html(r.item_code || '')}">
-                            <div class="picker-suggest-dropdown" id="suggest-dd-po-create-${idx}"></div>
+                        <td>
+                            <input type="text" class="modal-input-code modal-input-readonly" readonly tabindex="-1" placeholder="物料代码..." value="${frappe.utils.escape_html(r.item_code || '')}">
                         </td>
                         <td>
                             <input type="text" class="modal-input-name modal-input-readonly" readonly tabindex="-1" placeholder="物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
@@ -3219,7 +3218,6 @@ class ProcurementOrderPickerCenter {
                                     <tbody id="picker-modal-item-tbody"></tbody>
                                 </table>
                             </div>
-                            <button class="picker-modal-add-btn" id="picker-modal-add-row-btn">➕ 添加一行物料</button>
 
                             <div class="picker-modal-summary-bar">
                                 <span>合计汇总:</span>
@@ -3564,9 +3562,8 @@ class ProcurementOrderPickerCenter {
                 const tr = `
                     <tr data-idx="${idx}">
                         <td class="picker-modal-cell-center">${idx + 1}</td>
-                        <td class="picker-suggest-wrapper">
-                            <input type="text" class="modal-input-code" placeholder="物料代码/搜索..." value="${frappe.utils.escape_html(r.item_code || '')}">
-                            <div class="picker-suggest-dropdown" id="suggest-dd-pr-create-${idx}"></div>
+                        <td>
+                            <input type="text" class="modal-input-code modal-input-readonly" readonly tabindex="-1" placeholder="物料代码..." value="${frappe.utils.escape_html(r.item_code || '')}">
                         </td>
                         <td>
                             <input type="text" class="modal-input-name modal-input-readonly" readonly tabindex="-1" placeholder="物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
@@ -3670,7 +3667,6 @@ class ProcurementOrderPickerCenter {
                                     <tbody id="picker-modal-item-tbody"></tbody>
                                 </table>
                             </div>
-                            <button class="picker-modal-add-btn" id="picker-modal-add-row-btn">➕ 添加一行物料</button>
 
                             <div class="picker-modal-summary-bar">
                                 <span>合计汇总:</span>
@@ -3893,9 +3889,8 @@ class ProcurementOrderPickerCenter {
                 const tr = `
                     <tr data-idx="${idx}">
                         <td class="picker-modal-cell-center">${idx + 1}</td>
-                        <td class="picker-suggest-wrapper">
-                            <input type="text" class="modal-input-code" placeholder="物料代码/搜索..." value="${frappe.utils.escape_html(r.item_code || '')}">
-                            <div class="picker-suggest-dropdown" id="suggest-dd-pi-create-${idx}"></div>
+                        <td>
+                            <input type="text" class="modal-input-code modal-input-readonly" readonly tabindex="-1" placeholder="物料代码..." value="${frappe.utils.escape_html(r.item_code || '')}">
                         </td>
                         <td>
                             <input type="text" class="modal-input-name modal-input-readonly" readonly tabindex="-1" placeholder="物料名称..." value="${frappe.utils.escape_html(r.item_name || '')}">
@@ -3997,7 +3992,6 @@ class ProcurementOrderPickerCenter {
                                     <tbody id="picker-modal-item-tbody"></tbody>
                                 </table>
                             </div>
-                            <button class="picker-modal-add-btn" id="picker-modal-add-row-btn">➕ 添加一行物料</button>
 
                             <div class="picker-modal-summary-bar">
                                 <span>合计汇总:</span>
@@ -4023,13 +4017,29 @@ class ProcurementOrderPickerCenter {
                     return;
                 }
 
+                const items_payload = valid_items.map((r) => ({
+                    pri_name: r.pri_name,
+                    pr_name: r.pr_name,
+                    item_code: r.item_code,
+                    item_name: r.item_name,
+                    spec: r.spec,
+                    qty: r.qty,
+                    this_qty: r.qty,
+                    rate: r.rate,
+                    amount: r.amount,
+                    tax_rate: r.tax_rate,
+                    tax_amount: r.tax_amount,
+                    total_amount: r.total_amount,
+                    description: r.description,
+                }));
+
                 try {
                     frappe.dom.freeze(__("正在生成采购发票..."));
                     const res = await frappe.call({
                         method: "ashan_cn_procurement.services.procurement_picker_service.make_purchase_invoices_from_pr_items",
                         args: {
                             company: target_comp,
-                            selected_items: valid_items,
+                            selected_items: items_payload,
                             bill_no: vals.bill_no,
                             bill_date: vals.bill_date,
                         },

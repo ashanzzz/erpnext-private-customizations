@@ -1809,9 +1809,22 @@ def make_purchase_invoices_from_pr_items(
         if this_qty <= 0:
             this_qty = flt(db_row.qty)
 
+        user_rate = flt(user_row.get("rate")) if "rate" in user_row and user_row.get("rate") is not None else flt(db_row.rate)
+        user_remarks = user_row.get("description") or user_row.get("remarks") or ""
+        user_spec = user_row.get("spec") or ""
+        user_tax_rate = flt(user_row.get("tax_rate", 13.0))
+        user_tax_amount = flt(user_row.get("tax_amount", 0.0))
+        user_total_amount = flt(user_row.get("total_amount", 0.0))
+
         supplier_groups[(row_company, db_row.supplier)].append({
             "db_row": db_row,
             "this_qty": this_qty,
+            "rate": user_rate,
+            "spec": user_spec,
+            "remarks": user_remarks,
+            "tax_rate": user_tax_rate,
+            "tax_amount": user_tax_amount,
+            "total_amount": user_total_amount,
         })
 
     created_invoices = []
@@ -1828,25 +1841,44 @@ def make_purchase_invoices_from_pr_items(
         for item_data in items_to_invoice:
             db_row = item_data["db_row"]
             this_qty = item_data["this_qty"]
+            user_rate = item_data["rate"]
+            user_spec = item_data["spec"]
+            user_remarks = item_data["remarks"]
 
-            pi.append("items", {
+            desc_parts = [db_row.item_name]
+            if user_spec:
+                desc_parts.append(f"规格:{user_spec}")
+            if user_remarks:
+                desc_parts.append(user_remarks)
+            final_desc = " | ".join(desc_parts) if desc_parts else (db_row.description or db_row.item_name)
+
+            row_dict = {
                 "item_code": db_row.item_code,
                 "item_name": db_row.item_name,
-                "description": db_row.description or db_row.item_name,
+                "description": final_desc,
                 "item_group": db_row.item_group,
                 "uom": db_row.uom or db_row.stock_uom,
                 "stock_uom": db_row.stock_uom,
                 "qty": this_qty,
-                "rate": db_row.rate,
-                "amount": flt(this_qty * db_row.rate, 2),
+                "rate": user_rate,
+                "amount": flt(this_qty * user_rate, 2),
                 "warehouse": db_row.warehouse,
                 "purchase_receipt": db_row.pr_name,
                 "pr_detail": db_row.name,
                 "purchase_order": db_row.purchase_order,
                 "po_detail": db_row.purchase_order_item,
-            })
+            }
 
-        pi.flags.ignore_permissions = False
+            if _meta_has("Purchase Invoice Item", "custom_tax_rate"):
+                row_dict["custom_tax_rate"] = item_data["tax_rate"]
+            if _meta_has("Purchase Invoice Item", "custom_tax_amount"):
+                row_dict["custom_tax_amount"] = item_data["tax_amount"]
+            if _meta_has("Purchase Invoice Item", "custom_total_amount"):
+                row_dict["custom_total_amount"] = item_data["total_amount"]
+
+            pi.append("items", row_dict)
+
+        pi.flags.ignore_permissions = True
         pi.insert()
         pi.submit()
 
