@@ -1086,11 +1086,17 @@ class ProcurementOrderPickerCenter {
         const is_all_company = this.active_company === "All";
         let total_qty = 0;
         let total_amt = 0;
+        let total_tax = 0;
+        let total_grand = 0;
+        let total_paid = 0;
 
         this.table_data.forEach((r) => {
             if (this.locked_company && r.company !== this.locked_company) return;
             total_qty += flt(r.pending_qty || r.qty || r.total_qty || 0);
             total_amt += flt(r.estimated_amount || r.pending_amount || r.net_available_amount || r.amount || 0);
+            total_tax += flt(r.tax_amount || (flt(r.amount) * 0.13) || 0);
+            total_grand += flt(r.grand_total || r.total_amount || 0);
+            total_paid += flt(r.grand_total ? (r.grand_total - (r.outstanding_amount || 0)) : 0);
         });
 
         let prefix_cols = is_all_company ? 3 : 2;
@@ -1103,9 +1109,17 @@ class ProcurementOrderPickerCenter {
 
         if (stage === "item_to_mr") {
             if (mode === "doc") {
-                foot_html += `<td colspan="4"></td><td class="picker-qty-cell">${total_qty.toFixed(2)}</td><td colspan="2"></td>`;
+                foot_html += `
+                    <td colspan="5"></td>
+                    <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
+                    <td colspan="2"></td>
+                `;
             } else {
-                foot_html += `<td colspan="5"></td><td class="picker-qty-cell">${total_qty.toFixed(2)}</td><td colspan="2"></td>`;
+                foot_html += `
+                    <td colspan="5"></td>
+                    <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
+                    <td colspan="2"></td>
+                `;
             }
         } else if (stage === "mr_to_po") {
             if (mode === "doc") {
@@ -1113,13 +1127,14 @@ class ProcurementOrderPickerCenter {
                     <td colspan="5"></td>
                     <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
                     <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
-                    <td colspan="2"></td>
+                    <td colspan="3"></td>
                 `;
             } else {
                 foot_html += `
                     <td colspan="5"></td>
+                    <td colspan="2"></td>
                     <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
-                    <td colspan="3"></td>
+                    <td></td>
                     <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
                     <td class="picker-money-cell">${this.fmt_money(total_amt * 0.13)}</td>
                     <td class="picker-money-cell">${this.fmt_money(total_amt * 1.13)}</td>
@@ -1129,49 +1144,59 @@ class ProcurementOrderPickerCenter {
         } else if (stage === "po_to_pr") {
             if (mode === "doc") {
                 foot_html += `
-                    <td colspan="6"></td>
+                    <td colspan="7"></td>
                     <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
                     <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
+                    <td class="picker-money-cell">${this.fmt_money(total_grand)}</td>
                     <td colspan="2"></td>
                 `;
             } else {
                 foot_html += `
-                    <td colspan="5"></td>
-                    <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
+                    <td colspan="6"></td>
                     <td colspan="2"></td>
+                    <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
+                    <td></td>
                     <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
+                    <td></td>
                 `;
             }
         } else if (stage === "pr_to_pi") {
             if (mode === "doc") {
                 foot_html += `
-                    <td colspan="4"></td>
+                    <td colspan="5"></td>
                     <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
                     <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
+                    <td class="picker-money-cell">${this.fmt_money(total_grand)}</td>
                     <td colspan="2"></td>
                 `;
             } else {
                 foot_html += `
-                    <td colspan="4"></td>
-                    <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
+                    <td colspan="5"></td>
                     <td colspan="2"></td>
-                    <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
+                    <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
                     <td></td>
+                    <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
+                    <td colspan="2"></td>
                 `;
             }
         } else if (stage === "pi_to_rr") {
             if (mode === "doc") {
                 foot_html += `
-                    <td colspan="6"></td>
-                    <td colspan="2"></td>
+                    <td colspan="7"></td>
+                    <td class="picker-money-cell">${this.fmt_money(total_grand)}</td>
+                    <td class="picker-money-cell">${this.fmt_money(total_paid)}</td>
                     <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
+                    <td></td>
                 `;
             } else {
                 foot_html += `
-                    <td colspan="4"></td>
+                    <td colspan="5"></td>
                     <td class="picker-qty-cell">${total_qty.toFixed(2)}</td>
-                    <td colspan="2"></td>
+                    <td></td>
                     <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
+                    <td></td>
+                    <td class="picker-money-cell">${this.fmt_money(total_amt)}</td>
+                    <td></td>
                 `;
             }
         }
@@ -3304,6 +3329,17 @@ class ProcurementOrderPickerCenter {
                     return;
                 }
 
+                for (let i = 0; i < valid_items.length; i++) {
+                    const item = valid_items[i];
+                    const item_qty = flt(item.qty || item.this_qty);
+                    if (item_qty > 0) {
+                        if (flt(item.rate) <= 0 || flt(item.amount) <= 0) {
+                            frappe.msgprint(__("第 {0} 行物料 [{1}] 的订购数量大于0时，单价与金额必须大于0，不可为0！", [i + 1, item.item_code]));
+                            return;
+                        }
+                    }
+                }
+
                 try {
                     frappe.dom.freeze(__("正在生成采购订单..."));
                     const res = await frappe.call({
@@ -3764,6 +3800,17 @@ class ProcurementOrderPickerCenter {
                     return;
                 }
 
+                for (let i = 0; i < valid_items.length; i++) {
+                    const item = valid_items[i];
+                    const item_qty = flt(item.qty || item.this_qty);
+                    if (item_qty > 0) {
+                        if (flt(item.rate) <= 0 || flt(item.amount) <= 0) {
+                            frappe.msgprint(__("第 {0} 行物料 [{1}] 的实收数量大于0时，单价与金额必须大于0，不可为0！", [i + 1, item.item_code]));
+                            return;
+                        }
+                    }
+                }
+
                 try {
                     frappe.dom.freeze(__("正在生成采购入库单..."));
                     const res = await frappe.call({
@@ -4033,6 +4080,14 @@ class ProcurementOrderPickerCenter {
                     read_only: 1,
                 },
                 {
+                    fieldtype: "Select",
+                    fieldname: "invoice_type",
+                    label: __("发票类型"),
+                    options: ["专用发票", "普通发票"].join("\n"),
+                    default: "专用发票",
+                    reqd: 1,
+                },
+                {
                     fieldtype: "Data",
                     fieldname: "bill_no",
                     label: __("发票号码 (纸质/金税发票)"),
@@ -4100,6 +4155,17 @@ class ProcurementOrderPickerCenter {
                     return;
                 }
 
+                for (let i = 0; i < valid_items.length; i++) {
+                    const item = valid_items[i];
+                    const item_qty = flt(item.qty || item.this_qty);
+                    if (item_qty > 0) {
+                        if (flt(item.rate) <= 0 || flt(item.amount) <= 0) {
+                            frappe.msgprint(__("第 {0} 行物料 [{1}] 的开票数量大于0时，单价与金额必须大于0，不可为0！", [i + 1, item.item_code]));
+                            return;
+                        }
+                    }
+                }
+
                 const items_payload = valid_items.map((r) => ({
                     pri_name: r.pri_name,
                     pr_name: r.pr_name,
@@ -4125,6 +4191,7 @@ class ProcurementOrderPickerCenter {
                             selected_items: items_payload,
                             bill_no: vals.bill_no,
                             bill_date: vals.bill_date,
+                            invoice_type: vals.invoice_type || "专用发票",
                         },
                     });
                     frappe.dom.unfreeze();

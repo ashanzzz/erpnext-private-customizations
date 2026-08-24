@@ -990,10 +990,21 @@ def make_purchase_orders_from_mr_items(
                 frappe.throw(_("物料 {0} 未设置默认供应商，且系统中暂无供应商主数据，请先创建供应商。").format(db_row.item_code))
 
         this_qty = flt(user_row.get("this_qty"))
-        if this_qty <= 0 or this_qty > flt(db_row.pending_qty):
-            this_qty = flt(db_row.pending_qty)
+        if this_qty <= 0:
+            continue
+        if this_qty > flt(db_row.pending_qty) + 0.0001:
+            frappe.throw(_("物料 [{0}] 本次订购数量 ({1}) 超过了申请未订数量 ({2})！").format(
+                db_row.item_code, this_qty, flt(db_row.pending_qty)
+            ))
 
-        amount = flt(user_row.get("amount")) or flt(this_qty * (flt(user_row.get("rate")) or flt(db_row.rate)), 2)
+        user_rate = flt(user_row.get("rate")) if user_row.get("rate") is not None else flt(db_row.rate)
+        if user_rate <= 0:
+            frappe.throw(_("物料 [{0}] 的单价为 0，金额不能为 0！请输入有效单价。").format(db_row.item_code))
+
+        amount = flt(user_row.get("amount")) or flt(this_qty * user_rate, 2)
+        if amount <= 0:
+            frappe.throw(_("物料 [{0}] 的金额不能为 0！").format(db_row.item_code))
+
         tax_rate = flt(user_row.get("tax_rate") or 13.0, 2)
         tax_amount = flt(user_row.get("tax_amount") or (amount * (tax_rate / 100.0)), 2)
         total_amount = flt(user_row.get("total_amount") or (amount + tax_amount), 2)
@@ -1001,7 +1012,7 @@ def make_purchase_orders_from_mr_items(
         supplier_groups[(row_company, target_supplier)].append({
             "db_row": db_row,
             "this_qty": this_qty,
-            "rate": flt(user_row.get("rate")) or flt(db_row.rate),
+            "rate": user_rate,
             "amount": amount,
             "tax_rate": tax_rate,
             "tax_amount": tax_amount,
@@ -1485,8 +1496,17 @@ def make_purchase_receipts_from_po_items(
         assert_company_access(row_company)
 
         this_qty = flt(user_row.get("this_qty"))
-        if this_qty <= 0 or this_qty > flt(db_row.pending_qty):
-            this_qty = flt(db_row.pending_qty)
+        if this_qty <= 0:
+            continue
+        if this_qty > flt(db_row.pending_qty) + 0.0001:
+            frappe.throw(_("物料 [{0}] 本次实收数量 ({1}) 超过了订单未收数量 ({2})！").format(
+                db_row.item_code, this_qty, flt(db_row.pending_qty)
+            ))
+
+        if flt(db_row.rate) <= 0:
+            frappe.throw(_("物料 [{0}] 的采购单价为 0，金额不能为 0！请先核对采购订单单价后再办理入库。").format(
+                db_row.item_code
+            ))
 
         target_wh = (warehouse_override or "").strip() or user_row.get("warehouse") or db_row.warehouse
         if target_wh and not frappe.db.exists("Warehouse", target_wh):
@@ -1773,6 +1793,7 @@ def make_purchase_invoices_from_pr_items(
     selected_items: list[dict] | str,
     bill_no: str | None = None,
     bill_date: str | None = None,
+    invoice_type: str | None = "专用发票",
 ) -> dict:
     """Generate Draft Purchase Invoice(s) grouped by Supplier from PR items or PR docs."""
     if isinstance(selected_items, str):
@@ -1787,7 +1808,7 @@ def make_purchase_invoices_from_pr_items(
             expanded_items.append(it)
         elif it.get("pr_name"):
             doc_items = frappe.db.sql("""
-                SELECT pri.name AS pri_name, pri.qty AS this_qty, pri.parent AS pr_name
+                SELECT pri.name AS pri_name, (pri.qty - COALESCE(pri.billed_amt, 0) / NULLIF(pri.rate, 0)) AS this_qty, pri.parent AS pr_name
                 FROM `tabPurchase Receipt Item` pri
                 WHERE pri.parent = %s AND (pri.amount - COALESCE(pri.billed_amt, 0)) > 0.01
             """, (it["pr_name"],), as_dict=True)
@@ -1829,8 +1850,6 @@ def make_purchase_invoices_from_pr_items(
 
     db_map = {r.name: r for r in db_items}
 
-    warehouse_override = filters.get("warehouse") if isinstance(filters, dict) else None
-
     # Group by (company, supplier)
     supplier_groups = defaultdict(list)
     for user_row in expanded_items:
@@ -1842,13 +1861,39 @@ def make_purchase_invoices_from_pr_items(
         row_company = db_row.company
         assert_company_access(row_company)
 
-        target_wh = (warehouse_override or "").strip() or user_row.get("warehouse") or db_row.warehouse
-        this_qty = flt(user_row.get("this_qty"))
+        this_qty = flt(user_row.get("this_qty") or user_row.get("qty"))
         if this_qty <= 0:
-            this_qty = flt(db_row.qty)
-        
-        user_rate = flt(user_row.get("rate")) or flt(db_row.rate)
+            continue
+
+        unit_rate = flt(db_row.rate) or 1.0
+        pending_qty = flt(db_row.pending_amount) / unit_rate if unit_rate else flt(db_row.qty)
+
+        if this_qty > flt(pending_qty) + 0.0001:
+            frappe.throw(_("物料 [{0}] 本次开票数量 ({1}) 超过了入库待开票数量 ({2})！").format(
+                db_row.item_code, this_qty, flt(pending_qty, 2)
+            ))
+
+        user_rate = flt(user_row.get("rate")) if user_row.get("rate") is not None else flt(db_row.rate)
+        if user_rate <= 0:
+            frappe.throw(_("物料 [{0}] 的单价为 0，金额不能为 0！请输入有效单价。").format(db_row.item_code))
+
         amount = flt(user_row.get("amount")) or flt(this_qty * user_rate, 2)
+        if amount <= 0:
+            frappe.throw(_("物料 [{0}] 的开票金额不能为 0！").format(db_row.item_code))
+
+        if amount > flt(db_row.pending_amount) + 0.01:
+            frappe.throw(_("物料 [{0}] 本次开票金额 (¥ {1}) 超过了入库待开票金额上限 (¥ {2})！").format(
+                db_row.item_code, amount, flt(db_row.pending_amount, 2)
+            ))
+
+        # 比例防透支约束：如果本次数量尚未全部开完，禁止一次性透支全部金额
+        if this_qty < flt(pending_qty) - 0.0001:
+            max_allowed_amt = flt(user_rate * this_qty * 1.0005 + 0.05, 2)
+            if amount > max_allowed_amt:
+                frappe.throw(_("物料 [{0}] 在开票数量 ({1}) 尚未全部开完剩余数量 ({2}) 的情况下，不允许提前透支全部待开金额！本次最大允许开票金额为 ¥ {3}").format(
+                    db_row.item_code, this_qty, flt(pending_qty, 2), max_allowed_amt
+                ))
+
         tax_rate = flt(user_row.get("tax_rate") or 13.0, 2)
         tax_amount = flt(user_row.get("tax_amount") or (amount * (tax_rate / 100.0)), 2)
         total_amount = flt(user_row.get("total_amount") or (amount + tax_amount), 2)
@@ -1863,7 +1908,7 @@ def make_purchase_invoices_from_pr_items(
             "total_amount": total_amount,
             "spec": user_row.get("spec") or db_row.custom_spec_model or "",
             "remarks": user_row.get("remarks") or user_row.get("description") or db_row.custom_line_remark or "",
-            "warehouse": target_wh,
+            "warehouse": user_row.get("warehouse") or db_row.warehouse,
         })
 
     created_invoices = []
@@ -1877,10 +1922,14 @@ def make_purchase_invoices_from_pr_items(
         if bill_date:
             pi.bill_date = bill_date
 
+        if _meta_has("Purchase Invoice", "custom_invoice_type"):
+            pi.custom_invoice_type = invoice_type or "专用发票"
+
         for item_data in items_to_invoice:
             db_row = item_data["db_row"]
             this_qty = item_data["this_qty"]
             user_rate = item_data["rate"]
+            user_amount = item_data["amount"]
             user_spec = (item_data["spec"] or "").strip()
             user_remarks = (item_data["remarks"] or "").strip()
 
@@ -1893,7 +1942,7 @@ def make_purchase_invoices_from_pr_items(
                 "stock_uom": db_row.stock_uom,
                 "qty": this_qty,
                 "rate": user_rate,
-                "amount": flt(this_qty * user_rate, 2),
+                "amount": user_amount,
                 "warehouse": db_row.warehouse,
                 "purchase_receipt": db_row.pr_name,
                 "pr_detail": db_row.name,
