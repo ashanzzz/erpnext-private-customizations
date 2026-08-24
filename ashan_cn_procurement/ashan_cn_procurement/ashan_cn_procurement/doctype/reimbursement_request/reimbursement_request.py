@@ -26,10 +26,22 @@ class ReimbursementRequest(Document):
     def on_update(self):
         reserve_request_sources(self)
 
+    def on_submit(self):
+        for res in frappe.get_all(
+            "Reimbursement Source Reservation",
+            filters={"reimbursement_request": self.name, "status": "Draft"},
+        ):
+            frappe.db.set_value("Reimbursement Source Reservation", res.name, "status", "Submitted")
+
+    def on_cancel(self):
+        release_all_reservations(self)
+
     def _update_totals(self):
-        total = sum(frappe.utils.flt(row.amount) for row in self.get("invoice_items"))
+        total = sum(frappe.utils.flt(row.amount) for row in (self.get("invoice_items") or []))
         self.total_amount = total
-        self.outstanding_amount = total
-        self.paid_amount = 0
+        if not getattr(self, "paid_amount", None):
+            self.paid_amount = 0
+        self.outstanding_amount = max(0, total - frappe.utils.flt(self.paid_amount))
         if not self.payment_status:
             self.payment_status = "未付款"
+

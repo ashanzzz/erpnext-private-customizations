@@ -681,6 +681,25 @@
       "parentfield": "fields",
       "parenttype": "DocType",
       "doctype": "DocField"
+    },
+    {
+      "name": "nidsrctaxinv",
+      "owner": "Administrator",
+      "creation": "2026-08-24 14:00:00",
+      "modified": "2026-08-24 14:00:00",
+      "modified_by": "Administrator",
+      "docstatus": 0,
+      "idx": 12,
+      "label": "来源税局发票",
+      "fieldtype": "Link",
+      "fieldname": "source_tax_invoice",
+      "options": "Tax Invoice",
+      "read_only": 1,
+      "in_list_view": 0,
+      "parent": "Reimbursement Invoice Item",
+      "parentfield": "fields",
+      "parenttype": "DocType",
+      "doctype": "DocField"
     }
   ],
   "permissions": [],

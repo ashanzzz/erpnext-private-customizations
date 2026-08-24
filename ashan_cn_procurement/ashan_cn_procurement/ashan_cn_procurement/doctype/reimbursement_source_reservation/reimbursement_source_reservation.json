@@ -18,12 +18,30 @@
       "reqd": 1
     },
     {
+      "default": "Purchase Invoice Item",
+      "fieldname": "source_kind",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "来源类型",
+      "options": "Purchase Invoice Item\nTax Invoice",
+      "reqd": 1
+    },
+    {
+      "fieldname": "source_tax_invoice",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "来源税局发票",
+      "options": "Tax Invoice",
+      "read_only": 1,
+      "reqd": 0
+    },
+    {
       "fieldname": "source_purchase_invoice",
       "fieldtype": "Link",
       "in_list_view": 1,
       "label": "来源采购发票",
       "options": "Purchase Invoice",
-      "reqd": 1
+      "reqd": 0
     },
     {
       "fieldname": "source_purchase_invoice_item",
@@ -31,7 +49,7 @@
       "in_list_view": 1,
       "label": "来源采购发票明细",
       "read_only": 1,
-      "reqd": 1
+      "reqd": 0
     },
     {
       "fieldname": "active_source_key",

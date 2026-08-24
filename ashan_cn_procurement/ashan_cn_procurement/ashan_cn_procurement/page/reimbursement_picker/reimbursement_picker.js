@@ -4,11 +4,23 @@
 frappe.pages["reimbursement-picker"].on_page_load = function (wrapper) {
     var page = frappe.ui.make_app_page({
         parent: wrapper,
-        title: __("🚀 采购全流程选单生单中心"),
+        title: __("🧾 报销申请中心"),
         single_column: true,
     });
 
     wrapper.reim_picker = new ReimbursementPicker(page);
+};
+
+const REIM_API = {
+    overview_kpis: "ashan_cn_procurement.services.reimbursement_picker_service.get_reimbursement_picker_overview_kpis",
+    doc_summary: "ashan_cn_procurement.services.reimbursement_picker_service.get_reimbursement_picker_doc_summary_rows",
+    item_rows: "ashan_cn_procurement.services.reimbursement_picker_service.get_reimbursement_picker_rows",
+    companies: "ashan_cn_procurement.services.procurement_picker_service.get_user_procurement_companies",
+    creation_defaults: "ashan_cn_procurement.services.reimbursement_picker_service.get_reimbursement_creation_defaults",
+    candidates: "ashan_cn_procurement.services.reimbursement_picker_service.get_reimbursable_tax_invoices",
+    preview: "ashan_cn_procurement.services.reimbursement_picker_service.preview_tax_invoice_reimbursement",
+    create_v2: "ashan_cn_procurement.services.reimbursement_picker_service.create_tax_invoice_reimbursement",
+    upload: "ashan_cn_procurement.ashan_cn_procurement.page.tax_invoice_center.tax_invoice_center.upload_tax_invoice_file",
 };
 
 class ReimbursementPicker {
@@ -16,11 +28,36 @@ class ReimbursementPicker {
         this.page = page;
         this.active_company = "All";
         this.companies = [];
-        this.view_mode = "detail"; // detail | doc
-        this.match_status = "pending"; // pending | completed | all
+        this.view_mode = "doc"; // 默认单号视图
+        this.match_status = "pending";
         this.selected_items = new Set();
         this.cached_rows = [];
         this.kpis = {};
+
+        this.creation = {
+            dialog: null,
+            active_tab: "select", // select | upload
+            company: null,
+            employee: null,
+            employee_name: null,
+            posting_date: null,
+            title: "",
+            auto_receive_stock: 1,
+            filters: {
+                search: "",
+                from_date: "",
+                to_date: "",
+                invoice_type: "",
+                pi_mode: "",
+            },
+            candidate_rows: [],
+            selected_invoices: new Map(),
+            preview: null,
+            resolutions: { suppliers: {}, items: {}, warehouses: {} },
+            latest_request: 0,
+            loading: false,
+            preview_timer: null,
+        };
 
         this.init();
     }
@@ -38,8 +75,8 @@ class ReimbursementPicker {
                 <!-- Top Header & Company Selector -->
                 <div class="picker-top-bar">
                     <div class="picker-title-group">
-                        <h2>🚀 采购全流程选单生单中心</h2>
-                        <div class="picker-subtitle">报销申请</div>
+                        <h2>🧾 报销申请中心</h2>
+                        <div class="picker-subtitle">现金报销 · 多发票智能归集与闭环生单</div>
                     </div>
                     <div class="picker-company-group">
                         <label class="picker-company-label" for="reim-company-select">所属公司:</label>
@@ -53,7 +90,7 @@ class ReimbursementPicker {
                 <div class="picker-kpi-grid" id="reim-kpi-grid">
                     <div class="picker-kpi-card active" data-step="rr_pending">
                         <div class="picker-kpi-header">
-                            <span class="picker-kpi-title">报销申请</span>
+                            <span class="picker-kpi-title">待结款报销</span>
                             <span class="picker-kpi-icon">💰</span>
                         </div>
                         <div class="picker-kpi-body">
@@ -63,27 +100,27 @@ class ReimbursementPicker {
                     </div>
                     <div class="picker-kpi-card" data-step="pi">
                         <div class="picker-kpi-header">
-                            <span class="picker-kpi-title">采购发票</span>
+                            <span class="picker-kpi-title">垫付采购发票</span>
                             <span class="picker-kpi-icon">🧾</span>
                         </div>
                         <div class="picker-kpi-body">
                             <div class="picker-kpi-number" id="reim-kpi-pi-count">0</div>
-                            <div class="picker-kpi-sub">垫付采购发票</div>
+                            <div class="picker-kpi-sub">关联采购发票</div>
                         </div>
                     </div>
                     <div class="picker-kpi-card" data-step="pr">
                         <div class="picker-kpi-header">
-                            <span class="picker-kpi-title">采购入库</span>
+                            <span class="picker-kpi-title">自动入库单</span>
                             <span class="picker-kpi-icon">📦</span>
                         </div>
                         <div class="picker-kpi-body">
                             <div class="picker-kpi-number" id="reim-kpi-pr-count">0</div>
-                            <div class="picker-kpi-sub">自动入库单</div>
+                            <div class="picker-kpi-sub">库存品入库</div>
                         </div>
                     </div>
                     <div class="picker-kpi-card" data-step="outstanding_amt">
                         <div class="picker-kpi-header">
-                            <span class="picker-kpi-title">待报销付款</span>
+                            <span class="picker-kpi-title">待报销总额</span>
                             <span class="picker-kpi-icon">💳</span>
                         </div>
                         <div class="picker-kpi-body">
@@ -96,12 +133,12 @@ class ReimbursementPicker {
                 <!-- Section Context Banner -->
                 <div class="picker-section-banner" id="reim-section-banner">
                     <div class="picker-section-main">
-                        <div class="picker-section-icon">🚀</div>
+                        <div class="picker-section-icon">🧾</div>
                         <div class="picker-section-heading">
                             <div class="picker-section-title">
-                                <span>报销申请 · 极速录单与全链路闭环生单中心</span>
+                                <span>报销申请 · 多发票智能归集与闭环生单中心</span>
                             </div>
-                            <div class="picker-section-desc">填写报销申请，系统全自动生成并提交采购订单 (PO) ➔ 采购入库单 (PR，若库存品) ➔ 采购发票 (PI) ➔ 报销申请单 (RR)。</div>
+                            <div class="picker-section-desc">支持批量选择税局发票或直接拖拽上传电子发票，全自动复用或生成采购单据链并汇入报销申请单 (RR)。</div>
                         </div>
                     </div>
                     <div class="picker-section-badge" id="reim-total-summary-badge">
@@ -114,9 +151,9 @@ class ReimbursementPicker {
                     <div class="picker-filter-group">
                         <label>付款状态:</label>
                         <div class="picker-status-btn-group" id="reim-status-btn-group">
-                            <button type="button" class="picker-status-btn active" data-status="pending">🟡 仅待付款结清</button>
-                            <button type="button" class="picker-status-btn" data-status="completed">🟢 仅已付款结清</button>
-                            <button type="button" class="picker-status-btn" data-status="all">🌐 全部报销单据</button>
+                            <button type="button" class="picker-status-btn active" data-status="pending">🟡 仅待结款</button>
+                            <button type="button" class="picker-status-btn" data-status="completed">🟢 仅已结清</button>
+                            <button type="button" class="picker-status-btn" data-status="all">🌐 全部报销</button>
                         </div>
                     </div>
                     <div class="picker-filter-group">
@@ -141,1023 +178,998 @@ class ReimbursementPicker {
                     </div>
                 </div>
 
-                <!-- Action Bar (View Switcher + Selection Summary + Primary Actions) -->
+                <!-- Action Bar -->
                 <div class="picker-action-bar">
                     <div class="picker-summary-text">
                         <div class="picker-view-switch-group">
-                            <button type="button" class="picker-view-btn active" data-mode="detail">📑 明细视图</button>
-                            <button type="button" class="picker-view-btn" data-mode="doc">📦 单号视图</button>
+                            <button type="button" class="picker-view-btn" data-mode="detail">📑 明细视图</button>
+                            <button type="button" class="picker-view-btn active" data-mode="doc">📦 单号视图</button>
                         </div>
-                        <span>已选 <strong class="picker-summary-highlight" id="reim-selected-count">0</strong> 项</span>
-                        <span>本次总计: <strong class="picker-summary-highlight" id="reim-selected-amount">¥ 0.00</strong></span>
+                        <span>已加载: <strong class="picker-summary-highlight" id="reim-loaded-count">0</strong> 笔</span>
+                        <span>报销总额: <strong class="picker-summary-highlight" id="reim-sum-total-amt">¥ 0.00</strong></span>
+                        <span>待结款: <strong class="picker-summary-highlight" id="reim-sum-outstanding-amt">¥ 0.00</strong></span>
                     </div>
+
                     <div class="picker-btn-group">
-                        <button type="button" class="picker-btn-sub" id="reim-select-all-btn">全选本页</button>
-                        <button type="button" class="picker-btn-sub" id="reim-clear-sel-btn">清空选择</button>
-                        <button type="button" class="reim-btn-create-rr" id="reim-open-create-modal-btn">🚀 + 新建报销申请单</button>
+                        <button type="button" class="picker-btn-sub" id="reim-refresh-btn">🔄 刷新</button>
+                        <button type="button" class="reim-btn-create-rr" id="reim-open-create-modal-btn">
+                            <span>➕ 新建报销</span>
+                        </button>
                     </div>
                 </div>
 
-                <!-- Big Wide Data Table Container -->
+                <!-- Table Container & Sticky Panes -->
                 <div class="picker-table-wrapper">
-                    <!-- Top Sync Scrollbar -->
-                    <div class="picker-top-scrollbar-wrap" id="reim-top-scrollbar">
-                        <div class="picker-top-scrollbar-inner" id="reim-top-scrollbar-inner"></div>
+                    <div class="picker-top-scrollbar-wrap" id="reim-top-scroll">
+                        <div class="picker-top-scrollbar-inner" id="reim-top-scroll-inner"></div>
                     </div>
-
-                    <!-- Main Table Scroll Area -->
-                    <div class="picker-main-table-scroll" id="reim-main-table-scroll">
+                    <div class="picker-main-table-scroll" id="reim-main-scroll">
                         <table class="picker-data-table" id="reim-data-table">
-                            <thead id="reim-table-thead"></thead>
-                            <tbody id="reim-table-tbody"></tbody>
-                            <tfoot id="reim-table-tfoot"></tfoot>
+                            <thead id="reim-table-head"></thead>
+                            <tbody id="reim-table-body"></tbody>
+                            <tfoot id="reim-table-foot"></tfoot>
                         </table>
                     </div>
                 </div>
             </div>
         `;
-        $(this.page.body).html(html);
+
+        this.page.main.html(html);
+
+        // Add primary action button to Frappe Page Header
+        this.page.set_primary_action(__("➕ 新建报销"), () => {
+            this.open_create_reimbursement_modal();
+        });
     }
 
     async load_companies() {
-        try {
-            const r = await frappe.call({
-                method: "ashan_cn_procurement.services.procurement_picker_service.get_user_procurement_companies",
-            });
-            if (r.message && r.message.companies) {
-                const comp_names = r.message.companies;
-                this.companies = comp_names.map((name) => ({ name, company_name: name }));
-                const $select = $("#reim-company-select");
-                $select.empty();
-                if (this.companies.length > 1) {
-                    $select.append(`<option value="All">🌐 全部公司 (汇聚视图)</option>`);
-                }
-                this.companies.forEach((c) => {
-                    $select.append(`<option value="${c.name}">${frappe.utils.escape_html(c.company_name || c.name)}</option>`);
-                });
-                this.active_company = this.companies.length === 1 ? this.companies[0].name : "All";
-                $select.val(this.active_company);
+        const r = await frappe.call({ method: REIM_API.companies });
+        if (r.message && r.message.companies) {
+            this.companies = r.message.companies;
+            const $sel = $("#reim-company-select");
+            $sel.empty();
+            if (this.companies.length > 1) {
+                $sel.append(`<option value="All">🌐 全部公司 (汇聚视图)</option>`);
             }
-        } catch (e) {
-            console.error("Failed to load companies for reimbursement picker:", e);
+            this.companies.forEach((comp) => {
+                $sel.append(`<option value="${comp}">${comp}</option>`);
+            });
+            if (this.companies.length === 1) {
+                this.active_company = this.companies[0];
+                $sel.val(this.active_company);
+            }
         }
     }
 
     bind_global_events() {
-        const self = this;
+        const me = this;
 
-        // Company change
+        // Company filter
         $("#reim-company-select").on("change", function () {
-            self.active_company = $(this).val();
-            self.selected_items.clear();
-            self.refresh_all();
+            me.active_company = $(this).val();
+            me.refresh_all();
         });
 
-        // Filter button group
+        // Status filter
         $("#reim-status-btn-group").on("click", ".picker-status-btn", function () {
-            $(this).siblings().removeClass("active");
-            $(this).addClass("active");
-            self.match_status = $(this).data("status");
-            self.selected_items.clear();
-            self.load_table_data();
+            $(this).addClass("active").siblings().removeClass("active");
+            me.match_status = $(this).data("status");
+            me.load_rows();
         });
 
-        // Search inputs with debounce
-        let search_timer = null;
-        $("#reim-filter-bar").on("input change", "input[data-filter]", function () {
-            clearTimeout(search_timer);
-            search_timer = setTimeout(() => {
-                self.selected_items.clear();
-                self.load_table_data();
+        // View mode
+        $(".picker-view-switch-group").on("click", ".picker-view-btn", function () {
+            $(this).addClass("active").siblings().removeClass("active");
+            me.view_mode = $(this).data("mode");
+            me.load_rows();
+        });
+
+        // Inputs debounce
+        let filterTimer = null;
+        $("#reim-filter-bar").on("input", "input.picker-input", function () {
+            clearTimeout(filterTimer);
+            filterTimer = setTimeout(() => {
+                me.load_rows();
             }, 300);
         });
 
-        // View mode switch
-        $(".picker-view-switch-group").on("click", ".picker-view-btn", function () {
-            $(this).siblings().removeClass("active");
-            $(this).addClass("active");
-            self.view_mode = $(this).data("mode");
-            self.selected_items.clear();
-            self.render_table();
-        });
-
-        // Select All / Clear Select
-        $("#reim-select-all-btn").on("click", function () {
-            self.cached_rows.forEach((r) => {
-                const key = self.view_mode === "detail" ? r.rii_name : r.rr_name;
-                self.selected_items.add(key);
-            });
-            self.update_selection_summary();
-            self.sync_checkbox_states();
-        });
-
-        $("#reim-clear-sel-btn").on("click", function () {
-            self.selected_items.clear();
-            self.update_selection_summary();
-            self.sync_checkbox_states();
-        });
-
-        // Checkbox change in table
-        $("#reim-table-tbody").on("change", ".picker-row-checkbox", function () {
-            const key = $(this).data("key");
-            if ($(this).is(":checked")) {
-                self.selected_items.add(key);
-            } else {
-                self.selected_items.delete(key);
-            }
-            self.update_selection_summary();
+        // Refresh
+        $("#reim-refresh-btn").on("click", () => {
+            this.refresh_all();
         });
 
         // Open create modal
-        $("#reim-open-create-modal-btn").on("click", function () {
-            self.open_create_reimbursement_modal();
+        $("#reim-open-create-modal-btn").on("click", () => {
+            this.open_create_reimbursement_modal();
         });
 
-        // Table drill-down
-        $("#reim-table-tbody").on("click", ".picker-clickable-doc", function () {
-            const dt = $(this).data("doctype");
-            const dn = $(this).data("name");
-            if (dt && dn) {
-                self.show_doc_detail_modal(dt, dn);
-            }
-        });
-
-        // Mousewheel-to-Horizontal Scroll
-        this.bind_wheel_horizontal_scroll();
+        // Dual scrollbars & Mousewheel horizontal scroll
+        this.sync_scrollbars();
     }
 
-    bind_wheel_horizontal_scroll() {
-        const table_container = document.getElementById("reim-main-table-scroll");
-        const top_scrollbar = document.getElementById("reim-top-scrollbar");
-        const thead = document.getElementById("reim-table-thead");
+    sync_scrollbars() {
+        const $top = $("#reim-top-scroll");
+        const $main = $("#reim-main-scroll");
+        const $inner = $("#reim-top-scroll-inner");
+        const $table = $("#reim-data-table");
 
-        if (!table_container || !top_scrollbar) return;
-
-        // Dual scrollbar synchronization
-        let is_syncing_main = false;
-        let is_syncing_top = false;
-
-        table_container.addEventListener("scroll", () => {
-            if (!is_syncing_main) {
-                is_syncing_top = true;
-                top_scrollbar.scrollLeft = table_container.scrollLeft;
-                is_syncing_top = false;
-            }
-        });
-
-        top_scrollbar.addEventListener("scroll", () => {
-            if (!is_syncing_top) {
-                is_syncing_main = true;
-                table_container.scrollLeft = top_scrollbar.scrollLeft;
-                is_syncing_main = false;
-            }
-        });
-
-        // Convert mousewheel vertical scroll to horizontal scroll
-        const handle_wheel = (e) => {
-            if (table_container.scrollWidth > table_container.clientWidth) {
-                if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-                    e.preventDefault();
-                    table_container.scrollLeft += e.deltaY;
-                }
-            }
+        const updateWidth = () => {
+            const w = $table.outerWidth() || 1200;
+            $inner.width(w);
         };
 
-        if (thead) thead.addEventListener("wheel", handle_wheel, { passive: false });
-        table_container.addEventListener("wheel", handle_wheel, { passive: false });
-    }
-
-    sync_top_scrollbar_width() {
-        const table = document.getElementById("reim-data-table");
-        const inner = document.getElementById("reim-top-scrollbar-inner");
-        if (table && inner) {
-            inner.style.width = `${table.scrollWidth}px`;
-        }
-    }
-
-    get_current_filters() {
-        const filters = {
-            match_status: this.match_status,
-        };
-        $("#reim-filter-bar input[data-filter]").each(function () {
-            const k = $(this).data("filter");
-            const v = $(this).val().trim();
-            if (v) filters[k] = v;
+        $top.on("scroll", function () {
+            $main.scrollLeft($(this).scrollLeft());
         });
-        return filters;
+        $main.on("scroll", function () {
+            $top.scrollLeft($(this).scrollLeft());
+        });
+
+        // Mousewheel on thead & table converts to horizontal scroll
+        $("#reim-table-head, #reim-main-scroll").on("wheel", function (e) {
+            if (e.originalEvent.deltaY !== 0) {
+                const delta = e.originalEvent.deltaY;
+                $main.scrollLeft($main.scrollLeft() + delta);
+                e.preventDefault();
+            }
+        });
+
+        $(window).on("resize", updateWidth);
+        setTimeout(updateWidth, 300);
     }
 
     async refresh_all() {
-        await Promise.all([this.load_kpis(), this.load_table_data()]);
+        await Promise.all([this.load_kpis(), this.load_rows()]);
     }
 
     async load_kpis() {
-        try {
-            const r = await frappe.call({
-                method: "ashan_cn_procurement.services.reimbursement_picker_service.get_reimbursement_picker_overview_kpis",
-                args: { company: this.active_company },
-            });
-            if (r.message) {
-                this.kpis = r.message;
-                $("#reim-kpi-pending-rr").text(this.kpis.pending_rr_count || 0);
-                $("#reim-kpi-pi-count").text(this.kpis.pi_count || 0);
-                $("#reim-kpi-pr-count").text(this.kpis.pr_count || 0);
-                $("#reim-kpi-outstanding-amt").text(this.fmt_money(this.kpis.rr_outstanding || 0));
-            }
-        } catch (e) {
-            console.error("Failed to load KPIs:", e);
+        const r = await frappe.call({
+            method: REIM_API.overview_kpis,
+            args: { company: this.active_company },
+        });
+        if (r.message) {
+            this.kpis = r.message;
+            $("#reim-kpi-pending-rr").text(this.kpis.pending_rr_count || 0);
+            $("#reim-kpi-pi-count").text(this.kpis.pi_count || 0);
+            $("#reim-kpi-pr-count").text(this.kpis.pr_count || 0);
+            $("#reim-kpi-outstanding-amt").text(format_currency(this.kpis.rr_outstanding || 0));
         }
     }
 
-    async load_table_data() {
-        const method = this.view_mode === "detail"
-            ? "ashan_cn_procurement.services.reimbursement_picker_service.get_reimbursement_picker_rows"
-            : "ashan_cn_procurement.services.reimbursement_picker_service.get_reimbursement_picker_doc_summary_rows";
-
-        try {
-            frappe.dom.freeze(__("正在加载报销申请数据..."));
-            const r = await frappe.call({
-                method: method,
-                args: {
-                    company: this.active_company,
-                    filters: this.get_current_filters(),
-                },
-            });
-            frappe.dom.unfreeze();
-
-            if (r.message) {
-                this.cached_rows = r.message.rows || [];
-                $("#reim-total-summary-badge").text(`统计: ${this.cached_rows.length} 笔`);
-                this.render_table();
-            }
-        } catch (e) {
-            frappe.dom.unfreeze();
-            console.error("Failed to load table data:", e);
-        }
+    get_filter_params() {
+        const p = { match_status: this.match_status };
+        $("#reim-filter-bar input.picker-input").each(function () {
+            const key = $(this).data("filter");
+            const val = $(this).val().trim();
+            if (val) p[key] = val;
+        });
+        return p;
     }
 
-    render_table() {
-        if (this.view_mode === "detail") {
-            this.render_detail_view();
+    async load_rows() {
+        const filters = this.get_filter_params();
+        const method = this.view_mode === "doc" ? REIM_API.doc_summary : REIM_API.item_rows;
+
+        const r = await frappe.call({
+            method: method,
+            args: {
+                company: this.active_company,
+                filters: filters,
+            },
+        });
+
+        const data = r.message || { rows: [], total_count: 0, total_amount: 0, total_outstanding: 0 };
+        this.cached_rows = data.rows || [];
+
+        $("#reim-loaded-count").text(data.total_count || 0);
+        $("#reim-total-summary-badge").text(`统计: ${data.total_count || 0} 笔`);
+        $("#reim-sum-total-amt").text(format_currency(data.total_amount || 0));
+        $("#reim-sum-outstanding-amt").text(format_currency(data.total_outstanding || 0));
+
+        if (this.view_mode === "doc") {
+            this.render_doc_view(this.cached_rows);
         } else {
-            this.render_doc_view();
+            this.render_detail_view(this.cached_rows);
         }
-        this.sync_top_scrollbar_width();
-        this.update_selection_summary();
+
+        setTimeout(() => {
+            const w = $("#reim-data-table").outerWidth() || 1200;
+            $("#reim-top-scroll-inner").width(w);
+        }, 100);
     }
 
-    render_detail_view() {
-        const thead_html = `
+    render_doc_view(rows) {
+        const thead = `
             <tr>
-                <th class="qifu-col-sticky-1">
-                    <span class="picker-th-badge">SEQ</span>
-                    <span class="picker-th-title">#</span>
-                </th>
-                <th class="picker-col-chk">
-                    <span class="picker-th-badge">SEL</span>
-                    <span class="picker-th-title">选择</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">CORP</span>
-                    <span class="picker-th-title">所属公司</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">REIM NO</span>
-                    <span class="picker-th-title">报销单号</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">EMP</span>
-                    <span class="picker-th-title">报销人</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">VENDOR</span>
-                    <span class="picker-th-title">商户/供应商</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">INVOICE</span>
-                    <span class="picker-th-title">发票代码/号码</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">STATUS</span>
-                    <span class="picker-th-title">付款状态</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">ITEM</span>
-                    <span class="picker-th-title">费用/物料明细</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">SPEC</span>
-                    <span class="picker-th-title">规格说明</span>
-                </th>
-                <th class="text-right">
-                    <span class="picker-th-badge">QTY</span>
-                    <span class="picker-th-title">数量</span>
-                </th>
-                <th class="text-right">
-                    <span class="picker-th-badge">RATE</span>
-                    <span class="picker-th-title">单价</span>
-                </th>
-                <th class="text-right">
-                    <span class="picker-th-badge">TAX RATE</span>
-                    <span class="picker-th-title">税率</span>
-                </th>
-                <th class="text-right">
-                    <span class="picker-th-badge">AMOUNT</span>
-                    <span class="picker-th-title">报销金额</span>
-                </th>
-                <th class="text-right">
-                    <span class="picker-th-badge">OUTSTANDING</span>
-                    <span class="picker-th-title">待结款金额</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">LINKED PI</span>
-                    <span class="picker-th-title">关联发票</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">DATE</span>
-                    <span class="picker-th-title">开票/单据日期</span>
-                </th>
+                <th class="text-center ashan-col-w40">#</th>
+                <th class="ashan-col-w140">报销单号</th>
+                <th class="ashan-col-w160">所属公司</th>
+                <th class="ashan-col-w100">报销人员</th>
+                <th class="ashan-col-w90 text-center">报销日期</th>
+                <th class="ashan-col-w140">发票信息</th>
+                <th class="ashan-col-w140">涉及商户</th>
+                <th class="ashan-col-w110 text-right">报销总额</th>
+                <th class="ashan-col-w110 text-right">待结款金额</th>
+                <th class="ashan-col-w90 text-center">状态</th>
+                <th class="ashan-col-w160">关联采购单据</th>
             </tr>
         `;
-        $("#reim-table-thead").html(thead_html);
+        $("#reim-table-head").html(thead);
 
-        if (this.cached_rows.length === 0) {
-            $("#reim-table-tbody").html(`
+        if (!rows.length) {
+            $("#reim-table-body").html(`
                 <tr>
-                    <td colspan="17" class="picker-empty-state">
-                        <div class="picker-empty-icon">🚀</div>
-                        <div class="picker-empty-text">当前暂无报销申请记录，点击上方【🚀 + 新建报销申请单】即可极速录单！</div>
+                    <td colspan="11" class="picker-empty-state">
+                        <div class="picker-empty-icon">📂</div>
+                        <div class="picker-empty-text">当前筛选条件下暂无报销单数据</div>
                     </td>
                 </tr>
             `);
-            $("#reim-table-tfoot").empty();
+            $("#reim-table-foot").empty();
             return;
         }
 
-        let sum_qty = 0;
-        let sum_amt = 0;
-        let sum_outstanding = 0;
+        let totalAmt = 0;
+        let totalOut = 0;
 
-        let tbody_html = "";
-        this.cached_rows.forEach((r, idx) => {
-            sum_qty += flt(r.qty);
-            sum_amt += flt(r.amount);
-            sum_outstanding += flt(r.outstanding_amount);
+        const bodyHtml = rows.map((r, idx) => {
+            totalAmt += flt(r.total_amount);
+            totalOut += flt(r.outstanding_amount);
 
-            const is_checked = this.selected_items.has(r.rii_name) ? "checked" : "";
-
-            tbody_html += `
+            return `
                 <tr>
-                    <td class="qifu-col-sticky-1 picker-col-idx">${idx + 1}</td>
-                    <td class="picker-col-chk">
-                        <input type="checkbox" class="picker-row-checkbox" data-key="${r.rii_name}" ${is_checked} />
-                    </td>
-                    <td>${frappe.utils.escape_html(r.company)}</td>
+                    <td class="text-center font-bold text-muted">${idx + 1}</td>
                     <td>
-                        <span class="picker-clickable-doc" data-doctype="Reimbursement Request" data-name="${r.rr_name}">
-                            ${frappe.utils.escape_html(r.rr_name)}
-                        </span>
+                        <span class="picker-clickable-doc" onclick="frappe.set_route('Form', 'Reimbursement Request', '${r.rr_name}')">${r.rr_name}</span>
                     </td>
-                    <td>${frappe.utils.escape_html(r.employee_name || r.employee || "-")}</td>
-                    <td>${frappe.utils.escape_html(r.supplier || "-")}</td>
-                    <td>${frappe.utils.escape_html(r.invoice_no || "-")}</td>
-                    <td><span class="picker-status-tag">${r.status_label}</span></td>
-                    <td><strong>${frappe.utils.escape_html(r.item_name)}</strong></td>
-                    <td>${frappe.utils.escape_html(r.spec || "-")}</td>
-                    <td class="text-right">${flt(r.qty).toFixed(2)}</td>
-                    <td class="text-right qifu-money-cell">${this.fmt_money(r.rate)}</td>
-                    <td class="text-right">${flt(r.tax_rate)}%</td>
-                    <td class="text-right qifu-money-cell font-bold">${this.fmt_money(r.amount)}</td>
-                    <td class="text-right qifu-money-cell ${r.outstanding_amount > 0 ? 'text-danger font-bold' : ''}">
-                        ${this.fmt_money(r.outstanding_amount)}
+                    <td>${r.company}</td>
+                    <td><span class="font-bold">${r.employee_name || r.employee || '-'}</span></td>
+                    <td class="text-center font-mono">${r.posting_date}</td>
+                    <td>
+                        <span class="font-bold">${r.invoice_count || 1} 张</span>
+                        <div class="text-muted text-xs font-mono">${r.invoice_preview || r.invoice_nos}</div>
                     </td>
                     <td>
-                        ${r.source_pi && r.source_pi !== '-' ? `<span class="picker-clickable-doc" data-doctype="Purchase Invoice" data-name="${r.source_pi}">${r.source_pi}</span>` : "-"}
+                        <span class="font-bold">${r.supplier_count || 1} 个商户</span>
+                        <div class="text-muted text-xs">${r.supplier_preview || r.suppliers}</div>
                     </td>
-                    <td>${r.posting_date}</td>
+                    <td class="text-right font-mono font-bold text-primary">${format_currency(r.total_amount)}</td>
+                    <td class="text-right font-mono font-bold ${flt(r.outstanding_amount) > 0 ? 'text-amber-600' : 'text-green-600'}">${format_currency(r.outstanding_amount)}</td>
+                    <td class="text-center">
+                        <span class="picker-status-tag">${r.status_label}</span>
+                    </td>
+                    <td><span class="text-muted text-xs font-mono">${r.doc_details || r.linked_pis || '-'}</span></td>
                 </tr>
             `;
-        });
-        $("#reim-table-tbody").html(tbody_html);
+        }).join("");
 
-        const tfoot_html = `
+        $("#reim-table-body").html(bodyHtml);
+
+        const footHtml = `
             <tr>
-                <td colspan="10" class="text-left font-bold">合计 (共 ${this.cached_rows.length} 笔)</td>
-                <td class="text-right font-bold">${sum_qty.toFixed(2)}</td>
-                <td colspan="2"></td>
-                <td class="text-right qifu-money-cell font-bold">${this.fmt_money(sum_amt)}</td>
-                <td class="text-right qifu-money-cell font-bold">${this.fmt_money(sum_outstanding)}</td>
+                <td colspan="7" class="text-right font-bold">合计 (${rows.length} 笔):</td>
+                <td class="text-right font-mono font-bold text-primary">${format_currency(totalAmt)}</td>
+                <td class="text-right font-mono font-bold text-amber-600">${format_currency(totalOut)}</td>
                 <td colspan="2"></td>
             </tr>
         `;
-        $("#reim-table-tfoot").html(tfoot_html);
+        $("#reim-table-foot").html(footHtml);
     }
 
-    render_doc_view() {
-        const thead_html = `
+    render_detail_view(rows) {
+        const thead = `
             <tr>
-                <th class="qifu-col-sticky-1">
-                    <span class="picker-th-badge">SEQ</span>
-                    <span class="picker-th-title">#</span>
-                </th>
-                <th class="picker-col-chk">
-                    <span class="picker-th-badge">SEL</span>
-                    <span class="picker-th-title">选择</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">CORP</span>
-                    <span class="picker-th-title">所属公司</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">REIM NO</span>
-                    <span class="picker-th-title">报销单号</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">EMP</span>
-                    <span class="picker-th-title">报销人</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">VENDOR</span>
-                    <span class="picker-th-title">商户/供应商</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">INVOICE</span>
-                    <span class="picker-th-title">发票号码</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">STATUS</span>
-                    <span class="picker-th-title">状态</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">DETAILS</span>
-                    <span class="picker-th-title">单据明细</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">DATE</span>
-                    <span class="picker-th-title">申请日期</span>
-                </th>
-                <th class="text-right">
-                    <span class="picker-th-badge">ITEMS</span>
-                    <span class="picker-th-title">行数</span>
-                </th>
-                <th class="text-right">
-                    <span class="picker-th-badge">AMOUNT</span>
-                    <span class="picker-th-title">报销总额</span>
-                </th>
-                <th class="text-right">
-                    <span class="picker-th-badge">OUTSTANDING</span>
-                    <span class="picker-th-title">待结款金额</span>
-                </th>
-                <th>
-                    <span class="picker-th-badge">LINKED PI</span>
-                    <span class="picker-th-title">关联发票</span>
-                </th>
+                <th class="text-center ashan-col-w40">#</th>
+                <th class="ashan-col-w140">报销单号</th>
+                <th class="ashan-col-w160">所属公司</th>
+                <th class="ashan-col-w100">报销人员</th>
+                <th class="ashan-col-w140">商户/供应商</th>
+                <th class="ashan-col-w120">发票号码</th>
+                <th class="ashan-col-w90 text-center">发票类型</th>
+                <th class="ashan-col-w140">物料/费用项目</th>
+                <th class="ashan-col-w120">规格型号</th>
+                <th class="ashan-col-w80 text-right">数量</th>
+                <th class="ashan-col-w90 text-right">单价</th>
+                <th class="ashan-col-w100 text-right">报销金额</th>
+                <th class="ashan-col-w90 text-center">状态</th>
+                <th class="ashan-col-w140">来源采购发票</th>
             </tr>
         `;
-        $("#reim-table-thead").html(thead_html);
+        $("#reim-table-head").html(thead);
 
-        if (this.cached_rows.length === 0) {
-            $("#reim-table-tbody").html(`
+        if (!rows.length) {
+            $("#reim-table-body").html(`
                 <tr>
                     <td colspan="14" class="picker-empty-state">
-                        <div class="picker-empty-icon">🚀</div>
-                        <div class="picker-empty-text">当前暂无报销申请单据记录</div>
+                        <div class="picker-empty-icon">📂</div>
+                        <div class="picker-empty-text">当前筛选条件下暂无报销明细数据</div>
                     </td>
                 </tr>
             `);
-            $("#reim-table-tfoot").empty();
+            $("#reim-table-foot").empty();
             return;
         }
 
-        let sum_total = 0;
-        let sum_outstanding = 0;
+        let totalQty = 0;
+        let totalAmt = 0;
 
-        let tbody_html = "";
-        this.cached_rows.forEach((r, idx) => {
-            sum_total += flt(r.total_amount);
-            sum_outstanding += flt(r.outstanding_amount);
+        const bodyHtml = rows.map((r, idx) => {
+            totalQty += flt(r.qty);
+            totalAmt += flt(r.amount);
 
-            const is_checked = this.selected_items.has(r.rr_name) ? "checked" : "";
-
-            tbody_html += `
+            return `
                 <tr>
-                    <td class="qifu-col-sticky-1 picker-col-idx">${idx + 1}</td>
-                    <td class="picker-col-chk">
-                        <input type="checkbox" class="picker-row-checkbox" data-key="${r.rr_name}" ${is_checked} />
-                    </td>
-                    <td>${frappe.utils.escape_html(r.company)}</td>
+                    <td class="text-center font-bold text-muted">${idx + 1}</td>
                     <td>
-                        <span class="picker-clickable-doc" data-doctype="Reimbursement Request" data-name="${r.rr_name}">
-                            ${frappe.utils.escape_html(r.rr_name)}
-                        </span>
+                        <span class="picker-clickable-doc" onclick="frappe.set_route('Form', 'Reimbursement Request', '${r.rr_name}')">${r.rr_name}</span>
                     </td>
-                    <td>${frappe.utils.escape_html(r.employee_name || r.employee || "-")}</td>
-                    <td>${frappe.utils.escape_html(r.suppliers)}</td>
-                    <td>${frappe.utils.escape_html(r.invoice_nos)}</td>
-                    <td><span class="picker-status-tag">${r.status_label}</span></td>
-                    <td>${frappe.utils.escape_html(r.doc_details)}</td>
-                    <td>${r.posting_date}</td>
-                    <td class="text-right">${r.item_count}</td>
-                    <td class="text-right qifu-money-cell font-bold">${this.fmt_money(r.total_amount)}</td>
-                    <td class="text-right qifu-money-cell ${r.outstanding_amount > 0 ? 'text-danger font-bold' : ''}">
-                        ${this.fmt_money(r.outstanding_amount)}
-                    </td>
-                    <td>${frappe.utils.escape_html(r.linked_pis || "-")}</td>
+                    <td>${r.company}</td>
+                    <td><span class="font-bold">${r.employee_name || r.employee || '-'}</span></td>
+                    <td>${r.supplier || '-'}</td>
+                    <td><span class="font-mono text-muted font-bold">${r.invoice_no || '-'}</span></td>
+                    <td class="text-center"><span class="picker-status-tag">${r.invoice_type || '专用发票'}</span></td>
+                    <td><span class="font-bold">${r.item_name}</span></td>
+                    <td>${r.spec || '-'}</td>
+                    <td class="text-right font-mono">${r.qty}</td>
+                    <td class="text-right font-mono">${format_currency(r.rate)}</td>
+                    <td class="text-right font-mono font-bold text-primary">${format_currency(r.amount)}</td>
+                    <td class="text-center"><span class="picker-status-tag">${r.status_label}</span></td>
+                    <td><span class="text-muted font-mono text-xs">${r.source_pi}</span></td>
                 </tr>
             `;
-        });
-        $("#reim-table-tbody").html(tbody_html);
+        }).join("");
 
-        const tfoot_html = `
+        $("#reim-table-body").html(bodyHtml);
+
+        const footHtml = `
             <tr>
-                <td colspan="11" class="text-left font-bold">合计 (共 ${this.cached_rows.length} 笔)</td>
-                <td class="text-right qifu-money-cell font-bold">${this.fmt_money(sum_total)}</td>
-                <td class="text-right qifu-money-cell font-bold">${this.fmt_money(sum_outstanding)}</td>
+                <td colspan="9" class="text-right font-bold">合计:</td>
+                <td class="text-right font-mono font-bold">${totalQty.toFixed(2)}</td>
                 <td></td>
+                <td class="text-right font-mono font-bold text-primary">${format_currency(totalAmt)}</td>
+                <td colspan="2"></td>
             </tr>
         `;
-        $("#reim-table-tfoot").html(tfoot_html);
-    }
-
-    update_selection_summary() {
-        const count = this.selected_items.size;
-        let amount = 0.0;
-
-        if (this.view_mode === "detail") {
-            this.cached_rows.forEach((r) => {
-                if (this.selected_items.has(r.rii_name)) {
-                    amount += flt(r.outstanding_amount > 0 ? r.outstanding_amount : r.amount);
-                }
-            });
-        } else {
-            this.cached_rows.forEach((r) => {
-                if (this.selected_items.has(r.rr_name)) {
-                    amount += flt(r.outstanding_amount > 0 ? r.outstanding_amount : r.total_amount);
-                }
-            });
-        }
-
-        $("#reim-selected-count").text(count);
-        $("#reim-selected-amount").text(this.fmt_money(amount));
-    }
-
-    sync_checkbox_states() {
-        const self = this;
-        $("#reim-table-tbody .picker-row-checkbox").each(function () {
-            const key = $(this).data("key");
-            $(this).prop("checked", self.selected_items.has(key));
-        });
-    }
-
-    fmt_money(val) {
-        return "¥ " + flt(val || 0, 2).toLocaleString("zh-CN", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        });
+        $("#reim-table-foot").html(footHtml);
     }
 
     // =========================================================================
-    // Fast Reimbursement Creation Modal (Reimbursement-driven PO+PR+PI+RR Auto Bundle)
+    // Multi-Tax-Invoice Reimbursement Dialog (V2 Smart Entry)
     // =========================================================================
 
     open_create_reimbursement_modal() {
-        const self = this;
+        this.reset_creation_state();
 
         const d = new frappe.ui.Dialog({
-            title: __("🚀 新建报销申请单 · 极速录单与全链路闭环生单"),
+            title: __("🧾 新建现金报销 · 多发票智能归集"),
             size: "extra-large",
             fields: [
                 {
                     fieldtype: "HTML",
-                    fieldname: "form_html",
+                    fieldname: "root_html",
                 },
             ],
-            primary_action_label: __("🚀 立即生成全链路单据 (PO+PR+PI+RR)"),
-            primary_action: async function () {
-                await self.submit_create_reimbursement(d);
-            },
+            primary_action_label: __("🚀 确认创建报销"),
+            primary_action: () => this.submit_create_reimbursement_v2(),
         });
 
-        d.$wrapper.find(".modal-dialog").addClass("ashan-smart-modal");
+        this.creation.dialog = d;
+        d.show();
 
-        const comp_options = this.companies.map((c) =>
-            `<option value="${c.name}" ${c.name === (self.active_company === "All" ? self.companies[0]?.name : self.active_company) ? "selected" : ""}>${frappe.utils.escape_html(c.company_name || c.name)}</option>`
-        ).join("");
+        const $wrapper = d.fields_dict.root_html.$wrapper;
+        $wrapper.html(this.get_creation_dialog_html());
 
-        const form_html = `
-            <div class="ashan-smart-modal-body">
-                <!-- Section 1: Basic Info -->
-                <div class="ashan-smart-section">
-                    <div class="ashan-smart-section-header">
-                        <div class="ashan-smart-section-title">
-                            <span>🏢 1. 报销申请上下文与发票基础信息</span>
+        this.bind_creation_dialog_events($wrapper);
+        this.load_creation_defaults();
+    }
+
+    reset_creation_state() {
+        this.creation.active_tab = "select";
+        this.creation.company = this.active_company !== "All" ? this.active_company : (this.companies[0] || null);
+        this.creation.employee = null;
+        this.creation.employee_name = null;
+        this.creation.posting_date = frappe.datetime.get_today();
+        this.creation.title = "";
+        this.creation.auto_receive_stock = 1;
+        this.creation.candidate_rows = [];
+        this.creation.selected_invoices = new Map();
+        this.creation.preview = null;
+        this.creation.resolutions = { suppliers: {}, items: {}, warehouses: {} };
+        this.creation.latest_request = 0;
+        this.creation.loading = false;
+        this.creation.upload_files = [];
+    }
+
+    get_creation_dialog_html() {
+        return `
+            <div class="reim-v2-modal-container">
+                <!-- Section 1: Business Context & Employee -->
+                <div class="reim-v2-section-card">
+                    <div class="reim-v2-section-header">
+                        <div class="reim-v2-section-title">🏢 1. 报销业务上下文与基本信息</div>
+                    </div>
+                    <div class="reim-v2-grid-4">
+                        <div class="reim-v2-field-group">
+                            <label>所属公司<span class="req">*</span></label>
+                            <select id="modal-reim-company" class="reim-v2-input-control"></select>
+                        </div>
+                        <div class="reim-v2-field-group">
+                            <label>报销人员 (员工)<span class="req">*</span></label>
+                            <input type="text" id="modal-reim-employee" class="reim-v2-input-control" placeholder="输入员工工号/姓名..." />
+                        </div>
+                        <div class="reim-v2-field-group">
+                            <label>报销申请日期<span class="req">*</span></label>
+                            <input type="date" id="modal-reim-date" class="reim-v2-input-control" value="${frappe.datetime.get_today()}" />
+                        </div>
+                        <div class="reim-v2-field-group">
+                            <label>报销用途 / 标题</label>
+                            <input type="text" id="modal-reim-title" class="reim-v2-input-control" placeholder="例: 8月差旅与零星采购报销..." />
                         </div>
                     </div>
-                    <div class="ashan-smart-grid-4">
-                        <div class="ashan-smart-field">
-                            <label class="ashan-smart-field-label">所属公司 <span class="req">*</span></label>
-                            <select class="ashan-smart-control" id="modal-reim-company">
-                                ${comp_options}
-                            </select>
-                        </div>
-                        <div class="ashan-smart-field">
-                            <label class="ashan-smart-field-label">报销人员 (员工)</label>
-                            <input type="text" class="ashan-smart-control" id="modal-reim-employee" placeholder="输入员工工号或姓名..." />
-                        </div>
-                        <div class="ashan-smart-field">
-                            <label class="ashan-smart-field-label">商户/供应商名称</label>
-                            <input type="text" class="ashan-smart-control" id="modal-reim-supplier" placeholder="商户/开票单位..." />
-                        </div>
-                        <div class="ashan-smart-field">
-                            <label class="ashan-smart-field-label">发票号码</label>
-                            <input type="text" class="ashan-smart-control" id="modal-reim-invoice-no" placeholder="发票代码/号码..." />
-                        </div>
-                        <div class="ashan-smart-field">
-                            <label class="ashan-smart-field-label">发票类型</label>
-                            <select class="ashan-smart-control" id="modal-reim-invoice-type">
-                                <option value="专用发票">专用发票</option>
-                                <option value="普通发票">普通发票</option>
-                            </select>
-                        </div>
-                        <div class="ashan-smart-field">
-                            <label class="ashan-smart-field-label">开票/报销日期</label>
-                            <input type="date" class="ashan-smart-control" id="modal-reim-date" value="${frappe.datetime.nowdate()}" />
-                        </div>
-                    </div>
-                    <div class="ashan-smart-toggle-box">
+                    <label class="reim-v2-toggle-box">
                         <input type="checkbox" id="modal-reim-auto-stock" checked />
-                        <span>📦 若包含允许维护库存的物料，系统全自动生成采购入库单并完成过账 (默认开启)</span>
+                        <span>📦 包含允许维护库存的物料时，系统全自动生成采购入库单并完成过账 (默认开启)</span>
+                    </label>
+                </div>
+
+                <!-- Section 2: Invoice Source Workspace -->
+                <div class="reim-v2-section-card">
+                    <div class="reim-v2-tab-nav">
+                        <button type="button" class="reim-v2-tab-btn active" data-tab="select">📑 从税局发票库选择</button>
+                        <button type="button" class="reim-v2-tab-btn" data-tab="upload">📤 上传新发票 (PDF/XML/OFD/ZIP)</button>
+                    </div>
+
+                    <!-- Tab A: Select From Tax Invoice Library -->
+                    <div id="reim-tab-select-content">
+                        <div class="reim-v2-filter-toolbar">
+                            <div class="reim-v2-filter-inputs">
+                                <input type="text" id="modal-reim-search" class="reim-v2-input-control reim-v2-search-input" placeholder="搜索发票号 / 销售方 / 明细摘要..." />
+                                <input type="date" id="modal-reim-from-date" class="reim-v2-input-control reim-v2-date-input" title="开票日期起" />
+                                <input type="date" id="modal-reim-to-date" class="reim-v2-input-control reim-v2-date-input" title="开票日期止" />
+                                <select id="modal-reim-pi-mode" class="reim-v2-input-control reim-v2-select-input">
+                                    <option value="">全部发票状态</option>
+                                    <option value="need_pi">待生成采购发票</option>
+                                    <option value="has_pi">已有采购发票(复用)</option>
+                                </select>
+                            </div>
+                            <div class="reim-v2-tool-btns">
+                                <button type="button" class="reim-v2-btn-sm" id="modal-reim-select-all-btn">全选当前</button>
+                                <button type="button" class="reim-v2-btn-sm" id="modal-reim-clear-btn">清空选择</button>
+                                <button type="button" class="reim-v2-btn-sm" id="modal-reim-refresh-candidates-btn">🔄 刷新</button>
+                            </div>
+                        </div>
+
+                        <!-- Candidates Table -->
+                        <div class="reim-v2-table-container">
+                            <table class="reim-v2-table">
+                                <thead>
+                                    <tr>
+                                        <th class="ashan-col-w40 text-center"><input type="checkbox" id="modal-reim-th-checkbox" /></th>
+                                        <th class="ashan-col-w90 text-center">开票日期</th>
+                                        <th class="ashan-col-w160">销售方名称</th>
+                                        <th class="ashan-col-w90 text-center">发票类型</th>
+                                        <th class="ashan-col-w140">发票内容摘要</th>
+                                        <th class="ashan-col-w110">发票号码</th>
+                                        <th class="ashan-col-w100 text-right">发票金额</th>
+                                        <th class="ashan-col-w90 text-center">ERP状态</th>
+                                        <th class="ashan-col-w100 text-center">处理状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="modal-reim-candidates-body">
+                                    <tr>
+                                        <td colspan="9" class="picker-empty-state">
+                                            <div class="picker-empty-icon">⏳</div>
+                                            <div class="picker-empty-text">正在查询可用税局发票...</div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Tab B: Upload New Invoices -->
+                    <div id="reim-tab-upload-content" class="reim-v2-hidden">
+                        <div class="reim-v2-dropzone" id="reim-upload-dropzone">
+                            <div class="reim-v2-dropzone-icon">📤</div>
+                            <div class="reim-v2-dropzone-text">点击或拖拽发票文件至此处上传 (支持 PDF, XML, OFD, ZIP)</div>
+                            <div class="reim-v2-dropzone-sub">系统将自动调用税局发票智能解析引擎，解析成功后自动加入当前报销发票集合</div>
+                            <input type="file" id="modal-reim-file-input" multiple accept=".pdf,.xml,.ofd,.zip" class="reim-v2-hidden" />
+                        </div>
+                        <div class="reim-v2-upload-list" id="modal-reim-upload-list"></div>
+                    </div>
+
+                    <!-- Issues Box -->
+                    <div class="reim-v2-issues-container reim-v2-hidden" id="modal-reim-issues-box">
+                        <div class="font-bold mb-1">⚠️ 报销单据预检提醒：</div>
+                        <div id="modal-reim-issues-list"></div>
                     </div>
                 </div>
 
-                <!-- Section 2: Items Details Table -->
-                <div class="ashan-smart-section">
-                    <div class="ashan-smart-section-header">
-                        <div class="ashan-smart-section-title">
-                            <span>📑 2. 报销物料与费用明细清单</span>
-                        </div>
-                        <div class="ashan-smart-section-tools">
-                            <button type="button" class="btn btn-default btn-xs" id="modal-reim-add-row-btn">➕ 添加明细行</button>
+                <!-- Section 3: Summary Dashboard & Submit -->
+                <div class="reim-v2-summary-bar">
+                    <div class="reim-v2-summary-left">
+                        <div class="reim-v2-discipline-badge">
+                            <span>🛡️ 财务纪律</span>
+                            <span>系统严格执行 1张发票对应1张采购发票，并自动关联报销申请单</span>
                         </div>
                     </div>
-
-                    <div class="ashan-smart-table-wrap">
-                        <table class="ashan-smart-table" id="modal-reim-items-table">
-                            <thead>
-                                <tr>
-                                    <th class="ashan-col-w40">#</th>
-                                    <th class="ashan-col-w160">物料/费用代码 <span class="req">*</span></th>
-                                    <th class="ashan-col-w180">名称说明</th>
-                                    <th class="ashan-col-w120">规格型号</th>
-                                    <th class="ashan-col-w70">单位</th>
-                                    <th class="ashan-col-w80">数量 <span class="req">*</span></th>
-                                    <th class="ashan-col-w90">单价 (元) <span class="req">*</span></th>
-                                    <th class="ashan-col-w70">税率(%)</th>
-                                    <th class="ashan-col-w95">金额 (元)</th>
-                                    <th class="ashan-col-w85">税额 (元)</th>
-                                    <th class="ashan-col-w105">价税合计</th>
-                                    <th class="ashan-col-w140">用途/备注</th>
-                                    <th class="ashan-col-w45">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody id="modal-reim-items-tbody"></tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Section 3: Live Financial Summary & Discipline Bar -->
-                <div class="ashan-smart-summary-bar">
-                    <div class="ashan-smart-tip-box">
-                        <span class="ashan-smart-tip-badge">🛡️ 财务纪律</span>
-                        <span>单价与金额严禁为 0。系统将全自动闭环生成 PO ➔ PR(若库存品) ➔ PI ➔ RR 报销单。</span>
-                    </div>
-                    <div class="ashan-smart-kpi-group">
-                        <div class="ashan-smart-kpi-item">
-                            <span class="ashan-smart-kpi-label">报销总数</span>
-                            <span class="ashan-smart-kpi-value" id="modal-reim-sum-qty">0.00</span>
+                    <div class="reim-v2-summary-stats">
+                        <div class="reim-v2-stat-item">
+                            <span class="reim-v2-stat-label">已选发票</span>
+                            <span class="reim-v2-stat-val" id="modal-reim-sum-inv-count">0 张</span>
                         </div>
-                        <div class="ashan-smart-kpi-item">
-                            <span class="ashan-smart-kpi-label">不含税金额</span>
-                            <span class="ashan-smart-kpi-value" id="modal-reim-sum-amt">¥ 0.00</span>
+                        <div class="reim-v2-stat-item">
+                            <span class="reim-v2-stat-label">涉及商户</span>
+                            <span class="reim-v2-stat-val" id="modal-reim-sum-supp-count">0 个</span>
                         </div>
-                        <div class="ashan-smart-kpi-item">
-                            <span class="ashan-smart-kpi-label">预估税额</span>
-                            <span class="ashan-smart-kpi-value" id="modal-reim-sum-tax">¥ 0.00</span>
+                        <div class="reim-v2-stat-item">
+                            <span class="reim-v2-stat-label">复用采购发票</span>
+                            <span class="reim-v2-stat-val" id="modal-reim-sum-reuse-count">0 张</span>
                         </div>
-                        <div class="ashan-smart-kpi-item">
-                            <span class="ashan-smart-kpi-label">报销总额 (应付)</span>
-                            <span class="ashan-smart-kpi-value grand-total text-warning" id="modal-reim-sum-total">¥ 0.00</span>
+                        <div class="reim-v2-stat-item">
+                            <span class="reim-v2-stat-label">待生成采购发票</span>
+                            <span class="reim-v2-stat-val" id="modal-reim-sum-new-count">0 张</span>
+                        </div>
+                        <div class="reim-v2-stat-item">
+                            <span class="reim-v2-stat-label">本次报销总额 (应付)</span>
+                            <span class="reim-v2-stat-val primary" id="modal-reim-sum-grand-total">¥ 0.00</span>
                         </div>
                     </div>
                 </div>
             </div>
         `;
-
-        d.fields_dict.form_html.$wrapper.html(form_html);
-
-        // Bind Add Row
-        d.$wrapper.on("click", "#modal-reim-add-row-btn", () => this.add_reim_modal_row(d));
-
-        // Bind Row Delete
-        d.$wrapper.on("click", ".reim-row-delete-btn", function () {
-            $(this).closest("tr").remove();
-            self.recalc_reim_modal_totals(d);
-        });
-
-        // Bind Calculations
-        d.$wrapper.on("input change", ".reim-item-qty, .reim-item-rate, .reim-item-tax-rate", function () {
-            const $tr = $(this).closest("tr");
-            self.recalc_reim_modal_row($tr);
-            self.recalc_reim_modal_totals(d);
-        });
-
-        // Autocomplete Item Code
-        d.$wrapper.on("change", ".reim-item-code", async function () {
-            const $tr = $(this).closest("tr");
-            const code = $(this).val().trim();
-            if (!code) return;
-
-            try {
-                const item_info = await frappe.db.get_value("Item", code, ["item_name", "stock_uom", "standard_rate", "description"]);
-                if (item_info && item_info.message) {
-                    const msg = item_info.message;
-                    $tr.find(".reim-item-name").val(msg.item_name || code);
-                    $tr.find(".reim-item-uom").val(msg.stock_uom || "Nos");
-                    if (flt(msg.standard_rate) > 0 && flt($tr.find(".reim-item-rate").val()) === 0) {
-                        $tr.find(".reim-item-rate").val(flt(msg.standard_rate).toFixed(2));
-                    }
-                    self.recalc_reim_modal_row($tr);
-                    self.recalc_reim_modal_totals(d);
-                }
-            } catch (e) {
-                console.log("Item lookup error:", e);
-            }
-        });
-
-        d.show();
-
-        // Add 2 initial rows
-        this.add_reim_modal_row(d);
-        this.add_reim_modal_row(d);
     }
 
-    add_reim_modal_row(dialog) {
-        const $tbody = (dialog && dialog.$wrapper) ? dialog.$wrapper.find("#modal-reim-items-tbody") : $("#modal-reim-items-tbody");
-        const row_idx = $tbody.find("tr").length + 1;
-        const tr_html = `
-            <tr>
-                <td class="ashan-smart-cell-idx">${row_idx}</td>
-                <td><input type="text" class="ashan-smart-cell-input reim-item-code" placeholder="物料/费用代码..." /></td>
-                <td><input type="text" class="ashan-smart-cell-input reim-item-name" placeholder="名称说明" /></td>
-                <td><input type="text" class="ashan-smart-cell-input reim-item-spec" placeholder="规格型号" /></td>
-                <td><input type="text" class="ashan-smart-cell-input reim-item-uom text-center" value="Nos" /></td>
-                <td><input type="number" class="ashan-smart-cell-input reim-item-qty text-right font-bold" value="1" min="0.001" step="any" /></td>
-                <td><input type="number" class="ashan-smart-cell-input reim-item-rate text-right font-bold" value="0.00" min="0.01" step="any" /></td>
-                <td><input type="number" class="ashan-smart-cell-input reim-item-tax-rate text-center" value="13" min="0" max="100" /></td>
-                <td><input type="number" class="ashan-smart-cell-input reim-item-amt text-right font-bold" value="0.00" readonly /></td>
-                <td><input type="number" class="ashan-smart-cell-input reim-item-tax-amt text-right" value="0.00" readonly /></td>
-                <td><input type="number" class="ashan-smart-cell-input reim-item-total text-right font-bold text-warning" value="0.00" readonly /></td>
-                <td><input type="text" class="ashan-smart-cell-input reim-item-remarks" placeholder="备注用途..." /></td>
-                <td class="text-center">
-                    <button type="button" class="btn btn-xs btn-default reim-row-delete-btn ashan-smart-btn-del" title="删除此行">✕</button>
-                </td>
-            </tr>
-        `;
-        $tbody.append(tr_html);
-    }
-
-    recalc_reim_modal_row($tr) {
-        const qty = flt($tr.find(".reim-item-qty").val());
-        const rate = flt($tr.find(".reim-item-rate").val());
-        const tax_rate = flt($tr.find(".reim-item-tax-rate").val());
-
-        const amt = flt(qty * rate, 2);
-        const tax_amt = flt(amt * (tax_rate / 100.0), 2);
-        const total = flt(amt + tax_amt, 2);
-
-        $tr.find(".reim-item-amt").val(amt.toFixed(2));
-        $tr.find(".reim-item-tax-amt").val(tax_amt.toFixed(2));
-        $tr.find(".reim-item-total").val(total.toFixed(2));
-    }
-
-    recalc_reim_modal_totals(dialog) {
-        const $wrap = (dialog && dialog.$wrapper) ? dialog.$wrapper : $(document);
-        let sum_qty = 0;
-        let sum_amt = 0;
-        let sum_tax = 0;
-        let sum_total = 0;
-
-        $wrap.find("#modal-reim-items-tbody tr").each(function () {
-            sum_qty += flt($(this).find(".reim-item-qty").val());
-            sum_amt += flt($(this).find(".reim-item-amt").val());
-            sum_tax += flt($(this).find(".reim-item-tax-amt").val());
-            sum_total += flt($(this).find(".reim-item-total").val());
+    async load_creation_defaults() {
+        const r = await frappe.call({
+            method: REIM_API.creation_defaults,
+            args: { company: this.creation.company },
         });
 
-        $wrap.find("#modal-reim-sum-qty").text(sum_qty.toFixed(2));
-        $wrap.find("#modal-reim-sum-amt").text(this.fmt_money(sum_amt));
-        $wrap.find("#modal-reim-sum-tax").text(this.fmt_money(sum_tax));
-        $wrap.find("#modal-reim-sum-total").text(this.fmt_money(sum_total));
-    }
-
-    async submit_create_reimbursement(dialog) {
-        const $wrap = dialog.$wrapper;
-        const company = $wrap.find("#modal-reim-company").val();
-        const employee = $wrap.find("#modal-reim-employee").val().trim();
-        const supplier = $wrap.find("#modal-reim-supplier").val().trim();
-        const bill_no = $wrap.find("#modal-reim-invoice-no").val().trim();
-        const invoice_type = $wrap.find("#modal-reim-invoice-type").val();
-        const bill_date = $wrap.find("#modal-reim-date").val();
-        const auto_receive_stock = $wrap.find("#modal-reim-auto-stock").is(":checked") ? 1 : 0;
-
-        const items = [];
-        let has_zero_error = false;
-
-        $wrap.find("#modal-reim-items-tbody tr").each(function (idx) {
-            const item_code = $(this).find(".reim-item-code").val().trim();
-            const item_name = $(this).find(".reim-item-name").val().trim();
-            const spec = $(this).find(".reim-item-spec").val().trim();
-            const uom = $(this).find(".reim-item-uom").val().trim();
-            const qty = flt($(this).find(".reim-item-qty").val());
-            const rate = flt($(this).find(".reim-item-rate").val());
-            const tax_rate = flt($(this).find(".reim-item-tax-rate").val());
-            const amount = flt($(this).find(".reim-item-amt").val());
-            const tax_amount = flt($(this).find(".reim-item-tax-amt").val());
-            const total_amount = flt($(this).find(".reim-item-total").val());
-            const remarks = $(this).find(".reim-item-remarks").val().trim();
-
-            if (!item_code) return;
-
-            if (qty <= 0 || rate <= 0 || amount <= 0) {
-                frappe.msgprint(`第 ${idx + 1} 行物料 [${item_code}] 的单价或金额为 0！根据财务纪律，单价与金额严禁为 0。`);
-                has_zero_error = true;
-                return false;
-            }
-
-            items.push({
-                item_code,
-                item_name,
-                spec,
-                uom,
-                qty,
-                rate,
-                tax_rate,
-                amount,
-                tax_amount,
-                total_amount,
-                remarks,
+        if (r.message) {
+            const defs = r.message;
+            const $compSel = $("#modal-reim-company");
+            $compSel.empty();
+            defs.companies.forEach((c) => {
+                $compSel.append(`<option value="${c}" ${c === defs.company ? "selected" : ""}>${c}</option>`);
             });
+
+            this.creation.company = defs.company;
+            this.creation.employee = defs.employee;
+            this.creation.employee_name = defs.employee_name;
+
+            if (defs.employee) {
+                $("#modal-reim-employee").val(defs.employee_name ? `${defs.employee_name} (${defs.employee})` : defs.employee);
+            }
+
+            this.load_tax_invoice_candidates();
+        }
+    }
+
+    bind_creation_dialog_events($wrapper) {
+        const me = this;
+
+        // Company change
+        $wrapper.on("change", "#modal-reim-company", function () {
+            me.creation.company = $(this).val();
+            me.creation.selected_invoices.clear();
+            me.load_tax_invoice_candidates();
         });
 
-        if (has_zero_error) return;
+        // Tabs
+        $wrapper.on("click", ".reim-v2-tab-btn", function () {
+            $(this).addClass("active").siblings().removeClass("active");
+            const tab = $(this).data("tab");
+            me.creation.active_tab = tab;
+            if (tab === "select") {
+                $("#reim-tab-select-content").show();
+                $("#reim-tab-upload-content").hide();
+            } else {
+                $("#reim-tab-select-content").hide();
+                $("#reim-tab-upload-content").show();
+            }
+        });
 
-        if (items.length === 0) {
-            frappe.msgprint(__("请至少添加一行有效的报销明细！"));
+        // Filter search input
+        let searchTimer = null;
+        $wrapper.on("input", "#modal-reim-search, #modal-reim-from-date, #modal-reim-to-date", function () {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => {
+                me.load_tax_invoice_candidates();
+            }, 300);
+        });
+
+        $wrapper.on("change", "#modal-reim-pi-mode", function () {
+            me.load_tax_invoice_candidates();
+        });
+
+        $wrapper.on("click", "#modal-reim-refresh-candidates-btn", function () {
+            me.load_tax_invoice_candidates();
+        });
+
+        // Select All / Clear
+        $wrapper.on("click", "#modal-reim-select-all-btn", function () {
+            me.creation.candidate_rows.forEach((r) => {
+                if (r.eligibility !== "blocked") {
+                    me.creation.selected_invoices.set(r.name, r);
+                }
+            });
+            me.render_tax_invoice_rows();
+            me.schedule_preview();
+        });
+
+        $wrapper.on("click", "#modal-reim-clear-btn", function () {
+            me.creation.selected_invoices.clear();
+            me.render_tax_invoice_rows();
+            me.schedule_preview();
+        });
+
+        // Checkbox individual toggle
+        $wrapper.on("change", ".modal-reim-row-checkbox", function () {
+            const name = $(this).data("name");
+            const checked = $(this).is(":checked");
+            const row = me.creation.candidate_rows.find((r) => r.name === name);
+            if (row) {
+                me.toggle_tax_invoice(row, checked);
+            }
+        });
+
+        // Header Checkbox
+        $wrapper.on("change", "#modal-reim-th-checkbox", function () {
+            const checked = $(this).is(":checked");
+            me.creation.candidate_rows.forEach((r) => {
+                if (r.eligibility !== "blocked") {
+                    if (checked) {
+                        me.creation.selected_invoices.set(r.name, r);
+                    } else {
+                        me.creation.selected_invoices.delete(r.name);
+                    }
+                }
+            });
+            me.render_tax_invoice_rows();
+            me.schedule_preview();
+        });
+
+        // Upload Dropzone
+        const $dropzone = $("#reim-upload-dropzone");
+        const $fileInput = $("#modal-reim-file-input");
+
+        $dropzone.on("click", () => $fileInput.click());
+
+        $dropzone.on("dragover", (e) => {
+            e.preventDefault();
+            $dropzone.addClass("dragover");
+        });
+        $dropzone.on("dragleave", () => {
+            $dropzone.removeClass("dragover");
+        });
+        $dropzone.on("drop", (e) => {
+            e.preventDefault();
+            $dropzone.removeClass("dragover");
+            const files = e.originalEvent.dataTransfer.files;
+            if (files && files.length) {
+                me.handle_upload_files(files);
+            }
+        });
+
+        $fileInput.on("change", function () {
+            if (this.files && this.files.length) {
+                me.handle_upload_files(this.files);
+            }
+        });
+    }
+
+    async load_tax_invoice_candidates() {
+        const filters = {
+            search: $("#modal-reim-search").val(),
+            from_date: $("#modal-reim-from-date").val(),
+            to_date: $("#modal-reim-to-date").val(),
+            pi_mode: $("#modal-reim-pi-mode").val(),
+        };
+
+        const r = await frappe.call({
+            method: REIM_API.candidates,
+            args: {
+                company: this.creation.company,
+                filters: filters,
+                start: 0,
+                page_length: 100,
+            },
+        });
+
+        const data = r.message || { rows: [] };
+        this.creation.candidate_rows = data.rows || [];
+        this.render_tax_invoice_rows();
+    }
+
+    render_tax_invoice_rows() {
+        const rows = this.creation.candidate_rows;
+        const $tbody = $("#modal-reim-candidates-body");
+
+        if (!rows.length) {
+            $tbody.html(`
+                <tr>
+                    <td colspan="9" class="picker-empty-state">
+                        <div class="picker-empty-icon">📂</div>
+                        <div class="picker-empty-text">未找到符合条件的可用税局发票</div>
+                    </td>
+                </tr>
+            `);
             return;
         }
 
-        try {
-            frappe.dom.freeze(__("正在全自动生成全链路单据 (PO+PR+PI+RR)..."));
-            const r = await frappe.call({
-                method: "ashan_cn_procurement.services.reimbursement_picker_service.create_self_service_reimbursement_bundle",
-                args: {
-                    company,
-                    employee,
-                    supplier,
-                    bill_no,
-                    bill_date,
-                    invoice_type,
-                    auto_receive_stock,
-                    items,
-                },
-            });
-            frappe.dom.unfreeze();
+        const html = rows.map((r) => {
+            const isSelected = this.creation.selected_invoices.has(r.name);
+            const isBlocked = r.eligibility === "blocked";
 
-            if (r.message && r.message.success) {
-                dialog.hide();
-                frappe.show_alert({
-                    message: `🎉 成功生成报销申请全链路单据！报销单：${r.message.rr_name}`,
-                    indicator: "green",
-                }, 5);
-
-                this.refresh_all();
-                this.show_doc_detail_modal("Reimbursement Request", r.message.rr_name);
+            let badgeClass = "reim-v2-badge-ready";
+            let statusText = "🟢 可直接报销";
+            if (r.eligibility === "need_supplier") {
+                badgeClass = "reim-v2-badge-warning";
+                statusText = "🟡 待建档供应商";
+            } else if (r.eligibility === "need_item") {
+                badgeClass = "reim-v2-badge-warning";
+                statusText = "🟡 待匹配物料";
+            } else if (isBlocked) {
+                badgeClass = "reim-v2-badge-blocked";
+                statusText = "🔴 不可报销";
             }
-        } catch (e) {
-            frappe.dom.unfreeze();
-            console.error("Failed to create reimbursement bundle:", e);
+
+            const erpStateBadge = r.matched_purchase_invoice
+                ? `<span class="reim-v2-badge-pi">已有 PI (${r.matched_purchase_invoice})</span>`
+                : `<span class="picker-status-tag">待生成 PI</span>`;
+
+            return `
+                <tr class="${isSelected ? 'selected' : ''} ${isBlocked ? 'blocked' : ''}">
+                    <td class="text-center">
+                        <input type="checkbox" class="modal-reim-row-checkbox" data-name="${r.name}" ${isSelected ? 'checked' : ''} ${isBlocked ? 'disabled' : ''} />
+                    </td>
+                    <td class="text-center font-mono">${r.issue_date}</td>
+                    <td><span class="font-bold">${r.seller_name}</span></td>
+                    <td class="text-center"><span class="picker-status-tag">${r.invoice_type}</span></td>
+                    <td>${r.display_summary}</td>
+                    <td><span class="font-mono font-bold text-muted" title="${r.invoice_no}">${r.masked_invoice_no}</span></td>
+                    <td class="text-right font-mono font-bold text-primary">${format_currency(r.payable_total)}</td>
+                    <td class="text-center">${erpStateBadge}</td>
+                    <td class="text-center"><span class="${badgeClass}">${statusText}</span></td>
+                </tr>
+            `;
+        }).join("");
+
+        $tbody.html(html);
+        this.render_selection_summary();
+    }
+
+    toggle_tax_invoice(row, checked) {
+        if (checked) {
+            if (row.eligibility === "blocked") {
+                frappe.show_alert({ message: __("该发票当前不可报销"), indicator: "red" });
+                return;
+            }
+            this.creation.selected_invoices.set(row.name, row);
+        } else {
+            this.creation.selected_invoices.delete(row.name);
+        }
+        this.render_tax_invoice_rows();
+        this.schedule_preview();
+    }
+
+    schedule_preview() {
+        clearTimeout(this.creation.preview_timer);
+        this.creation.preview_timer = setTimeout(() => {
+            this.refresh_creation_preview();
+        }, 300);
+    }
+
+    async refresh_creation_preview() {
+        const names = [...this.creation.selected_invoices.keys()];
+        if (!names.length) {
+            this.creation.preview = null;
+            this.render_selection_summary();
+            $("#modal-reim-issues-box").hide();
+            return;
+        }
+
+        const requestNo = ++this.creation.latest_request;
+        const r = await frappe.call({
+            method: REIM_API.preview,
+            args: {
+                company: this.creation.company,
+                employee: this.creation.employee || "EMP-PREVIEW",
+                tax_invoice_names: names,
+                resolutions: this.creation.resolutions,
+                auto_receive_stock: this.creation.auto_receive_stock ? 1 : 0,
+            },
+        });
+
+        if (requestNo !== this.creation.latest_request) return;
+
+        this.creation.preview = r.message || null;
+        this.render_selection_summary();
+        this.render_preview_issues();
+    }
+
+    render_selection_summary() {
+        const map = this.creation.selected_invoices;
+        const invCount = map.size;
+        let grandTotal = 0;
+        const suppliers = new Set();
+        let reuseCount = 0;
+        let newCount = 0;
+
+        map.forEach((row) => {
+            grandTotal += flt(row.payable_total);
+            if (row.seller_name) suppliers.add(row.seller_name);
+            if (row.matched_purchase_invoice) {
+                reuseCount++;
+            } else {
+                newCount++;
+            }
+        });
+
+        if (this.creation.preview && this.creation.preview.summary) {
+            const s = this.creation.preview.summary;
+            $("#modal-reim-sum-inv-count").text(`${s.invoice_count} 张`);
+            $("#modal-reim-sum-supp-count").text(`${s.supplier_count} 个`);
+            $("#modal-reim-sum-reuse-count").text(`${s.existing_pi_count} 张`);
+            $("#modal-reim-sum-new-count").text(`${s.new_pi_count} 张`);
+            $("#modal-reim-sum-grand-total").text(format_currency(s.grand_total));
+        } else {
+            $("#modal-reim-sum-inv-count").text(`${invCount} 张`);
+            $("#modal-reim-sum-supp-count").text(`${suppliers.size} 个`);
+            $("#modal-reim-sum-reuse-count").text(`${reuseCount} 张`);
+            $("#modal-reim-sum-new-count").text(`${newCount} 张`);
+            $("#modal-reim-sum-grand-total").text(format_currency(grandTotal));
+        }
+
+        this.sync_create_button();
+    }
+
+    render_preview_issues() {
+        if (!this.creation.preview) return;
+        const issues = [];
+        this.creation.preview.invoices.forEach((inv) => {
+            (inv.issues || []).forEach((iss) => {
+                issues.push(`发票 ${inv.invoice_no}: ${iss.message}`);
+            });
+        });
+
+        if (issues.length) {
+            const html = issues.map((msg) => `<div class="reim-v2-issue-item"><span>•</span><span>${msg}</span></div>`).join("");
+            $("#modal-reim-issues-list").html(html);
+            $("#modal-reim-issues-box").show();
+        } else {
+            $("#modal-reim-issues-box").hide();
         }
     }
 
-    // =========================================================================
-    // Document Detail Modal (Full Upstream/Downstream Inspection)
-    // =========================================================================
+    sync_create_button(isSubmitting = false) {
+        if (!this.creation.dialog) return;
+        const $btn = this.creation.dialog.get_primary_btn();
+        const hasSelection = this.creation.selected_invoices.size > 0;
+        const blockingCount = this.creation.preview ? this.creation.preview.blocking_count : 0;
 
-    async show_doc_detail_modal(doctype, name) {
-        try {
-            frappe.dom.freeze(__("正在拉取单据详情..."));
-            const r = await frappe.call({
-                method: "ashan_cn_procurement.services.procurement_picker_service.get_document_details",
-                args: { doctype, name },
-            });
-            frappe.dom.unfreeze();
+        if (isSubmitting) {
+            $btn.prop("disabled", true).text(__("🚀 正在创建全链路单据..."));
+        } else if (!hasSelection) {
+            $btn.prop("disabled", true).text(__("请先选择发票"));
+        } else if (blockingCount > 0) {
+            $btn.prop("disabled", true).text(__(`请先处理 ${blockingCount} 项问题`));
+        } else {
+            $btn.prop("disabled", false).text(__("🚀 确认创建报销"));
+        }
+    }
 
-            if (!r.message) return;
-            const doc = r.message;
+    async handle_upload_files(files) {
+        const me = this;
+        const $list = $("#modal-reim-upload-list");
+        $list.empty();
 
-            const items_tbody = (doc.items || []).map((it) => `
-                <tr>
-                    <td class="text-center font-bold">${it.idx}</td>
-                    <td><strong>${frappe.utils.escape_html(it.item_code)}</strong></td>
-                    <td>${frappe.utils.escape_html(it.item_name)}</td>
-                    <td>${frappe.utils.escape_html(it.spec || "-")}</td>
-                    <td>${frappe.utils.escape_html(it.uom)}</td>
-                    <td class="text-right">${flt(it.qty).toFixed(2)}</td>
-                    <td class="text-right qifu-money-cell">${this.fmt_money(it.rate)}</td>
-                    <td class="text-right qifu-money-cell">${this.fmt_money(it.amount)}</td>
-                    <td class="text-right">${it.tax_rate}%</td>
-                    <td class="text-right qifu-money-cell">${this.fmt_money(it.tax_amount)}</td>
-                    <td class="text-right qifu-money-cell font-bold text-primary">${this.fmt_money(it.total_amount)}</td>
-                    <td>${frappe.utils.escape_html(it.description || "-")}</td>
-                </tr>
-            `).join("");
-
-            const html = `
-                <div class="picker-detail-modal-root">
-                    <div class="picker-detail-hdr-grid">
-                        <div class="picker-detail-hdr-card">
-                            <span class="picker-detail-hdr-label">所属公司</span>
-                            <span class="picker-detail-hdr-val">${frappe.utils.escape_html(doc.company)}</span>
-                        </div>
-                        <div class="picker-detail-hdr-card">
-                            <span class="picker-detail-hdr-label">报销人/供应商</span>
-                            <span class="picker-detail-hdr-val">${frappe.utils.escape_html(doc.supplier || doc.owner)}</span>
-                        </div>
-                        <div class="picker-detail-hdr-card">
-                            <span class="picker-detail-hdr-label">经手人</span>
-                            <span class="picker-detail-hdr-val">${frappe.utils.escape_html(doc.owner)}</span>
-                        </div>
-                        <div class="picker-detail-hdr-card">
-                            <span class="picker-detail-hdr-label">单据总额</span>
-                            <span class="picker-detail-hdr-val text-primary font-bold">${this.fmt_money(doc.total_amount || doc.grand_total)}</span>
-                        </div>
-                    </div>
-
-                    <div class="picker-detail-table-wrap">
-                        <table class="picker-data-table">
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>物料/项目</th>
-                                    <th>名称说明</th>
-                                    <th>规格型号</th>
-                                    <th>单位</th>
-                                    <th class="text-right">数量</th>
-                                    <th class="text-right">单价</th>
-                                    <th class="text-right">金额</th>
-                                    <th class="text-right">税率</th>
-                                    <th class="text-right">税额</th>
-                                    <th class="text-right">价税合计</th>
-                                    <th>备注/用途</th>
-                                </tr>
-                            </thead>
-                            <tbody>${items_tbody}</tbody>
-                            <tfoot>
-                                <tr>
-                                    <td colspan="5" class="text-right font-bold">合计:</td>
-                                    <td class="text-right font-bold">${flt(doc.total_qty).toFixed(2)}</td>
-                                    <td></td>
-                                    <td class="text-right qifu-money-cell font-bold">${this.fmt_money(doc.total_amount || doc.grand_total)}</td>
-                                    <td></td>
-                                    <td></td>
-                                    <td class="text-right qifu-money-cell font-bold text-primary">${this.fmt_money(doc.total_amount || doc.grand_total)}</td>
-                                    <td></td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
+        for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            const $item = $(`
+                <div class="reim-v2-upload-item">
+                    <span>📄 ${f.name} (${(f.size / 1024).toFixed(1)} KB)</span>
+                    <span class="text-muted">正在上传解析...</span>
                 </div>
-            `;
+            `);
+            $list.append($item);
 
-            const d = new frappe.ui.Dialog({
-                title: `${doc.doctype_label || doctype}: ${frappe.utils.escape_html(name)}`,
-                size: "large",
-                fields: [{ fieldtype: "HTML", fieldname: "detail_html" }],
-                primary_action_label: __("打印单据"),
-                primary_action: function () {
-                    window.open(`/printview?doctype=${encodeURIComponent(doctype)}&name=${encodeURIComponent(name)}&trigger_print=1`, "_blank");
-                },
-                secondary_action_label: __("关闭"),
-                secondary_action: function () {
-                    d.hide();
+            const formData = new FormData();
+            formData.append("file", f);
+
+            try {
+                const resp = await fetch("/api/method/" + REIM_API.upload, {
+                    method: "POST",
+                    headers: {
+                        "X-Frappe-CSRF-Token": frappe.csrf_token,
+                    },
+                    body: formData,
+                });
+                const res = await resp.json();
+                const msg = res.message || {};
+
+                if (msg.ok) {
+                    $item.find(".text-muted").removeClass("text-muted").addClass("text-green-600 font-bold").text("✓ 解析成功");
+                    if (msg.invoice_names && msg.invoice_names.length) {
+                        msg.invoice_names.forEach((invName) => {
+                            me.creation.selected_invoices.set(invName, {
+                                name: invName,
+                                invoice_no: invName,
+                                payable_total: 0,
+                                eligibility: "ready",
+                            });
+                        });
+                    }
+                } else {
+                    $item.find(".text-muted").removeClass("text-muted").addClass("text-red-600 font-bold").text("✕ " + (msg.current_message || "解析失败"));
+                }
+            } catch (err) {
+                $item.find(".text-muted").removeClass("text-muted").addClass("text-red-600 font-bold").text("✕ 上传异常");
+            }
+        }
+
+        // 重新加载候选并更新选择
+        await me.load_tax_invoice_candidates();
+        me.schedule_preview();
+    }
+
+    async submit_create_reimbursement_v2() {
+        if (!this.creation.selected_invoices.size) {
+            frappe.msgprint(__("请至少选择一张税局发票。"));
+            return;
+        }
+
+        const empVal = $("#modal-reim-employee").val().trim();
+        if (!empVal) {
+            frappe.msgprint(__("请填写报销人员。"));
+            return;
+        }
+
+        // Extract employee code if format is "Name (Code)"
+        let employeeCode = empVal;
+        const match = empVal.match(/\(([^)]+)\)$/);
+        if (match) {
+            employeeCode = match[1];
+        }
+
+        const dateVal = $("#modal-reim-date").val() || frappe.datetime.get_today();
+        const titleVal = $("#modal-reim-title").val().trim();
+        const autoStock = $("#modal-reim-auto-stock").is(":checked") ? 1 : 0;
+        const names = [...this.creation.selected_invoices.keys()];
+
+        this.sync_create_button(true);
+
+        try {
+            const r = await frappe.call({
+                method: REIM_API.create_v2,
+                type: "POST",
+                freeze: true,
+                freeze_message: __("正在全自动生成采购与报销单据，请稍候..."),
+                args: {
+                    company: this.creation.company,
+                    employee: employeeCode,
+                    posting_date: dateVal,
+                    title: titleVal,
+                    tax_invoice_names: names,
+                    resolutions: this.creation.resolutions,
+                    auto_receive_stock: autoStock,
                 },
             });
 
-            d.fields_dict.detail_html.$wrapper.html(html);
-            d.show();
-        } catch (e) {
-            frappe.dom.unfreeze();
-            console.error("Failed to load document details:", e);
+            if (r.message && r.message.success) {
+                this.creation.dialog.hide();
+                frappe.show_alert({
+                    message: __(`🎉 报销申请 ${r.message.rr_name} 创建并过账成功！`),
+                    indicator: "green",
+                });
+                await this.refresh_all();
+                frappe.set_route("Form", "Reimbursement Request", r.message.rr_name);
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            this.sync_create_button(false);
         }
     }
 }

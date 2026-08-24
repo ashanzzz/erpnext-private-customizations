@@ -314,6 +314,7 @@ def upload_tax_invoice_file():
 
 	batch.reload()
 	is_ok = (batch.batch_status != "失败") and (batch.created_count > 0 or batch.duplicate_count > 0 or batch.review_count > 0)
+	created_invoices = frappe.get_all("Tax Invoice", filters={"import_batch": batch.name}, pluck="name") if batch.name else []
 	return {
 		"ok": is_ok,
 		"batch_name": batch.name,
@@ -324,6 +325,7 @@ def upload_tax_invoice_file():
 		"duplicate_count": batch.duplicate_count or 0,
 		"review_count": batch.review_count or 0,
 		"failed_count": batch.failed_count or 0,
+		"invoice_names": created_invoices,
 		"current_message": batch.current_message,
 		"error_log": batch.error_log or (res.get("error_log") if isinstance(res, dict) else "") or (res.get("error") if isinstance(res, dict) else "")
 	}
