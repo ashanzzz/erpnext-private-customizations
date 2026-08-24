@@ -441,6 +441,62 @@ def get_suppliers_for_reimbursement(txt: str = "", limit: int = 20) -> list[dict
     return suppliers
 
 
+@frappe.whitelist(methods=["POST"])
+def quick_create_reimbursement_item(
+    item_code: str,
+    item_name: str | None = None,
+    stock_uom: str = "个",
+    spec: str = "",
+    is_stock_item: int | bool = 0,
+) -> dict:
+    """Quickly create a new Item in ERPNext for picker autocomplete."""
+    item_code = (item_code or "").strip()
+    if not item_code:
+        frappe.throw(_("物料代码不能为空。"))
+    item_name = (item_name or item_code).strip()
+    stock_uom = _ensure_uom(stock_uom)
+
+    if frappe.db.exists("Item", item_code):
+        frappe.throw(_("物料代码 {0} 已存在，请直接选择。").format(item_code))
+
+    doc = frappe.new_doc("Item")
+    doc.item_code = item_code
+    doc.item_name = item_name
+    doc.item_group = "All Item Groups"
+    doc.stock_uom = stock_uom
+    doc.is_stock_item = 1 if int(is_stock_item) else 0
+    if spec and _meta_has("Item", "custom_spec_model"):
+        doc.custom_spec_model = spec
+    elif spec:
+        doc.description = spec
+
+    doc.flags.ignore_permissions = True
+    doc.insert()
+
+    return {
+        "success": True,
+        "item_code": doc.name,
+        "item_name": doc.item_name,
+        "spec": spec,
+        "uom": doc.stock_uom,
+        "is_stock_item": bool(doc.is_stock_item),
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def quick_create_reimbursement_supplier(supplier_name: str) -> dict:
+    """Quickly create a new Supplier in ERPNext for picker autocomplete."""
+    supplier_name = (supplier_name or "").strip()
+    if not supplier_name:
+        frappe.throw(_("供应商名称不能为空。"))
+    supp_code = _ensure_supplier(supplier_name)
+    return {
+        "success": True,
+        "supplier": supp_code,
+        "supplier_name": supplier_name,
+    }
+
+
 # =========================================================================
 # 4. Multi-Invoice Manual Entry Engine (Atomic POST)
 # =========================================================================
@@ -907,8 +963,13 @@ def delete_reimbursement_bundle(rr_name: str) -> dict:
         if frappe.db.table_exists("Reimbursement Source Reservation"):
             frappe.db.sql("""
                 DELETE FROM `tabReimbursement Source Reservation`
-                WHERE reference_docname = %s OR voucher_no = %s
-            """, (rr_name, rr_name))
+                WHERE reimbursement_request = %s
+            """, (rr_name,))
+            if pi_names:
+                frappe.db.sql("""
+                    DELETE FROM `tabReimbursement Source Reservation`
+                    WHERE source_purchase_invoice IN %s
+                """, (tuple(pi_names),))
     except Exception:
         pass
 

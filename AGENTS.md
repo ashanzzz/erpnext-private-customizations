@@ -89,7 +89,18 @@
      - 金额、税率、单价、数量等数值列保持 `white-space: nowrap; font-variant-numeric: tabular-nums;`，等宽靠右永不折行；
    - **响应式栅格与流式卡片**：顶部 KPI 卡片网格、筛选控制栏采用 `grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))` 与自适应 Flex 换行，随浏览器窗口缩放平滑自适应。
 
+5. **企业级 Autocomplete 选单与新建浮层标准 (Enterprise Suggest Dropdown & Fast Creation Standard)**：
+   - **拒绝简陋原生 datalist 与笨重大弹窗**：所有单据明细、录单弹窗中的物料选择、供应商选择，严禁使用原生 `<datalist>` 或死板的臃肿控件；
+   - **统一高质感浮层架构**：统一采用 `.picker-suggest-wrapper` + `.picker-suggest-dropdown` 浮层体系，基于 `getBoundingClientRect()` 实现 Fixed 视口定位与动态跟随；
+   - **双行高密度信息呈现**：
+     - 上方：物料/供应商代码（`.picker-suggest-code`，粗体蓝字 `#1e40af`）；
+     - 下方：物料全称 + 规格单位（`.picker-suggest-name`，微灰色 `#475569`）；
+     - 右侧：参考单价（`.picker-suggest-price`，绿色等宽字体 `#059669`）；
+   - **标准化底部快捷新建栏**：
+     - 下拉菜单底部常驻 `➕ 新建物料 (Create Item)` 或 `➕ 新建供应商 (Create Supplier)`（`.picker-suggest-create-btn`），点击直接弹出标准创建窗口或无缝新建，选定后自动回填。
+
 ---
+
 
 ### ⚙️ 第三支柱：清晰架构、原生优先与代码规范 (Clean Architecture & Code Style)
 

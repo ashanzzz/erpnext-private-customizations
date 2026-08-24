@@ -503,11 +503,26 @@ def _assert_request_amounts_within_invoice_outstanding(request, candidates: list
 
 def _assert_sources_available(candidates: list[dict], current_request: str) -> None:
     keys = [candidate["source_pi_item"] for candidate in candidates]
+    if not keys:
+        return
     conflicts = frappe.get_all(
         "Reimbursement Source Reservation",
         filters={"active_source_key": ["in", keys]},
-        fields=["source_purchase_invoice_item", "reimbursement_request"],
+        fields=["name", "source_purchase_invoice_item", "reimbursement_request"],
     )
-    other_requests = sorted({row.reimbursement_request for row in conflicts if row.reimbursement_request != current_request})
+    stale_reservations = []
+    other_requests = set()
+    for row in conflicts:
+        if row.reimbursement_request and row.reimbursement_request != current_request:
+            rr_status = frappe.db.get_value("Reimbursement Request", row.reimbursement_request, "docstatus")
+            if rr_status is None or rr_status == 2:
+                stale_reservations.append(row.name)
+            else:
+                other_requests.add(row.reimbursement_request)
+
+    if stale_reservations:
+        frappe.db.sql("DELETE FROM `tabReimbursement Source Reservation` WHERE name IN %s", (tuple(stale_reservations),))
+
     if other_requests:
-        frappe.throw(_("以下来源明细已被其他报销草稿占用：{0}").format(", ".join(other_requests)))
+        frappe.throw(_("以下来源明细已被其他报销单占用：{0}").format(", ".join(sorted(other_requests))))
+

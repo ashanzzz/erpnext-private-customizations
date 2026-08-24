@@ -727,8 +727,105 @@
 .ashan-col-w85 { width: 85px; text-align: right; }
 .ashan-col-w105 { width: 105px; text-align: right; }
 .ashan-col-w140 { width: 140px; }
-.ashan-col-w45 { width: 45px; text-align: center; }
 .ashan-smart-cell-idx { text-align: center; font-weight: 700; color: #64748b; }
 .ashan-smart-btn-del { color: #ef4444; padding: 2px 6px; }
+
+/* ==========================================================================
+   Enterprise Autocomplete Suggest Dropdown (Pillar 2 Standard)
+   ========================================================================== */
+.ashan-suggest-wrapper,
+.picker-suggest-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.ashan-suggest-dropdown,
+.picker-suggest-dropdown {
+    position: fixed !important;
+    z-index: 99999999 !important;
+    background: #ffffff;
+    border: 1px solid #94a3b8;
+    border-radius: 6px;
+    box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.08);
+    max-height: 240px;
+    overflow-y: auto;
+    display: none;
+    box-sizing: border-box;
+}
+
+.ashan-suggest-dropdown.is-open,
+.picker-suggest-dropdown.is-open {
+    display: block !important;
+}
+
+.ashan-suggest-item,
+.picker-suggest-item {
+    padding: 6px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.1s ease;
+}
+
+.ashan-suggest-item:hover,
+.ashan-suggest-item.is-focused,
+.picker-suggest-item:hover,
+.picker-suggest-item.is-focused {
+    background: #eff6ff;
+}
+
+.ashan-suggest-main,
+.picker-suggest-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.ashan-suggest-code,
+.picker-suggest-code {
+    font-weight: 700;
+    color: #1e40af;
+    font-size: 11.5px;
+}
+
+.ashan-suggest-name,
+.picker-suggest-name {
+    color: #475569;
+    font-size: 10.5px;
+}
+
+.ashan-suggest-price,
+.picker-suggest-price {
+    font-family: monospace;
+    font-weight: 600;
+    color: #059669;
+    font-size: 11.5px;
+    text-align: right;
+}
+
+.ashan-suggest-create-btn,
+.picker-suggest-create-btn {
+    padding: 8px 10px;
+    background: #f8fafc;
+    border-top: 1px dashed #cbd5e1;
+    color: #0284c7;
+    font-weight: 600;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+
+.ashan-suggest-create-btn:hover,
+.picker-suggest-create-btn:hover {
+    background: #f0f9ff;
+    color: #0369a1;
+}
+
 
 
