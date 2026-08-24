@@ -1004,3 +1004,10 @@ def delete_reimbursement_bundle(rr_name: str) -> dict:
                 frappe.log_error(f"Error cascading delete PI {pi_name}: {e}")
 
     return {"success": True, "deleted_rr": rr_name}
+
+
+@frappe.whitelist(methods=["POST"])
+def delete_bundle_and_cancel_pi(rr_name: str) -> dict:
+    """Compatibility alias for delete_reimbursement_bundle."""
+    return delete_reimbursement_bundle(rr_name)
+

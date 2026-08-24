@@ -22,7 +22,7 @@ const REIM_API = {
     quick_create_item: "ashan_cn_procurement.services.reimbursement_picker_service.quick_create_reimbursement_item",
     quick_create_supp: "ashan_cn_procurement.services.reimbursement_picker_service.quick_create_reimbursement_supplier",
     get_detail: "ashan_cn_procurement.services.reimbursement_picker_service.get_reimbursement_detail_for_edit",
-    delete_bundle: "ashan_cn_procurement.services.reimbursement_picker_service.delete_bundle_and_cancel_pi",
+    delete_bundle: "ashan_cn_procurement.services.reimbursement_picker_service.delete_reimbursement_bundle",
 };
 
 function flash_field_error($el, msg) {
