@@ -1251,3 +1251,77 @@
     background: #fecaca;
 }
 
+/* Draft Banner & Draft Save */
+.reim-draft-banner {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11.5px;
+    color: #166534;
+}
+
+.reim-draft-banner-text {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+}
+
+.reim-btn-clear-draft {
+    background: transparent;
+    border: none;
+    color: #dc2626;
+    font-size: 11px;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.reim-btn-save-draft {
+    height: 30px;
+    padding: 0 14px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    color: #475569;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+
+.reim-btn-save-draft:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+    border-color: #94a3b8;
+}
+
+/* Item details pills */
+.reim-item-capsule {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin: 1px 2px;
+    font-size: 11px;
+    color: #334155;
+    white-space: nowrap;
+}
+
+.reim-item-capsule-price {
+    font-family: monospace;
+    font-weight: 600;
+    color: #059669;
+}
+
+

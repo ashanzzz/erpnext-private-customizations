@@ -4,114 +4,123 @@
 from __future__ import annotations
 
 import json
-from collections import defaultdict
-from typing import Any
-
+from datetime import date
 import frappe
 from frappe import _
-from frappe.utils import flt, nowdate, getdate
-
-from ashan_cn_procurement.services.authorization_service import assert_company_access
-from ashan_cn_procurement.services.procurement_picker_service import (
-    get_user_procurement_companies,
+from frappe.utils import flt, nowdate
+from ashan_cn_procurement.services.authorization_service import (
+    assert_company_access,
+    get_allowed_companies,
 )
 
 
-def _resolve_companies(company: str | None = None) -> list[str]:
-    """Resolve accessible companies list with server-side permission checks."""
-    user_comps = get_user_procurement_companies()["companies"]
-    if not user_comps:
-        frappe.throw(_("当前账号未获得任何公司的访问权限。"))
-
-    if not company or company in ("All", "全部公司"):
-        return user_comps
-
-    assert_company_access(company)
-    return [company]
-
-
 def _meta_has(doctype: str, fieldname: str) -> bool:
-    """Safely check if DocType has a field."""
+    """Safely check whether a DocType has a specific fieldname in schema."""
     try:
-        return frappe.get_meta(doctype).has_field(fieldname)
+        meta = frappe.get_meta(doctype)
+        return meta.has_field(fieldname)
     except Exception:
         return False
 
 
-def _normalize_dict(values: Any) -> dict:
-    if isinstance(values, str):
-        values = frappe.parse_json(values)
-    return values if isinstance(values, dict) else {}
+def _get_item_spec_column() -> str:
+    """Return correct Item spec column based on schema."""
+    return "custom_spec_model" if _meta_has("Item", "custom_spec_model") else "description"
+
+
+def _get_target_companies(company: str | None = None) -> list[str]:
+    """Get filtered companies according to user permissions and selection."""
+    all_companies = [c.name for c in frappe.get_all("Company", fields=["name"], order_by="name ASC")]
+    allowed = get_allowed_companies()
+    accessible = all_companies if allowed is None else [c for c in all_companies if c in allowed]
+
+    if company and company != "All":
+        assert_company_access(company)
+        return [company]
+    return accessible
 
 
 # =========================================================================
-# 1. KPI Aggregation for 报销申请中心
+# 1. Overview KPIs
 # =========================================================================
 
 @frappe.whitelist()
 def get_reimbursement_picker_overview_kpis(company: str | None = None) -> dict:
-    """Return aggregated KPI counts for 报销申请中心."""
-    companies = _resolve_companies(company)
+    """Get top 4 KPI cards data for Reimbursement Picker."""
+    target_companies = _get_target_companies(company)
+    if not target_companies:
+        return {
+            "pending_rr_count": 0,
+            "pi_count": 0,
+            "pr_count": 0,
+            "rr_outstanding": 0.0,
+        }
 
-    # 1. 待结款报销单数与总额
-    rr_stats = frappe.db.sql("""
-        SELECT
-            COUNT(name) AS total_count,
-            COALESCE(SUM(total_amount), 0) AS grand_total,
-            COALESCE(SUM(outstanding_amount), 0) AS outstanding_total,
-            SUM(CASE WHEN outstanding_amount > 0.0001 THEN 1 ELSE 0 END) AS pending_count
+    comp_list = target_companies
+
+    # 1. 待结款报销单数量
+    pending_rr_count = frappe.db.count(
+        "Reimbursement Request",
+        filters={
+            "company": ["in", comp_list],
+            "docstatus": ["in", [0, 1]],
+            "outstanding_amount": [">", 0],
+        },
+    )
+
+    # 2. 关联采购发票数量 (现金报销业务)
+    pi_count = frappe.db.count(
+        "Purchase Invoice",
+        filters={
+            "company": ["in", comp_list],
+            "docstatus": 1,
+            "custom_biz_mode": "现金报销",
+        },
+    )
+
+    # 3. 关联入库单数量 (现金报销业务)
+    pr_count = frappe.db.count(
+        "Purchase Receipt",
+        filters={
+            "company": ["in", comp_list],
+            "docstatus": 1,
+            "custom_biz_mode": "现金报销",
+        },
+    )
+
+    # 4. 待付款结清总额
+    outstanding_res = frappe.db.sql(
+        """
+        SELECT COALESCE(SUM(outstanding_amount), 0.0) AS total_out
         FROM `tabReimbursement Request`
-        WHERE docstatus = 1
-          AND company IN %s
-          AND (custom_biz_mode = '现金报销' OR custom_biz_mode = '报销申请')
-    """, (companies,), as_dict=True)[0]
-
-    pending_rr_count = rr_stats.pending_count or 0
-    rr_total_count = rr_stats.total_count or 0
-    rr_grand_total = flt(rr_stats.grand_total or 0)
-    rr_outstanding = flt(rr_stats.outstanding_total or 0)
-
-    # 2. 垫付采购发票数
-    pi_count = frappe.db.sql("""
-        SELECT COUNT(name)
-        FROM `tabPurchase Invoice`
-        WHERE docstatus = 1
-          AND company IN %s
-          AND (custom_biz_mode = '现金报销' OR custom_biz_mode = '报销申请')
-    """, (companies,))[0][0] or 0
-
-    # 3. 关联采购入库数
-    pr_count = frappe.db.sql("""
-        SELECT COUNT(name)
-        FROM `tabPurchase Receipt`
-        WHERE docstatus = 1
-          AND company IN %s
-          AND (custom_biz_mode = '现金报销' OR custom_biz_mode = '报销申请')
-    """, (companies,))[0][0] or 0
+        WHERE company IN %(comps)s
+          AND docstatus IN (0, 1)
+          AND outstanding_amount > 0
+        """,
+        {"comps": comp_list},
+        as_dict=True,
+    )
+    rr_outstanding = flt(outstanding_res[0].total_out if outstanding_res else 0.0, 2)
 
     return {
         "pending_rr_count": pending_rr_count,
-        "rr_total_count": rr_total_count,
-        "rr_grand_total": rr_grand_total,
-        "rr_outstanding": rr_outstanding,
         "pi_count": pi_count,
         "pr_count": pr_count,
+        "rr_outstanding": rr_outstanding,
     }
 
 
 # =========================================================================
-# 2. Document & Detail Queries (彻底移除报销人员)
+# 2. Doc Summary Rows (Cleaned Table: Single Row Per Reimbursement Request)
 # =========================================================================
 
-def _format_compact_preview(items: list[str], max_show: int = 2) -> str:
-    """Format compact string with overflow count: 'item1、item2 +3'."""
-    clean_items = [str(x).strip() for x in items if str(x).strip()]
-    clean_items = list(dict.fromkeys(clean_items))
-    if not clean_items:
+def _format_compact_preview(items: list[str], max_items: int = 2) -> str:
+    """Format compact string with ellipsis."""
+    if not items:
         return "-"
-    if len(clean_items) <= max_show:
-        return "、".join(clean_items)
-    return f"{'、'.join(clean_items[:max_show])} +{len(clean_items) - max_show}"
+    if len(items) <= max_items:
+        return "、".join(items)
+    return "、".join(items[:max_items]) + f" 等{len(items)}项"
 
 
 @frappe.whitelist()
@@ -119,52 +128,67 @@ def get_reimbursement_picker_doc_summary_rows(
     company: str | None = None,
     filters: dict | str | None = None,
 ) -> dict:
-    """Query document level summary rows for 报销申请 without employee column."""
-    companies = _resolve_companies(company)
-    filters = _normalize_dict(filters)
+    """Query doc-level summary rows for 报销申请 without employee column."""
+    target_companies = _get_target_companies(company)
+    if not target_companies:
+        return {"rows": [], "total_count": 0, "total_amount": 0, "total_outstanding": 0}
 
-    match_status = filters.get("match_status") or "pending"
+    if isinstance(filters, str):
+        try:
+            filters = json.loads(filters)
+        except Exception:
+            filters = {}
+    filters = filters or {}
 
-    conditions = [
-        "rr.docstatus = 1",
-        "rr.company IN %(companies)s",
-        "(rr.custom_biz_mode = '现金报销' OR rr.custom_biz_mode = '报销申请')",
-    ]
-    params: dict[str, Any] = {"companies": companies}
+    where_clauses = ["rr.company IN %(comps)s", "rr.docstatus IN (0, 1)"]
+    params = {"comps": target_companies}
 
+    match_status = filters.get("match_status", "pending")
     if match_status == "pending":
-        conditions.append("rr.outstanding_amount > 0.0001")
+        where_clauses.append("rr.outstanding_amount > 0")
     elif match_status == "completed":
-        conditions.append("rr.outstanding_amount <= 0.0001")
+        where_clauses.append("rr.outstanding_amount <= 0.0001 AND rr.docstatus = 1")
+    elif match_status == "draft":
+        where_clauses.append("rr.docstatus = 0")
 
     if filters.get("supplier"):
-        conditions.append("""
+        where_clauses.append("""
             EXISTS (
-                SELECT 1 FROM `tabReimbursement Invoice Item` rii_s
-                WHERE rii_s.parent = rr.name AND rii_s.supplier LIKE %(supplier)s
+                SELECT 1 FROM `tabReimbursement Invoice Item` rii
+                WHERE rii.parent = rr.name AND rii.supplier LIKE %(supp)s
             )
         """)
-        params["supplier"] = f"%{filters['supplier']}%"
+        params["supp"] = f"%{filters['supplier'].strip()}%"
 
     if filters.get("invoice_no"):
-        conditions.append("""
+        where_clauses.append("""
             EXISTS (
-                SELECT 1 FROM `tabReimbursement Invoice Item` rii_s
-                WHERE rii_s.parent = rr.name AND rii_s.invoice_no LIKE %(invoice_no)s
+                SELECT 1 FROM `tabReimbursement Invoice Item` rii
+                WHERE rii.parent = rr.name AND rii.invoice_no LIKE %(inv)s
             )
         """)
-        params["invoice_no"] = f"%{filters['invoice_no']}%"
+        params["inv"] = f"%{filters['invoice_no'].strip()}%"
+
+    if filters.get("item_code"):
+        where_clauses.append("""
+            EXISTS (
+                SELECT 1 FROM `tabReimbursement Invoice Item` rii
+                WHERE rii.parent = rr.name AND (rii.item_name LIKE %(item)s OR rii.description LIKE %(item)s)
+            )
+        """)
+        params["item"] = f"%{filters['item_code'].strip()}%"
 
     if filters.get("owner"):
-        conditions.append("rr.owner LIKE %(owner)s")
-        params["owner"] = f"%{filters['owner']}%"
+        where_clauses.append("rr.owner LIKE %(owner)s")
+        params["owner"] = f"%{filters['owner'].strip()}%"
 
-    where_clause = " AND ".join(conditions)
+    where_clause = " AND ".join(where_clauses)
 
     sql = f"""
         SELECT
             rr.name AS rr_name,
             rr.company,
+            rr.docstatus,
             rr.posting_date,
             rr.owner,
             rr.total_amount,
@@ -190,7 +214,12 @@ def get_reimbursement_picker_doc_summary_rows(
                 SELECT GROUP_CONCAT(DISTINCT rii.source_pi ORDER BY rii.source_pi DESC SEPARATOR '、')
                 FROM `tabReimbursement Invoice Item` rii
                 WHERE rii.parent = rr.name AND rii.source_pi IS NOT NULL AND rii.source_pi != ''
-            ) AS linked_pis
+            ) AS linked_pis,
+            (
+                SELECT GROUP_CONCAT(CONCAT(rii.item_name, ' (x', ROUND(rii.qty, 0), ') ¥', FORMAT(rii.amount, 2)) SEPARATOR '、')
+                FROM `tabReimbursement Invoice Item` rii
+                WHERE rii.parent = rr.name
+            ) AS auto_items_summary
         FROM `tabReimbursement Request` rr
         WHERE {where_clause}
         ORDER BY rr.posting_date DESC, rr.name DESC
@@ -202,7 +231,15 @@ def get_reimbursement_picker_doc_summary_rows(
     rows = []
     for idx, d in enumerate(raw_docs, 1):
         outstanding = flt(d.outstanding_amount)
-        status_label = "🟡 待结款" if outstanding > 0.0001 else "🟢 已结清"
+        if d.docstatus == 0:
+            status_label = "🔘 草稿"
+            doc_status = "Draft"
+        elif outstanding > 0.0001:
+            status_label = "🟡 待结款"
+            doc_status = "Submitted"
+        else:
+            status_label = "🟢 已结清"
+            doc_status = "Completed"
 
         suppliers_list = [s for s in (d.raw_suppliers or "").split("||") if s.strip()]
         invoices_list = [i for i in (d.raw_invoice_nos or "").split("||") if i.strip()]
@@ -211,11 +248,14 @@ def get_reimbursement_picker_doc_summary_rows(
         inv_count = len(invoices_list)
 
         masked_invoices = [f"…{x[-8:]}" if len(x) > 8 else x for x in invoices_list]
+        details_text = d.doc_details or d.auto_items_summary or "-"
 
         rows.append({
             "idx": idx,
             "rr_name": d.rr_name,
             "company": d.company,
+            "docstatus": d.docstatus,
+            "doc_status": doc_status,
             "title": d.title or "-",
             "supplier_count": supp_count,
             "invoice_count": inv_count,
@@ -230,7 +270,7 @@ def get_reimbursement_picker_doc_summary_rows(
             "total_amount": flt(d.total_amount, 2),
             "outstanding_amount": outstanding,
             "paid_amount": max(0.0, flt(d.total_amount) - outstanding),
-            "doc_details": d.doc_details or "-",
+            "doc_details": details_text,
             "linked_pis": d.linked_pis or "-",
         })
 
@@ -242,85 +282,82 @@ def get_reimbursement_picker_doc_summary_rows(
     }
 
 
+# =========================================================================
+# 3. Item Detail Rows Query
+# =========================================================================
+
 @frappe.whitelist()
 def get_reimbursement_picker_rows(
     company: str | None = None,
     filters: dict | str | None = None,
 ) -> dict:
     """Query item detail rows for 报销申请 without employee column."""
-    companies = _resolve_companies(company)
-    filters = _normalize_dict(filters)
+    target_companies = _get_target_companies(company)
+    if not target_companies:
+        return {"rows": [], "total_count": 0, "total_amount": 0, "total_outstanding": 0}
 
-    match_status = filters.get("match_status") or "pending"
+    if isinstance(filters, str):
+        try:
+            filters = json.loads(filters)
+        except Exception:
+            filters = {}
+    filters = filters or {}
 
-    conditions = [
-        "rr.docstatus = 1",
-        "rr.company IN %(companies)s",
-        "(rr.custom_biz_mode = '现金报销' OR rr.custom_biz_mode = '报销申请')",
-    ]
-    params: dict[str, Any] = {"companies": companies}
+    where_clauses = ["rr.company IN %(comps)s", "rr.docstatus IN (0, 1)"]
+    params = {"comps": target_companies}
 
+    match_status = filters.get("match_status", "pending")
     if match_status == "pending":
-        conditions.append("rr.outstanding_amount > 0.0001")
+        where_clauses.append("rr.outstanding_amount > 0")
     elif match_status == "completed":
-        conditions.append("rr.outstanding_amount <= 0.0001")
+        where_clauses.append("rr.outstanding_amount <= 0.0001 AND rr.docstatus = 1")
+    elif match_status == "draft":
+        where_clauses.append("rr.docstatus = 0")
 
     if filters.get("supplier"):
-        conditions.append("rii.supplier LIKE %(supplier)s")
-        params["supplier"] = f"%{filters['supplier']}%"
+        where_clauses.append("rii.supplier LIKE %(supp)s")
+        params["supp"] = f"%{filters['supplier'].strip()}%"
 
     if filters.get("invoice_no"):
-        conditions.append("rii.invoice_no LIKE %(invoice_no)s")
-        params["invoice_no"] = f"%{filters['invoice_no']}%"
+        where_clauses.append("rii.invoice_no LIKE %(inv)s")
+        params["inv"] = f"%{filters['invoice_no'].strip()}%"
 
     if filters.get("item_code"):
-        conditions.append("(rii.item_name LIKE %(item_code)s OR rii.description LIKE %(item_code)s)")
-        params["item_code"] = f"%{filters['item_code']}%"
+        where_clauses.append("(rii.item_name LIKE %(item)s OR rii.description LIKE %(item)s)")
+        params["item"] = f"%{filters['item_code'].strip()}%"
 
     if filters.get("owner"):
-        conditions.append("rr.owner LIKE %(owner)s")
-        params["owner"] = f"%{filters['owner']}%"
+        where_clauses.append("rr.owner LIKE %(owner)s")
+        params["owner"] = f"%{filters['owner'].strip()}%"
 
-    where_clause = " AND ".join(conditions)
-
-    has_inv_type = _meta_has("Reimbursement Invoice Item", "invoice_type")
-    inv_type_col = "COALESCE(rii.invoice_type, '专用发票')" if has_inv_type else "'专用发票'"
-    has_inv_date = _meta_has("Reimbursement Invoice Item", "invoice_date")
-    inv_date_col = "COALESCE(rii.invoice_date, rr.posting_date)" if has_inv_date else "rr.posting_date"
-    has_tax_rate = _meta_has("Reimbursement Invoice Item", "tax_rate")
-    tax_rate_col = "COALESCE(rii.tax_rate, 13.0)" if has_tax_rate else "13.0"
-    has_tax_amt = _meta_has("Reimbursement Invoice Item", "tax_amount")
-    tax_amt_col = "COALESCE(rii.tax_amount, 0)" if has_tax_amt else "0"
-    has_remark = _meta_has("Reimbursement Invoice Item", "custom_line_remark")
-    remark_col = "COALESCE(rii.custom_line_remark, '')" if has_remark else "''"
+    where_clause = " AND ".join(where_clauses)
+    inv_type_col = "rii.invoice_type" if _meta_has("Reimbursement Invoice Item", "invoice_type") else "'专用发票'"
+    inv_date_col = "rii.invoice_date" if _meta_has("Reimbursement Invoice Item", "invoice_date") else "rr.posting_date"
 
     sql = f"""
         SELECT
-            rii.name AS rii_name,
+            rii.name AS item_row_name,
             rr.name AS rr_name,
             rr.company,
-            COALESCE(rii.supplier, '') AS supplier,
-            COALESCE(rii.invoice_no, '') AS invoice_no,
-            {inv_type_col} AS invoice_type,
-            {inv_date_col} AS invoice_date,
+            rr.docstatus,
             rr.posting_date,
             rr.owner,
             rr.outstanding_amount,
-            rr.total_amount AS rr_total_amount,
             rii.item_name,
-            COALESCE(rii.description, '') AS description,
-            {remark_col} AS remarks,
-            COALESCE(rii.qty, 1) AS qty,
-            COALESCE(rii.rate, 0) AS rate,
-            COALESCE(rii.amount, 0) AS amount,
-            {tax_rate_col} AS tax_rate,
-            {tax_amt_col} AS tax_amount,
-            COALESCE(rii.source_pi, '') AS source_pi
+            rii.description AS spec,
+            rii.qty,
+            rii.rate,
+            rii.amount,
+            rii.invoice_no,
+            rii.supplier,
+            rii.source_pi,
+            {inv_type_col} AS invoice_type,
+            {inv_date_col} AS invoice_date
         FROM `tabReimbursement Invoice Item` rii
-        INNER JOIN `tabReimbursement Request` rr ON rr.name = rii.parent
+        INNER JOIN `tabReimbursement Request` rr ON rii.parent = rr.name
         WHERE {where_clause}
         ORDER BY rr.posting_date DESC, rr.name DESC, rii.idx ASC
-        LIMIT 1000
+        LIMIT 500
     """
 
     raw_items = frappe.db.sql(sql, params, as_dict=True)
@@ -328,79 +365,54 @@ def get_reimbursement_picker_rows(
     rows = []
     for idx, it in enumerate(raw_items, 1):
         outstanding = flt(it.outstanding_amount)
-        status_label = "🟡 待结款" if outstanding > 0.0001 else "🟢 已结清"
-        amt = flt(it.amount, 2)
+        if it.docstatus == 0:
+            status_label = "🔘 草稿"
+        elif outstanding > 0.0001:
+            status_label = "🟡 待结款"
+        else:
+            status_label = "🟢 已结清"
 
         rows.append({
             "idx": idx,
-            "rii_name": it.rii_name,
+            "item_row_name": it.item_row_name,
             "rr_name": it.rr_name,
             "company": it.company,
-            "supplier": it.supplier,
-            "invoice_no": it.invoice_no,
-            "invoice_type": it.invoice_type,
-            "invoice_date": str(it.invoice_date or "")[:10],
-            "posting_date": str(it.posting_date or "")[:10],
+            "docstatus": it.docstatus,
+            "posting_date": str(it.posting_date or ""),
             "owner": it.owner,
-            "status_label": status_label,
-            "item_name": it.item_name,
-            "spec": it.description or "",
-            "remarks": it.remarks or "",
-            "qty": flt(it.qty, 4),
+            "item_name": it.item_name or "-",
+            "spec": it.spec or "-",
+            "qty": flt(it.qty, 2),
             "rate": flt(it.rate, 2),
-            "amount": amt,
-            "tax_rate": flt(it.tax_rate, 2),
-            "tax_amount": flt(it.tax_amount, 2),
-            "total_amount": amt,
+            "amount": flt(it.amount, 2),
+            "invoice_no": it.invoice_no or "-",
+            "supplier": it.supplier or "-",
             "source_pi": it.source_pi or "-",
-            "outstanding_amount": outstanding,
+            "invoice_type": it.invoice_type or "专用发票",
+            "invoice_date": str(it.invoice_date or ""),
+            "status_label": status_label,
         })
 
     return {
         "rows": rows,
         "total_count": len(rows),
-        "total_qty": sum(r["qty"] for r in rows),
         "total_amount": sum(r["amount"] for r in rows),
-        "total_tax": sum(r["tax_amount"] for r in rows),
-        "total_outstanding": sum(r["outstanding_amount"] for r in rows),
+        "total_outstanding": sum(flt(r["amount"]) for r in rows if r["status_label"] == "🟡 待结款"),
     }
 
 
 # =========================================================================
-# 3. Autocomplete & Defaults APIs
+# 4. Search Master Data & Autocomplete APIs
 # =========================================================================
-
-@frappe.whitelist()
-def get_reimbursement_creation_defaults(company: str | None = None) -> dict:
-    """Return default company and posting date for reimbursement dialog."""
-    companies = _resolve_companies(company)
-
-    selected_company = None
-    if company and company not in ("All", "全部公司") and company in companies:
-        selected_company = company
-    elif len(companies) == 1:
-        selected_company = companies[0]
-    elif companies:
-        selected_company = companies[0]
-
-    return {
-        "companies": companies,
-        "company": selected_company,
-        "posting_date": nowdate(),
-        "auto_receive_stock": 1,
-    }
-
 
 @frappe.whitelist()
 def search_items_for_reimbursement(txt: str = "", limit: int = 20) -> list[dict]:
-    """Search items for reimbursement by item_code, item_name or spec."""
+    """Search items for reimbursement modal autocomplete."""
     txt = (txt or "").strip()
+    spec_col = _get_item_spec_column()
     has_spec = _meta_has("Item", "custom_spec_model")
-    spec_col = "custom_spec_model" if has_spec else "description"
 
-    filters = [
-        ["disabled", "=", 0],
-    ]
+    filters = [["disabled", "=", 0]]
     or_filters = [
         ["name", "like", f"%{txt}%"],
         ["item_name", "like", f"%{txt}%"],
@@ -498,7 +510,7 @@ def quick_create_reimbursement_supplier(supplier_name: str) -> dict:
 
 
 # =========================================================================
-# 4. Multi-Invoice Manual Entry Engine (Atomic POST)
+# 5. Pure 3-Doc Multi-Invoice Reimbursement Engine (NO Purchase Order)
 # =========================================================================
 
 VALID_INVOICE_TYPES = ("专用发票", "普通发票", "无发票")
@@ -537,28 +549,25 @@ def _ensure_uom(uom_name: str) -> str:
     return uom_name
 
 
-def _ensure_item(item_code_or_name: str, spec: str = "", uom: str = "个", is_stock: bool = False) -> tuple[str, str, str, bool]:
-    """Ensure Item exists in ERPNext Item DocType, create non-stock service item if missing."""
-    clean_name = (item_code_or_name or "零星费用项").strip()
-    clean_uom = _ensure_uom(uom)
+def _ensure_item(item_name: str, uom: str = "个", spec: str = "") -> str:
+    """Ensure item exists in ERPNext Item table; if missing create as expense item."""
+    item_name = (item_name or "").strip()
+    if not item_name:
+        return "通用零星报销费用"
+    if frappe.db.exists("Item", item_name):
+        return item_name
 
-    # 1. 查找是否存在完全一致的 item_code
-    if frappe.db.exists("Item", clean_name):
-        doc = frappe.db.get_value("Item", clean_name, ["item_name", "stock_uom", "is_stock_item"], as_dict=True)
-        return clean_name, doc.item_name, doc.stock_uom, bool(doc.is_stock_item)
+    existing_name = frappe.db.get_value("Item", {"item_name": item_name}, "name")
+    if existing_name:
+        return existing_name
 
-    # 2. 查找是否存在 item_name
-    match_by_name = frappe.db.get_value("Item", {"item_name": clean_name}, ["name", "item_name", "stock_uom", "is_stock_item"], as_dict=True)
-    if match_by_name:
-        return match_by_name.name, match_by_name.item_name, match_by_name.stock_uom, bool(match_by_name.is_stock_item)
-
-    # 3. 若均不存在，自动建立一个非库存/费用型 Item
+    uom_val = _ensure_uom(uom)
     item_doc = frappe.new_doc("Item")
-    item_doc.item_code = clean_name
-    item_doc.item_name = clean_name
+    item_doc.item_code = item_name
+    item_doc.item_name = item_name
     item_doc.item_group = "All Item Groups"
-    item_doc.stock_uom = clean_uom
-    item_doc.is_stock_item = 1 if is_stock else 0
+    item_doc.stock_uom = uom_val
+    item_doc.is_stock_item = 0
     if spec and _meta_has("Item", "custom_spec_model"):
         item_doc.custom_spec_model = spec
     elif spec:
@@ -566,19 +575,7 @@ def _ensure_item(item_code_or_name: str, spec: str = "", uom: str = "个", is_st
 
     item_doc.flags.ignore_permissions = True
     item_doc.insert()
-    return item_doc.name, item_doc.item_name, item_doc.stock_uom, bool(item_doc.is_stock_item)
-
-
-def _resolve_warehouse_for_company(company: str, preferred: str | None = None) -> str:
-    """Determine receiving warehouse for stock items."""
-    if preferred and frappe.db.exists("Warehouse", preferred):
-        return preferred
-    if frappe.db.exists("Warehouse", f"Stores - {company}"):
-        return f"Stores - {company}"
-    if frappe.db.exists("Warehouse", f"Goods In Transit - {company}"):
-        return f"Goods In Transit - {company}"
-    whs = frappe.get_all("Warehouse", filters={"company": company, "is_group": 0}, pluck="name", limit=1)
-    return whs[0] if whs else ""
+    return item_doc.name
 
 
 @frappe.whitelist(methods=["POST"])
@@ -587,96 +584,86 @@ def create_manual_multi_invoice_reimbursement(
     posting_date: str | None = None,
     title: str | None = None,
     auto_receive_stock: int | bool = 1,
-    invoices: list[dict] | str | None = None,
+    is_draft: int | bool = 0,
+    invoices: str | list | None = None,
 ) -> dict:
-    """Create multi-invoice reimbursement bundle: PO -> PR(stock) -> PI -> RR."""
+    """Create Reimbursement Request and linked Purchase Invoices & Receipts (NO PO)."""
     assert_company_access(company)
 
     if isinstance(invoices, str):
-        invoices = json.loads(invoices) or []
-    if not invoices:
-        frappe.throw(_("请添加至少一张报销发票。"))
+        try:
+            invoices = json.loads(invoices)
+        except Exception as e:
+            frappe.throw(_("发票数据格式错误：{0}").format(str(e)))
 
+    if not invoices or not isinstance(invoices, list):
+        frappe.throw(_("请至少录入一张有效的发票信息。"))
+
+    posting_date_str = str(posting_date or nowdate())
     auto_receive_stock = bool(int(auto_receive_stock))
-    posting_date_str = posting_date or nowdate()
-    default_warehouse = _resolve_warehouse_for_company(company)
+    is_draft = bool(int(is_draft))
 
-    created_po_names = []
-    created_pr_names = []
+    default_warehouse = frappe.db.get_value("Stock Settings", None, "default_warehouse")
+    if not default_warehouse:
+        default_warehouse = frappe.db.get_value("Warehouse", {"company": company, "is_group": 0}, "name")
+
     created_pi_names = []
+    created_pr_names = []
     all_rr_item_rows = []
 
-    # 1. 逐张发票校验并生成采购链
     for inv_idx, inv in enumerate(invoices, 1):
-        inv_type = (inv.get("invoice_type") or "专用发票").strip()
+        inv_type = inv.get("invoice_type") or "专用发票"
         if inv_type not in VALID_INVOICE_TYPES:
             inv_type = "专用发票"
 
         supplier_raw = (inv.get("supplier") or "").strip()
-        if not supplier_raw:
-            supplier_raw = "零星报销供应商" if inv_type == "无发票" else "报销商户"
-
         supplier_val = _ensure_supplier(supplier_raw)
 
+        bill_date_str = str(inv.get("invoice_date") or posting_date_str)
         bill_no_raw = (inv.get("invoice_no") or "").strip()
-        if not bill_no_raw:
-            bill_no_raw = f"REIM-NOINV-{posting_date_str.replace('-', '')}-{inv_idx:02d}" if inv_type == "无发票" else f"REIM-INV-{posting_date_str.replace('-', '')}-{inv_idx:02d}"
 
-        bill_date_str = (inv.get("invoice_date") or "").strip() or posting_date_str
+        if inv_type == "无发票" or not bill_no_raw:
+            bill_no_raw = f"REIM-NOINV-{posting_date_str.replace('-', '')}-{inv_idx:02d}"
 
         items = inv.get("items") or []
         if not items:
-            frappe.throw(_("发票 [{0}] (供应商: {1}) 至少需要录入一行有效的明细。").format(bill_no_raw, supplier_raw))
+            frappe.throw(_("发票 #{0} 没有任何物料明细。").format(inv_idx))
 
         validated_items = []
         has_stock_items = False
 
         for row_idx, row in enumerate(items, 1):
-            item_code_raw = (row.get("item_code") or "").strip()
-            item_name_raw = (row.get("item_name") or item_code_raw or "").strip()
+            item_name_raw = (row.get("item_name") or row.get("item_code") or "").strip()
+            if not item_name_raw:
+                frappe.throw(_("发票 #{0} 第 {1} 行物料名称不能为空。").format(inv_idx, row_idx))
 
-            if not item_code_raw and not item_name_raw:
-                frappe.throw(_("发票 [{0}] 第 {1} 行物料名称不能为空。").format(bill_no_raw, row_idx))
+            uom_raw = (row.get("uom") or "个").strip()
+            spec_raw = (row.get("spec") or "").strip()
+            item_code_val = _ensure_item(item_name_raw, uom_raw, spec_raw)
 
-            raw_spec = (row.get("spec") or "").strip()
-            raw_uom = (row.get("uom") or "个").strip()
-
-            final_code, final_name, final_uom, is_stock = _ensure_item(
-                item_code_or_name=item_code_raw or item_name_raw,
-                spec=raw_spec,
-                uom=raw_uom,
-                is_stock=False,
-            )
-
-            qty = flt(row.get("qty") or 1.0)
+            qty = flt(row.get("qty") or 0.0)
             rate = flt(row.get("rate") or 0.0)
-            amount = flt(row.get("amount") or (qty * rate))
+            tax_rate = flt(row.get("tax_rate") or 0.0)
 
-            if qty <= 0 or rate <= 0 or amount <= 0:
-                frappe.throw(
-                    _("发票 [{0}] 第 {1} 行 [{2}] 的数量({3})、单价(¥{4:.2f})或金额(¥{5:.2f})必须大于0！根据财务纪律，单价与金额严禁为0。").format(
-                        bill_no_raw, row_idx, final_name, qty, rate, amount
-                    )
-                )
-
-            # 税率：普通发票或无发票默认税率为 0
-            if inv_type in ("普通发票", "无发票"):
+            if inv_type == "普通发票" or inv_type == "无发票":
                 tax_rate = 0.0
-            else:
-                tax_rate = flt(row.get("tax_rate") or 13.0)
 
-            tax_amount = flt(amount * (tax_rate / 100.0), 2)
+            if qty <= 0.0 or rate <= 0.0:
+                frappe.throw(_("发票 #{0} 第 {1} 行【{2}】数量与单价必须大于 0！").format(inv_idx, row_idx, item_name_raw))
+
+            amount = flt(row.get("amount") or (qty * rate), 2)
+            tax_amount = flt(row.get("tax_amount") or (amount * tax_rate / 100.0), 2)
             line_total = flt(amount + tax_amount, 2)
 
+            is_stock = bool(frappe.db.get_value("Item", item_code_val, "is_stock_item"))
             if is_stock:
                 has_stock_items = True
 
             validated_items.append({
-                "idx": row_idx,
-                "item_code": final_code,
-                "item_name": final_name,
-                "spec": raw_spec,
-                "uom": final_uom,
+                "item_code": item_code_val,
+                "item_name": item_name_raw,
+                "uom": _ensure_uom(uom_raw),
+                "spec": spec_raw,
                 "qty": qty,
                 "rate": rate,
                 "amount": amount,
@@ -688,44 +675,7 @@ def create_manual_multi_invoice_reimbursement(
                 "warehouse": default_warehouse if is_stock else None,
             })
 
-        # --- 生成发票对应的 PO ---
-        po = frappe.new_doc("Purchase Order")
-        po.company = company
-        po.supplier = supplier_val
-        po.transaction_date = posting_date_str
-        po.schedule_date = posting_date_str
-        po.custom_biz_mode = "现金报销"
-
-        for it in validated_items:
-            po_row = po.append("items", {
-                "item_code": it["item_code"],
-                "item_name": it["item_name"],
-                "uom": it["uom"],
-                "stock_uom": it["uom"],
-                "qty": it["qty"],
-                "rate": it["rate"],
-                "amount": it["amount"],
-                "schedule_date": posting_date_str,
-                "warehouse": it["warehouse"],
-                "description": it["remarks"] or it["item_name"],
-            })
-            if _meta_has("Purchase Order Item", "custom_spec_model"):
-                po_row.custom_spec_model = it["spec"]
-            if _meta_has("Purchase Order Item", "custom_line_remark"):
-                po_row.custom_line_remark = it["remarks"]
-            if _meta_has("Purchase Order Item", "custom_tax_rate"):
-                po_row.custom_tax_rate = it["tax_rate"]
-            if _meta_has("Purchase Order Item", "custom_tax_amount"):
-                po_row.custom_tax_amount = it["tax_amount"]
-            if _meta_has("Purchase Order Item", "custom_total_amount"):
-                po_row.custom_total_amount = it["line_total"]
-
-        po.flags.ignore_permissions = True
-        po.insert()
-        po.submit()
-        created_po_names.append(po.name)
-
-        # --- 生成发票对应的 PR (若库存品) ---
+        # --- 生成发票对应的 PR (若包含库存品，直接建单，不依赖 PO) ---
         pr_name = None
         pr_item_map = {}
         if auto_receive_stock and has_stock_items:
@@ -735,10 +685,9 @@ def create_manual_multi_invoice_reimbursement(
             pr.posting_date = posting_date_str
             pr.custom_biz_mode = "现金报销"
 
-            for idx, it in enumerate(validated_items):
+            for it in validated_items:
                 if not it["is_stock_item"]:
                     continue
-                po_row = po.items[idx]
                 pr_row = pr.append("items", {
                     "item_code": it["item_code"],
                     "item_name": it["item_name"],
@@ -748,8 +697,6 @@ def create_manual_multi_invoice_reimbursement(
                     "rate": it["rate"],
                     "amount": it["amount"],
                     "warehouse": it["warehouse"],
-                    "purchase_order": po.name,
-                    "purchase_order_item": po_row.name,
                     "description": it["remarks"] or it["item_name"],
                 })
                 if _meta_has("Purchase Receipt Item", "custom_spec_model"):
@@ -766,13 +713,14 @@ def create_manual_multi_invoice_reimbursement(
             if pr.items:
                 pr.flags.ignore_permissions = True
                 pr.insert()
-                pr.submit()
+                if not is_draft:
+                    pr.submit()
                 pr_name = pr.name
                 created_pr_names.append(pr.name)
                 for p_item in pr.items:
                     pr_item_map[p_item.item_code] = p_item.name
 
-        # --- 生成发票对应的 PI ---
+        # --- 生成发票对应的 PI (直接建单，不依赖 PO) ---
         pi = frappe.new_doc("Purchase Invoice")
         pi.company = company
         pi.supplier = supplier_val
@@ -783,8 +731,7 @@ def create_manual_multi_invoice_reimbursement(
         if _meta_has("Purchase Invoice", "custom_invoice_type"):
             pi.custom_invoice_type = inv_type
 
-        for idx, it in enumerate(validated_items):
-            po_row = po.items[idx]
+        for it in validated_items:
             pi_row = pi.append("items", {
                 "item_code": it["item_code"],
                 "item_name": it["item_name"],
@@ -793,8 +740,6 @@ def create_manual_multi_invoice_reimbursement(
                 "qty": it["qty"],
                 "rate": it["rate"],
                 "amount": it["amount"],
-                "purchase_order": po.name,
-                "po_detail": po_row.name,
                 "purchase_receipt": pr_name if (it["is_stock_item"] and pr_name) else None,
                 "pr_detail": pr_item_map.get(it["item_code"]) if (it["is_stock_item"] and pr_name) else None,
                 "description": it["remarks"] or it["item_name"],
@@ -812,10 +757,11 @@ def create_manual_multi_invoice_reimbursement(
 
         pi.flags.ignore_permissions = True
         pi.insert()
-        pi.submit()
+        if not is_draft:
+            pi.submit()
         created_pi_names.append(pi.name)
 
-        # 收集该发票明细行供汇总进入 RR
+        # 收集明细行进入 RR
         for idx, it in enumerate(validated_items):
             pi_item_row = pi.items[idx]
             all_rr_item_rows.append({
@@ -823,7 +769,7 @@ def create_manual_multi_invoice_reimbursement(
                 "description": it["spec"],
                 "qty": it["qty"],
                 "rate": it["rate"],
-                "amount": it["line_total"],  # 报销金额为价税合计
+                "amount": it["line_total"],
                 "invoice_no": bill_no_raw,
                 "supplier": supplier_val,
                 "source_pi": pi.name,
@@ -835,7 +781,7 @@ def create_manual_multi_invoice_reimbursement(
                 "tax_amount": it["tax_amount"],
             })
 
-    # 2. 创建 Reimbursement Request (Submitted)
+    # 2. 创建 Reimbursement Request
     rr = frappe.new_doc("Reimbursement Request")
     rr.company = company
     rr.title = title or f"报销单-{posting_date_str} ({len(invoices)}张发票)"
@@ -869,7 +815,8 @@ def create_manual_multi_invoice_reimbursement(
 
     rr.flags.ignore_permissions = True
     rr.insert()
-    rr.submit()
+    if not is_draft:
+        rr.submit()
 
     # 3. 刷新 custom_doc_details
     try:
@@ -883,16 +830,16 @@ def create_manual_multi_invoice_reimbursement(
     return {
         "success": True,
         "rr_name": rr.name,
+        "docstatus": rr.docstatus,
         "invoice_count": len(invoices),
         "grand_total": flt(rr.total_amount, 2),
-        "created_po_names": created_po_names,
         "created_pr_names": created_pr_names,
         "created_pi_names": created_pi_names,
     }
 
 
 # =========================================================================
-# 5. Reimbursement Request Detail & Update / Delete Engine (For Modal Edit)
+# 6. Reimbursement Request Detail & Update / Delete Engine (Pure 3 Docs)
 # =========================================================================
 
 @frappe.whitelist()
@@ -904,40 +851,43 @@ def get_reimbursement_detail_for_edit(rr_name: str) -> dict:
     rr = frappe.get_doc("Reimbursement Request", rr_name)
     assert_company_access(rr.company)
 
-    # 按照 invoice_no + supplier + invoice_type 分组发票
-    invoices_map = defaultdict(lambda: {"items": [], "invoice_no": "", "supplier": "", "invoice_type": "专用发票", "invoice_date": rr.posting_date})
-
+    invoices_map = {}
     for item in rr.invoice_items:
-        key = (item.invoice_no or "NO_INV", item.supplier or "NO_SUPP")
-        inv = invoices_map[key]
-        inv["invoice_no"] = item.invoice_no or ""
-        inv["supplier"] = item.supplier or ""
-        inv["invoice_type"] = item.get("invoice_type") or "专用发票"
-        inv["invoice_date"] = str(item.get("invoice_date") or rr.posting_date)[:10]
+        inv_key = f"{item.invoice_no or 'NOINV'}___{item.supplier or 'NOSUPP'}"
+        if inv_key not in invoices_map:
+            invoices_map[inv_key] = {
+                "invoice_type": getattr(item, "invoice_type", None) or "专用发票",
+                "supplier": item.supplier or "",
+                "invoice_no": item.invoice_no or "",
+                "invoice_date": str(getattr(item, "invoice_date", None) or rr.posting_date),
+                "items": [],
+            }
 
-        amt = flt(item.amount)
-        tax_rate = flt(item.get("tax_rate") or 0.0)
-        tax_amount = flt(item.get("tax_amount") or 0.0)
-        qty = flt(item.qty or 1.0)
-        rate = flt(item.rate or (amt / qty))
-        unrounded_amt = amt - tax_amount if tax_amount > 0 else (qty * rate)
+        tax_rate = flt(getattr(item, "tax_rate", 0))
+        tax_amount = flt(getattr(item, "tax_amount", 0))
+        amount = flt(item.amount)
+        if tax_amount > 0 and amount >= tax_amount:
+            net_amount = flt(amount - tax_amount, 2)
+        else:
+            net_amount = amount
 
-        inv["items"].append({
+        invoices_map[inv_key]["items"].append({
             "item_name": item.item_name,
             "spec": item.description or "",
             "uom": "个",
-            "qty": qty,
-            "rate": rate,
+            "qty": flt(item.qty, 2),
+            "rate": flt(item.rate, 2),
             "tax_rate": tax_rate,
-            "amount": unrounded_amt,
+            "amount": net_amount,
             "tax_amount": tax_amount,
-            "line_total": amt,
-            "remarks": item.get("custom_line_remark") or "",
+            "line_total": amount,
+            "remarks": getattr(item, "custom_line_remark", None) or "",
         })
 
     return {
         "rr_name": rr.name,
         "company": rr.company,
+        "docstatus": rr.docstatus,
         "posting_date": str(rr.posting_date),
         "title": rr.title or "",
         "total_amount": flt(rr.total_amount, 2),
@@ -948,7 +898,7 @@ def get_reimbursement_detail_for_edit(rr_name: str) -> dict:
 
 @frappe.whitelist(methods=["POST"])
 def delete_reimbursement_bundle(rr_name: str) -> dict:
-    """Safely delete or cancel a reimbursement request and linked purchase docs."""
+    """Safely delete or cancel a reimbursement request and linked PI & PR (NO PO)."""
     if not frappe.db.exists("Reimbursement Request", rr_name):
         return {"success": True, "deleted_rr": rr_name}
 
@@ -982,13 +932,12 @@ def delete_reimbursement_bundle(rr_name: str) -> dict:
             pass
     frappe.delete_doc("Reimbursement Request", rr.name, force=True, ignore_permissions=True)
 
-    # 4. 级联取消/删除生成的关联采购发票、入库单、订单
+    # 4. 级联取消/删除生成的关联采购发票与入库单 (不涉及 PO)
     for pi_name in pi_names:
         if frappe.db.exists("Purchase Invoice", pi_name):
             try:
                 pi = frappe.get_doc("Purchase Invoice", pi_name)
                 pr_names = list(set([p_it.purchase_receipt for p_it in pi.items if p_it.purchase_receipt]))
-                po_names = list(set([p_it.purchase_order for p_it in pi.items if p_it.purchase_order]))
 
                 if pi.docstatus == 1:
                     pi.flags.ignore_permissions = True
@@ -1008,19 +957,7 @@ def delete_reimbursement_bundle(rr_name: str) -> dict:
                             except Exception:
                                 pass
                         frappe.delete_doc("Purchase Receipt", pr.name, force=True, ignore_permissions=True)
-
-                for po_name in po_names:
-                    if frappe.db.exists("Purchase Order", po_name):
-                        po = frappe.get_doc("Purchase Order", po_name)
-                        if po.docstatus == 1:
-                            po.flags.ignore_permissions = True
-                            try:
-                                po.cancel()
-                            except Exception:
-                                pass
-                        frappe.delete_doc("Purchase Order", po.name, force=True, ignore_permissions=True)
             except Exception as e:
                 frappe.log_error(f"Error cascading delete PI {pi_name}: {e}")
 
     return {"success": True, "deleted_rr": rr_name}
-
