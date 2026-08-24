@@ -2578,7 +2578,7 @@ def get_document_details(doctype: str, name: str) -> dict:
                 })
         # Downstream RRs
         rrs = frappe.db.sql("""
-            SELECT DISTINCT rii.parent AS name, rr.status, rr.docstatus, rr.total_amount, rr.posting_date
+            SELECT DISTINCT rii.parent AS name, rr.docstatus, rr.total_amount, rr.posting_date
             FROM `tabReimbursement Invoice Item` rii
             INNER JOIN `tabReimbursement Request` rr ON rr.name = rii.parent
             WHERE rii.source_pi = %s AND rr.docstatus < 2
@@ -2589,7 +2589,7 @@ def get_document_details(doctype: str, name: str) -> dict:
                 "doctype": "Reimbursement Request",
                 "doctype_label": "报销申请单",
                 "name": rr.name,
-                "status": rr.status or ("Draft" if rr.docstatus == 0 else "Submitted"),
+                "status": "Draft" if rr.docstatus == 0 else "Submitted",
                 "docstatus": rr.docstatus,
                 "grand_total": flt(rr.total_amount, 2),
                 "date": str(rr.posting_date or ""),

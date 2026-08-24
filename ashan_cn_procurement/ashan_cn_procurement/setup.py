@@ -13,6 +13,7 @@ def after_migrate():
 	migrate_legacy_module_role_assignments()
 	cleanup_deprecated_roles()
 	setup_doctype_and_page_permissions()
+	setup_procurement_custom_biz_mode()
 	setup_vehicle_custom_fields()
 	setup_document_details_custom_fields()
 	retire_purchase_invoice_items_summary_column()
@@ -76,6 +77,42 @@ def retire_purchase_invoice_items_summary_column():
 		frappe.logger("setup").warning(
 			f"Retire Purchase Invoice items summary column failed: {e}"
 		)
+
+
+def setup_procurement_custom_biz_mode():
+	"""
+	确保采购全流程 5 大单据上的 custom_biz_mode (业务模式) 选项包含最新规范：
+	常规采购\n采购申请\n现金报销\n报销申请\n自办电汇\n电汇申请\n月结补录
+	"""
+	options_str = "常规采购\n采购申请\n现金报销\n报销申请\n自办电汇\n电汇申请\n月结补录"
+	doctypes = [
+		"Material Request",
+		"Purchase Order",
+		"Purchase Receipt",
+		"Purchase Invoice",
+		"Reimbursement Request",
+	]
+	for dt in doctypes:
+		cf_name = f"{dt}-custom_biz_mode"
+		if frappe.db.exists("Custom Field", cf_name):
+			cf = frappe.get_doc("Custom Field", cf_name)
+			cf.options = options_str
+			cf.save(ignore_permissions=True)
+		else:
+			try:
+				from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
+				create_custom_fields({
+					dt: [{
+						"fieldname": "custom_biz_mode",
+						"label": "业务模式",
+						"fieldtype": "Select",
+						"options": options_str,
+						"insert_after": "company",
+					}]
+				}, ignore_validate=True)
+			except Exception:
+				pass
+	frappe.db.commit()
 
 
 def setup_document_details_custom_fields():
