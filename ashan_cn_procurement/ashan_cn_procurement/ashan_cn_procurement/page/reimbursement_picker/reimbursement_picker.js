@@ -432,10 +432,17 @@ class ReimbursementPicker {
             totalOut += flt(r.outstanding_amount);
 
             // Format item details capsules
-            const detailItems = (r.doc_details || "").split("、").filter(Boolean);
+            const detailText = r.doc_details || r.auto_items_summary || "";
+            const detailItems = detailText.split("、").map(s => s.trim()).filter(Boolean);
             let detailCapsulesHtml = "";
             if (detailItems.length) {
-                detailCapsulesHtml = detailItems.map(d => `<span class="reim-item-capsule">${frappe.utils.escape_html(d)}</span>`).join("");
+                detailCapsulesHtml = detailItems.map(d => {
+                    const match = d.match(/^(.*?)\s*(\(.*?\))$/);
+                    if (match) {
+                        return `<span class="reim-item-capsule"><span class="reim-item-name-part">${frappe.utils.escape_html(match[1])}</span><span class="reim-item-capsule-qty">${frappe.utils.escape_html(match[2])}</span></span>`;
+                    }
+                    return `<span class="reim-item-capsule">${frappe.utils.escape_html(d)}</span>`;
+                }).join("");
             } else {
                 detailCapsulesHtml = `<span class="text-muted text-xs font-mono">-</span>`;
             }

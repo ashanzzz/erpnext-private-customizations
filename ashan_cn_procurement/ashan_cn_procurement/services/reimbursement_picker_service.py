@@ -220,9 +220,18 @@ def get_reimbursement_picker_doc_summary_rows(
                 WHERE rii.parent = rr.name AND rii.source_pi IS NOT NULL AND rii.source_pi != ''
             ) AS linked_pis,
             (
-                SELECT GROUP_CONCAT(CONCAT(rii.item_name, ' (x', ROUND(rii.qty, 0), ') ¥', FORMAT(rii.amount, 2)) SEPARATOR '、')
+                SELECT GROUP_CONCAT(
+                    CONCAT(
+                        rii.item_name,
+                        ' (',
+                        IF(rii.qty = ROUND(rii.qty, 0), CAST(ROUND(rii.qty, 0) AS CHAR), CAST(ROUND(rii.qty, 2) AS CHAR)),
+                        COALESCE(rii.uom, '个'),
+                        ')'
+                    )
+                    SEPARATOR '、'
+                )
                 FROM `tabReimbursement Invoice Item` rii
-                WHERE rii.parent = rr.name
+                WHERE rii.parent = rr.name AND rii.item_name IS NOT NULL AND rii.item_name != ''
             ) AS auto_items_summary
         FROM `tabReimbursement Request` rr
         WHERE {where_clause}
