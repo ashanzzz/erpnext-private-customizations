@@ -139,6 +139,7 @@ class ProcurementOrderPickerCenter {
             </div>
         `;
         $(this.page.body).html(html);
+        this.update_action_summary();
     }
 
     async load_companies() {
@@ -375,6 +376,7 @@ class ProcurementOrderPickerCenter {
         this.render_kpis();
         this.render_section_banner();
         this.render_filter_bar();
+        this.update_action_summary();
         this.load_table_data();
     }
 
@@ -383,6 +385,7 @@ class ProcurementOrderPickerCenter {
         this.render_kpis();
         this.render_section_banner();
         this.render_filter_bar();
+        this.update_action_summary();
         await this.load_table_data();
     }
 

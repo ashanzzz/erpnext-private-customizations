@@ -1042,6 +1042,55 @@
     background-color: #fff8f8 !important;
 }
 
+/* ==========================================================================
+   View Mode Switcher Standard (Detail View vs Doc View)
+   ========================================================================== */
+.picker-view-switch-group,
+.ashan-view-switch-group {
+    display: inline-flex;
+    border-radius: var(--ashan-radius-sm, 6px);
+    border: 1px solid var(--ashan-color-slate-300, #cbd5e1);
+    overflow: hidden;
+    background: #f1f5f9;
+    padding: 2px;
+    vertical-align: middle;
+    gap: 2px;
+}
+
+.picker-view-btn,
+.ashan-view-btn {
+    height: 26px;
+    line-height: 26px;
+    padding: 0 10px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #475569;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    box-sizing: border-box;
+    white-space: nowrap;
+}
+
+.picker-view-btn:hover,
+.ashan-view-btn:hover {
+    color: #1e40af;
+    background: rgba(255, 255, 255, 0.6);
+}
+
+.picker-view-btn.active,
+.ashan-view-btn.active {
+    background: #1e40af !important;
+    color: #ffffff !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+    font-weight: 700;
+}
+
 
 
 
