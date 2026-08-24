@@ -1199,3 +1199,55 @@
     border-color: #94a3b8;
     color: #0f172a;
 }
+
+.reim-v2-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.reim-full-width-field {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.reim-btn-delete-doc {
+    border: none;
+    background: transparent;
+    color: #ef4444;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    transition: all 0.15s ease;
+}
+
+.reim-btn-delete-doc:hover {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.reim-btn-danger {
+    height: 30px;
+    padding: 0 14px;
+    font-size: 12px;
+    font-weight: 700;
+    background: #fee2e2;
+    border: 1px solid #fca5a5;
+    border-radius: 4px;
+    color: #991b1b;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+
+.reim-btn-danger:hover {
+    background: #fecaca;
+}
+
