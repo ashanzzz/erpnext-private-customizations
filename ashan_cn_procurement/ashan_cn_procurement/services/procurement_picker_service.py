@@ -18,7 +18,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import flt, getdate, nowdate
+from frappe.utils import cint, flt, getdate, nowdate
 
 from ashan_cn_procurement.reimbursement.service import (
     _create_reservation,
