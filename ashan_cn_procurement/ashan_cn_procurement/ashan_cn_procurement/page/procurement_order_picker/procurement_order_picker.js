@@ -2,7 +2,7 @@
 
 frappe.pages["procurement-order-picker"].on_page_load = function (wrapper) {
     frappe.require([
-        "/assets/ashan_cn_procurement/css/procurement_workbench.css?v=20260824.49",
-        "/assets/ashan_cn_procurement/js/procurement_workbench.js?v=20260824.49",
+        "/assets/ashan_cn_procurement/css/procurement_workbench.css",
+        "/assets/ashan_cn_procurement/js/procurement_workbench.js",
     ], () => window.AshanProcurementWorkbench.mount(wrapper, "overview"));
 };
