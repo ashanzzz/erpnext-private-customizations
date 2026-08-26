@@ -68,18 +68,6 @@
       "doctype": "Workspace Sidebar Item"
     },
     {
-      "label": "采购总览",
-      "link_type": "Page",
-      "type": "Link",
-      "link_to": "procurement-order-picker",
-      "child": 1,
-      "collapsible": 0,
-      "indent": 0,
-      "keep_closed": 0,
-      "show_arrow": 0,
-      "doctype": "Workspace Sidebar Item"
-    },
-    {
       "label": "自办电汇",
       "link_type": "Page",
       "type": "Link",

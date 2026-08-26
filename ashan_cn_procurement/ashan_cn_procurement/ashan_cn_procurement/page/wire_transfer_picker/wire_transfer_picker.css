@@ -520,25 +520,35 @@
     left: 0;
     z-index: 5;
     background: inherit;
-    min-width: 44px;
+    width: 36px;
+    min-width: 36px;
+    max-width: 36px;
     text-align: center;
+    padding: 0 2px !important;
 }
 
 .picker-col-sticky-2 {
     position: sticky;
-    left: 44px;
+    left: 36px;
     z-index: 5;
     background: inherit;
-    min-width: 44px;
+    width: 36px;
+    min-width: 36px;
+    max-width: 36px;
+    padding: 0 !important;
     text-align: center;
 }
 
 .picker-col-sticky-3 {
     position: sticky;
-    left: 88px;
+    left: 72px;
     z-index: 5;
     background: inherit;
-    min-width: clamp(150px, 16vw, 260px);
+    width: 68px;
+    min-width: 68px;
+    max-width: 72px;
+    text-align: center !important;
+    padding: 0 4px !important;
     box-shadow: 3px 0 6px rgba(0, 0, 0, 0.04);
 }
 
@@ -659,6 +669,12 @@
     background: #f0fdf4;
     color: #15803d;
     border-color: #bbf7d0;
+}
+
+.picker-linked-badge.badge-stock-entry {
+    background: #f0fdfa;
+    color: #0f766e;
+    border-color: #99f6e4;
 }
 
 .picker-linked-badge.badge-purchase-invoice {
@@ -958,4 +974,190 @@
     overflow-y: auto;
     border: 1px solid #e2e8f0;
     border-radius: 6px;
+}
+
+.ashan-smart-toggle-first {
+    margin-top: 10px;
+}
+
+.ashan-smart-toggle-item {
+    margin-top: 6px;
+}
+
+.ashan-doc-detail-grid {
+    margin-bottom: 15px;
+}
+
+
+/* Lifecycle Badges & Actions for Wire Transfer */
+.picker-lifecycle-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.badge-lifecycle-pending-receipt {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+}
+
+.badge-lifecycle-pending-invoice {
+    background: #fefce8;
+    color: #a16207;
+    border: 1px solid #fef08a;
+}
+
+.badge-lifecycle-closed {
+    background: #f0fdf4;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+
+.badge-lifecycle-pending-payment {
+    background: #fff7ed;
+    color: #c2410c;
+    border: 1px solid #ffedd5;
+}
+
+.ashan-tag-amber {
+    background: #fef3c7;
+    color: #b45309;
+    border: 1px solid #fde68a;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.wire-table-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.wire-action-receive-btn {
+    background: #2563eb;
+    color: #ffffff;
+    border: none;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.wire-action-receive-btn:hover {
+    background: #1d4ed8;
+}
+
+.wire-action-complete-inv-btn {
+    background: #d97706;
+    color: #ffffff;
+    border: none;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.wire-action-complete-inv-btn:hover {
+    background: #b45309;
+}
+
+.picker-lifecycle-segment-group {
+    display: flex;
+    gap: 4px;
+}
+
+/* Quick 1-Click Document Creation Buttons in 3 Linked Columns */
+.wire-quick-create-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 7px;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.2;
+    border-radius: 4px;
+    border: 1px dashed;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+
+.wire-quick-create-btn.wire-quick-create-pr {
+    color: #047857;
+    background-color: #ecfdf5;
+    border-color: #10b981;
+}
+.wire-quick-create-btn.wire-quick-create-pr:hover {
+    background-color: #d1fae5;
+    color: #065f46;
+    border-color: #059669;
+}
+
+.wire-quick-create-btn.wire-quick-create-se {
+    color: #0284c7;
+    background-color: #f0f9ff;
+    border-color: #38bdf8;
+}
+.wire-quick-create-btn.wire-quick-create-se:hover {
+    background-color: #e0f2fe;
+    color: #0369a1;
+    border-color: #0284c7;
+}
+
+.wire-quick-create-btn.wire-quick-create-rr {
+    color: #b45309;
+    background-color: #fffbeb;
+    border-color: #f59e0b;
+}
+.wire-quick-create-btn.wire-quick-create-rr:hover {
+    background-color: #fef3c7;
+    color: #92400e;
+    border-color: #d97706;
+}
+
+.picker-linked-badge.badge-payment-entry {
+    color: #7c3aed;
+    background-color: #f5f3ff;
+    border-color: #ddd6fe;
+}
+.picker-linked-badge.badge-payment-entry:hover {
+    background-color: #ede9fe;
+    color: #6d28d9;
+    border-color: #c4b5fd;
+}
+
+.wire-quick-create-btn.wire-quick-create-pe {
+    color: #7c3aed;
+    background-color: #f5f3ff;
+    border-color: #a78bfa;
+}
+.wire-quick-create-btn.wire-quick-create-pe:hover {
+    background-color: #ede9fe;
+    color: #6d28d9;
+    border-color: #8b5cf6;
+}
+
+.picker-not-required-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 20px;
+    padding: 0 4px;
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: default;
+    user-select: none;
 }

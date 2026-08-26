@@ -56,7 +56,7 @@ const workbenches = [
     {
         route: "procurement-execution-workbench",
         title: "采购执行",
-        stageCount: 3,
+        stageCount: 4,
         requiredHeaders: ["物料名称", "规格", "数量", "金额", "备注"],
     },
     {
@@ -68,6 +68,19 @@ const workbenches = [
 ];
 
 const isPlatformSocketOriginWarning = (message) => message.includes("socket.io: Invalid origin");
+
+async function waitForWorkbench(page, expectedTitle) {
+    const container = page.locator(".picker-page-container").filter({
+        hasText: expectedTitle,
+    });
+    await container.waitFor({ state: "visible", timeout: 30000 });
+    await container.locator("h2").filter({ hasText: expectedTitle }).waitFor({
+        state: "visible",
+        timeout: 30000,
+    });
+    await container.locator("#picker-data-table").waitFor({ state: "visible", timeout: 30000 });
+    return container;
+}
 
 fs.mkdirSync(artifactDir, { recursive: true });
 
@@ -96,9 +109,7 @@ try {
             waitUntil: "domcontentloaded",
             timeout: 30000,
         });
-        const container = page.locator(".picker-page-container");
-        await container.waitFor({ state: "visible", timeout: 30000 });
-        await page.locator("#picker-data-table").waitFor({ state: "visible", timeout: 30000 });
+        const container = await waitForWorkbench(page, workbench.title);
         await page.waitForTimeout(1200);
 
         const title = (await container.locator("h2").innerText()).trim();
@@ -151,7 +162,30 @@ try {
         });
     }
 
-    console.log(JSON.stringify(results, null, 2));
+    // Frappe Desk keeps Page wrappers alive.  A cold URL load cannot prove
+    // that a cached page is restored on internal SPA navigation, which is the
+    // exact regression that previously appeared as a white page.
+    const spaErrorStart = consoleErrors.length;
+    const spaRoutes = [
+        ["procurement-execution-workbench", "采购执行"],
+        ["material-receipt-workbench", "收货入库"],
+        ["material-request-workbench", "物料申请"],
+    ];
+    let spaActiveContainer;
+    for (const [route, title] of spaRoutes) {
+        await page.evaluate((targetRoute) => frappe.set_route(targetRoute), route);
+        spaActiveContainer = await waitForWorkbench(page, title);
+    }
+    const spaRouteErrors = consoleErrors.slice(spaErrorStart);
+    const spaApplicationErrors = spaRouteErrors.filter((message) => !isPlatformSocketOriginWarning(message));
+    const spaReturnState = {
+        title: (await spaActiveContainer.locator("h2").innerText()).trim(),
+        tableVisible: await spaActiveContainer.locator("#picker-data-table").isVisible(),
+        applicationErrors: spaApplicationErrors,
+        platformWarnings: spaRouteErrors.filter(isPlatformSocketOriginWarning),
+    };
+
+    console.log(JSON.stringify({ results, spaReturnState }, null, 2));
     const failed = results.filter((result) => (
         result.title !== result.expectedTitle
         || result.stageCount !== result.expectedStageCount
@@ -163,8 +197,17 @@ try {
         || result.assetUrls.css.length === 0
         || result.applicationErrors.length > 0
     ));
-    if (failed.length) {
-        throw new Error(`Procurement workbench acceptance failed: ${failed.map((item) => item.route).join(", ")}`);
+    if (
+        failed.length
+        || spaReturnState.title !== "物料申请"
+        || !spaReturnState.tableVisible
+        || spaReturnState.applicationErrors.length > 0
+    ) {
+        const failedRoutes = failed.map((item) => item.route);
+        if (spaReturnState.title !== "物料申请" || !spaReturnState.tableVisible || spaReturnState.applicationErrors.length > 0) {
+            failedRoutes.push("desk-spa-revisit");
+        }
+        throw new Error(`Procurement workbench acceptance failed: ${failedRoutes.join(", ")}`);
     }
 } finally {
     await browser.close();

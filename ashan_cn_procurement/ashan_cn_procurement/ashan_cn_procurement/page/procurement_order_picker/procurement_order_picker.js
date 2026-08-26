@@ -1,8 +1,0 @@
-// Copyright (c) 2026, Ashan CN Procurement and contributors
-
-frappe.pages["procurement-order-picker"].on_page_load = function (wrapper) {
-    frappe.require([
-        "/assets/ashan_cn_procurement/css/procurement_workbench.css",
-        "/assets/ashan_cn_procurement/js/procurement_workbench.js",
-    ], () => window.AshanProcurementWorkbench.mount(wrapper, "overview"));
-};

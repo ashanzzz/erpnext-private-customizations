@@ -23,6 +23,7 @@ def after_migrate():
 	cleanup_deprecated_sidebar_items()
 	sync_all_workspace_sidebars()
 	backfill_all_document_details()
+	setup_mode_of_payment_defaults()
 
 def optimize_all_list_view_columns():
 	"""
@@ -756,3 +757,38 @@ def setup_doctype_and_page_permissions():
 		page_doc.save(ignore_permissions=True)
 
 	frappe.db.commit()
+
+def setup_mode_of_payment_defaults():
+	"""
+	确保常用结算方式（电汇、银行转账）存在并绑定公司默认银行账户
+	"""
+	try:
+		companies = frappe.get_all("Company", fields=["name", "default_bank_account", "default_cash_account"])
+		for mop_name in ["电汇", "银行转账"]:
+			if not frappe.db.exists("Mode of Payment", mop_name):
+				mop = frappe.new_doc("Mode of Payment")
+				mop.mode_of_payment = mop_name
+				mop.type = "Bank"
+				mop.enabled = 1
+				for comp in companies:
+					acc = comp.default_bank_account or comp.default_cash_account
+					if acc:
+						mop.append("accounts", {"company": comp.name, "default_account": acc})
+				mop.flags.ignore_permissions = True
+				mop.insert()
+			else:
+				mop = frappe.get_doc("Mode of Payment", mop_name)
+				existing_comps = [a.company for a in mop.accounts]
+				changed = False
+				for comp in companies:
+					if comp.name not in existing_comps:
+						acc = comp.default_bank_account or comp.default_cash_account
+						if acc:
+							mop.append("accounts", {"company": comp.name, "default_account": acc})
+							changed = True
+				if changed:
+					mop.flags.ignore_permissions = True
+					mop.save()
+		frappe.db.commit()
+	except Exception as e:
+		frappe.logger("setup").warning(f"Setup mode of payment defaults failed: {e}")

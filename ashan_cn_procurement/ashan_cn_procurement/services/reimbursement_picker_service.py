@@ -12,6 +12,7 @@ from ashan_cn_procurement.services.authorization_service import (
     assert_company_access,
     get_allowed_companies,
 )
+from ashan_cn_procurement.services.work_context_service import get_effective_work_date
 
 
 def _meta_has(doctype: str, fieldname: str) -> bool:
@@ -625,7 +626,7 @@ def _create_manual_multi_invoice_reimbursement_inner(
     if not invoices or not isinstance(invoices, list):
         invoices = []
 
-    posting_date_str = str(posting_date or nowdate())
+    posting_date_str = get_effective_work_date(posting_date)
     auto_receive_stock = bool(int(auto_receive_stock))
     is_draft = bool(int(is_draft))
 

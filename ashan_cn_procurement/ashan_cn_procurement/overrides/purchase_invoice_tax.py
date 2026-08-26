@@ -221,7 +221,32 @@ def calculate_china_line_taxes(doc, method=None):
     # 4. 自动生成开票物料明细摘要
     update_items_summary(doc)
 
+def validate_invoice_month_not_locked(doc):
+    """
+    检查发票所属月份（票据日期/记账日期）是否已执行发票月度核定关账锁定
+    """
+    if not doc.company:
+        return
+
+    from ashan_cn_procurement.services.invoice_closing_service import is_invoice_month_locked
+
+    periods_to_check = set()
+    if doc.bill_date:
+        periods_to_check.add(str(doc.bill_date)[:7])
+    if doc.posting_date:
+        periods_to_check.add(str(doc.posting_date)[:7])
+
+    for p in periods_to_check:
+        if is_invoice_month_locked(doc.company, p):
+            frappe.throw(
+                _("【🔒 发票月度核定锁定】主体【{0}】在账期【{1}】的发票台账已完成月度核定并锁定，禁止新建、修改或提交该月份的发票！<br><br>如需补录发票，请联系财务主管在总控中枢【月度任务】中反审核解锁。").format(
+                    doc.company, p
+                )
+            )
+
 def validate_purchase_invoice_taxes(doc, method=None):
+    # 0. 校验发票所属月份是否已核定锁定
+    validate_invoice_month_not_locked(doc)
     # 1. 校验发票类型与发票号
     validate_invoice_type_and_bill_no(doc)
     # 2. 计算多税率与进项税额

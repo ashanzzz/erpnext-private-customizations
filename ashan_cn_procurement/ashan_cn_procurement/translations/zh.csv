@@ -30,11 +30,10 @@ Phantom Item,虚拟物料
 'Verification Link Expiry Duration' must be between 15 to 60 minutes.,“验证链接有效期”必须在 15 到 60 分钟之间。
 + Add Price,添加价格
 1 invoice,1 张发票
-<b>Cannot create asset.</b><br><br>You're trying to create <b>{0} asset(s)</b> from {2} {3}.<br>However,only <b>{1} item(s)</b> were purchased and <b>{4} asset(s)</b> already exist against {5}.",<b>无法创建资产。</b><br><br>您正尝试从 {2} {3} 创建 <b>{0} 个资产</b>。<br>但仅采购了 <b>{1} 个物料</b>，且 {5} 已关联 <b>{4} 个资产</b>。
+<b>Cannot create asset.</b><br><br>You're trying to create <b>{0} asset(s)</b> from {2} {3}.<br>However,"only <b>{1} item(s)</b> were purchased and <b>{4} asset(s)</b> already exist against {5}."""
 <b>Row #{0}:</b> Bundle {1} in warehouse {2} has insufficient packed items:<br><div style='margin-top: 15px;'><ul style='line-height: 0.8;'>{3}</ul></div>,<b>第 {0} 行：</b>仓库 {2} 中的套件 {1} 所需包装物料不足：<br><div style='margin-top: 15px;'><ul style='line-height: 0.8;'>{3}</ul></div>
-<div style=""margin-bottom:10px; color: var(--gray-500) !important;"">Define alternate units for this item. Eg: 1 Box = 12 Nos,set conversion factor as 12. (Will also apply for variants) <a href=""https://docs.frappe.io/erpnext/uom"" target=""_blank"">Learn more &#8594;</a></div>","<div style=""margin-bottom:10px; color: var(--gray-500) !important;"">为此物料定义替代计量单位。例如：1 箱 = 12 个，则换算系数设为 12。（同样适用于变体） <a href=""https://docs.frappe.io/erpnext/uom"" target=""_blank"">了解更多 &#8594;</a></div>
-<li>Packed Item {0}: Required {1},Available {2}</li>",<li>包装物料 {0}：需要 {1}，可用 {2}</li>
-<span class=""h4""><b>Subcontracting Inward and Outward</b></span>,<span class=""h4""><b>委外入库与委外出库</b></span>
+"<div style=""""margin-bottom:10px; color: var(--gray-500) !important;"""">Define alternate units for this item. Eg: 1 Box = 12 Nos","set conversion factor as 12. (Will also apply for variants) <a href=""""https://docs.frappe.io/erpnext/uom"""" target=""""_blank"""">Learn more &#8594;</a></div>"""
+"<span class=""""h4""""><b>Subcontracting Inward and Outward</b></span>","<span class=""""h4""""><b>委外入库与委外出库</b></span>"
 A disabled Product Bundle cannot be selected in transactions.,已禁用的产品套件不能用于交易。
 A draft reverse journal for {0} has been created: {1},已为 {0} 创建草稿状态的冲销日记账凭证：{1}
 A few quick questions so we can set things up the way you work.,请回答几个简单问题，以便按您的业务方式完成设置。
@@ -57,7 +56,7 @@ Account Data,科目数据
 Account Detail Level,科目明细层级
 Account is mandatory,科目为必填项
 Account is required,必须填写科目
-Account to track value added to stock via Stock Entry,Stock Reconciliation or Landed Cost Voucher",用于记录通过库存凭证、库存盘点或到岸成本凭证计入库存的价值。
+Account to track value added to stock via Stock Entry,"Stock Reconciliation or Landed Cost Voucher"""
 Account where cost of goods sold will be posted when this item is sold,销售此物料时，用于记入销售成本的科目。
 Account where revenue from selling this item will be credited,销售此物料取得的收入将贷记到此科目。
 Account where the cost of this item will be debited on purchase,采购此物料时，其成本将借记到此科目。
@@ -86,7 +85,7 @@ Additional Finished Good,附加产成品
 Additional {0} {1} of item {2} required as per BOM to complete this transaction,根据物料清单，还需要物料 {2} 的额外 {0} {1} 才能完成此交易。
 Advanced Features,高级功能
 Advanced Filtering,高级筛选
-After save,please refresh the page to apply the changes.",保存后，请刷新页面以应用更改。
+After save,"please refresh the page to apply the changes."""
 Age as on,账龄截至
 Alias,别名
 All active prices for this item across buying and selling price lists.,此物料在采购和销售价格表中的所有有效价格。
@@ -114,7 +113,7 @@ Allow Sales Order creation for expired Quotation,允许根据已过期报价单�
 Allow Sales Order with zero quantity,允许零数量销售订单
 Allow sales transactions with zero quantities if the rate is fixed but the quantities are not. e.g. Rate Contracts,当单价已确定但数量尚未确定时，允许创建零数量销售交易，例如价格合同。
 Allow same Item to be added multiple times in a transaction,允许同一物料在交易中重复添加
-Allow stock to go below zero for this item,even if negative stock is disabled in Stock Settings.",即使库存设置中已禁用负库存，也允许此物料的库存数量低于零。
+Allow stock to go below zero for this item,"even if negative stock is disabled in Stock Settings."""
 Allow substituting this item with an alternative from the Item Alternative list when stock is unavailable.,当库存不足时，允许使用“物料替代”列表中的替代物料。
 Allow this item to be used in purchase transactions.,允许此物料用于采购交易。
 Allow this item to be used in sales transactions.,允许此物料用于销售交易。
@@ -131,7 +130,7 @@ Allowed Users is required for data synchronization from remote Frappe CRM site.,
 Already Imported,已导入
 Alt UOM,备用计量单位
 Alternative For Item,替代的原物料
-Amount column has ""CR""/""DR"" values,金额列包含“CR”/“DR”值
+"Amount column has """"CR""""/""""DR"""" values",金额列包含“CR”/“DR”值
 Amount column has positive/negative values,金额列包含正数/负数值
 Amount does not match the selected transaction,金额与所选交易不匹配
 Amount matches the selected transaction,金额与所选交易匹配
@@ -202,7 +201,7 @@ Balance Qty (Alt UOM),结余数量（备用计量单位）
 Balance Sheet Closing Balance,资产负债表结账余额
 Balance Sheet requires {0} to be synced to DuckDB,资产负债表要求先将 {0} 同步到 DuckDB。
 Balance Type,余额类型
-Balances as per bank statement before {0},{0} 之前按银行对账单计算的余额,Do MMM YYYY
+Balances as per bank statement before {0},{0} 之前按银行对账单计算的余额
 Bank Account Balance,银行账户余额
 Bank account credit for withdrawal,支出时贷记银行科目
 Bank account debit for deposit,存入时借记银行科目
@@ -224,7 +223,7 @@ Bank Transactions,银行交易
 Base Cost (Company Currency),基础成本（本币）
 Base Tax Withheld,代扣税额（本币）
 Base Taxable Amount,应税金额（本币）
-Based on the above entries,the balance amount (debit or credit) will be set for the last row to balance the journal entry.",根据上述分录，系统会在最后一行自动填写余额（借方或贷方），使日记账凭证借贷平衡。
+Based on the above entries,"the balance amount (debit or credit) will be set for the last row to balance the journal entry."""
 Batch Item settings,批次物料设置
 Batch Qty updated successfully,批次数量更新成功
 Bin Values Recalculated,库位数值已重新计算
@@ -234,7 +233,7 @@ Block a new Sales Invoice when the customer's overdue amount exceeds the Overdue
 ,冻结此客户账户后续的所有会计分录。只有具有冻结分录权限角色的用户可以绕过此限制。
 Blocks this customer from being used on any new transaction.,禁止在任何新交易中使用此客户。
 Bold Text,粗体文本
-Bold text for emphasis (totals,major headings)",使用粗体突出显示总计和主要标题
+Bold text for emphasis (totals,"major headings)"""
 BOM Component,物料清单组件
 BOM Configuration,物料清单配置
 BOM Creator Item with name {0} does not exist,名称为 {0} 的物料清单创建工具明细不存在。
@@ -245,7 +244,7 @@ Book Stock Expense GL Entries,记账库存费用总账分录
 Book tax loss on early payment discount,记账提前付款折扣产生的税额损失
 "Books Purchase Expense and Expenses Added To Stock account pairs against stock value. On enabling this, the accounts become mandatory in Company or Item Defaults for Purchase Receipt, Purchase Invoice, Stock Entry, Stock Reconciliation and Landed Cost Voucher",按库存价值记录采购费用科目与计入库存费用科目的对应总账分录。启用后，采购收货单、采购发票、库存凭证、库存盘点和到岸成本凭证所需科目必须在公司或物料默认值中设置。
 Budget Amount can not be {0}.,预算金额不能为 {0}。
-Budget cannot be assigned against {0},as its Root Type is not of Income or Expense",无法为 {0} 分配预算，因为其根类型不是收入或费用。
+Budget cannot be assigned against {0},"as its Root Type is not of Income or Expense"""
 Budget Distribution,预算分配
 Budget Distribution Total,预算分配总额
 Budget End Date,预算结束日期
@@ -273,12 +272,12 @@ Cannot declare as Lost because an active Quotation exists.,存在有效报价单
 Cannot delete an item which has been ordered,已下单的物料不能删除。
 Cannot delete protected core DocType: {0},不能删除受保护的核心单据类型：{0}
 Cannot delete virtual DocType: {0}. Virtual DocTypes do not have database tables.,不能删除虚拟单据类型 {0}。虚拟单据类型没有数据库表。
-Cannot disable Serial and Batch No for Item,as there are existing records for serial / batch.",该物料已存在序列号/批号记录，不能禁用序列号和批号。
+Cannot disable Serial and Batch No for Item,"as there are existing records for serial / batch."""
 Cannot disable {0} as it may lead to incorrect stock valuation.,不能禁用 {0}，否则可能导致库存计价错误。
 Cannot disassemble {0} qty against Stock Entry {1}. Only {2} qty available to disassemble.,针对库存凭证 {1} 不能拆解 {0} 数量，当前仅有 {2} 数量可拆解。
 Cannot enable Opportunity creation from Contact Us because the Contact Us form is disabled.,“联系我们”表单已禁用，不能启用从该表单创建商机。
 Cannot fetch selected rows for submitted Payment Request,无法获取已提交付款请求中的选中行
-Cannot find a default warehouse for item {0}. Please select one in the Update Items dialog,or set a default in the Item Master or in Stock Settings.",未找到物料 {0} 的默认仓库。请在“更新物料”对话框中选择仓库，或在物料主数据/库存设置中设置默认仓库。
+Cannot find a default warehouse for item {0}. Please select one in the Update Items dialog,"or set a default in the Item Master or in Stock Settings."""
 Cannot merge {0} '{1}' into '{2}' as both have existing accounting entries in different currencies for company '{3}'.,无法将 {0}“{1}”合并到“{2}”，因为两者在公司“{3}”中已有不同货币的会计分录。
 Cannot produce more Item {0} than Sales Order quantity {1} {2},物料 {0} 的生产数量不能超过销售订单数量 {1} {2}。
 Cannot reduce quantity than ordered or purchased quantity,数量不能低于已订购或已采购数量。
@@ -288,7 +287,7 @@ Cannot start deletion. Another deletion {0} is already queued/running. Please wa
 Cannot submit Job Card {0} while it is On Hold. Please resume and complete the job before submission.,作业卡 {0} 处于暂停状态，无法提交。请先恢复并完成作业。
 Cannot update rate as item {0} is already ordered or purchased against this quotation,物料 {0} 已基于此报价单下单或采购，不能更新单价。
 Capitalize this asset before submitting.,提交前请先将此资产资本化。
-Changing the account in any transaction of the DocTypes listed below will trigger a repost. To prevent reposting,remove the relevant DocType from the list.",在下列单据类型的任何交易中修改科目都会触发重新过账。如需避免重新过账，请从列表中移除相应单据类型。
+Changing the account in any transaction of the DocTypes listed below will trigger a repost. To prevent reposting,"remove the relevant DocType from the list."""
 Check Availability in Warehouse,检查仓库可用量
 Check if this tax is not applicable to items (distinct from 0% rate),勾选后表示此税不适用于物料，与 0% 税率不同。
 Check row {0} for account {1}: Party is only allowed if Party Type is set,请检查第 {0} 行科目 {1}：只有设置了往来方类型后才能填写往来方。
@@ -300,7 +299,7 @@ Child DocTypes,子单据类型
 Child Table Not Allowed,不允许使用子表
 Child tables that will also be deleted,将一并删除的子表
 Classify As,分类为
-Classify the type of market this customer belongs to,used for sales analysis and targeting.",对客户所属市场类型进行分类，用于销售分析和目标客户定位。
+Classify the type of market this customer belongs to,"used for sales analysis and targeting."""
 Clear Last Scanned Warehouse,清除上次扫描的仓库
 Clearance date changed from {0} to {1} via Bank Clearance Tool,通过银行清账工具将清账日期从 {0} 更改为 {1}
 Clearance date updated,清账日期已更新
@@ -308,17 +307,17 @@ Click to pay in full.,点击全额支付。
 Click to set the closing balance as per statement,点击按对账单设置期末余额
 Click to set this as the header row.,点击将此行设为表头。
 Closed Period,已关闭期间
-Closing Balance as of {},截至 {} 的期末余额,Do MMMM YYYY
+Closing Balance as of {},截至 {} 的期末余额
 Closing Balance as per statement,按对账单的期末余额
 Closing Balance as per system,按系统的期末余额
 Closing balance as per system,按系统的期末余额
 Closing balance deleted.,期末余额已删除。
 Closing balance is required.,期末余额为必填项。
-Closing balance on bank statement as of {0},截至 {0} 的银行对账单期末余额,Do MMM YYYY
+Closing balance on bank statement as of {0},截至 {0} 的银行对账单期末余额
 Closing balance set.,期末余额已设置。
 Co-Product,联产品
 "Code to reference this line in formulas (e.g. REV100, EXP200, ASSET100)",用于在公式中引用此行的代码，例如 REV100、EXP200、ASSET100。
-"Color to highlight values (e.g. red for exceptions)",用于突出显示数值的颜色，例如异常项使用红色。
+Color to highlight values (e.g. red for exceptions),用于突出显示数值的颜色，例如异常项使用红色。
 Column Mapping,列映射
 Search or type a command (Ctrl + K),搜索单据、页面或输入快捷指令 (Ctrl + K)
 List View,列表视图
@@ -363,24 +362,24 @@ Draft,草稿
 Submitted,已提交
 Cancelled,已作废
 Pending,待处理
-Approved,已批准
+Approved,已审批
 Rejected,已驳回
-Open,进行中
+Open,开启待办
 Closed,已结案
-Paid,已支付
+Paid,已付款
 Unpaid,未付款
 Overdue,已逾期
 Partly Paid,部分付款
 To Bill,待开票
-To Receive,待入库
-To Deliver,待出库
+To Receive,待收货入库
+To Deliver,待发货出库
 Completed,已完成
 Active,启用
 Disabled,已停用
 Enabled,已启用
 Unbilled,未开票
 Billed,已开票
-Return,退货/退款
+Return,退货/红冲
 Select Document Type or Role to start.,请在上方选择【单据类型】或【角色】以开始配置权限规则。
 Quick Help for Setting Permissions:,权限配置快速指南：
 Meaning of Different Permission Types:,各项权限类型业务释义：
@@ -464,3 +463,78 @@ Build,开发与构建
 Retail,零售管理
 Assets,固定资产
 My Business,我的业务 (总控主页)
+To Receive and Bill,待入库与待开票
+To Deliver and Bill,待出库与待开票
+Partly Billed,部分开票
+Partially Paid,部分付款
+Partially Ordered,部分订购
+Partially Received,部分收货
+Partly Delivered,部分出库
+Partially Delivered,部分交付
+Ordered,已订购
+Delivered,已交付
+Received,已收货
+Stopped,已终止
+On Hold,暂停挂起
+In Progress,进行中
+Reopened,已重开
+Amended,已修改重开
+Expired,已到期
+Return Issued,已退货
+Credit Note Issued,已开红字发票
+Debit Note Issued,已开借项凭证
+Overdue Payment,逾期未付
+Pending Approval,待审批
+Requested,已申请
+Verified,已核验
+Unverified,未核验
+Review,复核
+Under Review,审核中
+Pending Review,待复核
+Unreconciled,未对账
+Reconciled,已对账
+Partly Reconciled,部分对账
+Cleared,已结清
+Uncleared,未清算
+Advance Paid,已付预付款
+Prepaid,预付
+Payment Pending,待付款
+Payment Received,已收款
+Payment Made,已付款
+Grand Total,含税总计
+Outstanding Amount,待付余额
+Net Total,不含税净额
+Total Taxes and Charges,税费总额
+Mode of Payment,结算方式
+Payment Entry,付款凭单
+Wire Transfer,对公电汇
+Bank Transfer,银行转账
+Cash,现金支付
+Accepted,合格/已接收
+Quality Inspection Pending,待质检
+Pending Inspection,待检验
+Inspection Completed,质检完成
+Available,可用
+Out of Stock,无库存/缺货
+In Stock,有库存/在库
+Low Stock,库存预警
+Reserved,已预留/已锁定
+Inactive,停用
+Success,成功
+Failed,失败
+Queued,排队中
+Running,运行中
+Error,错误
+Warning,警告
+Info,提示
+Locked,已锁定
+Unlocked,已解锁
+Due Today,今日到期
+Due Tomorrow,明日到期
+Unpublished,未发布
+Published,已发布
+Reimbursement Request,整算单 / 报销单
+Purchase Order,采购订单
+Purchase Receipt,采购入库单
+Purchase Invoice,采购发票
+Material Request,物料申请单

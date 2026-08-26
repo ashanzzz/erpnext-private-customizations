@@ -6,3 +6,9 @@ frappe.pages["procurement-execution-workbench"].on_page_load = function (wrapper
         "/assets/ashan_cn_procurement/js/procurement_workbench.js",
     ], () => window.AshanProcurementWorkbench.mount(wrapper, "execution"));
 };
+
+frappe.pages["procurement-execution-workbench"].on_page_show = function (wrapper) {
+    if (wrapper.ashan_procurement_workbench) {
+        wrapper.ashan_procurement_workbench.show();
+    }
+};

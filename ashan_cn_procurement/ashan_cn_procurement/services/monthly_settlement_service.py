@@ -15,6 +15,7 @@ from ashan_cn_procurement.services.authorization_service import assert_company_a
 from ashan_cn_procurement.services.procurement_picker_service import (
     get_user_procurement_companies,
 )
+from ashan_cn_procurement.services.work_context_service import get_effective_work_date
 
 
 def _resolve_companies(company: str | None = None) -> list[str]:
@@ -403,7 +404,7 @@ def create_monthly_settlement_receipt_bundle(
     if not items:
         frappe.throw(_("请录入至少一行有效的入库物料明细。"))
 
-    posting_date_str = posting_date or nowdate()
+    posting_date_str = get_effective_work_date(posting_date)
     supplier_val = _ensure_supplier(supplier)
 
     # Resolve Default Warehouse

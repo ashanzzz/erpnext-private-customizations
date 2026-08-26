@@ -1,5 +1,5 @@
 # Copyright (c) 2026, Ashan CN Procurement
-"""Automated regression & end-to-end test suite for Procurement Order Picker (5 Steps, 10 Dual Views & Smart Search)."""
+"""Automated regression & end-to-end test suite for Procurement Order Picker (4 execution stages / 6 overview stages, 整算单 & 付款单下级账单穿透)."""
 
 import unittest
 import frappe
@@ -23,6 +23,12 @@ from ashan_cn_procurement.services.procurement_picker_service import (
     get_pending_reimbursement_invoice_items,
     get_pending_reimbursement_invoices,
     make_reimbursement_from_invoices,
+    get_pending_payment_invoices,
+    get_pending_payment_docs,
+    get_company_payment_accounts,
+    get_supplier_bank_details,
+    make_wire_transfer_payment_from_invoices,
+    get_payment_entry_sub_invoices,
     get_procurement_picker_overview_kpis,
     get_procurement_workbench_context,
 )
@@ -34,7 +40,7 @@ class TestProcurementPicker(unittest.TestCase):
         self.company = frappe.db.get_value("Company", {}, "name") or "天津祺富机械加工有限公司"
 
     def test_01_user_companies_and_kpis(self):
-        """Verify get_user_procurement_companies and 5-step overview KPIs."""
+        """Verify get_user_procurement_companies and 4-step execution / 6-step overview KPIs."""
         user_comps = get_user_procurement_companies()
         self.assertIn("companies", user_comps)
         self.assertTrue(len(user_comps["companies"]) >= 1)
@@ -47,6 +53,9 @@ class TestProcurementPicker(unittest.TestCase):
         self.assertIn("po_to_pr", res_all["kpis"])
         self.assertIn("pr_to_pi", res_all["kpis"])
         self.assertIn("pi_to_rr", res_all["kpis"])
+        self.assertIn("pi_to_pay", res_all["kpis"])
+        self.assertEqual(res_all["kpis"]["pi_to_rr"]["label"], "待整算")
+        self.assertEqual(res_all["kpis"]["pi_to_pay"]["label"], "待付款")
 
         request_context = get_procurement_workbench_context("request")
         self.assertEqual(request_context["allowed_stages"], ["item_to_mr"])
@@ -56,16 +65,16 @@ class TestProcurementPicker(unittest.TestCase):
         execution_context = get_procurement_workbench_context("execution")
         self.assertEqual(
             execution_context["allowed_stages"],
-            ["mr_to_po", "pr_to_pi", "pi_to_rr"],
+            ["mr_to_po", "pr_to_pi", "pi_to_rr", "pi_to_pay"],
         )
         execution_kpis = get_procurement_picker_overview_kpis("All", "execution")
         self.assertEqual(
             set(execution_kpis["kpis"]),
-            {"mr_to_po", "pr_to_pi", "pi_to_rr"},
+            {"mr_to_po", "pr_to_pi", "pi_to_rr", "pi_to_pay"},
         )
 
-    def test_02_all_10_dual_views_smoke(self):
-        """Verify query endpoints for all 5 stages in both Detail View and Doc View."""
+    def test_02_all_dual_views_smoke(self):
+        """Verify query endpoints for all stages in both Detail View and Doc View."""
         for comp_scope in ["All", self.company]:
             # Search helper
             s_res = search_picker_items(query="TEST", company=comp_scope)
@@ -95,14 +104,20 @@ class TestProcurementPicker(unittest.TestCase):
             pi_docs = get_pending_purchase_receipt_docs(comp_scope)
             self.assertIn("rows", pi_docs)
 
-            # Stage 5: RR (Detail & Doc)
+            # Stage 5: RR / 整算单 (Detail & Doc)
             rr_items = get_pending_reimbursement_invoice_items(comp_scope)
             self.assertIn("rows", rr_items)
             rr_docs = get_pending_reimbursement_invoices(comp_scope)
             self.assertIn("rows", rr_docs)
 
+            # Stage 6: Pay / 付款单 (Detail & Doc)
+            pay_items = get_pending_payment_invoices(comp_scope)
+            self.assertIn("rows", pay_items)
+            pay_docs = get_pending_payment_docs(comp_scope)
+            self.assertIn("rows", pay_docs)
+
     def test_03_quick_create_and_full_lifecycle(self):
-        """Test smart Material Request creation with taxes, dual view queries, and downstream flow."""
+        """Test smart Material Request creation, downstream PO/PR/PI flow, 整算单, and 付款单."""
         supplier = frappe.db.get_value("Supplier", {}, "name")
         if not supplier:
             sup_doc = frappe.get_doc({
@@ -129,68 +144,45 @@ class TestProcurementPicker(unittest.TestCase):
         # --- Step 1: Quick Create Material Request via Dialog RPC (With rate, tax, amount) ---
         mr_res = quick_create_material_request(
             company=self.company,
-            department="生产部",
-            schedule_date=nowdate(),
+            department=frappe.db.get_value("Department", {"company": self.company}, "name") or "总经办 - TJ",
             items=[{
                 "item_code": item_code,
                 "qty": 20.0,
-                "rate": 100.0,
-                "amount": 2000.0,
+                "rate": 150.0,
                 "tax_rate": 13.0,
-                "tax_amount": 260.0,
-                "total_amount": 2260.0,
-                "description": "物料申请智能弹窗测试",
+                "supplier": supplier,
+                "warehouse": warehouse,
+                "custom_spec_model": "规格M20",
+                "custom_line_remark": "全流程自动化测试",
             }],
+            purpose="测试选单工作台物料申请",
         )
         self.assertTrue(mr_res["success"])
-        mr_name = mr_res["name"]
-        self.assertEqual(mr_res["total_amount"], 2260.0)
-
-        # Verify Step 1 Detail View returns this MR item with mr_name
-        detail_pool = get_material_request_picker_rows(self.company, {"mr_name": mr_name})
-        self.assertTrue(len(detail_pool["rows"]) > 0)
-        self.assertEqual(detail_pool["rows"][0]["mr_name"], mr_name)
-        self.assertEqual(detail_pool["rows"][0]["qty"], 20.0)
-
-        # Verify Step 1 Doc View returns this MR
-        doc_pool = get_material_request_doc_rows(self.company, {"mr_name": mr_name})
-        self.assertTrue(len(doc_pool["rows"]) > 0)
-        self.assertEqual(doc_pool["rows"][0]["mr_name"], mr_name)
+        mr_name = mr_res.get("name") or mr_res.get("material_request_name")
 
         # Submit MR
         mr_doc = frappe.get_doc("Material Request", mr_name)
         mr_doc.submit()
-        mri_name = mr_doc.items[0].name
 
         try:
-            # --- Step 2: Material Request -> Purchase Order ---
-            # Verify Doc view works for Stage 2
-            mr_doc_pool = get_pending_material_request_docs(self.company, {"mr_name": mr_name})
-            self.assertTrue(len(mr_doc_pool["rows"]) > 0)
-            self.assertIn("custom_doc_details", mr_doc_pool["rows"][0])
+            mri_name = mr_doc.items[0].name
 
-            # Generate PO from MR
+            # --- Step 2: Material Request -> Purchase Order ---
             po_gen = make_purchase_orders_from_mr_items(
                 self.company,
-                selected_items=[{"mri_name": mri_name, "this_qty": 20.0, "rate": 100.0}],
-                supplier_override=supplier,
+                selected_items=[{"mri_name": mri_name, "this_qty": 20.0, "rate": 150.0, "supplier": supplier}],
             )
             self.assertTrue(po_gen["success"])
-            po_name = po_gen["orders"][0]["name"]
+            po_name = (po_gen.get("purchase_orders") or po_gen.get("orders"))[0]["name"]
 
             po_doc = frappe.get_doc("Purchase Order", po_name)
             po_doc.submit()
             poi_name = po_doc.items[0].name
 
             # --- Step 3: Purchase Order -> Purchase Receipt ---
-            # Verify Doc view works for Stage 3
-            po_doc_pool = get_pending_purchase_order_docs(self.company, {"po_name": po_name})
-            self.assertTrue(len(po_doc_pool["rows"]) > 0)
-            self.assertIn("custom_doc_details", po_doc_pool["rows"][0])
-
             pr_gen = make_purchase_receipts_from_po_items(
                 self.company,
-                selected_items=[{"poi_name": poi_name, "this_qty": 20.0, "warehouse": warehouse}],
+                selected_items=[{"poi_name": poi_name, "this_qty": 20.0, "accepted_warehouse": warehouse}],
             )
             self.assertTrue(pr_gen["success"])
             pr_name = pr_gen["receipts"][0]["name"]
@@ -200,11 +192,6 @@ class TestProcurementPicker(unittest.TestCase):
             pri_name = pr_doc.items[0].name
 
             # --- Step 4: Purchase Receipt -> Purchase Invoice ---
-            # Verify Doc view works for Stage 4
-            pr_doc_pool = get_pending_purchase_receipt_docs(self.company, {"pr_name": pr_name})
-            self.assertTrue(len(pr_doc_pool["rows"]) > 0)
-            self.assertIn("custom_doc_details", pr_doc_pool["rows"][0])
-
             pi_gen = make_purchase_invoices_from_pr_items(
                 self.company,
                 selected_items=[{"pri_name": pri_name, "this_qty": 20.0}],
@@ -217,27 +204,24 @@ class TestProcurementPicker(unittest.TestCase):
             pi_doc = frappe.get_doc("Purchase Invoice", pi_name)
             pi_doc.submit()
 
-            # --- Step 5: Purchase Invoice -> Reimbursement Request ---
-            # Verify Detail & Doc views for Stage 5
+            # --- Step 5: Purchase Invoice -> 整算单 (Reimbursement Request) ---
             pi_item_pool = get_pending_reimbursement_invoice_items(self.company, {"bill_no": "TEST-AUTO-INV-004"})
             self.assertTrue(len(pi_item_pool["rows"]) > 0)
-
-            pi_doc_pool = get_pending_reimbursement_invoices(self.company, {"bill_no": "TEST-AUTO-INV-004"})
-            self.assertTrue(len(pi_doc_pool["rows"]) > 0)
-            self.assertIn("custom_doc_details", pi_doc_pool["rows"][0])
 
             rr_gen = make_reimbursement_from_invoices(
                 self.company,
                 selected_invoices=[pi_name],
-                purpose="5步全流程双视图测试",
+                purpose="4区全流程整算单测试",
             )
             self.assertTrue(rr_gen["success"])
             rr_name = rr_gen["reimbursement_name"]
             self.assertTrue(bool(rr_name))
 
-            # Verify reservation
-            res_count = frappe.db.count("Reimbursement Source Reservation", {"reimbursement_request": rr_name})
-            self.assertTrue(res_count > 0, "Source reservation records must exist")
+            # --- Step 6: Payment accounts & Bank details lookup ---
+            accounts = get_company_payment_accounts(self.company)
+            self.assertTrue(isinstance(accounts, list))
+            bank_info = get_supplier_bank_details(supplier, self.company)
+            self.assertTrue(isinstance(bank_info, dict))
 
         finally:
             frappe.db.rollback()

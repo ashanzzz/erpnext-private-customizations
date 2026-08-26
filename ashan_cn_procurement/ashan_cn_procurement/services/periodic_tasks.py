@@ -9,27 +9,13 @@ from ashan_cn_procurement.services.authorization_service import get_allowed_comp
 @frappe.whitelist()
 def get_monthly_settlement_status(year=None, month=None):
     """
-    获取指定年月的【我的月度任务】（月度报表核定）状态
-    支持多主体（吉众、祺富）按用户公司权限与角色严格隔离
+    动态多主体月度核定状态感知服务 (每个小项目独立自适应探测最早未核定月份)
+    核心逻辑：
+    - 按月连续检测各业务事项；
+    - 若 5月已核定、6月未核定，则直接呈现【2026年06月未核定】；
+    - 绝不受死板下拉框限制，直观呈现每项业务当前最急需处理的待核定月份。
     """
     try:
-        current_date = getdate(nowdate())
-
-        # 默认核定周期：若未显式传入年月，自动推导上一自然月
-        if not year or not month:
-            if current_date.month == 1:
-                target_year = current_date.year - 1
-                target_month = 12
-            else:
-                target_year = current_date.year
-                target_month = current_date.month - 1
-        else:
-            target_year = cint(year)
-            target_month = cint(month)
-
-        period_str = f"{target_year}-{target_month:02d}"
-        period_label = f"{target_year}年{target_month}月"
-
         user = frappe.session.user
         roles = frappe.get_roles(user)
         company_scope = get_allowed_companies(user)
@@ -39,130 +25,284 @@ def get_monthly_settlement_status(year=None, month=None):
         has_qifu_perm = is_admin or any("祺富" in company for company in scoped_companies)
 
         # 角色权限感知
-        can_manage_oil = is_admin or any(r in roles for r in ["Oil Card Operator", "Oil Card Manager", "油卡操作员", "油卡管理员"])
-        can_manage_property = is_admin or any(r in roles for r in ["Property Operator", "Property Manager", "物业操作员", "物业管理员", "Accounts User"])
+        can_manage_oil = is_admin or any(r in roles for r in ["Oil Card Operator", "Oil Card Manager", "油卡操作员", "油卡管理员", "Accounts User", "Accounts Manager"])
+        can_manage_property = is_admin or any(r in roles for r in ["Property Operator", "Property Manager", "物业操作员", "物业管理员", "Accounts User", "Accounts Manager"])
+        can_manage_payroll = is_admin or any(r in roles for r in ["Payroll Operator", "Payroll Manager", "薪酬操作员", "薪酬管理员", "HR User", "HR Manager"])
+        can_manage_finance = is_admin or any(r in roles for r in ["Accounts User", "Accounts Manager", "财务经理", "System Manager"])
 
-        # 2. 吉众月度报表核定 (天津吉众机电设备有限公司)
-        jizhong_items = []
-        if has_jizhong_perm and (can_manage_oil or is_admin):
-            # A. 油卡明细核定
-            oil_status = "unsettled"
-            oil_summary = "本期加油及油票明细待核定"
+        # 生成候选检测月份序列（从 2026-06 起至当前核算月）
+        candidate_months = []
+        now_d = getdate(nowdate())
+        cur_y, cur_m = now_d.year, now_d.month
+        period_str = f"{cur_y}-{cur_m:02d}"
+        period_label = f"{cur_y}年{cur_m}月"
 
-            has_oil_summary = False
+        start_tot = 2026 * 12 + 6
+        cur_tot = cur_y * 12 + cur_m
+        for tot_m in range(start_tot, cur_tot + 1):
+            y = (tot_m - 1) // 12
+            m = (tot_m - 1) % 12 + 1
+            candidate_months.append(f"{y:04d}-{m:02d}")
+
+        # -----------------------------------------------------------------
+        # 独立检测器定义
+        # -----------------------------------------------------------------
+        def _check_oil_card(p):
+            has_summary = False
             if frappe.db.exists("DocType", "Oil Card Invoice Batch"):
-                has_oil_summary = bool(frappe.db.exists("Oil Card Invoice Batch", {
-                    "batch_period": period_str,
-                    "docstatus": 1
-                }))
-
-            if not has_oil_summary and frappe.db.exists("DocType", "Oil Card Monthly Summary"):
-                has_oil_summary = bool(frappe.db.exists("Oil Card Monthly Summary", {
-                    "period": period_str,
-                    "docstatus": 1
-                }))
-
-            if has_oil_summary:
-                oil_status = "settled"
-                oil_summary = f"{period_label} 油卡台账已核定锁定"
-            else:
-                refuel_count = 0
-                if frappe.db.exists("DocType", "Oil Card Refuel Log"):
-                    try:
-                        refuel_count = frappe.db.count("Oil Card Refuel Log", {
-                            "posting_date": ["between", [f"{period_str}-01", f"{period_str}-31"]]
-                        })
-                    except Exception:
-                        refuel_count = 0
-                if refuel_count > 0:
-                    oil_summary = f"当月有 {refuel_count} 笔加油记录等待核定对账"
-                else:
-                    oil_summary = "当月尚未录入/核定加油明细"
-
-            jizhong_items.append({
-                "id": "oil_card",
-                "title": "油卡明细",
-                "icon": "⛽",
-                "status": oil_status,
-                "status_label": "已核定" if oil_status == "settled" else "未核定",
-                "action_label": "去核定 ➔" if oil_status != "settled" else "查看台账",
-                "route": "/desk/oil-card-ledger",
-                "summary_text": oil_summary
-            })
-
-            # B. 车辆高速费核定
-            has_toll_vehicle = False
-            if frappe.db.exists("DocType", "Vehicle Toll Config"):
+                has_summary = bool(frappe.db.exists("Oil Card Invoice Batch", {"batch_period": p, "docstatus": 1}))
+            if not has_summary and frappe.db.exists("DocType", "Oil Card Monthly Summary"):
+                has_summary = bool(frappe.db.exists("Oil Card Monthly Summary", {"period": p, "docstatus": 1}))
+            if not has_summary and frappe.db.exists("DocType", "Oil Card Monthly Closing"):
                 try:
-                    toll_configs = frappe.get_all("Vehicle Toll Config", fields=["vehicle", "is_active"], filters={"is_active": 1})
-                    for tc in toll_configs:
-                        veh_name = tc.get("vehicle")
-                        veh_comp = frappe.db.get_value("Vehicle", veh_name, "company") if frappe.db.exists("DocType", "Vehicle") else ""
-                        if not veh_comp or "吉众" in str(veh_comp):
-                            has_toll_vehicle = True
-                            break
+                    y_i, m_i = [int(x) for x in p.split("-")]
+                    has_summary = bool(frappe.db.exists("Oil Card Monthly Closing", {"fiscal_year": y_i, "fiscal_month": m_i, "closing_locked": 1}))
                 except Exception:
-                    has_toll_vehicle = False
+                    pass
+            if has_summary:
+                return True, "油卡台账已核定锁定"
+            
+            refuel_count = 0
+            if frappe.db.exists("DocType", "Oil Card Refuel Log"):
+                try:
+                    refuel_count = frappe.db.count("Oil Card Refuel Log", {
+                        "posting_date": ["between", [f"{p}-01", f"{p}-31"]]
+                    })
+                except Exception:
+                    refuel_count = 0
+            detail = f"有 {refuel_count} 笔加油记录待核定" if refuel_count > 0 else "尚未录入/核定加油明细"
+            return False, detail
 
-            if has_toll_vehicle:
-                toll_status = "unsettled"
-                toll_summary = "高速费通行流水待核定"
+        def _check_highway_toll(p):
+            has_toll = False
+            if frappe.db.exists("DocType", "Vehicle Toll Monthly Sheet"):
+                has_toll = bool(frappe.db.exists("Vehicle Toll Monthly Sheet", {"sheet_period": p, "docstatus": 1}))
+            if has_toll:
+                return True, "高速费月度台账已核定"
+            return False, "高速费通行流水待生成月度账单"
 
-                has_toll_sheet = False
-                if frappe.db.exists("DocType", "Vehicle Toll Monthly Sheet"):
-                    has_toll_sheet = bool(frappe.db.exists("Vehicle Toll Monthly Sheet", {
-                        "sheet_period": period_str,
-                        "docstatus": 1
-                    }))
+        def _check_meal(p):
+            has_meal = False
+            meal_doc = f"MEAL-{p}"
+            if frappe.db.exists("Ashan Monthly Meal Settlement", meal_doc):
+                st = frappe.db.get_value("Ashan Monthly Meal Settlement", meal_doc, "status")
+                if st == "已核定":
+                    has_meal = True
+            if has_meal:
+                return True, "车间餐费已核定锁定"
+            return False, "车间日常就餐记录待核定"
 
-                if has_toll_sheet:
-                    toll_status = "settled"
-                    toll_summary = f"{period_label} 高速费月度台账已核定"
-                else:
-                    toll_summary = "当月高速费通行流水待生成月度账单"
+        def _check_jz_payroll(p):
+            has_close = False
+            if frappe.db.exists("DocType", "Payroll Month Close"):
+                has_close = bool(frappe.db.exists("Payroll Month Close", {"payroll_period": p, "company": ["like", "%吉众%"], "is_locked": 1}))
+            if not has_close and frappe.db.exists("DocType", "Ashan Payroll Entry"):
+                has_close = bool(frappe.db.exists("Ashan Payroll Entry", {"payroll_month": p, "company": ["like", "%吉众%"], "status": "已封账"}))
+            if has_close:
+                return True, "吉众薪酬已核定封账"
+            return False, "吉众薪酬待测算与核定锁定"
 
+        def _check_qf_payroll(p):
+            has_close = False
+            if frappe.db.exists("DocType", "Payroll Month Close"):
+                has_close = bool(frappe.db.exists("Payroll Month Close", {"payroll_period": p, "company": ["like", "%祺富%"], "is_locked": 1}))
+            if not has_close and frappe.db.exists("DocType", "Ashan Payroll Entry"):
+                has_close = bool(frappe.db.exists("Ashan Payroll Entry", {"payroll_month": p, "company": ["like", "%祺富%"], "status": "已封账"}))
+            if has_close:
+                return True, "祺富薪酬与个税已封账"
+            return False, "薪资核算与凭证待核定封账"
+
+        def _check_property_utility(p):
+            has_util = False
+            if frappe.db.exists("DocType", "Property Monthly Settlement"):
+                has_util = bool(frappe.db.exists("Property Monthly Settlement", {
+                    "settlement_period": p,
+                    "settlement_type": ["in", ["水电费月结", "综合月结", "水电月结"]],
+                    "docstatus": 1
+                }))
+            if has_util:
+                return True, "水电费已核定完成并过账"
+            return False, "水电抄表与差额分摊未锁定"
+
+        def _check_jz_inv(p):
+            has_inv = False
+            if frappe.db.exists("DocType", "Monthly Invoice Closing"):
+                has_inv = bool(frappe.db.exists("Monthly Invoice Closing", {"company": ["like", "%吉众%"], "period": p, "is_locked": 1}))
+            if has_inv:
+                return True, "采购发票已关账锁定"
+            return False, "采购发票待核定关账"
+
+        def _check_qf_inv(p):
+            has_inv = False
+            if frappe.db.exists("DocType", "Monthly Invoice Closing"):
+                has_inv = bool(frappe.db.exists("Monthly Invoice Closing", {"company": ["like", "%祺富%"], "period": p, "is_locked": 1}))
+            if has_inv:
+                return True, "采购发票已关账锁定"
+            return False, "采购发票待核定关账"
+
+        def detect_item(check_fn):
+            for p in candidate_months:
+                is_settled, detail = check_fn(p)
+                if not is_settled:
+                    y_i, m_i = [int(x) for x in p.split("-")]
+                    lbl = f"{y_i}年{m_i:02d}月"
+                    return {
+                        "status": "unsettled",
+                        "period": p,
+                        "period_label": lbl,
+                        "status_label": "未核定",
+                        "action_label": "去核定 ➔",
+                        "summary_text": f"{lbl}未核定 · {detail}" if detail else f"{lbl}未核定"
+                    }
+            # 全核定
+            latest = candidate_months[-1]
+            y_i, m_i = [int(x) for x in latest.split("-")]
+            lbl = f"{y_i}年{m_i:02d}月"
+            return {
+                "status": "settled",
+                "period": latest,
+                "period_label": lbl,
+                "status_label": "已核定",
+                "action_label": "查看台账",
+                "summary_text": f"已核定至 {lbl} ✅"
+            }
+
+        # -----------------------------------------------------------------
+        # 组装吉众各项月度核定
+        # -----------------------------------------------------------------
+        jizhong_items = []
+        if has_jizhong_perm:
+            if can_manage_oil or is_admin:
+                oil_data = detect_item(_check_oil_card)
+                jizhong_items.append({
+                    "id": "oil_card",
+                    "title": "油卡明细",
+                    "icon": "⛽",
+                    "status": oil_data["status"],
+                    "status_label": oil_data["status_label"],
+                    "action_label": oil_data["action_label"],
+                    "target_period": oil_data["period"],
+                    "route": "/desk/oil-card-ledger",
+                    "summary_text": oil_data["summary_text"]
+                })
+
+                toll_data = detect_item(_check_highway_toll)
                 jizhong_items.append({
                     "id": "highway_toll",
                     "title": "车辆高速费",
                     "icon": "🛣️",
-                    "status": toll_status,
-                    "status_label": "已核定" if toll_status == "settled" else "未核定",
-                    "action_label": "去核定 ➔" if toll_status != "settled" else "查看台账",
+                    "status": toll_data["status"],
+                    "status_label": toll_data["status_label"],
+                    "action_label": toll_data["action_label"],
+                    "target_period": toll_data["period"],
                     "route": "/desk/vehicle-toll-monthly-sheet",
-                    "summary_text": toll_summary
+                    "summary_text": toll_data["summary_text"]
                 })
 
-        # 3. 祺富月度报表核定 (天津祺富机械加工有限公司)
-        qifu_items = []
-        if has_qifu_perm and (can_manage_property or is_admin):
-            # A. 水电费月结 (按月抄表与倍率分摊)
-            utility_status = "unsettled"
-            utility_summary = "当月水电抄表及倍率分摊待核定"
-
-            has_utility_settle = False
-            if frappe.db.exists("DocType", "Property Monthly Settlement"):
-                has_utility_settle = bool(frappe.db.exists("Property Monthly Settlement", {
-                    "settlement_period": period_str,
-                    "settlement_type": ["in", ["水电费月结", "综合月结", "水电月结"]],
-                    "docstatus": 1
-                }))
-
-            if has_utility_settle:
-                utility_status = "settled"
-                utility_summary = f"{period_label} 水电费已核定完成并过账"
-            else:
-                utility_summary = "本期水电抄表与差额分摊未锁定"
-
-            qifu_items.append({
-                "id": "utility_settlement",
-                "title": "水电费月结",
-                "icon": "💡",
-                "status": utility_status,
-                "status_label": "已核定" if utility_status == "settled" else "未核定",
-                "action_label": "去核定 ➔" if utility_status != "settled" else "查看工作台",
-                "route": "/desk/property-settlement-workbench",
-                "summary_text": utility_summary
+            meal_data = detect_item(_check_meal)
+            jizhong_items.append({
+                "id": "jz_meal",
+                "title": "车间日常餐费",
+                "icon": "🍱",
+                "status": meal_data["status"],
+                "status_label": meal_data["status_label"],
+                "action_label": meal_data["action_label"],
+                "target_period": meal_data["period"],
+                "route": "/desk/meal-settlement-workbench",
+                "summary_text": meal_data["summary_text"]
             })
+
+            if can_manage_payroll or is_admin:
+                jz_pay_data = detect_item(_check_jz_payroll)
+                jizhong_items.append({
+                    "id": "jz_payroll",
+                    "title": "吉众工资核定",
+                    "icon": "💼",
+                    "status": jz_pay_data["status"],
+                    "status_label": "未封账" if jz_pay_data["status"] == "unsettled" else "已封账",
+                    "action_label": jz_pay_data["action_label"],
+                    "target_period": jz_pay_data["period"],
+                    "route": "/desk/jizhong-hr-salary-workbench",
+                    "summary_text": jz_pay_data["summary_text"]
+                })
+
+            if can_manage_finance or is_admin:
+                jz_inv_data = detect_item(_check_jz_inv)
+                jizhong_items.append({
+                    "id": "jz_inv_close",
+                    "title": "发票月度核定",
+                    "icon": "🧾",
+                    "company_name": "天津吉众科技有限公司",
+                    "status": jz_inv_data["status"],
+                    "status_label": "未关账" if jz_inv_data["status"] == "unsettled" else "已关账",
+                    "action_label": jz_inv_data["action_label"],
+                    "is_invoice_action": True,
+                    "target_period": jz_inv_data["period"],
+                    "target_period_label": jz_inv_data["period_label"],
+                    "summary_text": jz_inv_data["summary_text"]
+                })
+
+        # -----------------------------------------------------------------
+        # 组装祺富各项月度核定
+        # -----------------------------------------------------------------
+        qifu_items = []
+        if has_qifu_perm:
+            if can_manage_property or is_admin:
+                util_data = detect_item(_check_property_utility)
+                qifu_items.append({
+                    "id": "utility_settlement",
+                    "title": "水电费月结",
+                    "icon": "💡",
+                    "status": util_data["status"],
+                    "status_label": util_data["status_label"],
+                    "action_label": util_data["action_label"],
+                    "target_period": util_data["period"],
+                    "route": "/desk/property-settlement-workbench",
+                    "summary_text": util_data["summary_text"]
+                })
+
+            meal_data_qf = detect_item(_check_meal)
+            qifu_items.append({
+                "id": "qf_meal",
+                "title": "车间日常餐费",
+                "icon": "🍱",
+                "status": meal_data_qf["status"],
+                "status_label": meal_data_qf["status_label"],
+                "action_label": meal_data_qf["action_label"],
+                "target_period": meal_data_qf["period"],
+                "route": "/desk/meal-settlement-workbench",
+                "summary_text": meal_data_qf["summary_text"]
+            })
+
+            if can_manage_payroll or is_admin:
+                qf_pay_data = detect_item(_check_qf_payroll)
+                qifu_items.append({
+                    "id": "qf_payroll",
+                    "title": "祺富工资核定",
+                    "icon": "🛡️",
+                    "status": qf_pay_data["status"],
+                    "status_label": "未封账" if qf_pay_data["status"] == "unsettled" else "已封账",
+                    "action_label": qf_pay_data["action_label"],
+                    "target_period": qf_pay_data["period"],
+                    "route": "/desk/qifu-payroll-center",
+                    "summary_text": qf_pay_data["summary_text"]
+                })
+
+            if can_manage_finance or is_admin:
+                qf_inv_data = detect_item(_check_qf_inv)
+                qifu_items.append({
+                    "id": "qf_inv_close",
+                    "title": "发票月度核定",
+                    "icon": "🧾",
+                    "company_name": "天津祺富机械加工有限公司",
+                    "status": qf_inv_data["status"],
+                    "status_label": "未关账" if qf_inv_data["status"] == "unsettled" else "已关账",
+                    "action_label": qf_inv_data["action_label"],
+                    "is_invoice_action": True,
+                    "target_period": qf_inv_data["period"],
+                    "target_period_label": qf_inv_data["period_label"],
+                    "summary_text": qf_inv_data["summary_text"]
+                })
 
         show_jizhong = len(jizhong_items) > 0 and has_jizhong_perm
         show_qifu = len(qifu_items) > 0 and has_qifu_perm
@@ -208,6 +348,38 @@ def get_monthly_settlement_status(year=None, month=None):
             "all_done": False,
             "companies": {}
         }
+
+@frappe.whitelist()
+def get_pending_reimbursement_count():
+    """
+    高效统计当前用户垫付待报销的发票数量
+    """
+    try:
+        user = frappe.session.user
+        roles = frappe.get_roles(user)
+        is_admin = user == "Administrator" or "System Manager" in roles
+
+        filters = {"docstatus": 1, "custom_biz_mode": "现金报销"}
+        if not is_admin:
+            filters["owner"] = user
+
+        pi_names = frappe.get_all("Purchase Invoice", filters=filters, pluck="name")
+        if not pi_names:
+            return {"count": 0}
+
+        claimed = frappe.get_all(
+            "Reimbursement Invoice Item",
+            filters={
+                "parenttype": "Reimbursement Request",
+                "source_pi": ["in", pi_names],
+                "docstatus": ["!=", 2]
+            },
+            pluck="source_pi"
+        )
+        unclaimed = set(pi_names) - set(claimed)
+        return {"count": len(unclaimed)}
+    except Exception as e:
+        return {"count": 0, "error": str(e)}
 
 @frappe.whitelist()
 def get_compliance_expiry_status():

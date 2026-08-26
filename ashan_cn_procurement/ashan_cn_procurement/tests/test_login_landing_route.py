@@ -32,4 +32,3 @@ class TestLoginLandingRoute(TestCase):
 			PROCUREMENT_PAGE_ROLES["material-receipt-workbench"],
 			{"Stock Manager", "Stock User"},
 		)
-		self.assertNotIn("Purchase User", PROCUREMENT_PAGE_ROLES["procurement-order-picker"])

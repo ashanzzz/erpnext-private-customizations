@@ -74,7 +74,7 @@ def clear_confirmed_orphan_migrate_lock(client):
 
     process_out, _, _ = run_cmd(
         client,
-        f"docker exec -u frappe -w {workdir} erpnext16 sh -lc \"ps -eo args= | grep -F 'bench --site site1.local migrate' | grep -v grep || true\"",
+        f"docker exec -u frappe -w {workdir} erpnext16 sh -lc \"ps -ef | grep 'bench --site site1.local migrate' | grep -v grep || true\"",
     )
     if process_out.strip():
         raise RuntimeError("检测到仍在运行的 bench migrate，拒绝移除迁移锁。")
@@ -105,74 +105,78 @@ def connect_ssh():
     except Exception as e:
         raise ConnectionError(f"Failed to connect to both LAN ({LAN_HOST}) and Tailscale ({TAILSCALE_HOST}): {e}")
 
-client = connect_ssh()
+def sync_and_migrate():
+    client = connect_ssh()
 
-# 1. 压缩本地 ashan_cn_procurement app
-local_app_dir = r"d:\SynologyDrive团队\antigravity\erpnext16\ashan_cn_procurement"
-temp_tar = os.path.join(tempfile.gettempdir(), "ashan_cn_procurement.tar.gz")
-print("Archiving local app...")
-with tarfile.open(temp_tar, "w:gz") as tar:
-    tar.add(local_app_dir, arcname="ashan_cn_procurement")
+    # 1. 压缩本地 ashan_cn_procurement app
+    local_app_dir = r"d:\SynologyDrive团队\antigravity\erpnext16\ashan_cn_procurement"
+    temp_tar = os.path.join(tempfile.gettempdir(), "ashan_cn_procurement.tar.gz")
+    print("Archiving local app...")
+    with tarfile.open(temp_tar, "w:gz") as tar:
+        tar.add(local_app_dir, arcname="ashan_cn_procurement")
 
-# 2. 上传到服务器 /tmp
-sftp = client.open_sftp()
-remote_tar = "/tmp/ashan_cn_procurement.tar.gz"
-print(f"Uploading to {remote_tar}...")
-sftp.put(temp_tar, remote_tar)
-sftp.close()
-os.remove(temp_tar)
+    # 2. 上传到服务器 /tmp
+    sftp = client.open_sftp()
+    remote_tar = "/tmp/ashan_cn_procurement.tar.gz"
+    print(f"Uploading to {remote_tar}...")
+    sftp.put(temp_tar, remote_tar)
+    sftp.close()
+    os.remove(temp_tar)
 
-# 3. 解压到容器内
-print("Extracting into erpnext16 container...")
-run_cmd(client, "docker cp /tmp/ashan_cn_procurement.tar.gz erpnext16:/tmp/ashan_cn_procurement.tar.gz")
-run_cmd(client, "docker exec erpnext16 tar -xzf /tmp/ashan_cn_procurement.tar.gz -C /home/frappe/frappe-bench/apps/")
-run_cmd(client, "docker exec erpnext16 chown -R frappe:frappe /home/frappe/frappe-bench/apps/ashan_cn_procurement")
+    # 3. 解压到容器内
+    print("Extracting into erpnext16 container...")
+    run_cmd(client, "docker cp /tmp/ashan_cn_procurement.tar.gz erpnext16:/tmp/ashan_cn_procurement.tar.gz")
+    run_cmd(client, "docker exec erpnext16 tar -xzf /tmp/ashan_cn_procurement.tar.gz -C /home/frappe/frappe-bench/apps/")
+    run_cmd(client, "docker exec erpnext16 chown -R frappe:frappe /home/frappe/frappe-bench/apps/ashan_cn_procurement")
 
-# 4. 执行 bench migrate
-print("Running bench migrate...")
-for attempt in range(1, 4):
-    clear_confirmed_orphan_migrate_lock(client)
-    out, err, exit_status = run_cmd(
-        client,
-        "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench --site site1.local migrate",
-        check=False,
-    )
-    combined = (out or "") + (err or "")
-    if exit_status == 0 and "Traceback" not in combined:
-        break
-    if attempt == 3:
-        raise RuntimeError(
-            f"bench migrate 连续 {attempt} 次失败（最后退出码 {exit_status}）。"
+    # 4. 执行 bench migrate
+    print("Running bench migrate...")
+    for attempt in range(1, 4):
+        clear_confirmed_orphan_migrate_lock(client)
+        out, err, exit_status = run_cmd(
+            client,
+            "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench --site site1.local migrate",
+            check=False,
         )
-    print(f"[WARN] Migrate attempt {attempt} failed, retrying in 3s...")
-    import time
-    time.sleep(3)
+        combined = (out or "") + (err or "")
+        if exit_status == 0 and "Traceback" not in combined:
+            break
+        if attempt == 3:
+            raise RuntimeError(
+                f"bench migrate 连续 {attempt} 次失败（最后退出码 {exit_status}）。"
+            )
+        print(f"[WARN] Migrate attempt {attempt} failed, retrying in 3s...")
+        import time
+        time.sleep(3)
 
-# 5. 构建前端静态资源
-print("Building frontend assets...")
-run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench build --app ashan_cn_procurement")
+    # 5. 构建前端静态资源
+    print("Building frontend assets...")
+    run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench build --app ashan_cn_procurement")
 
-# 6. 对已部署的采购工作台服务做只读健康检查
-print("Validating procurement workbench services...")
-run_cmd(
-    client,
-    "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 "
-    "bench --site site1.local execute "
-    "ashan_cn_procurement.services.procurement_picker_service.get_procurement_workbench_context "
-    "--kwargs '{\"workbench\":\"overview\"}'",
-)
-run_cmd(
-    client,
-    "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 "
-    "bench --site site1.local execute "
-    "ashan_cn_procurement.services.procurement_picker_service.get_procurement_picker_overview_kpis "
-    "--kwargs '{\"workbench\":\"request\"}'",
-)
+    # 6. 对已部署的采购工作台服务做只读健康检查
+    print("Validating procurement workbench services...")
+    run_cmd(
+        client,
+        "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 "
+        "bench --site site1.local execute "
+        "ashan_cn_procurement.services.procurement_picker_service.get_procurement_workbench_context "
+        "--kwargs '{\"workbench\":\"overview\"}'",
+    )
+    run_cmd(
+        client,
+        "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 "
+        "bench --site site1.local execute "
+        "ashan_cn_procurement.services.procurement_picker_service.get_procurement_picker_overview_kpis "
+        "--kwargs '{\"workbench\":\"request\"}'",
+    )
 
-# 7. 清理缓存并重启容器重载 Python 模块
-print("Clearing cache & restarting container...")
-run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench --site site1.local clear-cache")
-run_cmd(client, "docker restart erpnext16")
+    # 7. 清理缓存并重启容器重载 Python 模块
+    print("Clearing cache & restarting container...")
+    run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench --site site1.local clear-cache")
+    run_cmd(client, "docker restart erpnext16")
 
-client.close()
-print("\n[OK] Sync & Migrate completed successfully!")
+    client.close()
+    print("\n[OK] Sync & Migrate completed successfully!")
+
+if __name__ == '__main__':
+    sync_and_migrate()

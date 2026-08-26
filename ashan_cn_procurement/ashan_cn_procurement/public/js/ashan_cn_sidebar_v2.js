@@ -142,6 +142,81 @@
         return true;
     }
 
+    let lastFetchedKpis = null;
+    let kpiFetchPending = false;
+
+    async function fetchSidebarKpis(force = false) {
+        if (!window.frappe || !frappe.call) return null;
+        if (window.frappe.session && window.frappe.session.user === "Guest") return null;
+        if (lastFetchedKpis && !force) return lastFetchedKpis;
+        if (kpiFetchPending) return lastFetchedKpis;
+        kpiFetchPending = true;
+        try {
+            const r = await frappe.call({
+                method: "ashan_cn_procurement.services.procurement_picker_service.get_sidebar_notification_kpis",
+                args: {},
+                freeze: false,
+            });
+            kpiFetchPending = false;
+            if (r && r.message) {
+                lastFetchedKpis = r.message;
+                return r.message;
+            }
+        } catch (e) {
+            kpiFetchPending = false;
+        }
+        return lastFetchedKpis;
+    }
+
+    function renderSidebarBadges(kpis) {
+        if (!kpis) return;
+        const sidebar = document.querySelector(".body-sidebar");
+        if (!sidebar) return;
+
+        sidebar.querySelectorAll(".sidebar-child-item a.item-anchor, .sidebar-child-item a[href]").forEach((anchor) => {
+            const href = (anchor.getAttribute("href") || "").toLowerCase();
+            const text = (anchor.textContent || "").trim();
+
+            let count = 0;
+            let tooltip = "";
+
+            if (href.includes("material-receipt-workbench") || text.includes("收货入库")) {
+                count = Number(kpis["material-receipt-workbench"]) || 0;
+                tooltip = `${count} 个采购订单等待实际入库`;
+            } else if (href.includes("procurement-execution-workbench") || text.includes("采购执行")) {
+                count = Number(kpis["procurement-execution-workbench"]) || 0;
+                tooltip = `${count} 个采购申请待处理`;
+            } else if (href.includes("material-request-workbench") || text.includes("物料申请")) {
+                count = Number(kpis["material-request-workbench"]) || 0;
+                tooltip = `${count} 个物料申请单待处理`;
+            }
+
+            let badge = anchor.querySelector(".ashan-sidebar-count-badge");
+            if (count > 0) {
+                if (!badge) {
+                    badge = document.createElement("span");
+                    badge.className = "ashan-sidebar-count-badge";
+                    anchor.appendChild(badge);
+                }
+                badge.textContent = count > 99 ? "99+" : String(count);
+                badge.setAttribute("title", tooltip);
+            } else if (badge) {
+                badge.remove();
+            }
+        });
+    }
+
+    async function updateSidebarBadges(force = false) {
+        const kpis = await fetchSidebarKpis(force);
+        if (kpis) {
+            renderSidebarBadges(kpis);
+        }
+    }
+
+    // Expose global hook for workbench refresh
+    window.AshanUI = window.AshanUI || {};
+    window.AshanUI.refreshSidebarBadges = () => updateSidebarBadges(true);
+
     function markWorkbenchItems() {
         const sidebar = document.querySelector(".body-sidebar");
         if (!sidebar) return;
@@ -156,6 +231,8 @@
             );
             item.classList.toggle("ashan-workbench-item", important);
         });
+
+        updateSidebarBadges(false);
     }
 
     function applyOilOperatorView() {
@@ -315,6 +392,7 @@
         pendingHydrationFrame = window.requestAnimationFrame(() => {
             pendingHydrationFrame = null;
             hydrateAccordionState(sidebar);
+            updateSidebarBadges(false);
         });
     }
 

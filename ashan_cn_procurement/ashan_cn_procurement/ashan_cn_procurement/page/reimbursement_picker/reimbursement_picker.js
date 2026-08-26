@@ -39,7 +39,7 @@ function flash_field_error($el, msg) {
 class ReimbursementPicker {
     constructor(page) {
         this.page = page;
-        this.active_company = "All";
+        this.active_company = window.AshanWorkContext?.getCompany?.() || "All";
         this.companies = [];
         this.view_mode = "doc";
         this.match_status = "pending";
@@ -252,6 +252,14 @@ class ReimbursementPicker {
     bind_global_events() {
         const me = this;
 
+        document.addEventListener("ashan-work-context-changed", (event) => {
+            const selectedCompany = event.detail?.company || "All";
+            if (selectedCompany === me.active_company) return;
+            if (selectedCompany !== "All" && !me.companies.includes(selectedCompany)) return;
+            me.active_company = selectedCompany;
+            me.refresh_all();
+        });
+
         $("#reim-company-select").on("change", function () {
             me.active_company = $(this).val();
             me.refresh_all();
@@ -336,7 +344,7 @@ class ReimbursementPicker {
             $top.scrollLeft($(this).scrollLeft());
         });
 
-        $("#reim-table-head, #reim-main-scroll").on("wheel", function (e) {
+        $("#reim-table-head, #reim-top-scroll").on("wheel", function (e) {
             if (e.originalEvent.deltaY !== 0) {
                 const delta = e.originalEvent.deltaY;
                 $main.scrollLeft($main.scrollLeft() + delta);
@@ -732,8 +740,10 @@ class ReimbursementPicker {
         this.creation.is_edit = isEdit;
         this.creation.current_rr_name = rrName;
         this.creation.can_delete = false;
-        this.creation.company = this.active_company !== "All" ? this.active_company : (this.companies[0] || null);
-        this.creation.posting_date = frappe.datetime.get_today();
+        this.creation.company = window.AshanWorkContext
+            ? (window.AshanWorkContext.getCompany() || null)
+            : (this.active_company !== "All" ? this.active_company : (this.companies[0] || null));
+        this.creation.posting_date = window.AshanWorkContext?.getWorkDate?.() || frappe.datetime.get_today();
         this.creation.title = "";
         this.creation.auto_receive_stock = 1;
         this.creation.invoices = [];
@@ -823,6 +833,9 @@ class ReimbursementPicker {
         const $sel = $wrapper.find("#modal-reim-company");
         $sel.empty();
         const comps = this.companies.length ? this.companies : [this.creation.company].filter(Boolean);
+        if (!this.creation.company) {
+            $sel.append('<option value="" selected>请选择公司</option>');
+        }
         comps.forEach((c) => {
             $sel.append(`<option value="${c}">${c}</option>`);
         });
@@ -846,7 +859,7 @@ class ReimbursementPicker {
                         </div>
                         <div class="reim-v2-field-group">
                             <label>报销申请日期<span class="req">*</span></label>
-                            <input type="date" id="modal-reim-date" class="reim-v2-input-control" value="${frappe.datetime.get_today()}" />
+                            <input type="date" id="modal-reim-date" class="reim-v2-input-control" value="${window.AshanWorkContext?.getWorkDate?.() || frappe.datetime.get_today()}" />
                         </div>
                         <div class="reim-full-width-field">
                             <label>报销标题<span class="req">*</span></label>

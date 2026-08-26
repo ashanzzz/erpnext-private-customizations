@@ -34,11 +34,6 @@ PROCUREMENT_PAGE_ROLES = {
         "Accounts User",
     },
     "material-receipt-workbench": {"Stock Manager", "Stock User"},
-    "procurement-order-picker": {
-        "Purchase Manager",
-        "Stock Manager",
-        "Accounts Manager",
-    },
 }
 
 
@@ -103,6 +98,10 @@ def boot_session(bootinfo):
     home_route = _resolve_login_home_route(roles)
     bootinfo.ashan_is_system_manager = is_system_manager
     bootinfo.ashan_home_route = home_route
+    if user and user != "Guest":
+        from ashan_cn_procurement.services.work_context_service import get_work_context
+
+        bootinfo.ashan_work_context = get_work_context(user)
 
     # bootinfo.home_page must be a real Frappe Page name, not a Workspace route.
     # Only dedicated oil-card users use the custom Page as their fallback; all other

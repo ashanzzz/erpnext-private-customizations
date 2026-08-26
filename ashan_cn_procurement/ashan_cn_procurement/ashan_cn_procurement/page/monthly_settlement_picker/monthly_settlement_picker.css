@@ -499,24 +499,29 @@
 
 .picker-col-sticky-1 {
     left: 0;
-    width: 44px;
-    min-width: 44px;
-    max-width: 44px;
+    width: 36px;
+    min-width: 36px;
+    max-width: 36px;
     text-align: center;
+    padding: 0 2px !important;
 }
 
 .picker-col-sticky-2 {
-    left: 44px;
-    width: 44px;
-    min-width: 44px;
-    max-width: 44px;
+    left: 36px;
+    width: 36px;
+    min-width: 36px;
+    max-width: 36px;
     padding: 0 !important;
     text-align: center;
 }
 
 .picker-col-sticky-3 {
-    left: 88px;
-    min-width: clamp(150px, 16vw, 260px);
+    left: 72px;
+    width: 68px;
+    min-width: 68px;
+    max-width: 72px;
+    text-align: center !important;
+    padding: 0 4px !important;
     box-shadow: 3px 0 6px rgba(0, 0, 0, 0.05);
 }
 

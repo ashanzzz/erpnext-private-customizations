@@ -15,7 +15,7 @@ frappe.pages["monthly-settlement-picker"].on_page_load = function (wrapper) {
 class MonthlySettlementPicker {
     constructor(page) {
         this.page = page;
-        this.active_company = "All";
+        this.active_company = window.AshanWorkContext?.getCompany?.() || "All";
         this.companies = [];
         this.view_mode = "detail"; // detail | doc
         this.match_status = "pending"; // pending | completed | all
@@ -187,7 +187,9 @@ class MonthlySettlementPicker {
                 this.companies.forEach((c) => {
                     $select.append(`<option value="${c.name}">${frappe.utils.escape_html(c.company_name || c.name)}</option>`);
                 });
-                this.active_company = this.companies.length === 1 ? this.companies[0].name : "All";
+                if (!this.companies.some((company) => company.name === this.active_company)) {
+                    this.active_company = this.companies.length === 1 ? this.companies[0].name : "All";
+                }
                 $select.val(this.active_company);
             }
         } catch (e) {
@@ -197,6 +199,15 @@ class MonthlySettlementPicker {
 
     bind_global_events() {
         const self = this;
+
+        document.addEventListener("ashan-work-context-changed", (event) => {
+            const selectedCompany = event.detail?.company || "All";
+            if (selectedCompany === self.active_company) return;
+            if (selectedCompany !== "All" && !self.companies.some((company) => company.name === selectedCompany)) return;
+            self.active_company = selectedCompany;
+            self.selected_items.clear();
+            self.refresh_all();
+        });
 
         // Company change
         $("#monthly-company-select").on("change", function () {
@@ -277,7 +288,18 @@ class MonthlySettlementPicker {
         });
 
         $("#monthly-table-tbody").on("click", "tr[data-doctype][data-name]", function (e) {
-            if ($(e.target).closest("input, button, a, .picker-clickable-doc").length) {
+            const $chkCell = $(e.target).closest("td.picker-col-sticky-2, td.picker-col-checkbox, td:has(input.picker-row-checkbox)");
+            if ($chkCell.length) {
+                if (!$(e.target).is("input[type='checkbox']")) {
+                    const $cb = $chkCell.find("input.picker-row-checkbox");
+                    if ($cb.length) {
+                        $cb.prop("checked", !$cb.prop("checked")).trigger("change");
+                    }
+                }
+                return;
+            }
+
+            if ($(e.target).closest("input, button, a, .picker-clickable-doc, .ashan-tag-badge").length) {
                 return;
             }
             const dt = $(this).attr("data-doctype");
@@ -329,7 +351,7 @@ class MonthlySettlementPicker {
         };
 
         if (thead) thead.addEventListener("wheel", handle_wheel, { passive: false });
-        table_container.addEventListener("wheel", handle_wheel, { passive: false });
+        if (top_scrollbar) top_scrollbar.addEventListener("wheel", handle_wheel, { passive: false });
     }
 
     sync_top_scrollbar_width() {
@@ -516,7 +538,9 @@ class MonthlySettlementPicker {
                     <td class="picker-col-sticky-2 picker-col-chk">
                         <input type="checkbox" class="picker-row-checkbox" data-key="${r.pri_name}" ${is_checked} />
                     </td>
-                    <td class="picker-col-sticky-3 picker-col-company">${frappe.utils.escape_html(r.company)}</td>
+                    <td class="picker-col-sticky-3 picker-col-company">
+                        <span class="picker-company-badge ${(r.company || '').includes('祺富') ? 'picker-company-badge-qifu' : 'picker-company-badge-jizhong'}">${frappe.utils.escape_html((r.company || '').includes('祺富') ? '祺富' : ((r.company || '').includes('吉众') ? '吉众' : (r.company || '')))}</span>
+                    </td>
                     <td>
                         <span class="picker-clickable-doc" data-doctype="Purchase Receipt" data-name="${r.pr_name}">
                             ${frappe.utils.escape_html(r.pr_name)}
@@ -648,7 +672,9 @@ class MonthlySettlementPicker {
                     <td class="picker-col-sticky-2 picker-col-chk">
                         <input type="checkbox" class="picker-row-checkbox" data-key="${r.pr_name}" ${is_checked} />
                     </td>
-                    <td class="picker-col-sticky-3 picker-col-company">${frappe.utils.escape_html(r.company)}</td>
+                    <td class="picker-col-sticky-3 picker-col-company">
+                        <span class="picker-company-badge ${(r.company || '').includes('祺富') ? 'picker-company-badge-qifu' : 'picker-company-badge-jizhong'}">${frappe.utils.escape_html((r.company || '').includes('祺富') ? '祺富' : ((r.company || '').includes('吉众') ? '吉众' : (r.company || '')))}</span>
+                    </td>
                     <td>
                         <span class="picker-clickable-doc" data-doctype="Purchase Receipt" data-name="${r.pr_name}">
                             ${frappe.utils.escape_html(r.pr_name)}
@@ -748,9 +774,13 @@ class MonthlySettlementPicker {
 
         d.$wrapper.find(".modal-dialog").addClass("ashan-smart-modal");
 
-        const comp_options = this.companies.map((c) =>
-            `<option value="${c.name}" ${c.name === (self.active_company === "All" ? self.companies[0]?.name : self.active_company) ? "selected" : ""}>${frappe.utils.escape_html(c.company_name || c.name)}</option>`
-        ).join("");
+        const contextCompany = window.AshanWorkContext?.getCompany?.();
+        const defaultCompany = window.AshanWorkContext
+            ? contextCompany
+            : (self.active_company === "All" ? self.companies[0]?.name : self.active_company);
+        const comp_options = `${defaultCompany ? "" : '<option value="" selected>请选择公司</option>'}${this.companies.map((c) =>
+            `<option value="${c.name}" ${c.name === defaultCompany ? "selected" : ""}>${frappe.utils.escape_html(c.company_name || c.name)}</option>`
+        ).join("")}`;
 
         const form_html = `
             <div class="ashan-smart-modal-body">
@@ -774,7 +804,7 @@ class MonthlySettlementPicker {
                         </div>
                         <div class="ashan-smart-field">
                             <label class="ashan-smart-field-label">入库日期</label>
-                            <input type="date" class="ashan-smart-control" id="modal-monthly-date" value="${frappe.datetime.nowdate()}" />
+                            <input type="date" class="ashan-smart-control" id="modal-monthly-date" value="${window.AshanWorkContext?.getWorkDate?.() || frappe.datetime.nowdate()}" />
                         </div>
                         <div class="ashan-smart-field">
                             <label class="ashan-smart-field-label">收货目标仓库</label>
@@ -964,6 +994,10 @@ class MonthlySettlementPicker {
         const posting_date = $wrap.find("#modal-monthly-date").val();
         const warehouse = $wrap.find("#modal-monthly-warehouse").val().trim();
 
+        if (!company) {
+            frappe.msgprint(__("请选择所属公司！"));
+            return;
+        }
         if (!supplier) {
             frappe.msgprint(__("请填写月结供应商名称！"));
             return;

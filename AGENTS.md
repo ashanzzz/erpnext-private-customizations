@@ -69,8 +69,7 @@
 2. **动态视口锁定大宽表高度与零垂直滚动条 (Zero Outer Vertical Scroll)**：
    - **动态视口锁定**：通过 `adjust_active_table_height()` 动态计算 `window.innerHeight - topOffsets`，将表格横向滚动条**永久常驻贴合在当前屏幕视口底沿**；
    - **外层网页禁止出现垂直滚动条**：彻底消灭“下拉到底找滑轮、拖到右边再拉回顶上看姓名”的反人类体验；
-   - **双向联动顶部辅助滚动条**：宽表上方挂载 `sync_dual_scrollbars()` 顶部滑轮，左右滚动实时双向同步；
-   - **表头与主体滚轮转横向滚动 (Mousewheel-to-Horizontal Scroll)**：所有 10 列以上的长宽表（选单大表、弹窗物料表、薪酬台账等），表头 `thead` 与表格容器必须挂载滚轮事件，当用户在表头或表格区域上下拨动鼠标滚轮时，若存在横向溢出，自动平滑转换为横向左右滚动（`scrollLeft += deltaY`），支持单手滑轮极速漫游大宽表。
+   - **表头滚轮转横向滚动 (Mousewheel-to-Horizontal Scroll)**：所有 10 列以上的长宽表（选单大表、弹窗物料表、薪酬台账等），表头 `thead` 与顶部辅助滚动条挂载滚轮事件，当用户在表头或顶部滚动条拨动鼠标滚轮时，若存在横向溢出，自动平滑转换为横向左右滚动（`scrollLeft += deltaY`），支持单手滑轮极速漫游大宽表；而在表格内容行/明细行 (`tbody`) 区域，滚轮保持默认的原生垂直上下滚动（上下移动），严禁劫持内容区纵向滚动。
 
 3. **务实、高效、核心决策数据一目了然**：
    - 卡片等宽排版、统一高度、字体字号阶梯一致；
@@ -114,14 +113,26 @@
      - 页面刷新与关闭（`window.beforeunload`）：离开页面前同步写入 `localStorage`；
    - **草稿自动恢复与重置**：重新打开录单弹窗时，自动检测有效草稿并完整恢复全部卡片、行项目、金额、税率、规格与备注，顶部展示高质感恢复提示条，并提供一键重置草稿功能。
 
-8. **现代分段控件与草稿置顶警示标准 (Modern Segmented Control & Draft Pinning Standard)**：
+8. **现代分段控件与全生命周期状态梯队排序铁律 (Modern Segmented Control & Lifecycle Status Sorting Hierarchy)**：
    - **高质感分段控件取代笨重下拉单选**：对于固定 2~4 个互斥状态或类型的选择（如发票类型：`专用发票` / `普通发票` / `无发票`），优先采用分段控件（`.ashan-segmented-control` + `.ashan-segment-btn`），实现单手极速点选，彻底消除原生 `<select>` 的多次点击折叠体验；
    - **动态表单联锁逻辑**：
      - 当选择 `专用发票` / `普通发票` 时，发票号码必填（红色星号），提交时强校验；
      - 当选择 `无发票` 时，发票号码自动禁用（`disabled`）并赋系统自动编号占位符，税率自动置 0；
-   - **草稿单据默认置顶与警示高亮**：
-     - 查询列表排序铁律：`ORDER BY (CASE WHEN rr.docstatus = 0 THEN 0 ELSE 1 END) ASC, rr.posting_date DESC, rr.name DESC`，草稿单据（`docstatus = 0`）永远置顶于主列表最上方；
-     - 视觉采用暖色琥珀色警示条（`.ashan-row-draft`）与胶囊标签（`.ashan-tag-draft`，`🟡 待提交草稿`）；
+   - **单据全生命周期状态梯队排序铁律 (3-Tier Document Status Sorting Hierarchy)**：
+     - **全工作台查询统一排序原则**：**草稿单据必须永远置顶于最前面，全部完成/已结清/已作废的历史单据必须沉底于最后面，进行中的待办单据居中按日期倒序排列**；
+     - **第一梯队（置顶）**：`🟡 待提交草稿`（`docstatus = 0` / `Draft`）——永远置顶于主列表最上方，配合暖色琥珀色高亮（`.ashan-row-draft`）与提示，提醒操作员优先处理或提交；
+     - **第二梯队（中间）**：`🔵 待收货待开票`、`🚚 待收货入库`、`📑 待开票结算`、`🔴 待付款`、`🟠 部分付款`、`🟡 待处理` 等进行中活跃单据——按业务日期倒序排列，保证待办任务清晰可见；
+     - **第三梯队（沉底）**：`✅ 已完成`（`Completed`）、`✅ 已付款 / ✅ 已结清`（`Paid`）、`🔒 已关闭`（`Closed`）、`⚪ 已作废`（`Cancelled`）——自动沉底至列表最后方，避免历史归档数据冲淡或干扰当前活跃业务；
+     - **SQL 服务层实现规范**：
+       ```sql
+       ORDER BY (
+           CASE 
+               WHEN doc.docstatus = 0 THEN 0
+               WHEN doc.status IN ('Completed', 'Closed', 'Cancelled', 'Paid') OR (doc.outstanding_amount <= 0.0001 AND doc.docstatus = 1) THEN 2
+               ELSE 1
+           END
+       ) ASC, doc.posting_date DESC, doc.name DESC
+       ```
    - **智能高效静默同步与实时无刷新呈现**：
      - 空表单绝不生成单据；一旦录入实质内容，前端防抖在后台静默保存为服务器草稿，并以微量 JSON 局部更新主列表与 KPI，保证无需整页刷新即可实时感知最新草稿，且极度节省系统资源。
 

@@ -1068,6 +1068,16 @@
     border-left: 3px solid #f59e0b !important;
 }
 
+.ashan-row-draft td,
+.reim-row-draft td {
+    background: #fffdf7 !important;
+}
+
+.ashan-row-draft:hover td,
+.reim-row-draft:hover td {
+    background: #fef3c7 !important;
+}
+
 .ashan-tag-draft,
 .reim-tag-draft {
     background: #fef3c7 !important;
@@ -1083,7 +1093,7 @@
     0%, 100% {
         border-color: #ef4444;
         box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
-        background-color: #fff8f8;
+        background-color: #fff1f2;
     }
     50% {
         border-color: #cbd5e1;
@@ -1092,11 +1102,47 @@
     }
 }
 
+@keyframes ashan-label-flash-bg {
+    0%, 100% {
+        background-color: #fee2e2;
+        color: #b91c1c;
+        border-radius: 3px;
+        padding: 1px 5px;
+    }
+    50% {
+        background-color: transparent;
+        color: #475569;
+        padding: 1px 5px;
+    }
+}
+
 .ashan-field-flash-error,
 .reim-field-flash-error {
-    animation: ashan-flash-red 0.8s ease-in-out 2;
+    animation: ashan-flash-red 0.6s ease-in-out 3;
     border-color: #ef4444 !important;
-    background-color: #fff8f8 !important;
+    background-color: #fff1f2 !important;
+    border-radius: 6px;
+}
+
+.ashan-field-flash-error .control-label,
+.ashan-field-flash-error label,
+.reim-field-flash-error .control-label,
+.reim-field-flash-error label {
+    animation: ashan-label-flash-bg 0.6s ease-in-out 3 !important;
+    color: #b91c1c !important;
+    font-weight: 700 !important;
+}
+
+.ashan-field-flash-error input,
+.ashan-field-flash-error select,
+.ashan-field-flash-error textarea,
+.ashan-field-flash-error .input-with-feedback,
+.reim-field-flash-error input,
+.reim-field-flash-error select,
+.reim-field-flash-error textarea {
+    border-color: #ef4444 !important;
+    background-color: #fff1f2 !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
 }
 
 /* ==========================================================================
@@ -1151,7 +1197,9 @@
 /* ==========================================================================
    Clean Single-Header View (Hide Redundant Native Breadcrumbs)
    ========================================================================== */
-[data-page-route="procurement-order-picker"] .page-head,
+[data-page-route="material-request-workbench"] .page-head,
+[data-page-route="procurement-execution-workbench"] .page-head,
+[data-page-route="material-receipt-workbench"] .page-head,
 [data-page-route="wire-transfer-picker"] .page-head,
 [data-page-route="monthly-settlement-picker"] .page-head,
 [data-page-route="reimbursement-picker"] .page-head {
@@ -1167,6 +1215,150 @@
     background-color: #f8fafc;
 }
 
+/* ===========================================================================
+   Desk Working Context Trigger
+   Keeps business defaults separate from the user's native profile menu.
+   ========================================================================== */
+.ashan-work-context-trigger {
+    width: calc(100% - 16px);
+    margin: 0 8px 8px;
+    padding: 8px 9px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    color: var(--ashan-color-slate-700, #334155);
+    background: var(--ashan-color-slate-50, #f8fafc);
+    border: 1px solid var(--ashan-color-slate-200, #e2e8f0);
+    border-radius: var(--ashan-radius-sm, 6px);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
 
+.ashan-work-context-trigger:hover {
+    color: var(--ashan-color-blue-800, #1e40af);
+    background: var(--ashan-color-blue-50, #eff6ff);
+    border-color: var(--ashan-color-blue-200, #bfdbfe);
+    box-shadow: 0 1px 3px rgba(30, 64, 175, 0.1);
+}
 
+.ashan-work-context-trigger:focus-visible {
+    outline: 2px solid var(--ashan-color-blue-500, #3b82f6);
+    outline-offset: 2px;
+}
+
+.ashan-work-context-trigger-topline,
+.ashan-work-context-trigger-value {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.ashan-work-context-trigger-topline {
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.ashan-work-context-trigger-label {
+    color: var(--ashan-color-slate-500, #64748b);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.ashan-work-context-trigger-action {
+    color: var(--ashan-color-blue-700, #1d4ed8);
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.ashan-work-context-trigger-value {
+    gap: 5px;
+    color: var(--ashan-color-slate-700, #334155);
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 1.25;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.ashan-work-context-company {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ashan-work-context-separator,
+.ashan-work-context-date {
+    flex: 0 0 auto;
+}
+
+.ashan-work-date-mode {
+    margin-bottom: 4px;
+}
+
+.ashan-work-date-mode-label {
+    margin-bottom: 7px;
+    color: var(--ashan-color-slate-700, #334155);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.ashan-work-date-mode-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.ashan-work-date-mode-option {
+    min-width: 0;
+    padding: 9px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    color: var(--ashan-color-slate-600, #475569);
+    background: var(--ashan-color-slate-50, #f8fafc);
+    border: 1px solid var(--ashan-color-slate-200, #e2e8f0);
+    border-radius: var(--ashan-radius-sm, 6px);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ashan-work-date-mode-option:hover {
+    color: var(--ashan-color-blue-800, #1e40af);
+    background: var(--ashan-color-blue-50, #eff6ff);
+    border-color: var(--ashan-color-blue-200, #bfdbfe);
+}
+
+.ashan-work-date-mode-option.active {
+    color: var(--ashan-color-blue-900, #1e3a8a);
+    background: var(--ashan-color-blue-50, #eff6ff);
+    border-color: var(--ashan-color-blue-500, #3b82f6);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
+.ashan-work-date-mode-option:focus-visible {
+    outline: 2px solid var(--ashan-color-blue-500, #3b82f6);
+    outline-offset: 2px;
+}
+
+.ashan-work-date-mode-title {
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.ashan-work-date-mode-description,
+.ashan-work-date-mode-note {
+    color: var(--ashan-color-slate-500, #64748b);
+    font-size: 10.5px;
+    line-height: 1.45;
+}
+
+.ashan-work-date-mode-note {
+    min-height: 16px;
+    margin-top: 6px;
+}
 

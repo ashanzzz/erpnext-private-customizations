@@ -253,14 +253,14 @@
         },
 
         /**
-         * 6. 统一大宽表表头/主体鼠标滚轮转横向滚动能力 (Mousewheel-to-Horizontal Scroll)
-         * 当用户在表头或表格区域上下拨动鼠标滚轮时，若容器存在横向溢出，自动转换为横向滚动。
+         * 6. 统一大宽表表头/顶部滚动条鼠标滚轮转横向滚动能力 (Mousewheel-to-Horizontal Scroll)
+         * 当用户在表头 (thead) 或顶部辅助滚动条上下拨动鼠标滚轮时，若容器存在横向溢出，自动转换为横向滚动；内容行/明细行保持默认垂直上下移动。
          * @param {jQuery|HTMLElement|string} container 滚动容器元素
-         * @param {jQuery|HTMLElement|string} triggerEl 触发元素（如 thead 或整个 table）
+         * @param {jQuery|HTMLElement|string} triggerEl 触发元素（如 thead 或顶部滚动条，默认查找 container 内 thead）
          */
         enableMousewheelHorizontalScroll: function (container, triggerEl) {
             const $container = $(container);
-            const $trigger = triggerEl ? $(triggerEl) : $container;
+            const $trigger = triggerEl ? $(triggerEl) : $container.find("thead");
 
             $trigger.on("wheel", function (e) {
                 const raw = e.originalEvent || e;
@@ -274,6 +274,64 @@
                     }
                 }
             });
+        },
+
+        /**
+         * 7. 统一单据状态中文语义化徽章 (Standard Chinese Document Status Badges)
+         * @param {string} doctype 单据类型 (e.g. "Purchase Order", "Material Request")
+         * @param {string} status 原始状态字符串
+         * @param {number} docstatus 文档状态代码 (0: Draft, 1: Submitted, 2: Cancelled)
+         * @param {Object} r 原始行或文档对象
+         * @returns {string} HTML 胶囊标签
+         */
+        formatDocStatus: function (doctype, status, docstatus, r) {
+            status = (status || "").trim();
+            if (docstatus === 0 || status === "Draft" || status === "草稿") {
+                return `<span class="ashan-status-badge ashan-status-amber">🟡 待提交草稿</span>`;
+            }
+            if (docstatus === 2 || status === "Cancelled" || status === "已作废") {
+                return `<span class="ashan-status-badge ashan-status-gray">⚪ 已作废</span>`;
+            }
+
+            const STATUS_MAP = {
+                // 采购订单与入库单状态 (Purchase Order / Receipt)
+                "To Receive and Bill": { label: "🔵 待收货待开票", cls: "ashan-status-blue" },
+                "To Receive": { label: "🚚 待收货入库", cls: "ashan-status-blue" },
+                "To Bill": { label: "📑 待开票结算", cls: "ashan-status-purple" },
+                "Completed": { label: "✅ 已完成", cls: "ashan-status-green" },
+                "Submitted": { label: "✅ 已生效", cls: "ashan-status-green" },
+                "Closed": { label: "🔒 已关闭", cls: "ashan-status-gray" },
+                "Stopped": { label: "🛑 已停止", cls: "ashan-status-red" },
+                "On Hold": { label: "⏸️ 挂起中", cls: "ashan-status-amber" },
+                "Delivered": { label: "📦 已交付", cls: "ashan-status-green" },
+
+                // 工作流状态 (Workflow Statuses)
+                "Pending": { label: "🟡 待处理", cls: "ashan-status-amber" },
+                "Ordered": { label: "📦 已订购", cls: "ashan-status-green" },
+                "Issued": { label: "📤 已发料", cls: "ashan-status-green" },
+                "Transferred": { label: "🔄 已调拨", cls: "ashan-status-blue" },
+                "Approved": { label: "✅ 已核准", cls: "ashan-status-green" },
+                "Rejected": { label: "❌ 已驳回", cls: "ashan-status-red" },
+
+                // 支付/结算/开票状态 (Payment / Settlement Statuses)
+                "Paid": { label: "✅ 已付款", cls: "ashan-status-green" },
+                "Unpaid": { label: "🔴 待付款", cls: "ashan-status-red" },
+                "未付款": { label: "🔴 待付款", cls: "ashan-status-red" },
+                "已付款": { label: "✅ 已付款", cls: "ashan-status-green" },
+                "已结清": { label: "✅ 已结清", cls: "ashan-status-green" },
+                "Partly Paid": { label: "🟠 部分付款", cls: "ashan-status-amber" },
+                "部分付款": { label: "🟠 部分付款", cls: "ashan-status-amber" },
+                "Overdue": { label: "⏰ 已逾期", cls: "ashan-status-red" },
+                "Partly Billed": { label: "📑 部分开票", cls: "ashan-status-purple" },
+                "Partly Received": { label: "🚚 部分收货", cls: "ashan-status-blue" },
+            };
+
+            const conf = STATUS_MAP[status];
+            if (conf) {
+                return `<span class="ashan-status-badge ${conf.cls}">${conf.label}</span>`;
+            }
+
+            return `<span class="ashan-status-badge ashan-status-blue">${window.frappe && frappe.utils ? frappe.utils.escape_html(status || "已生效") : (status || "已生效")}</span>`;
         },
     };
 })();

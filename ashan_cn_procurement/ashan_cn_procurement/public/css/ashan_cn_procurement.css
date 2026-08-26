@@ -165,13 +165,53 @@ body:not(.full-width) [data-page-route="Workspaces"] .layout-main {
 
 .body-sidebar .sidebar-child-item .standard-sidebar-item .item-anchor {
     padding-left: 24px !important;
+    padding-right: 8px !important;
     font-size: 13px !important;
     font-weight: 400 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
 }
 
 .body-sidebar .standard-sidebar-item.ashan-workbench-item .sidebar-item-label {
     font-weight: 700 !important;
     color: var(--text-color) !important;
+}
+
+/* 侧边栏任务待办微型徽章 (Sidebar Task Count Badge) */
+.ashan-sidebar-count-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 18px !important;
+    height: 18px !important;
+    padding: 0 5px !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    border-radius: 999px !important;
+    font-variant-numeric: tabular-nums !important;
+    background: #fffbeb !important;
+    color: #d97706 !important;
+    border: 1px solid #fef3c7 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+    margin-left: auto !important;
+    flex-shrink: 0 !important;
+    transition: all 0.15s ease !important;
+}
+
+.body-sidebar .sidebar-child-item:hover .ashan-sidebar-count-badge {
+    background: #fef3c7 !important;
+    color: #b45309 !important;
+    border-color: #fde68a !important;
+}
+
+.body-sidebar .sidebar-child-item.active .ashan-sidebar-count-badge,
+.body-sidebar .sidebar-child-item.selected .ashan-sidebar-count-badge {
+    background: #d97706 !important;
+    color: #ffffff !important;
+    border-color: #d97706 !important;
 }
 
 .body-sidebar[data-ashan-sidebar-hydrating="true"]

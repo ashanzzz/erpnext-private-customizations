@@ -170,6 +170,32 @@
         "Share": "共享单据 (Share)",
         "User Permissions": "按用户隔离数据权限",
         "If Owner": "仅限创建者本人",
+
+        // === 5.1 单据状态与工作流术语 (Document Statuses) ===
+        "Draft": "待提交草稿",
+        "Pending": "待处理",
+        "Submitted": "已生效",
+        "Completed": "已完成",
+        "Cancelled": "已作废",
+        "Closed": "已关闭",
+        "Stopped": "已停止",
+        "On Hold": "挂起中",
+        "Delivered": "已交付",
+        "Ordered": "已订购",
+        "Issued": "已发料",
+        "Transferred": "已调拨",
+        "Approved": "已核准",
+        "Rejected": "已驳回",
+        "Paid": "已付款",
+        "Unpaid": "待付款",
+        "Partly Paid": "部分付款",
+        "Overdue": "已逾期",
+        "Partly Billed": "部分开票",
+        "Partly Received": "部分收货",
+        "To Receive and Bill": "待收货待开票",
+        "To Receive": "待收货入库",
+        "To Bill": "待开票结算",
+
         "Purchase Order": "采购订单",
         "Purchase Receipt": "采购入库单",
         "Purchase Invoice": "采购发票",
@@ -216,7 +242,24 @@
         "Purchase Manager": "采购管理员",
         "Accounts Manager": "财务主管",
         "Fleet Manager": "车队主管",
-        "System Manager": "系统管理员"
+        "System Manager": "系统管理员",
+
+        // === 6. 表单校验与必填项提示 (Validation & Mandatory Prompts) ===
+        "Missing Values Required": "请填写必填项",
+        "Following fields have missing values:": "以下必填字段尚未填写：",
+        "Following fields have missing values": "以下必填字段尚未填写",
+        "Value missing for:": "以下字段未填写：",
+        "Value missing for": "以下字段未填写",
+        "Mandatory fields required": "请完善以下必填项",
+        "Mandatory fields missing": "缺少必填字段",
+        "Please specify": "请填写",
+        "Please select": "请选择",
+        "Supplier is required": "供应商为必填项",
+        "Please select a Supplier": "请选择供应商",
+        "Schedule Date is required": "期望到货日期为必填项",
+        "Please enter a valid rate": "请输入有效单价",
+        "Amount cannot be zero": "金额不能为 0",
+        "Rate and Amount must be greater than zero": "单价与金额必须大于 0"
     };
 
     // 1. 注入前端 Frappe 翻译字典
