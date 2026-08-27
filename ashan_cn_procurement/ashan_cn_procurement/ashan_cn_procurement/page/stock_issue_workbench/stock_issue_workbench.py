@@ -304,6 +304,74 @@ def get_stock_issue_list(
 
 
 @frappe.whitelist()
+def get_warehouse_stock_items(
+    company: str,
+    warehouse: str,
+    search_text: str | None = None,
+    only_positive_stock: int | str = 1,
+) -> list[dict]:
+    """
+    查询选定发货仓内的实存物料清单：
+    默认只返回 actual_qty > 0 的物料，附带物料编码、物料名称、规格型号、主计量单位及当前实存。
+    按库存量倒序及物料编码排序，专供出库极速选单与智能补全。
+    """
+    if not company or not warehouse:
+        return []
+
+    assert_company_access(company)
+
+    only_pos = str(only_positive_stock).strip() in ("1", "true", "True")
+    txt = (search_text or "").strip()
+
+    conditions = ["b.warehouse = %s", "i.disabled = 0"]
+    params = [warehouse]
+
+    if only_pos:
+        conditions.append("b.actual_qty > 0.0001")
+
+    if txt:
+        conditions.append("(b.item_code LIKE %s OR i.item_name LIKE %s OR i.description LIKE %s)")
+        like_txt = f"%{txt}%"
+        params.extend([like_txt, like_txt, like_txt])
+
+    where_clause = " AND ".join(conditions)
+
+    sql = f"""
+        SELECT 
+            b.item_code,
+            i.item_name,
+            i.description,
+            COALESCE(b.stock_uom, i.stock_uom, 'Nos') AS stock_uom,
+            COALESCE(b.actual_qty, 0) AS actual_qty
+        FROM `tabBin` b
+        INNER JOIN `tabItem` i ON i.name = b.item_code
+        WHERE {where_clause}
+        ORDER BY b.actual_qty DESC, b.item_code ASC
+        LIMIT 100
+    """
+
+    records = frappe.db.sql(sql, params, as_dict=True)
+
+    # 如果指定关键词搜索且允许0库存但无结果时，回退检索全量物料主数据
+    if not records and txt and not only_pos:
+        items = frappe.get_all(
+            "Item",
+            filters=[
+                ["disabled", "=", 0],
+                ["is_stock_item", "=", 1],
+                ["item_code", "like", f"%{txt}%"],
+            ],
+            fields=["name as item_code", "item_name", "description", "stock_uom"],
+            limit=20,
+        )
+        for it in items:
+            it["actual_qty"] = 0.0
+            records.append(it)
+
+    return records
+
+
+@frappe.whitelist()
 def get_item_stock_balance(company: str, warehouse: str, item_code: str) -> dict:
     """查询指定物料在发货仓的实时可用账面结存"""
     if not company or not warehouse or not item_code:
@@ -381,6 +449,13 @@ def create_stock_issue(
         qty = flt(it.get("qty") or 0)
         if qty <= 0:
             frappe.throw(f"第 {idx} 行物料 {code} 的出库数量必须大于 0")
+
+        # 严格校验发货仓可用库存，严禁超库存出库
+        bin_qty = frappe.db.get_value("Bin", {"warehouse": warehouse, "item_code": code}, "actual_qty") or 0.0
+        if flt(qty) > flt(bin_qty) + 0.0001:
+            frappe.throw(
+                f"第 {idx} 行物料 {code} 在发货仓【{warehouse}】的可用库存为 {flt(bin_qty):.2f}，出库数量 {qty:.2f} 超出可用库存，无法出库！"
+            )
 
         item_doc = frappe.get_cached_doc("Item", code)
         stock_uom = it.get("stock_uom") or item_doc.stock_uom or "Nos"

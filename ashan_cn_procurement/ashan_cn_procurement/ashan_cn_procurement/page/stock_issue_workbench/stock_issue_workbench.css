@@ -678,10 +678,22 @@
     border-radius: 6px;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
     z-index: 1100;
-    max-height: 220px;
+    max-height: 260px;
     overflow-y: auto;
-    width: 320px;
+    width: 360px;
     font-size: 12px;
+}
+
+.si-suggest-header {
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 .si-suggest-item {
@@ -689,18 +701,100 @@
     cursor: pointer;
     border-bottom: 1px solid #f1f5f9;
     display: flex;
-    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.1s ease;
 }
 .si-suggest-item:hover, .si-suggest-item.active {
     background: #eff6ff;
 }
 
+.si-suggest-item-left {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
 .si-suggest-code {
     font-weight: 700;
     color: #1e40af;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .si-suggest-name {
     color: #64748b;
     font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
+
+.si-suggest-stock {
+    font-size: 11px;
+    font-weight: 700;
+    color: #15803d;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    padding: 1px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+.si-suggest-stock.zero {
+    color: #94a3b8;
+    background: #f1f5f9;
+    border-color: #e2e8f0;
+}
+
+.si-stock-badge-clickable {
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.si-stock-badge-clickable:hover {
+    transform: scale(1.05);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    background: #dcfce7;
+}
+
+.si-qty-invalid {
+    border-color: #ef4444 !important;
+    background-color: #fef2f2 !important;
+    color: #b91c1c !important;
+    font-weight: 700 !important;
+}
+
+.si-stock-warning {
+    font-size: 10.5px;
+    color: #dc2626;
+    margin-top: 2px;
+    font-weight: 600;
+    text-align: right;
+    line-height: 1.2;
+}
+
+/* Warehouse Stock Picker Modal */
+.si-picker-dialog {
+    width: min(92vw, 850px);
+}
+.si-picker-header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.si-picker-search {
+    width: 220px;
+}
+.si-picker-table th {
+    background: #f8fafc;
+}
+.si-picker-row:hover td {
+    background: #f8fafc;
+}
+.si-picker-qty-input {
+    width: 90px;
+    text-align: right;
+}
+

@@ -76,7 +76,7 @@ class AshanStockIssueWorkbench {
                     <div class="si-header-left">
                         <div class="si-title-box">
                             <h3>材料出库</h3>
-                            <p>登记车间领料、维修改造与部门领用，支持批量选料、库存实时校验与直接过账</p>
+                            <p>登记车间领料、维修改造与部门领用，支持仓库实存感知、库存上限强约束与直接过账</p>
                         </div>
                         <select class="si-company-select"></select>
                     </div>
@@ -106,7 +106,7 @@ class AshanStockIssueWorkbench {
                     <div class="si-kpi-card">
                         <div class="si-kpi-label">常用操作与规范</div>
                         <div class="si-kpi-val si-kpi-val-text">默认直接过账生效</div>
-                        <div class="si-kpi-sub">支持按部门/用途分流统计与明细穿透</div>
+                        <div class="si-kpi-sub">严禁超库存出库 · 支持仓库实存感知智能选单</div>
                     </div>
                 </div>
 
@@ -482,8 +482,11 @@ class AshanStockIssueWorkbench {
 
                         <!-- Items Entry Table -->
                         <div class="si-section-header">
-                            <span class="si-section-title">出库物料清单</span>
                             <div>
+                                <span class="si-section-title">出库物料清单</span>
+                            </div>
+                            <div>
+                                <button type="button" class="btn btn-xs btn-default si-open-picker-btn">📦 仓库现存挑选</button>
                                 <button type="button" class="btn btn-xs btn-default si-add-item-btn">➕ 添加物料行</button>
                                 <button type="button" class="btn btn-xs btn-default si-clear-items-btn si-btn-danger-text">🗑️ 清空清单</button>
                             </div>
@@ -532,16 +535,19 @@ class AshanStockIssueWorkbench {
                     <td class="si-row-idx">${row_idx}</td>
                     <td>
                         <div class="si-relative-box">
-                            <input type="text" class="si-form-control si-row-item-input" value="${item_code ? `${item_name || item_code} (${item_code})` : ''}" placeholder="键入编码或名称搜索..." data-code="${item_code}" data-name="${item_name}" data-uom="${stock_uom}" />
+                            <input type="text" class="si-form-control si-row-item-input" value="${item_code ? `${item_name || item_code} (${item_code})` : ''}" placeholder="点击挑选实存物料或搜索..." data-code="${item_code}" data-name="${item_name}" data-uom="${stock_uom}" />
                         </div>
                     </td>
                     <td class="si-row-spec si-row-spec-text">${description || '-'}</td>
                     <td class="si-text-right">
-                        <span class="si-stock-badge ${available_qty <= 0 ? 'si-stock-badge-low' : ''} si-row-stock-badge">${(flt(available_qty) || 0).toFixed(2)} ${stock_uom}</span>
+                        <span class="si-stock-badge ${available_qty <= 0 ? 'si-stock-badge-low' : ''} si-row-stock-badge si-stock-badge-clickable" data-avail="${available_qty}" title="点击可一键自动填入最大可用库存">${(flt(available_qty) || 0).toFixed(2)} ${stock_uom}</span>
                     </td>
                     <td class="si-text-right">
-                        <input type="number" step="any" min="0.001" class="si-form-control si-row-qty si-qty-input" value="${qty}" />
-                        <span class="si-row-uom-label si-row-uom-text">${stock_uom}</span>
+                        <div class="si-relative-box">
+                            <input type="number" step="any" min="0.001" class="si-form-control si-row-qty si-qty-input" value="${qty}" />
+                            <span class="si-row-uom-label si-row-uom-text">${stock_uom}</span>
+                            <div class="si-stock-warning"></div>
+                        </div>
                     </td>
                     <td class="si-text-center">
                         <button type="button" class="btn btn-xs btn-default si-row-del-btn si-row-del-button">✕</button>
@@ -550,23 +556,61 @@ class AshanStockIssueWorkbench {
             `;
             const $tr = $(tr).appendTo($items_body);
             bind_row_events($tr);
+            validate_row($tr);
             update_totals();
             save_draft_debounced();
+            return $tr;
+        }
+
+        function validate_row($tr) {
+            const $input = $tr.find('.si-row-item-input');
+            const $qty = $tr.find('.si-row-qty');
+            const $warning = $tr.find('.si-stock-warning');
+            const $badge = $tr.find('.si-row-stock-badge');
+            
+            const code = $input.data('code');
+            const val = flt($qty.val()) || 0;
+            const avail = flt($badge.data('avail')) || 0;
+            const uom = $input.data('uom') || 'Nos';
+
+            if (code && val > avail + 0.0001) {
+                $qty.addClass('si-qty-invalid');
+                $warning.text(`超出库存(最多${avail.toFixed(2)})`).show();
+                return false;
+            } else {
+                $qty.removeClass('si-qty-invalid');
+                $warning.empty().hide();
+                return true;
+            }
         }
 
         function update_totals() {
             let total_items = 0;
             let total_qty = 0;
             let uom = 'Nos';
+            let has_invalid = false;
+
             $items_body.find('.si-item-row').each(function () {
                 const code = $(this).find('.si-row-item-input').data('code');
                 if (code) {
                     total_items++;
-                    total_qty += flt($(this).find('.si-row-qty').val()) || 0;
+                    const row_qty = flt($(this).find('.si-row-qty').val()) || 0;
+                    total_qty += row_qty;
                     uom = $(this).find('.si-row-item-input').data('uom') || uom;
+                    if (!validate_row($(this))) {
+                        has_invalid = true;
+                    }
                 }
             });
-            $modal.find('.si-dialog-summary-text').text(`共 ${total_items} 项物料，合计出库 ${total_qty.toFixed(2)} ${uom}`);
+
+            const $submit_btn = $modal.find('.si-dialog-submit-btn');
+            if (has_invalid) {
+                $modal.find('.si-dialog-summary-text').html(`<span class="si-btn-danger-text">共 ${total_items} 项物料，合计出库 ${total_qty.toFixed(2)} ${uom} (存在超出库存项，禁止提交)</span>`);
+                $submit_btn.prop('disabled', true);
+            } else {
+                $modal.find('.si-dialog-summary-text').text(`共 ${total_items} 项物料，合计出库 ${total_qty.toFixed(2)} ${uom}`);
+                $submit_btn.prop('disabled', false);
+            }
         }
 
         let draft_timer = null;
@@ -583,7 +627,7 @@ class AshanStockIssueWorkbench {
                             item_name: $input.data('name'),
                             description: $(this).find('.si-row-spec').text(),
                             stock_uom: $input.data('uom'),
-                            available_qty: flt($(this).find('.si-row-stock-badge').text()),
+                            available_qty: flt($(this).find('.si-row-stock-badge').data('avail')),
                             qty: flt($(this).find('.si-row-qty').val()) || 1
                         });
                     }
@@ -603,6 +647,7 @@ class AshanStockIssueWorkbench {
             const $input = $tr.find('.si-row-item-input');
             const $qty = $tr.find('.si-row-qty');
             const $del = $tr.find('.si-row-del-btn');
+            const $badge = $tr.find('.si-row-stock-badge');
 
             $del.on('click', function () {
                 $tr.remove();
@@ -612,6 +657,7 @@ class AshanStockIssueWorkbench {
             });
 
             $qty.on('input', function () {
+                validate_row($tr);
                 update_totals();
                 save_draft_debounced();
             });
@@ -624,35 +670,55 @@ class AshanStockIssueWorkbench {
                 }
             });
 
+            // 点击库存徽标自动填入当前最大可用库存
+            $badge.on('click', function () {
+                const avail = flt($(this).data('avail')) || 0;
+                if (avail > 0) {
+                    $qty.val(avail).trigger('input');
+                    frappe.show_alert({ message: `已自动填入最大可用库存 ${avail}`, indicator: 'green' }, 2);
+                }
+            });
+
             let suggest_timer = null;
+
+            // 聚焦或点击时，立即加载发货仓实存物料
+            $input.on('focus click', function () {
+                const txt = $(this).val();
+                load_and_render_suggest($input, txt);
+            });
+
             $input.on('input', function () {
                 const txt = $(this).val();
                 clearTimeout(suggest_timer);
-                $('.si-suggest-box').remove();
-                if (!txt || txt.length < 1) return;
-
-                suggest_timer = setTimeout(async () => {
-                    const warehouse = $modal.find('.si-dialog-warehouse').val();
-                    try {
-                        const r = await frappe.call({
-                            method: 'frappe.client.get_list',
-                            args: {
-                                doctype: 'Item',
-                                filters: [
-                                    ['disabled', '=', 0],
-                                    ['is_stock_item', '=', 1],
-                                    ['item_code', 'like', `%${txt}%`]
-                                ],
-                                fields: ['item_code', 'item_name', 'description', 'stock_uom'],
-                                limit: 10
-                            }
-                        });
-                        if (r && r.message && r.message.length > 0) {
-                            render_suggest_box($input, r.message, warehouse);
-                        }
-                    } catch (e) {}
-                }, 200);
+                suggest_timer = setTimeout(() => {
+                    load_and_render_suggest($input, txt);
+                }, 150);
             });
+        }
+
+        async function load_and_render_suggest($target_input, search_text) {
+            const warehouse = $modal.find('.si-dialog-warehouse').val();
+            const target_company = self.$company_select ? (self.$company_select.val() || self.company) : self.company;
+
+            if (!warehouse) return;
+
+            try {
+                const res = await frappe.call({
+                    method: 'ashan_cn_procurement.ashan_cn_procurement.page.stock_issue_workbench.stock_issue_workbench.get_warehouse_stock_items',
+                    args: {
+                        company: target_company,
+                        warehouse: warehouse,
+                        search_text: search_text,
+                        only_positive_stock: 1
+                    }
+                });
+
+                if (res && res.message) {
+                    render_suggest_box($target_input, res.message, warehouse);
+                }
+            } catch (e) {
+                console.error('Failed to query warehouse stock items:', e);
+            }
         }
 
         function render_suggest_box($target_input, items, warehouse) {
@@ -662,18 +728,38 @@ class AshanStockIssueWorkbench {
             box.css({
                 top: offset.top + $target_input.outerHeight() + 2,
                 left: offset.left,
-                width: Math.max($target_input.outerWidth(), 320)
+                width: Math.max($target_input.outerWidth(), 360)
             });
 
+            const header = $(`
+                <div class="si-suggest-header">
+                    <span>发货仓实存物料 (库存 > 0)</span>
+                    <span>共 ${items.length} 种</span>
+                </div>
+            `).appendTo(box);
+
+            if (!items || items.length === 0) {
+                $(`
+                    <div class="si-suggest-item">
+                        <div class="si-suggest-name">该仓库当前暂无大于 0 的实物库存</div>
+                    </div>
+                `).appendTo(box);
+                return;
+            }
+
             items.forEach(it => {
+                const avail = flt(it.actual_qty) || 0;
                 const item_el = $(`
                     <div class="si-suggest-item">
-                        <span class="si-suggest-code">${it.item_code}</span>
-                        <span class="si-suggest-name">${it.item_name || ''} ${it.description ? `· ${it.description}` : ''}</span>
+                        <div class="si-suggest-item-left">
+                            <span class="si-suggest-code">${it.item_code}</span>
+                            <span class="si-suggest-name">${it.item_name || ''} ${it.description ? `· ${it.description}` : ''}</span>
+                        </div>
+                        <span class="si-suggest-stock ${avail <= 0 ? 'zero' : ''}">${avail.toFixed(2)} ${it.stock_uom || 'Nos'}</span>
                     </div>
                 `).appendTo(box);
 
-                item_el.on('click', async function () {
+                item_el.on('click', function () {
                     $target_input.val(`${it.item_name || it.item_code} (${it.item_code})`);
                     $target_input.data('code', it.item_code);
                     $target_input.data('name', it.item_name);
@@ -683,24 +769,20 @@ class AshanStockIssueWorkbench {
                     $tr.find('.si-row-spec').text(it.description || '-');
                     $tr.find('.si-row-uom-label').text(it.stock_uom || 'Nos');
 
-                    try {
-                        const bal_res = await frappe.call({
-                            method: 'ashan_cn_procurement.ashan_cn_procurement.page.stock_issue_workbench.stock_issue_workbench.get_item_stock_balance',
-                            args: {
-                                company: self.company,
-                                warehouse: warehouse,
-                                item_code: it.item_code
-                            }
-                        });
-                        if (bal_res && bal_res.message) {
-                            const bal = bal_res.message.actual_qty || 0;
-                            const $badge = $tr.find('.si-row-stock-badge');
-                            $badge.text(`${bal.toFixed(2)} ${it.stock_uom || 'Nos'}`);
-                            $badge.toggleClass('si-stock-badge-low', bal <= 0);
-                        }
-                    } catch (e) {}
+                    const $badge = $tr.find('.si-row-stock-badge');
+                    $badge.text(`${avail.toFixed(2)} ${it.stock_uom || 'Nos'}`);
+                    $badge.data('avail', avail);
+                    $badge.toggleClass('si-stock-badge-low', avail <= 0);
+
+                    // 默认填入 1.0 或 最大实存
+                    const $qty = $tr.find('.si-row-qty');
+                    const cur_qty = flt($qty.val()) || 1;
+                    if (avail > 0 && cur_qty > avail) {
+                        $qty.val(avail);
+                    }
 
                     box.remove();
+                    validate_row($tr);
                     update_totals();
                     save_draft_debounced();
                     $tr.find('.si-row-qty').focus().select();
@@ -711,6 +793,161 @@ class AshanStockIssueWorkbench {
                 if (!$(e.target).closest('.si-suggest-box, .si-row-item-input').length) {
                     box.remove();
                     $(document).off('click.si_suggest_dismiss');
+                }
+            });
+        }
+
+        // 打开【📦 仓库现存物料挑选器】
+        function open_warehouse_stock_picker() {
+            const warehouse = $modal.find('.si-dialog-warehouse').val();
+            const target_company = self.$company_select ? (self.$company_select.val() || self.company) : self.company;
+
+            if (!warehouse) {
+                frappe.msgprint('请先选择具体的出库发货仓库！');
+                return;
+            }
+
+            frappe.call({
+                method: 'ashan_cn_procurement.ashan_cn_procurement.page.stock_issue_workbench.stock_issue_workbench.get_warehouse_stock_items',
+                args: {
+                    company: target_company,
+                    warehouse: warehouse,
+                    only_positive_stock: 1
+                }
+            }).then(res => {
+                const stock_items = res.message || [];
+                render_picker_dialog(stock_items, warehouse, target_company);
+            });
+        }
+
+        function render_picker_dialog(stock_items, warehouse, company) {
+            let rows_html = '';
+            stock_items.forEach((it, i) => {
+                const avail = flt(it.actual_qty) || 0;
+                rows_html += `
+                    <tr class="si-picker-row" data-code="${it.item_code}">
+                        <td class="si-col-idx">${i + 1}</td>
+                        <td><strong class="si-link">${it.item_code}</strong></td>
+                        <td>${it.item_name || '-'}</td>
+                        <td class="si-row-spec-text">${it.description || '-'}</td>
+                        <td class="si-text-right">
+                            <span class="si-stock-badge">${avail.toFixed(2)} ${it.stock_uom || 'Nos'}</span>
+                        </td>
+                        <td class="si-text-right">
+                            <input type="number" step="any" min="0" max="${avail}" class="si-form-control si-picker-qty-input" placeholder="0.00" data-code="${it.item_code}" data-name="${it.item_name || ''}" data-desc="${it.description || ''}" data-uom="${it.stock_uom || 'Nos'}" data-avail="${avail}" />
+                        </td>
+                        <td class="si-text-center">
+                            <button type="button" class="btn btn-xs btn-default si-picker-fill-max-btn" data-max="${avail}">领完</button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            if (stock_items.length === 0) {
+                rows_html = `
+                    <tr>
+                        <td colspan="7" class="si-empty-box">
+                            <div class="si-empty-title">当前发货仓暂无可出库的实存物料</div>
+                            <div class="si-empty-desc">该仓库所有物料账面库存均为 0.00</div>
+                        </td>
+                    </tr>
+                `;
+            }
+
+            const picker_html = `
+                <div class="si-modal-backdrop si-picker-backdrop">
+                    <div class="si-modal-dialog si-picker-dialog">
+                        <div class="si-modal-header">
+                            <div class="si-modal-title">
+                                <span>📦 仓库现存物料挑选</span>
+                                <span class="si-modal-company-tag">· ${warehouse}</span>
+                            </div>
+                            <button type="button" class="si-modal-close-btn si-picker-close-btn">✕</button>
+                        </div>
+                        <div class="si-modal-body">
+                            <div class="si-items-table-wrapper">
+                                <table class="si-items-table si-picker-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="si-col-idx">#</th>
+                                            <th>物料编码</th>
+                                            <th>物料名称</th>
+                                            <th>规格型号</th>
+                                            <th class="si-text-right">当前可用库存</th>
+                                            <th class="si-text-right">本次出库数量</th>
+                                            <th class="si-text-center">快捷</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="si-picker-body">
+                                        ${rows_html}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="si-modal-footer">
+                            <div class="si-picker-summary-text si-summary-text">
+                                共 ${stock_items.length} 项实存物料
+                            </div>
+                            <div>
+                                <button type="button" class="btn btn-sm btn-default si-picker-cancel-btn">✕ 取消</button>
+                                <button type="button" class="btn btn-sm btn-primary si-picker-confirm-btn">🚀 批量加入出库单</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const $picker = $(picker_html).appendTo('body');
+
+            $picker.find('.si-picker-fill-max-btn').on('click', function () {
+                const max = $(this).data('max');
+                $(this).closest('tr').find('.si-picker-qty-input').val(max).focus();
+            });
+
+            $picker.find('.si-picker-close-btn, .si-picker-cancel-btn').on('click', () => $picker.remove());
+
+            $picker.find('.si-picker-confirm-btn').on('click', function () {
+                let added_count = 0;
+                $picker.find('.si-picker-qty-input').each(function () {
+                    const qty = flt($(this).val()) || 0;
+                    if (qty > 0) {
+                        const code = $(this).data('code');
+                        const name = $(this).data('name');
+                        const desc = $(this).data('desc');
+                        const uom = $(this).data('uom');
+                        const avail = flt($(this).data('avail')) || 0;
+
+                        // 检查当前主清单是否已有空白第一行，有则填充，否则新增
+                        let $target_row = null;
+                        $items_body.find('.si-item-row').each(function () {
+                            if (!$(this).find('.si-row-item-input').data('code') && !$target_row) {
+                                $target_row = $(this);
+                            }
+                        });
+
+                        if ($target_row) {
+                            const $input = $target_row.find('.si-row-item-input');
+                            $input.val(`${name || code} (${code})`).data('code', code).data('name', name).data('uom', uom);
+                            $target_row.find('.si-row-spec').text(desc || '-');
+                            $target_row.find('.si-row-uom-label').text(uom);
+                            const $badge = $target_row.find('.si-row-stock-badge');
+                            $badge.text(`${avail.toFixed(2)} ${uom}`).data('avail', avail);
+                            $target_row.find('.si-row-qty').val(qty);
+                            validate_row($target_row);
+                        } else {
+                            add_item_row(code, name, desc, uom, avail, qty);
+                        }
+                        added_count++;
+                    }
+                });
+
+                if (added_count > 0) {
+                    frappe.show_alert({ message: `已成功加入 ${added_count} 项出库物料`, indicator: 'green' }, 3);
+                    update_totals();
+                    save_draft_debounced();
+                    $picker.remove();
+                } else {
+                    frappe.msgprint('请在至少一项物料行填写大于 0 的出库数量！');
                 }
             });
         }
@@ -746,6 +983,7 @@ class AshanStockIssueWorkbench {
         });
 
         $modal.find('.si-add-item-btn').on('click', () => add_item_row());
+        $modal.find('.si-open-picker-btn').on('click', () => open_warehouse_stock_picker());
 
         $modal.find('.si-dialog-warehouse').on('change', async function () {
             const wh = $(this).val();
@@ -765,8 +1003,10 @@ class AshanStockIssueWorkbench {
                             const bal = bal_res.message.actual_qty || 0;
                             const uom = bal_res.message.stock_uom || 'Nos';
                             const $badge = $(this).find('.si-row-stock-badge');
-                            $badge.text(`${bal.toFixed(2)} ${uom}`);
+                            $badge.text(`${bal.toFixed(2)} ${uom}`).data('avail', bal);
                             $badge.toggleClass('si-stock-badge-low', bal <= 0);
+                            validate_row($(this));
+                            update_totals();
                         }
                     } catch (e) {}
                 }
@@ -782,11 +1022,19 @@ class AshanStockIssueWorkbench {
             const submit_direct = $modal.find('.si-dialog-submit-direct').is(':checked') ? 1 : 0;
 
             const items = [];
+            let has_over_stock = false;
+
             $items_body.find('.si-item-row').each(function () {
                 const $input = $(this).find('.si-row-item-input');
                 const code = $input.data('code');
                 const qty = flt($(this).find('.si-row-qty').val()) || 0;
+                const avail = flt($(this).find('.si-row-stock-badge').data('avail')) || 0;
+
                 if (code && qty > 0) {
+                    if (qty > avail + 0.0001) {
+                        has_over_stock = true;
+                        $(this).find('.si-row-qty').addClass('si-qty-invalid');
+                    }
                     items.push({
                         item_code: code,
                         stock_uom: $input.data('uom') || 'Nos',
@@ -797,6 +1045,11 @@ class AshanStockIssueWorkbench {
 
             if (items.length === 0) {
                 frappe.msgprint('出库物料清单不能为空，请至少添加一项物料并填写出库数量！');
+                return;
+            }
+
+            if (has_over_stock) {
+                frappe.msgprint('出库清单中存在超出当前仓库可用库存的物料，请调整出库数量后再提交！');
                 return;
             }
 
