@@ -1362,3 +1362,295 @@
     margin-top: 6px;
 }
 
+/* =========================================================================
+   💼 「我的业务」自定义弹窗高质感设计规范
+   ========================================================================= */
+.my-biz-dialog-wrapper {
+    padding: 6px 2px;
+    font-family: inherit;
+}
+.my-biz-section {
+    margin-bottom: 20px;
+}
+.my-biz-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.my-biz-section-tip {
+    font-size: 11.5px;
+    font-weight: normal;
+    color: #64748b;
+}
+
+/* 已选业务列表 */
+.my-biz-selected-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 50px;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+    padding: 8px;
+}
+.my-biz-selected-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 7px 12px;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+}
+.my-biz-selected-item:hover {
+    border-color: #cbd5e1;
+    background: #fdfdfd;
+}
+.my-biz-item-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.my-biz-item-idx {
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    width: 20px;
+}
+.my-biz-item-icon {
+    font-size: 15px;
+}
+.my-biz-item-name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #0f172a;
+}
+.my-biz-item-cat {
+    font-size: 10px;
+    font-weight: 600;
+    color: #475569;
+    background: #f1f5f9;
+    border-radius: 4px;
+    padding: 2px 6px;
+}
+.my-biz-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.btn-mybiz-tool {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    color: #475569;
+    transition: all 0.12s ease;
+}
+.btn-mybiz-tool:hover:not(:disabled) {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+.btn-mybiz-tool:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+.btn-mybiz-tool.btn-tool-del {
+    color: #ef4444;
+    border-color: #fecaca;
+    background: #fff5f5;
+}
+.btn-mybiz-tool.btn-tool-del:hover {
+    background: #ef4444;
+    color: #fff;
+    border-color: #ef4444;
+}
+
+/* 候选资产库网格 */
+.my-biz-cand-category {
+    margin-bottom: 14px;
+}
+.my-biz-cand-cat-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.my-biz-cand-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+}
+.my-biz-cand-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 7px 10px;
+    transition: all 0.15s ease;
+}
+.my-biz-cand-card:hover {
+    border-color: #93c5fd;
+    background: #f0fdf4;
+}
+.my-biz-cand-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.my-biz-cand-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #334155;
+}
+.btn-cand-add {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #1d4ed8;
+    cursor: pointer;
+    transition: all 0.12s ease;
+}
+.btn-cand-add:hover {
+    background: #1d4ed8;
+    color: #fff;
+}
+
+/* ── 频次徽章 (My Biz strip & dialog) ── */
+.my-biz-freq-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 16px;
+    padding: 0 4px;
+    margin-left: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    color: #fff;
+    background: rgba(255,255,255,0.28);
+    border-radius: 8px;
+    vertical-align: middle;
+    letter-spacing: 0;
+}
+.my-biz-freq-badge-dialog {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: #0369a1;
+    background: #e0f2fe;
+    border-radius: 5px;
+    padding: 1px 6px;
+    cursor: default;
+}
+
+/* ── 智能频次排序 Toggle 行 ── */
+.my-biz-autosort-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    padding: 9px 14px;
+    margin-bottom: 10px;
+    gap: 12px;
+}
+.my-biz-autosort-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+.my-biz-autosort-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+.my-biz-autosort-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.my-biz-autosort-title {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #15803d;
+}
+.my-biz-autosort-desc {
+    font-size: 11px;
+    color: #4b7c63;
+}
+/* Toggle switch */
+.my-biz-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+    user-select: none;
+}
+.my-biz-toggle-input {
+    position: absolute;
+    width: 0;
+    height: 0;
+    opacity: 0;
+}
+.my-biz-toggle-track {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    background: #cbd5e1;
+    border-radius: 11px;
+    transition: background 0.2s ease;
+    display: inline-block;
+    flex-shrink: 0;
+}
+.my-biz-toggle-input:checked + .my-biz-toggle-track {
+    background: #22c55e;
+}
+.my-biz-toggle-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    background: #fff;
+    border-radius: 50%;
+    transition: left 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+}
+.my-biz-toggle-input:checked ~ .my-biz-toggle-track .my-biz-toggle-thumb,
+.my-biz-toggle-input:checked + .my-biz-toggle-track .my-biz-toggle-thumb {
+    left: 21px;
+}
+.my-biz-toggle-state-text {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #475569;
+    min-width: 36px;
+}
+.my-biz-toggle-input:checked ~ .my-biz-toggle-state-text {
+    color: #16a34a;
+}
+

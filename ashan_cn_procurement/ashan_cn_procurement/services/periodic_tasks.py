@@ -151,7 +151,7 @@ def get_monthly_settlement_status(year=None, month=None):
                         "period": p,
                         "period_label": lbl,
                         "status_label": "未核定",
-                        "action_label": "去核定 ➔",
+                        "action_label": "去核定",
                         "summary_text": f"{lbl}未核定 · {detail}" if detail else f"{lbl}未核定"
                     }
             # 全核定
@@ -164,7 +164,7 @@ def get_monthly_settlement_status(year=None, month=None):
                 "period_label": lbl,
                 "status_label": "已核定",
                 "action_label": "查看台账",
-                "summary_text": f"已核定至 {lbl} ✅"
+                "summary_text": f"已核定至 {lbl}"
             }
 
         # -----------------------------------------------------------------
@@ -177,7 +177,7 @@ def get_monthly_settlement_status(year=None, month=None):
                 jizhong_items.append({
                     "id": "oil_card",
                     "title": "油卡明细",
-                    "icon": "⛽",
+                    "icon": "",
                     "status": oil_data["status"],
                     "status_label": oil_data["status_label"],
                     "action_label": oil_data["action_label"],
@@ -190,7 +190,7 @@ def get_monthly_settlement_status(year=None, month=None):
                 jizhong_items.append({
                     "id": "highway_toll",
                     "title": "车辆高速费",
-                    "icon": "🛣️",
+                    "icon": "",
                     "status": toll_data["status"],
                     "status_label": toll_data["status_label"],
                     "action_label": toll_data["action_label"],
@@ -203,7 +203,7 @@ def get_monthly_settlement_status(year=None, month=None):
             jizhong_items.append({
                 "id": "jz_meal",
                 "title": "车间日常餐费",
-                "icon": "🍱",
+                "icon": "",
                 "status": meal_data["status"],
                 "status_label": meal_data["status_label"],
                 "action_label": meal_data["action_label"],
@@ -217,7 +217,7 @@ def get_monthly_settlement_status(year=None, month=None):
                 jizhong_items.append({
                     "id": "jz_payroll",
                     "title": "吉众工资核定",
-                    "icon": "💼",
+                    "icon": "",
                     "status": jz_pay_data["status"],
                     "status_label": "未封账" if jz_pay_data["status"] == "unsettled" else "已封账",
                     "action_label": jz_pay_data["action_label"],
@@ -231,7 +231,7 @@ def get_monthly_settlement_status(year=None, month=None):
                 jizhong_items.append({
                     "id": "jz_inv_close",
                     "title": "发票月度核定",
-                    "icon": "🧾",
+                    "icon": "",
                     "company_name": "天津吉众科技有限公司",
                     "status": jz_inv_data["status"],
                     "status_label": "未关账" if jz_inv_data["status"] == "unsettled" else "已关账",
@@ -252,7 +252,7 @@ def get_monthly_settlement_status(year=None, month=None):
                 qifu_items.append({
                     "id": "utility_settlement",
                     "title": "水电费月结",
-                    "icon": "💡",
+                    "icon": "",
                     "status": util_data["status"],
                     "status_label": util_data["status_label"],
                     "action_label": util_data["action_label"],
@@ -265,7 +265,7 @@ def get_monthly_settlement_status(year=None, month=None):
             qifu_items.append({
                 "id": "qf_meal",
                 "title": "车间日常餐费",
-                "icon": "🍱",
+                "icon": "",
                 "status": meal_data_qf["status"],
                 "status_label": meal_data_qf["status_label"],
                 "action_label": meal_data_qf["action_label"],
@@ -279,7 +279,7 @@ def get_monthly_settlement_status(year=None, month=None):
                 qifu_items.append({
                     "id": "qf_payroll",
                     "title": "祺富工资核定",
-                    "icon": "🛡️",
+                    "icon": "",
                     "status": qf_pay_data["status"],
                     "status_label": "未封账" if qf_pay_data["status"] == "unsettled" else "已封账",
                     "action_label": qf_pay_data["action_label"],
@@ -293,7 +293,7 @@ def get_monthly_settlement_status(year=None, month=None):
                 qifu_items.append({
                     "id": "qf_inv_close",
                     "title": "发票月度核定",
-                    "icon": "🧾",
+                    "icon": "",
                     "company_name": "天津祺富机械加工有限公司",
                     "status": qf_inv_data["status"],
                     "status_label": "未关账" if qf_inv_data["status"] == "unsettled" else "已关账",
@@ -414,7 +414,7 @@ def get_compliance_expiry_status():
                             "doctype": "Property Lease",
                             "docname": l.name,
                             "category": "合同租约",
-                            "icon": "📑",
+                            "icon": "",
                             "company": "祺富",
                             "title": f"租赁合同: {l.property_name or l.name}",
                             "due_date": str(l.end_date),
@@ -423,7 +423,7 @@ def get_compliance_expiry_status():
                             "days_remaining": days,
                             "level": level,
                             "status_text": status_text,
-                            "action_label": "办理续租 ➔",
+                            "action_label": "办理续租",
                             "route": f"/desk/property-lease/{l.name}",
                             "is_cyclical": True
                         })
@@ -447,7 +447,7 @@ def get_compliance_expiry_status():
                             "doctype": "Employee Certificate Item",
                             "docname": c.name,
                             "category": "员工资质",
-                            "icon": "🪪",
+                            "icon": "",
                             "company": "吉众" if "吉众" in comp_name else ("祺富" if "祺富" in comp_name else "公司"),
                             "title": f"{emp_name} - {c.certificate_name}",
                             "due_date": str(c.next_due_date),
@@ -456,7 +456,7 @@ def get_compliance_expiry_status():
                             "days_remaining": days,
                             "level": level,
                             "status_text": status_text,
-                            "action_label": "记录续期 ➔",
+                            "action_label": "记录续期",
                             "route": f"/desk/employee-certificate-item/{c.name}",
                             "is_cyclical": True
                         })
@@ -479,7 +479,7 @@ def get_compliance_expiry_status():
                             "doctype": "Compliance Equipment Item",
                             "docname": e.name,
                             "category": "特种设备",
-                            "icon": "⚙️",
+                            "icon": "",
                             "company": "吉众" if "吉众" in comp_name else ("祺富" if "祺富" in comp_name else "车间"),
                             "title": f"特检: {e.equipment_name}",
                             "due_date": str(e.next_due_date),
@@ -488,7 +488,7 @@ def get_compliance_expiry_status():
                             "days_remaining": days,
                             "level": level,
                             "status_text": status_text,
-                            "action_label": "记录检验 ➔",
+                            "action_label": "记录检验",
                             "route": f"/desk/compliance-equipment-item/{e.name}",
                             "is_cyclical": True
                         })
@@ -511,7 +511,7 @@ def get_compliance_expiry_status():
                             "doctype": "Environmental Compliance Item",
                             "docname": env.name,
                             "category": "环保检测",
-                            "icon": "🌱",
+                            "icon": "",
                             "company": "祺富" if "祺富" in comp_name else "吉众",
                             "title": f"环保: {env.title}",
                             "due_date": str(env.next_due_date),
@@ -520,7 +520,7 @@ def get_compliance_expiry_status():
                             "days_remaining": days,
                             "level": level,
                             "status_text": status_text,
-                            "action_label": "安排检测 ➔",
+                            "action_label": "安排检测",
                             "route": f"/desk/environmental-compliance-item/{env.name}",
                             "is_cyclical": True
                         })
@@ -540,7 +540,7 @@ def get_compliance_expiry_status():
                             "doctype": "Vehicle",
                             "docname": v.name,
                             "category": "车辆保险",
-                            "icon": "🚚",
+                            "icon": "",
                             "company": "吉众",
                             "title": f"车辆保险: {v.license_plate or v.name}",
                             "due_date": str(v.end_date),
@@ -549,7 +549,7 @@ def get_compliance_expiry_status():
                             "days_remaining": days,
                             "level": level,
                             "status_text": status_text,
-                            "action_label": "办理续保 ➔",
+                            "action_label": "办理续保",
                             "route": f"/desk/vehicle/{v.name}",
                             "is_cyclical": True
                         })

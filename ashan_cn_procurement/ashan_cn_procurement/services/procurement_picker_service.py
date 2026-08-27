@@ -2440,7 +2440,6 @@ def make_reimbursement_from_invoices(
     }
 
 
-
 # =========================================================================
 # Stage 4: 付款单 (对公电汇 / Payment Entry & 下级账单穿透) APIs
 # =========================================================================
@@ -2880,6 +2879,7 @@ def get_payment_entry_sub_invoices(payment_entry_name: str) -> dict:
         "count": len(invoices),
     }
 
+
 # =========================================================================
 # Overall Summary KPI Endpoint (5-Step Flow)
 # =========================================================================
@@ -2918,7 +2918,7 @@ def get_procurement_picker_overview_kpis(
 
     if "mr_to_po" in allowed_stages:
         count = frappe.db.sql("""
-            SELECT COUNT(DISTINCT mri.name)
+            SELECT COUNT(DISTINCT mr.name)
             FROM `tabMaterial Request Item` mri
             INNER JOIN `tabMaterial Request` mr ON mr.name = mri.parent
             WHERE mr.docstatus = 1
@@ -2931,7 +2931,7 @@ def get_procurement_picker_overview_kpis(
 
     if "po_to_pr" in allowed_stages:
         count = frappe.db.sql("""
-            SELECT COUNT(DISTINCT poi.name)
+            SELECT COUNT(DISTINCT po.name)
             FROM `tabPurchase Order Item` poi
             INNER JOIN `tabPurchase Order` po ON po.name = poi.parent
             WHERE po.docstatus = 1
@@ -2943,7 +2943,7 @@ def get_procurement_picker_overview_kpis(
 
     if "pr_to_pi" in allowed_stages:
         count = frappe.db.sql("""
-            SELECT COUNT(DISTINCT pri.name)
+            SELECT COUNT(DISTINCT pr.name)
             FROM `tabPurchase Receipt Item` pri
             INNER JOIN `tabPurchase Receipt` pr ON pr.name = pri.parent
             WHERE pr.docstatus = 1
@@ -3003,16 +3003,16 @@ def get_sidebar_notification_kpis(company: str | None = None) -> dict:
     """Return dynamic pending task counts for left sidebar navigation items.
 
     Keys map directly to sidebar route / item identifiers:
-    - material-receipt-workbench (收货入库): 已执行采购等待实际入库的单据/物料任务数 (po_to_pr)
-    - procurement-execution-workbench (采购执行): 待订货/待开票/待整算的待办任务数 (mr_to_po / pr_to_pi / pi_to_rr)
-    - material-request-workbench (物料申请): 待提交/待处理物料申请任务数 (item_to_mr)
+    - material-receipt-workbench (收货入库): 已执行采购等待实际入库的采购订单数 (po_to_pr)
+    - procurement-execution-workbench (采购执行): 待订货的采购申请单据数 (mr_to_po)
+    - material-request-workbench (物料申请): 待提交/待处理物料申请草稿单据数 (item_to_mr)
     """
     companies = _resolve_companies(company)
 
     # 1. 收货入库 (material-receipt-workbench · po_to_pr):
-    # 已审核生效采购订单中，尚有未全部入库的待办任务数 (以有待收货数量的订单明细数为准)
+    # 已审核生效采购订单中，尚有未全部入库的采购订单单据数 (与首页待物资入库口径保持100%一致)
     po_to_pr_count = frappe.db.sql("""
-        SELECT COUNT(DISTINCT poi.name)
+        SELECT COUNT(DISTINCT po.name)
         FROM `tabPurchase Order Item` poi
         INNER JOIN `tabPurchase Order` po ON po.name = poi.parent
         WHERE po.docstatus = 1
@@ -3022,9 +3022,9 @@ def get_sidebar_notification_kpis(company: str | None = None) -> dict:
     """, (companies,))[0][0] or 0
 
     # 2. 采购执行 (procurement-execution-workbench · mr_to_po):
-    # 待采购订货的申请明细数
+    # 待采购订货的申请单据数 (与首页待采购下单口径一致)
     mr_to_po_count = frappe.db.sql("""
-        SELECT COUNT(DISTINCT mri.name)
+        SELECT COUNT(DISTINCT mr.name)
         FROM `tabMaterial Request Item` mri
         INNER JOIN `tabMaterial Request` mr ON mr.name = mri.parent
         WHERE mr.docstatus = 1
@@ -3035,7 +3035,7 @@ def get_sidebar_notification_kpis(company: str | None = None) -> dict:
     """, (companies,))[0][0] or 0
 
     # 3. 物料申请 (material-request-workbench · item_to_mr):
-    # 草稿采购申请数
+    # 草稿采购申请单据数
     item_to_mr_count = frappe.db.sql("""
         SELECT COUNT(DISTINCT mr.name)
         FROM `tabMaterial Request` mr
@@ -3044,10 +3044,21 @@ def get_sidebar_notification_kpis(company: str | None = None) -> dict:
           AND mr.company IN %s
     """, (companies,))[0][0] or 0
 
+    # 4. 材料出库 (stock-issue-workbench):
+    # 待提交出库单草稿数
+    stock_issue_draft_count = frappe.db.sql("""
+        SELECT COUNT(DISTINCT se.name)
+        FROM `tabStock Entry` se
+        WHERE se.docstatus = 0
+          AND se.purpose IN ('Material Issue', 'Manufacture', 'Material Transfer')
+          AND se.company IN %s
+    """, (companies,))[0][0] or 0
+
     return {
         "material-receipt-workbench": int(po_to_pr_count),
         "procurement-execution-workbench": int(mr_to_po_count),
         "material-request-workbench": int(item_to_mr_count),
+        "stock-issue-workbench": int(stock_issue_draft_count),
     }
 
 

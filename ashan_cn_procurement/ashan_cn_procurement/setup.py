@@ -22,6 +22,7 @@ def after_migrate():
 	migrate_property_lease_and_rates()
 	cleanup_deprecated_sidebar_items()
 	sync_all_workspace_sidebars()
+	setup_stock_restricted_custom_fields()
 	backfill_all_document_details()
 	setup_mode_of_payment_defaults()
 
@@ -188,6 +189,47 @@ def setup_document_details_custom_fields():
 		]
 	}
 
+	from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
+	create_custom_fields(custom_fields, ignore_validate=True)
+	frappe.db.commit()
+
+
+def setup_stock_restricted_custom_fields():
+	"""
+	确保库存与物料相关单据（Stock Entry, Delivery Note, Item）具备受限保密自定义字段
+	"""
+	custom_fields = {
+		"Stock Entry": [
+			{
+				"fieldname": "custom_is_restricted_doc",
+				"label": "受限单据",
+				"fieldtype": "Check",
+				"insert_after": "purpose",
+				"default": "0",
+				"description": "勾选后此单据仅总经理及保密特权人员可见，普通库存台账中不予计算。"
+			}
+		],
+		"Delivery Note": [
+			{
+				"fieldname": "custom_is_restricted_doc",
+				"label": "受限单据",
+				"fieldtype": "Check",
+				"insert_after": "title",
+				"default": "0",
+				"description": "勾选后此单据仅总经理及保密特权人员可见，普通库存台账中不予计算。"
+			}
+		],
+		"Item": [
+			{
+				"fieldname": "custom_is_restricted_item",
+				"label": "受限保密物料",
+				"fieldtype": "Check",
+				"insert_after": "item_group",
+				"default": "0",
+				"description": "勾选后此物料及其库存仅总经理及保密特权人员可见，普通库存台账中不予呈现。"
+			}
+		]
+	}
 	from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 	create_custom_fields(custom_fields, ignore_validate=True)
 	frappe.db.commit()

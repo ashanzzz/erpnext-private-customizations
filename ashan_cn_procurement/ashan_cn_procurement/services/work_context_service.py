@@ -16,9 +16,24 @@ from ashan_cn_procurement.services.authorization_service import (
 WORK_CONTEXT_COMPANY_KEY = "ashan_work_company"
 WORK_CONTEXT_DATE_KEY = "ashan_work_date"
 WORK_CONTEXT_DATE_MODE_KEY = "ashan_work_date_mode"
+WORK_CONTEXT_RESTRICTED_SCOPE_KEY = "ashan_work_restricted_scope"
 DATE_MODE_SYSTEM = "system"
 DATE_MODE_FIXED = "fixed"
+RESTRICTED_SCOPE_ALL = "all"
+RESTRICTED_SCOPE_PUBLIC = "public_only"
+RESTRICTED_SCOPE_RESTRICTED = "restricted_only"
 ALL_COMPANY_MARKERS = {"", "All", "全部公司"}
+
+
+def has_restricted_doc_access(user: str | None = None) -> bool:
+    """Check if the user is privileged to view restricted documents."""
+    user = str(user or frappe.session.user or "").strip()
+    if not user or user == "Guest":
+        return False
+    if user in ("Administrator",):
+        return True
+    roles = set(frappe.get_roles(user))
+    return bool(roles & {"System Manager", "Restricted Document Super Viewer"})
 
 
 def _require_authenticated_user(user: str | None = None) -> str:
@@ -87,12 +102,27 @@ def get_work_context(user: str | None = None) -> dict[str, Any]:
         fixed_work_date = ""
         work_date = nowdate()
 
+    can_restrict = has_restricted_doc_access(user)
+    if can_restrict:
+        saved_scope = str(
+            frappe.defaults.get_user_default(WORK_CONTEXT_RESTRICTED_SCOPE_KEY, user=user) or ""
+        ).strip()
+        restricted_scope = (
+            saved_scope
+            if saved_scope in {RESTRICTED_SCOPE_ALL, RESTRICTED_SCOPE_PUBLIC, RESTRICTED_SCOPE_RESTRICTED}
+            else RESTRICTED_SCOPE_ALL
+        )
+    else:
+        restricted_scope = RESTRICTED_SCOPE_PUBLIC
+
     return {
         "company": selected_company,
         "date_mode": date_mode,
         "work_date": work_date,
         "fixed_work_date": fixed_work_date,
         "companies": companies,
+        "restricted_doc_scope": restricted_scope,
+        "has_restricted_access": can_restrict,
     }
 
 
@@ -111,6 +141,7 @@ def save_work_context(
     company: str | None = None,
     date_mode: str | None = None,
     work_date: str | None = None,
+    restricted_doc_scope: str | None = None,
 ) -> dict[str, Any]:
     """Persist company scope and optional fixed-date preference for one user."""
     user = _require_authenticated_user()
@@ -155,5 +186,14 @@ def save_work_context(
     else:
         frappe.defaults.clear_user_default(WORK_CONTEXT_DATE_MODE_KEY, user=user)
         frappe.defaults.clear_user_default(WORK_CONTEXT_DATE_KEY, user=user)
+
+    if has_restricted_doc_access(user) and restricted_doc_scope:
+        scope = str(restricted_doc_scope).strip().lower()
+        if scope in {RESTRICTED_SCOPE_ALL, RESTRICTED_SCOPE_PUBLIC, RESTRICTED_SCOPE_RESTRICTED}:
+            frappe.defaults.set_user_default(
+                WORK_CONTEXT_RESTRICTED_SCOPE_KEY,
+                scope,
+                user=user,
+            )
 
     return get_work_context(user)

@@ -12,7 +12,7 @@ app_include_css = [
     "/assets/ashan_cn_procurement/css/ashan_cn_procurement.css?v=20260825.60",
     # Versioned so Desk never keeps an obsolete global component definition
     # after a UI-kit deployment.  The file itself remains a shared static asset.
-    "/assets/ashan_cn_procurement/css/ashan_ui_kit.css?v=20260826.62",
+    "/assets/ashan_cn_procurement/css/ashan_ui_kit.css?v=20260826.64",
 ]
 
 # 全局仅加载真正的全站能力。
@@ -21,8 +21,8 @@ app_include_css = [
 app_include_js = [
     "/assets/ashan_cn_procurement/js/ashan_ui_kit.js?v=20260825.60",
     "/assets/ashan_cn_procurement/js/ashan_cn_translations.js?v=20260825.60",
-    "/assets/ashan_cn_procurement/js/ashan_cn_sidebar_v2.js?v=20260825.60",
-    "/assets/ashan_cn_procurement/js/ashan_work_context.js?v=20260826.62",
+    "/assets/ashan_cn_procurement/js/ashan_cn_sidebar_v2.js?v=20260827.65",
+    "/assets/ashan_cn_procurement/js/ashan_work_context.js?v=20260826.63",
     "/assets/ashan_cn_procurement/js/doc_details_list.js?v=20260825.60",
 ]
 

@@ -182,13 +182,16 @@
 
             if (href.includes("material-receipt-workbench") || text.includes("收货入库")) {
                 count = Number(kpis["material-receipt-workbench"]) || 0;
-                tooltip = `${count} 个采购订单等待实际入库`;
+                tooltip = `${count} 笔采购订单等待实际入库`;
             } else if (href.includes("procurement-execution-workbench") || text.includes("采购执行")) {
                 count = Number(kpis["procurement-execution-workbench"]) || 0;
-                tooltip = `${count} 个采购申请待处理`;
+                tooltip = `${count} 笔采购申请等待下单`;
             } else if (href.includes("material-request-workbench") || text.includes("物料申请")) {
                 count = Number(kpis["material-request-workbench"]) || 0;
-                tooltip = `${count} 个物料申请单待处理`;
+                tooltip = `${count} 笔物料申请草稿待提交`;
+            } else if (href.includes("stock-issue-workbench") || text.includes("材料出库")) {
+                count = Number(kpis["stock-issue-workbench"]) || 0;
+                tooltip = `${count} 笔材料出库草稿待提交`;
             }
 
             let badge = anchor.querySelector(".ashan-sidebar-count-badge");

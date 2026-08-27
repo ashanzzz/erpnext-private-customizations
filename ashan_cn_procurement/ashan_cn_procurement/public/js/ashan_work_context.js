@@ -28,6 +28,8 @@
             work_date: dateMode === DATE_MODE_FIXED ? (fixedWorkDate || getToday()) : getToday(),
             fixed_work_date: dateMode === DATE_MODE_FIXED ? fixedWorkDate : "",
             companies: Array.isArray(raw.companies) ? raw.companies.map(String) : [],
+            restricted_doc_scope: String(raw.restricted_doc_scope || "all").trim(),
+            has_restricted_access: Boolean(raw.has_restricted_access),
         };
     }
 
@@ -220,32 +222,49 @@
         dialog?.hide();
         let selectedDateMode = context.date_mode;
 
+        const fields = [
+            {
+                fieldname: "company",
+                fieldtype: "Select",
+                label: __("当前默认公司"),
+                options: [ALL_COMPANY_LABEL, ...context.companies].join("\n"),
+                default: context.company || ALL_COMPANY_LABEL,
+                description: __("全部公司仅用于查询；新建必须归属公司的单据时，仍需明确选择公司。"),
+            },
+            {
+                fieldname: "date_mode_control",
+                fieldtype: "HTML",
+            },
+            {
+                fieldname: "work_date",
+                fieldtype: "Date",
+                label: __("固定业务日期"),
+                default: context.fixed_work_date || getToday(),
+                hidden: context.date_mode !== DATE_MODE_FIXED,
+                reqd: context.date_mode === DATE_MODE_FIXED,
+                description: __("固定后，仅预填后续新单据的过账日期和交易日期，不修改系统当天。"),
+            },
+        ];
+
+        if (context.has_restricted_access) {
+            fields.push({
+                fieldname: "restricted_doc_scope",
+                fieldtype: "Select",
+                label: __("保密单据核算范围 (高管特权)"),
+                options: [
+                    { label: __("全量真实口径 (含受限单据)"), value: "all" },
+                    { label: __("仅公开业务 (普通员工视角)"), value: "public_only" },
+                    { label: __("仅受限保密专账"), value: "restricted_only" },
+                ],
+                default: context.restricted_doc_scope || "all",
+                description: __("控制库存台账与单据核算中是否包含涉密受限单据。"),
+            });
+        }
+
         dialog = new frappe.ui.Dialog({
             title: __("当前工作环境"),
             static: true,
-            fields: [
-                {
-                    fieldname: "company",
-                    fieldtype: "Select",
-                    label: __("当前默认公司"),
-                    options: [ALL_COMPANY_LABEL, ...context.companies].join("\n"),
-                    default: context.company || ALL_COMPANY_LABEL,
-                    description: __("全部公司仅用于查询；新建必须归属公司的单据时，仍需明确选择公司。"),
-                },
-                {
-                    fieldname: "date_mode_control",
-                    fieldtype: "HTML",
-                },
-                {
-                    fieldname: "work_date",
-                    fieldtype: "Date",
-                    label: __("固定业务日期"),
-                    default: context.fixed_work_date || getToday(),
-                    hidden: context.date_mode !== DATE_MODE_FIXED,
-                    reqd: context.date_mode === DATE_MODE_FIXED,
-                    description: __("固定后，仅预填后续新单据的过账日期和交易日期，不修改系统当天。"),
-                },
-            ],
+            fields: fields,
             primary_action_label: __("保存并应用"),
             primary_action(values) {
                 const selectedCompany = values.company === ALL_COMPANY_LABEL ? "" : values.company;
@@ -256,6 +275,7 @@
                         company: selectedCompany,
                         date_mode: selectedDateMode,
                         work_date: selectedDateMode === DATE_MODE_FIXED ? values.work_date : "",
+                        restricted_doc_scope: values.restricted_doc_scope || context.restricted_doc_scope,
                     },
                     freeze: false,
                     callback(response) {

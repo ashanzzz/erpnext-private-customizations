@@ -152,6 +152,30 @@
       "doctype": "Workspace Sidebar Item"
     },
     {
+      "label": "材料出库工作台",
+      "link_type": "Page",
+      "type": "Link",
+      "link_to": "stock-issue-workbench",
+      "child": 1,
+      "collapsible": 0,
+      "indent": 0,
+      "keep_closed": 0,
+      "show_arrow": 0,
+      "doctype": "Workspace Sidebar Item"
+    },
+    {
+      "label": "库存收发流水台账",
+      "link_type": "Page",
+      "type": "Link",
+      "link_to": "stock-ledger-workbench",
+      "child": 1,
+      "collapsible": 0,
+      "indent": 0,
+      "keep_closed": 0,
+      "show_arrow": 0,
+      "doctype": "Workspace Sidebar Item"
+    },
+    {
       "label": "库存台账明细",
       "link_type": "Report",
       "type": "Link",
