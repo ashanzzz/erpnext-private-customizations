@@ -56,7 +56,7 @@ TASK_DEFINITIONS = [
         "lock_desc": "核定关账后，系统在底层钩子强拦截当月采购发票，严密禁止新增、修改、提交或作废当月发票。",
         "edit_rule": "核定后禁止新增/修改当月发票，需反审核解锁",
         "required_roles": "Tax Invoice Manager, Accounts Manager, System Manager",
-        "route": "/desk/tax-invoice-ledger",
+        "route": "/desk/tax-invoice-center",
         "doctype": "Monthly Invoice Closing",
         "action_type": "invoice_dialog",
     },
@@ -70,7 +70,7 @@ TASK_DEFINITIONS = [
         "lock_desc": "核定关账后锁定进项税金、价税总额与发票底册，防止报税后数据被篡改。",
         "edit_rule": "核定后禁止新增/修改当月发票，需反审核解锁",
         "required_roles": "Tax Invoice Manager, Accounts Manager, System Manager",
-        "route": "/desk/tax-invoice-ledger",
+        "route": "/desk/tax-invoice-center",
         "doctype": "Monthly Invoice Closing",
         "action_type": "invoice_dialog",
     },
@@ -243,21 +243,23 @@ def _check_task_status_for_period(task_def: dict, period: str) -> dict:
             detail_text = f"有 {refuels} 笔加油明细待核定" if refuels > 0 else "尚未录入加油明细"
 
     elif key == "toll_jz":
+        y_i, m_i = [int(x) for x in period.split("-")]
         if frappe.db.exists("DocType", "Vehicle Toll Monthly Sheet"):
             sheets = frappe.get_all(
                 "Vehicle Toll Monthly Sheet",
-                filters={"sheet_period": period, "docstatus": 1},
-                fields=["name", "verified_by", "verified_at", "total_toll_amount"],
+                filters={"fiscal_year": y_i, "fiscal_month": m_i, "is_locked": 1},
+                fields=["name", "locked_by", "locked_at", "total_expense"],
                 limit=1,
             )
             if sheets:
                 is_settled = True
                 status_label = "已核定锁定"
-                verifier = sheets[0].verified_by
-                verified_at = str(sheets[0].verified_at) if sheets[0].verified_at else None
-                detail_text = f"核定通行费 ¥{flt(sheets[0].total_toll_amount):,.2f}"
+                verifier = sheets[0].locked_by
+                verified_at = str(sheets[0].locked_at) if sheets[0].locked_at else None
+                detail_text = f"核定通行费 ¥{flt(sheets[0].total_expense):,.2f}"
             else:
-                detail_text = "待生成月度账单"
+                count_sheets = frappe.db.count("Vehicle Toll Monthly Sheet", {"fiscal_year": y_i, "fiscal_month": m_i})
+                detail_text = f"有 {count_sheets} 份车辆账单待核定" if count_sheets > 0 else "待生成月度账单"
         else:
             detail_text = "待生成月度账单"
 
@@ -279,21 +281,23 @@ def _check_task_status_for_period(task_def: dict, period: str) -> dict:
 
     elif key == "property_qf":
         if frappe.db.exists("DocType", "Property Monthly Settlement"):
+            start_date = f"{period}-01"
+            end_date = f"{period}-31"
             props = frappe.get_all(
                 "Property Monthly Settlement",
                 filters={
-                    "settlement_period": period,
-                    "docstatus": 1
+                    "settlement_month": ["between", [start_date, end_date]],
+                    "status": "已结算"
                 },
-                fields=["name", "modified_by", "modified", "total_settlement_amount"],
+                fields=["name", "settled_by", "settled_at", "total_amount"],
                 limit=1,
             )
             if props:
                 is_settled = True
-                status_label = "已过账核定"
-                verifier = props[0].modified_by
-                verified_at = str(props[0].modified)
-                detail_text = f"月结总额 ¥{flt(props[0].total_settlement_amount):,.2f}"
+                status_label = "已结算锁定"
+                verifier = props[0].settled_by
+                verified_at = str(props[0].settled_at) if props[0].settled_at else None
+                detail_text = f"月结总额 ¥{flt(props[0].total_amount):,.2f}"
             else:
                 detail_text = "水电抄表与分摊待月结"
         else:

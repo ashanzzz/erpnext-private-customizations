@@ -225,6 +225,8 @@ frappe.pages['monthly-closing-center'].on_page_load = function(wrapper) {
 
       const isInv = t.action_type === 'invoice_dialog';
       const invAttrs = isInv ? `data-is-inv="1" data-comp="${frappe.utils.escape_html(t.company)}" data-period="${frappe.utils.escape_html(t.target_period)}" data-period-label="${frappe.utils.escape_html(t.target_period_label)}"` : '';
+      const hrefAttr = isInv ? 'href="javascript:void(0)"' : `href="${t.route || '#'}"`;
+      const routeAttr = isInv ? '' : `data-route="${(t.route || '').replace('/desk/', '')}"`;
 
       const actClass = t.is_settled ? 'mcc-btn mcc-btn--outline' : 'mcc-btn mcc-btn--primary';
 
@@ -248,7 +250,7 @@ frappe.pages['monthly-closing-center'].on_page_load = function(wrapper) {
           <td>${frappe.utils.escape_html(t.edit_rule)}</td>
           <td>${auditHtml}</td>
           <td>
-            <a href="${t.route || '#'}" class="${actClass}" data-route="${(t.route || '').replace('/desk/', '')}" ${invAttrs}>
+            <a ${hrefAttr} class="${actClass}" ${routeAttr} ${invAttrs}>
               ${t.action_label}
             </a>
           </td>
