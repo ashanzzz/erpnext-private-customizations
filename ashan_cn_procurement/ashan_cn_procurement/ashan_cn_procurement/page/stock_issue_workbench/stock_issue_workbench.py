@@ -249,7 +249,7 @@ def get_stock_issue_list(
     """
     records = frappe.db.sql(query_sql, params, as_dict=True)
 
-    # 3. 关联查询各出库单的行项目明细摘要
+    # 3. 关联查询各出库单的行项目明细摘要与实时库存
     if records:
         entry_names = [r.name for r in records]
         item_details = frappe.db.sql(
@@ -270,16 +270,63 @@ def get_stock_issue_list(
         )
 
         detail_map = {}
+        wh_item_pairs = set()
         for d in item_details:
             detail_map.setdefault(d.parent, []).append(d)
+            if d.s_warehouse and d.item_code:
+                wh_item_pairs.add((d.s_warehouse, d.item_code))
+
+        # 批量获取当前实时库存
+        bin_map = {}
+        if wh_item_pairs:
+            warehouses = list({pair[0] for pair in wh_item_pairs})
+            item_codes = list({pair[1] for pair in wh_item_pairs})
+            bins = frappe.db.sql(
+                """
+                SELECT warehouse, item_code, actual_qty, stock_uom
+                FROM `tabBin`
+                WHERE warehouse IN %s AND item_code IN %s
+                """,
+                (tuple(warehouses), tuple(item_codes)),
+                as_dict=True,
+            )
+            for b in bins:
+                bin_map[(b.warehouse, b.item_code)] = flt(b.actual_qty)
 
         for r in records:
             items = detail_map.get(r.name, [])
             r["items_count"] = len(items)
-            r["total_qty"] = sum(flt(it.qty) for it in items)
-            r["stock_uom"] = items[0].stock_uom if items else "Nos"
             r["s_warehouse"] = items[0].s_warehouse if items else "-"
             
+            # 区分单一计量单位 vs 异构多计量单位
+            uom_set = {it.stock_uom for it in items if it.stock_uom}
+            if len(uom_set) <= 1:
+                uom = list(uom_set)[0] if uom_set else "Nos"
+                total_qty = sum(flt(it.qty) for it in items)
+                r["is_single_uom"] = 1
+                r["stock_uom"] = uom
+                r["total_qty"] = total_qty
+                r["qty_display"] = f"-{total_qty:.2f} {uom}"
+                
+                if len(items) == 1:
+                    it = items[0]
+                    cur_bal = bin_map.get((it.s_warehouse, it.item_code), 0.0)
+                    r["current_stock_display"] = f"{cur_bal:.2f} {uom}"
+                    r["current_stock_tooltip"] = f"{it.item_name or it.item_code} 当前发货仓现存: {cur_bal:.2f} {uom}"
+                else:
+                    r["current_stock_display"] = f"共 {len(items)} 项库存"
+                    r["current_stock_tooltip"] = " | ".join([f"{it.item_name or it.item_code}: {bin_map.get((it.s_warehouse, it.item_code), 0.0):.2f}{it.stock_uom}" for it in items])
+            else:
+                # 包含多种不同计量单位（如 10 Nos + 50 Kg，严禁直接数学相加！）
+                r["is_single_uom"] = 0
+                r["stock_uom"] = "多单位"
+                r["total_qty"] = sum(flt(it.qty) for it in items)
+                qty_parts = [f"{flt(it.qty):.2f}{it.stock_uom}" for it in items[:2]]
+                r["qty_display"] = f"共 {len(items)} 种 (" + " / ".join(qty_parts) + (f"...)" if len(items) > 2 else ")")
+                
+                r["current_stock_display"] = f"共 {len(items)} 种物料现存"
+                r["current_stock_tooltip"] = " | ".join([f"{it.item_name or it.item_code}: {bin_map.get((it.s_warehouse, it.item_code), 0.0):.2f}{it.stock_uom}" for it in items])
+
             # 组装明细摘要
             if items:
                 summary_parts = [f"{it.item_name or it.item_code} ({flt(it.qty):.2f}{it.stock_uom})" for it in items[:3]]

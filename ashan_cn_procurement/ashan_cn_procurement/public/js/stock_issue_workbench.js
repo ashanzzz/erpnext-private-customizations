@@ -373,6 +373,7 @@ class AshanStockIssueWorkbench {
                 <th>业务性质 / 领料用途</th>
                 <th>出库物料摘要</th>
                 <th class="si-text-right">出库数量</th>
+                <th class="si-text-right">发货仓当前结存</th>
                 <th>单据状态</th>
                 <th class="si-action-col">操作</th>
             </tr>
@@ -380,7 +381,7 @@ class AshanStockIssueWorkbench {
 
         this.$table_body.html(`
             <tr>
-                <td colspan="9" class="si-empty-box">
+                <td colspan="10" class="si-empty-box">
                     <div class="si-empty-title">正在查询出库单据...</div>
                 </td>
             </tr>
@@ -408,7 +409,7 @@ class AshanStockIssueWorkbench {
             console.error('Failed to load stock issue list:', e);
             this.$table_body.html(`
                 <tr>
-                    <td colspan="9" class="si-empty-box">
+                    <td colspan="10" class="si-empty-box">
                         <div class="si-empty-title si-empty-title-danger">加载失败</div>
                         <div class="si-empty-desc">${e.message || '请稍后重试'}</div>
                     </td>
@@ -421,7 +422,7 @@ class AshanStockIssueWorkbench {
         if (!records || records.length === 0) {
             this.$table_body.html(`
                 <tr>
-                    <td colspan="9" class="si-empty-box">
+                    <td colspan="10" class="si-empty-box">
                         <div class="si-empty-title">暂无符合条件的材料出库单据</div>
                         <div class="si-empty-desc">当前筛选期间或仓库下未产生出库业务，您可以发起一笔极速出库</div>
                         <button type="button" class="btn btn-sm btn-primary si-empty-create-btn">⚡ 立即发起出库</button>
@@ -452,7 +453,10 @@ class AshanStockIssueWorkbench {
                     <td>
                         <div class="si-item-summary">${r.items_summary || '-'}</div>
                     </td>
-                    <td class="si-qty-out">-${(flt(r.total_qty) || 0).toFixed(2)} ${r.stock_uom || 'Nos'}</td>
+                    <td class="si-qty-out">${r.qty_display || `-${(flt(r.total_qty) || 0).toFixed(2)} ${r.stock_uom || 'Nos'}`}</td>
+                    <td class="si-text-right">
+                        <span class="si-stock-text" title="${r.current_stock_tooltip || ''}">${r.current_stock_display || '-'}</span>
+                    </td>
                     <td>
                         <span class="si-status-badge ${status_class}">${r.status_label}</span>
                     </td>
