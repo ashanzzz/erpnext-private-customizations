@@ -9,21 +9,17 @@ app_license = "mit"
 # ------------------
 
 app_include_css = [
-    "/assets/ashan_cn_procurement/css/ashan_cn_procurement.css?v=20260825.60",
-    # Versioned so Desk never keeps an obsolete global component definition
-    # after a UI-kit deployment.  The file itself remains a shared static asset.
-    "/assets/ashan_cn_procurement/css/ashan_ui_kit.css?v=20260826.64",
+    "/assets/ashan_cn_procurement/css/ashan_cn_procurement.css?v=20260828.66",
+    "/assets/ashan_cn_procurement/css/ashan_ui_kit.css?v=20260828.66",
 ]
 
 # 全局仅加载真正的全站能力。
-# Purchase Invoice / Reimbursement Request 的脚本改为 doctype_js，
-# 避免在全 Desk 重复注册表单事件。
 app_include_js = [
-    "/assets/ashan_cn_procurement/js/ashan_ui_kit.js?v=20260825.60",
-    "/assets/ashan_cn_procurement/js/ashan_cn_translations.js?v=20260825.60",
-    "/assets/ashan_cn_procurement/js/ashan_cn_sidebar_v2.js?v=20260827.65",
-    "/assets/ashan_cn_procurement/js/ashan_work_context.js?v=20260826.63",
-    "/assets/ashan_cn_procurement/js/doc_details_list.js?v=20260825.60",
+    "/assets/ashan_cn_procurement/js/ashan_ui_kit.js?v=20260828.66",
+    "/assets/ashan_cn_procurement/js/ashan_cn_translations.js?v=20260828.66",
+    "/assets/ashan_cn_procurement/js/ashan_cn_sidebar_v2.js?v=20260828.66",
+    "/assets/ashan_cn_procurement/js/ashan_work_context.js?v=20260828.66",
+    "/assets/ashan_cn_procurement/js/doc_details_list.js?v=20260828.66",
 ]
 
 # App Switcher Dropdown Registration (Frappe 16 Official Multi-App Standard)
@@ -36,7 +32,6 @@ add_to_apps_screen = [
 ]
 
 # 首次登录路由保护（Frappe v16）：
-# 保持里程碑已验证的三层登录路由方案，不在本次导航重构中改变。
 website_redirects = [
     {
         "source": "/",
@@ -83,16 +78,32 @@ doctype_list_js = {
 # Doc Events / Server Hooks
 doc_events = {
     "Material Request": {
-        "validate": "ashan_cn_procurement.overrides.document_details.update_doc_details"
+        "validate": [
+            "ashan_cn_procurement.overrides.procurement_closing.validate_procurement_period_not_locked",
+            "ashan_cn_procurement.overrides.document_details.update_doc_details"
+        ],
+        "on_cancel": "ashan_cn_procurement.overrides.procurement_closing.validate_procurement_period_not_locked",
+        "on_trash": "ashan_cn_procurement.overrides.procurement_closing.validate_procurement_period_not_locked"
     },
     "Purchase Order": {
-        "validate": "ashan_cn_procurement.overrides.document_details.update_doc_details"
+        "validate": [
+            "ashan_cn_procurement.overrides.procurement_closing.validate_procurement_period_not_locked",
+            "ashan_cn_procurement.overrides.document_details.update_doc_details"
+        ],
+        "on_cancel": "ashan_cn_procurement.overrides.procurement_closing.validate_procurement_period_not_locked",
+        "on_trash": "ashan_cn_procurement.overrides.procurement_closing.validate_procurement_period_not_locked"
     },
     "Purchase Receipt": {
-        "validate": "ashan_cn_procurement.overrides.document_details.update_doc_details"
+        "validate": [
+            "ashan_cn_procurement.overrides.procurement_closing.validate_procurement_period_not_locked",
+            "ashan_cn_procurement.overrides.document_details.update_doc_details"
+        ],
+        "on_cancel": "ashan_cn_procurement.overrides.procurement_closing.validate_procurement_period_not_locked",
+        "on_trash": "ashan_cn_procurement.overrides.procurement_closing.validate_procurement_period_not_locked"
     },
     "Purchase Invoice": {
         "before_validate": [
+            "ashan_cn_procurement.overrides.procurement_closing.validate_procurement_period_not_locked",
             "ashan_cn_procurement.overrides.purchase_invoice_tax.calculate_china_line_taxes",
             "ashan_cn_procurement.overrides.document_details.update_doc_details"
         ],
@@ -100,11 +111,22 @@ doc_events = {
         "after_insert": "ashan_cn_procurement.services.tax_invoice_matcher.on_purchase_invoice_change",
         "on_update": "ashan_cn_procurement.services.tax_invoice_matcher.on_purchase_invoice_change",
         "on_update_after_submit": "ashan_cn_procurement.services.tax_invoice_matcher.on_purchase_invoice_change",
-        "on_cancel": "ashan_cn_procurement.services.tax_invoice_matcher.on_purchase_invoice_change",
-        "on_trash": "ashan_cn_procurement.services.tax_invoice_matcher.on_purchase_invoice_delete"
+        "on_cancel": [
+            "ashan_cn_procurement.overrides.procurement_closing.validate_procurement_period_not_locked",
+            "ashan_cn_procurement.services.tax_invoice_matcher.on_purchase_invoice_change"
+        ],
+        "on_trash": [
+            "ashan_cn_procurement.overrides.procurement_closing.validate_procurement_period_not_locked",
+            "ashan_cn_procurement.services.tax_invoice_matcher.on_purchase_invoice_delete"
+        ]
     },
     "Reimbursement Request": {
-        "validate": "ashan_cn_procurement.overrides.document_details.update_doc_details"
+        "validate": [
+            "ashan_cn_procurement.overrides.procurement_closing.validate_procurement_period_not_locked",
+            "ashan_cn_procurement.overrides.document_details.update_doc_details"
+        ],
+        "on_cancel": "ashan_cn_procurement.overrides.procurement_closing.validate_procurement_period_not_locked",
+        "on_trash": "ashan_cn_procurement.overrides.procurement_closing.validate_procurement_period_not_locked"
     },
     "Vehicle": {
         "on_update": "ashan_cn_procurement.overrides.vehicle_sync.on_vehicle_update"

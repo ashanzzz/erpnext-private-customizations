@@ -457,7 +457,7 @@ frappe.pages['monthly-closing-center'].on_page_load = function(wrapper) {
         const isLocked = d_data.is_locked;
 
         const d = new frappe.ui.Dialog({
-          title: `发票月度核定关账 · ${company}`,
+          title: `采购与供应链月度综合封账 · ${company}`,
           fields: [
             {
               fieldtype: 'HTML',
@@ -467,14 +467,14 @@ frappe.pages['monthly-closing-center'].on_page_load = function(wrapper) {
                   <div class="mcc-dialog-header-row">
                     <strong>核定账期：${periodLabel || period} (${period})</strong>
                     <span class="mcc-badge ${isLocked ? 'mcc-badge--success' : 'mcc-badge--warning'}">
-                      ${isLocked ? '已核定关账锁定' : '草稿 / 未关账'}
+                      ${isLocked ? '已全链条封账锁定' : '草稿 / 待封账'}
                     </span>
                   </div>
                   <div class="mcc-dialog-grid">
-                    <div>已录入发票：<b>${d_data.invoice_count}</b> 笔</div>
-                    <div>价税总额：<b class="mcc-dialog-val-highlight">¥ ${format_currency(d_data.total_grand_total)}</b></div>
-                    <div>不含税金额：<b>¥ ${format_currency(d_data.total_net_amount)}</b></div>
-                    <div>进项税额：<b>¥ ${format_currency(d_data.total_tax_amount)}</b></div>
+                    <div>采购订单：<b>${d_data.po_count || 0}</b> 笔 (¥ ${format_currency(d_data.po_amount || 0)})</div>
+                    <div>采购入库：<b>${d_data.pr_count || 0}</b> 笔 (¥ ${format_currency(d_data.pr_amount || 0)})</div>
+                    <div>采购发票：<b>${d_data.invoice_count || 0}</b> 笔 (<b class="mcc-dialog-val-highlight">¥ ${format_currency(d_data.total_grand_total || 0)}</b>)</div>
+                    <div>报销申请：<b>${d_data.reim_count || 0}</b> 笔 (¥ ${format_currency(d_data.reim_amount || 0)})</div>
                   </div>
                   ${isLocked ? `
                     <div class="mcc-dialog-audit-row">
@@ -485,7 +485,7 @@ frappe.pages['monthly-closing-center'].on_page_load = function(wrapper) {
                 ${!isLocked ? `
                   <div class="mcc-philosophy-banner mcc-dialog-banner">
                     <div class="mcc-philosophy-text">
-                      <strong>核定锁定说明：</strong>核定关账后，系统将严密禁止新增、修改或作废发票日期/记账日期为 <strong>${periodLabel || period}</strong> 的任何采购发票。
+                      <strong>全链条封账说明：</strong>核定封账后，系统在底层强拦截当月采购申请、采购订单、采购入库单、采购发票与报销单，严密禁止新增、修改、提交、作废或删除所属账期为 <strong>${periodLabel || period}</strong> 的任何单据。
                     </div>
                   </div>
                 ` : ''}
@@ -506,7 +506,7 @@ frappe.pages['monthly-closing-center'].on_page_load = function(wrapper) {
               }
             ])
           ],
-          primary_action_label: isLocked ? '反审核解锁' : '确认核定并关账锁定',
+          primary_action_label: isLocked ? '反审核解锁' : '确认核定并全链条封账',
           primary_action: function(values) {
             d.get_primary_btn().prop('disabled', true);
             if (isLocked) {

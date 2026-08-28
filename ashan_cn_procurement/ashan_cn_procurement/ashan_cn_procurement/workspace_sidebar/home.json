@@ -284,6 +284,18 @@
       "doctype": "Workspace Sidebar Item"
     },
     {
+      "label": "月度核定全景中枢",
+      "link_type": "Page",
+      "type": "Link",
+      "link_to": "monthly-closing-center",
+      "child": 1,
+      "collapsible": 0,
+      "indent": 0,
+      "keep_closed": 0,
+      "show_arrow": 0,
+      "doctype": "Workspace Sidebar Item"
+    },
+    {
       "label": "税局发票资料库",
       "link_type": "Page",
       "type": "Link",

@@ -48,28 +48,28 @@ TASK_DEFINITIONS = [
     },
     {
         "key": "invoice_jz",
-        "title": "吉众采购发票月度核定关账",
-        "category": "财务税务",
+        "title": "吉众采购与供应链月度综合封账",
+        "category": "采购供应链",
         "company": "天津吉众科技有限公司",
         "company_short": "吉众",
-        "lock_strength": "底层强拦截 (禁止增改删)",
-        "lock_desc": "核定关账后，系统在底层钩子强拦截当月采购发票，严密禁止新增、修改、提交或作废当月发票。",
-        "edit_rule": "核定后禁止新增/修改当月发票，需反审核解锁",
-        "required_roles": "Tax Invoice Manager, Accounts Manager, System Manager",
+        "lock_strength": "全链路强拦截 (禁止增改删)",
+        "lock_desc": "核定关账后，系统在底层钩子强拦截当月采购申请、订单、入库单、发票与报销单，严密禁止增改删。",
+        "edit_rule": "核定后禁止增改删当月采购全链条单据，需反审核解锁",
+        "required_roles": "Purchase Manager, Accounts Manager, Tax Invoice Manager, System Manager",
         "route": "/desk/tax-invoice-center",
         "doctype": "Monthly Invoice Closing",
         "action_type": "invoice_dialog",
     },
     {
         "key": "invoice_qf",
-        "title": "祺富采购发票月度核定关账",
-        "category": "财务税务",
+        "title": "祺富采购与供应链月度综合封账",
+        "category": "采购供应链",
         "company": "天津祺富机械加工有限公司",
         "company_short": "祺富",
-        "lock_strength": "底层强拦截 (禁止增改删)",
-        "lock_desc": "核定关账后锁定进项税金、价税总额与发票底册，防止报税后数据被篡改。",
-        "edit_rule": "核定后禁止新增/修改当月发票，需反审核解锁",
-        "required_roles": "Tax Invoice Manager, Accounts Manager, System Manager",
+        "lock_strength": "全链路强拦截 (禁止增改删)",
+        "lock_desc": "核定关账后锁定当月采购全链条单据与进项税金底册，防止报税和结算后数据被篡改。",
+        "edit_rule": "核定后禁止增改删当月采购全链条单据，需反审核解锁",
+        "required_roles": "Purchase Manager, Accounts Manager, Tax Invoice Manager, System Manager",
         "route": "/desk/tax-invoice-center",
         "doctype": "Monthly Invoice Closing",
         "action_type": "invoice_dialog",
@@ -202,7 +202,7 @@ def _check_task_status_for_period(task_def: dict, period: str) -> dict:
             doc = frappe.get_doc("Monthly Invoice Closing", doc_name)
             if doc.is_locked:
                 is_settled = True
-                status_label = "已关账锁定"
+                status_label = "已封账锁定"
                 verifier = doc.locked_by
                 verified_at = str(doc.locked_at) if doc.locked_at else None
                 detail_text = f"已核定 {doc.invoice_count or 0} 笔发票, 价税合计 ¥{flt(doc.total_grand_total):,.2f}"
@@ -210,12 +210,22 @@ def _check_task_status_for_period(task_def: dict, period: str) -> dict:
                 status_label = "已解锁/草稿"
                 unlock_reason = doc.unlock_reason
         if not is_settled and not detail_text:
-            inv_count = frappe.db.count("Purchase Invoice", {
+            start_date = f"{period}-01"
+            end_date = f"{period}-31"
+            po_count = frappe.db.count("Purchase Order", {
                 "company": company,
-                "posting_date": ["between", [f"{period}-01", f"{period}-31"]],
+                "transaction_date": ["between", [start_date, end_date]],
                 "docstatus": 1
             })
-            detail_text = f"当月已录入 {inv_count} 笔发票" if inv_count > 0 else "无当月已过账发票"
+            inv_count = frappe.db.count("Purchase Invoice", {
+                "company": company,
+                "posting_date": ["between", [start_date, end_date]],
+                "docstatus": 1
+            })
+            if po_count > 0 or inv_count > 0:
+                detail_text = f"当月已录 {po_count} 笔订单, {inv_count} 笔发票"
+            else:
+                detail_text = "当月暂无过账订单与发票"
 
     elif key == "oil_card_jz":
         y_i, m_i = [int(x) for x in period.split("-")]

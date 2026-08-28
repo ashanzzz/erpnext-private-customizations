@@ -230,7 +230,9 @@
                 text.includes("工作台") ||
                 text.includes("总览") ||
                 text.includes("资料库") ||
-                text.includes("台账明细台")
+                text.includes("台账明细台") ||
+                text.includes("全景中枢") ||
+                text.includes("核定中枢")
             );
             item.classList.toggle("ashan-workbench-item", important);
         });
@@ -375,11 +377,32 @@
         return openId;
     }
 
+    function highlightActiveSidebarItem(sidebar) {
+        if (!sidebar) return;
+        const route = window.frappe?.get_route?.() || [];
+        if (!route || !route.length) return;
+        const joined = route.join("/").toLowerCase();
+        const primary = String(route[0] || "").toLowerCase().replace(/[\s_]+/g, "-");
+
+        sidebar.querySelectorAll(".sidebar-child-item").forEach((child) => {
+            const anchor = child.querySelector("a[href]");
+            if (!anchor) return;
+            const rawHref = (anchor.getAttribute("href") || "").toLowerCase();
+            const cleanHref = rawHref.replace(/^\/desk\//, "").replace(/^\/app\//, "").replace(/^\//, "");
+            const isMatch = cleanHref === joined || cleanHref === primary || (joined.startsWith(cleanHref) && cleanHref.length > 3);
+            if (isMatch) {
+                child.classList.add("active", "selected");
+                child.querySelector(".standard-sidebar-item")?.classList.add("active", "selected");
+            }
+        });
+    }
+
     let pendingHydrationFrame = null;
     function hydrateAccordionState(sidebar) {
         if (!sidebar || sidebar !== document.querySelector(".body-sidebar")) return;
         sidebar.dataset.ashanSidebarHydrating = "true";
         syncAccordionState();
+        highlightActiveSidebarItem(sidebar);
         window.requestAnimationFrame(() => {
             if (sidebar === document.querySelector(".body-sidebar")) {
                 delete sidebar.dataset.ashanSidebarHydrating;
