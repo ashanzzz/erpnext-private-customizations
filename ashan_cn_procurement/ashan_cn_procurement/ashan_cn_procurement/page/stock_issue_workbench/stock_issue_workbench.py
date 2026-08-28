@@ -304,6 +304,93 @@ def get_stock_issue_list(
 
 
 @frappe.whitelist()
+def get_company_stock_inventory(
+    company: str,
+    warehouse: str | None = None,
+    search_text: str | None = None,
+    page_index: int | str = 1,
+    page_size: int | str = 50,
+) -> dict:
+    """
+    查询指定公司的全量现存实物库存底册（支持选料出库）：
+    默认只返回 actual_qty > 0.0001 的物料，附带物料编码、物料名称、规格型号、所在仓库、主计量单位、实际结存与估值。
+    """
+    if not company:
+        company = get_current_user_company()
+    assert_company_access(company)
+
+    page_idx = max(int(page_index or 1), 1)
+    p_size = max(int(page_size or 50), 1)
+    offset = (page_idx - 1) * p_size
+
+    conditions = [
+        "w.company = %s",
+        "w.is_group = 0",
+        "w.disabled = 0",
+        "i.disabled = 0",
+        "b.actual_qty > 0.0001",
+    ]
+    params = [company]
+
+    if warehouse and warehouse not in ("全部仓库", "All Warehouses", ""):
+        conditions.append("b.warehouse = %s")
+        params.append(warehouse)
+
+    txt = (search_text or "").strip()
+    if txt:
+        conditions.append("(b.item_code LIKE %s OR i.item_name LIKE %s OR i.description LIKE %s OR b.warehouse LIKE %s)")
+        like_txt = f"%{txt}%"
+        params.extend([like_txt, like_txt, like_txt, like_txt])
+
+    where_clause = " AND ".join(conditions)
+
+    count_sql = f"""
+        SELECT 
+            COUNT(b.name) AS total_count,
+            COALESCE(SUM(b.actual_qty), 0) AS total_qty
+        FROM `tabBin` b
+        INNER JOIN `tabItem` i ON i.name = b.item_code
+        INNER JOIN `tabWarehouse` w ON w.name = b.warehouse
+        WHERE {where_clause}
+    """
+    count_res = frappe.db.sql(count_sql, params, as_dict=True)[0]
+    total_records = count_res.total_count or 0
+    total_stock_qty = count_res.total_qty or 0.0
+
+    sql = f"""
+        SELECT 
+            b.name AS bin_name,
+            b.item_code,
+            i.item_name,
+            i.description,
+            i.item_group,
+            b.warehouse,
+            w.warehouse_name,
+            COALESCE(b.stock_uom, i.stock_uom, 'Nos') AS stock_uom,
+            COALESCE(b.actual_qty, 0) AS actual_qty,
+            COALESCE(b.valuation_rate, 0) AS valuation_rate
+        FROM `tabBin` b
+        INNER JOIN `tabItem` i ON i.name = b.item_code
+        INNER JOIN `tabWarehouse` w ON w.name = b.warehouse
+        WHERE {where_clause}
+        ORDER BY b.actual_qty DESC, b.item_code ASC
+        LIMIT %s OFFSET %s
+    """
+    records_params = list(params)
+    records_params.extend([p_size, offset])
+    records = frappe.db.sql(sql, records_params, as_dict=True)
+
+    return {
+        "records": records,
+        "total_records": total_records,
+        "total_stock_qty": total_stock_qty,
+        "page_index": page_idx,
+        "page_size": p_size,
+        "total_pages": (total_records + p_size - 1) // p_size if total_records > 0 else 1,
+    }
+
+
+@frappe.whitelist()
 def get_warehouse_stock_items(
     company: str,
     warehouse: str,
