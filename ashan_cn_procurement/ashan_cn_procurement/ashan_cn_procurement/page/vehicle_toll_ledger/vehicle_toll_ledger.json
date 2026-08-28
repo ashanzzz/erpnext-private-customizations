@@ -12,25 +12,10 @@
   "page_name": "vehicle-toll-ledger",
   "roles": [
     {
-      "role": "Stock User"
-    },
-    {
-      "role": "Purchase User"
-    },
-    {
-      "role": "Accounts User"
-    },
-    {
       "role": "Oil Card Operator"
     },
     {
       "role": "Oil Card Manager"
-    },
-    {
-      "role": "油卡操作员"
-    },
-    {
-      "role": "油卡管理员"
     },
     {
       "role": "System Manager"

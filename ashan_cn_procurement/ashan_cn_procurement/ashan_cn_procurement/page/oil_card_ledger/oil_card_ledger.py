@@ -26,6 +26,26 @@ def is_oil_card_manager():
 	return bool(user_roles & manager_roles)
 
 
+def _recalculate_oil_card_balance(oil_card):
+	"""Recalculate one card from submitted transactions only."""
+	card = frappe.get_doc("Oil Card", oil_card)
+	recharges_sum = frappe.db.sql(
+		"SELECT COALESCE(SUM(COALESCE(effective_amount, recharge_amount)), 0) AS total "
+		"FROM `tabOil Card Recharge` WHERE oil_card = %s AND docstatus = 1",
+		oil_card,
+		as_dict=True,
+	)[0].total
+	refuels_sum = frappe.db.sql(
+		"SELECT COALESCE(SUM(amount), 0) AS total "
+		"FROM `tabOil Card Refuel Log` WHERE oil_card = %s AND docstatus = 1",
+		oil_card,
+		as_dict=True,
+	)[0].total
+	balance = flt(card.opening_balance) + flt(recharges_sum) - flt(refuels_sum)
+	frappe.db.set_value("Oil Card", oil_card, "current_balance", balance, update_modified=True)
+	return balance
+
+
 @frappe.whitelist()
 def get_all_oil_cards():
 	"""
@@ -164,7 +184,7 @@ def get_quick_entry_meta():
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="柴油", default_fuel_grade=None, vehicle_remark=None, last_odometer=0, make=None, company=None, primary_driver=None):
 	"""
 	单页极速新建车辆档案（零跳转，纯中文，默认正常在用，完全同步至车辆主数据）
@@ -222,7 +242,6 @@ def quick_create_vehicle(license_plate, vehicle_category="货车", fuel_type="�
 	if vehicle_remark and frappe.db.has_column("Vehicle", "custom_vehicle_remark"):
 		doc.custom_vehicle_remark = vehicle_remark.strip()
 	doc.insert(ignore_permissions=True)
-	frappe.db.commit()
 
 	return {
 		"status": "ok",
@@ -255,7 +274,7 @@ def is_system_admin():
 	return "System Manager" in user_roles
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def quick_create_oil_card(card_name, card_no, card_code=None, card_type="主卡", company=None, supplier=None, opening_balance=0):
 	"""
 	单页模态对话框极速新建油卡档案（管理员专用）
@@ -306,23 +325,24 @@ def quick_create_oil_card(card_name, card_no, card_code=None, card_type="主卡"
 	doc.opening_balance = op_bal
 	doc.current_balance = op_bal
 	doc.insert(ignore_permissions=True)
-	frappe.db.commit()
 
 	return {"status": "ok", "message": f"油卡【{doc.card_name}】已成功创建！", "name": doc.name}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def delete_oil_card(oil_card):
 	"""
-	单页极速删除油卡档案（管理员专用）
+	删除无流水的油卡档案（管理员专用）
 	"""
 	if not oil_card or not frappe.db.exists("Oil Card", oil_card):
 		frappe.throw("指定的油卡不存在或已被删除！")
 	assert_oil_ledger_access("unlock_approve", oil_card)
 
 	card_name = frappe.db.get_value("Oil Card", oil_card, "card_name") or oil_card
+	for transaction_type in ("Oil Card Recharge", "Oil Card Refuel Log"):
+		if frappe.db.exists(transaction_type, {"oil_card": oil_card}):
+			frappe.throw("该油卡已有业务流水，必须保留档案与审计链路，不能删除。")
 	frappe.delete_doc("Oil Card", oil_card, ignore_permissions=True)
-	frappe.db.commit()
 
 	return {"status": "ok", "message": f"油卡【{card_name}】已成功删除！"}
 
@@ -354,7 +374,7 @@ def get_unified_ledger_data(oil_card, year=None, month=None):
 		"""
 		SELECT COALESCE(SUM(COALESCE(effective_amount, recharge_amount)), 0) as total
 		FROM `tabOil Card Recharge`
-		WHERE oil_card = %s AND posting_date < %s AND docstatus != 2
+		WHERE oil_card = %s AND posting_date < %s AND docstatus = 1
 	""",
 		(oil_card, start_date),
 		as_dict=True,
@@ -364,7 +384,7 @@ def get_unified_ledger_data(oil_card, year=None, month=None):
 		"""
 		SELECT COALESCE(SUM(amount), 0) as total
 		FROM `tabOil Card Refuel Log`
-		WHERE oil_card = %s AND posting_date < %s AND docstatus != 2
+		WHERE oil_card = %s AND posting_date < %s AND docstatus = 1
 	""",
 		(oil_card, start_date),
 		as_dict=True,
@@ -375,7 +395,7 @@ def get_unified_ledger_data(oil_card, year=None, month=None):
 	# 2. 拉取本月【充值记录】
 	recharges = frappe.get_all(
 		"Oil Card Recharge",
-		filters={"oil_card": oil_card, "posting_date": ["between", [start_date, end_date]], "docstatus": ["!=", 2]},
+		filters={"oil_card": oil_card, "posting_date": ["between", [start_date, end_date]], "docstatus": 1},
 		fields=[
 			"name",
 			"posting_date",
@@ -394,7 +414,7 @@ def get_unified_ledger_data(oil_card, year=None, month=None):
 	# 3. 拉取本月【加油记录】
 	refuels = frappe.get_all(
 		"Oil Card Refuel Log",
-		filters={"oil_card": oil_card, "posting_date": ["between", [start_date, end_date]], "docstatus": ["!=", 2]},
+		filters={"oil_card": oil_card, "posting_date": ["between", [start_date, end_date]], "docstatus": 1},
 		fields=[
 			"name",
 			"posting_date",
@@ -565,7 +585,7 @@ def get_oil_card_ledger_data(oil_card, year=None, month=None):
 	return get_unified_ledger_data(oil_card, year, month)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def quick_add_refuel(oil_card, posting_date, vehicle, odometer, liters, amount, fuel_grade=None, remark=None):
 	"""
 	行内快速录入加油记录
@@ -620,6 +640,7 @@ def quick_add_refuel(oil_card, posting_date, vehicle, odometer, liters, amount, 
 	doc.status = "Submitted"
 	doc.remark = remark or ""
 	doc.insert(ignore_permissions=True)
+	doc.submit()
 
 
 	# 更新车辆里程与上次加油油号（供下次加油默认自动带出）
@@ -634,25 +655,11 @@ def quick_add_refuel(oil_card, posting_date, vehicle, odometer, liters, amount, 
 			frappe.db.set_value("Vehicle", vehicle, update_fields, update_modified=True)
 
 
-	# 重新计算卡内当前总余额
-	recharges_sum = frappe.db.sql(
-		"SELECT COALESCE(SUM(COALESCE(effective_amount, recharge_amount)), 0) as total FROM `tabOil Card Recharge` WHERE oil_card = %s AND docstatus != 2",
-		oil_card,
-		as_dict=True,
-	)[0].total
-	refuels_sum = frappe.db.sql(
-		"SELECT COALESCE(SUM(amount), 0) as total FROM `tabOil Card Refuel Log` WHERE oil_card = %s AND docstatus != 2",
-		oil_card,
-		as_dict=True,
-	)[0].total
-	new_card_bal = flt(card.opening_balance) + flt(recharges_sum) - flt(refuels_sum)
-	frappe.db.set_value("Oil Card", oil_card, "current_balance", new_card_bal, update_modified=True)
-
-	frappe.db.commit()
+	_recalculate_oil_card_balance(oil_card)
 	return {"status": "ok", "message": "加油记录已成功保存并实时核算！", "name": doc.name}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def quick_add_recharge(oil_card, posting_date, recharge_amount, mode_of_payment=None, bonus_amount=None, remark=None):
 	"""
 	行内快速录入充值记录
@@ -692,26 +699,13 @@ def quick_add_recharge(oil_card, posting_date, recharge_amount, mode_of_payment=
 	doc.status = "Submitted"
 	doc.remark = remark or ""
 	doc.insert(ignore_permissions=True)
+	doc.submit()
 
-	# 重新计算卡内当前总余额
-	recharges_sum = frappe.db.sql(
-		"SELECT COALESCE(SUM(COALESCE(effective_amount, recharge_amount)), 0) as total FROM `tabOil Card Recharge` WHERE oil_card = %s AND docstatus != 2",
-		oil_card,
-		as_dict=True,
-	)[0].total
-	refuels_sum = frappe.db.sql(
-		"SELECT COALESCE(SUM(amount), 0) as total FROM `tabOil Card Refuel Log` WHERE oil_card = %s AND docstatus != 2",
-		oil_card,
-		as_dict=True,
-	)[0].total
-	new_card_bal = flt(card.opening_balance) + flt(recharges_sum) - flt(refuels_sum)
-	frappe.db.set_value("Oil Card", oil_card, "current_balance", new_card_bal, update_modified=True)
-
-	frappe.db.commit()
+	_recalculate_oil_card_balance(oil_card)
 	return {"status": "ok", "message": "充值记录已成功保存并实时核算！", "name": doc.name}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def lock_monthly_ledger(oil_card, year, month, remark=None):
 	"""
 	【本月核定 / 锁定月度】：
@@ -754,11 +748,10 @@ def lock_monthly_ledger(oil_card, year, month, remark=None):
 		})
 		doc.insert(ignore_permissions=True)
 
-	frappe.db.commit()
 	return {"status": "ok", "message": f"【{card_name}】{y}年{m}月已成功核定并锁定（期末结存: ¥{closing_bal:,.2f}）！"}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def request_unlock_monthly_ledger(oil_card, year, month, reason):
 	"""
 	【操作员申请取消核定 / 申请解锁月度】：
@@ -784,12 +777,10 @@ def request_unlock_monthly_ledger(oil_card, year, month, reason):
 	doc.unlock_requested_at = now_datetime()
 	doc.unlock_request_reason = str(reason).strip()
 	doc.save(ignore_permissions=True)
-	frappe.db.commit()
-
 	return {"status": "ok", "message": f"已提交【{y}年{m}月】取消核定申请，请等待油卡管理员审核解锁！"}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def approve_unlock_monthly_ledger(oil_card, year, month, approved=1):
 	"""
 	【管理员审核取消核定申请 / 直接解锁】：
@@ -811,16 +802,14 @@ def approve_unlock_monthly_ledger(oil_card, year, month, approved=1):
 		doc.closing_locked = 0
 		doc.unlock_requested = 0
 		doc.save(ignore_permissions=True)
-		frappe.db.commit()
 		return {"status": "ok", "message": f"{y}年{m}月已解除锁定，恢复可编辑状态。"}
 	else:
 		doc.unlock_requested = 0
 		doc.save(ignore_permissions=True)
-		frappe.db.commit()
 		return {"status": "ok", "message": f"{y}年{m}月的取消核定申请已被驳回。"}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def unlock_monthly_ledger(oil_card, year, month):
 	"""
 	【解除月度锁定】：
@@ -829,21 +818,11 @@ def unlock_monthly_ledger(oil_card, year, month):
 	return approve_unlock_monthly_ledger(oil_card, year, month, approved=1)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def delete_ledger_record(doc_type, name, oil_card, year, month, reason=None):
 	"""
 	删除单笔充值或加油流水（检查月度锁定与操作授权审计）
 	"""
-	assert_oil_ledger_access("unlock_approve", oil_card)
-	y = int(year)
-	m = int(month)
-	closing_name = f"{oil_card}-{y}-{m}"
-
-	if frappe.db.exists("Oil Card Monthly Closing", closing_name):
-		closing_doc = frappe.get_doc("Oil Card Monthly Closing", closing_name)
-		if closing_doc.get("closing_locked") or closing_doc.get("is_locked"):
-			frappe.throw(f"该月份 ({y}年{m}月) 已被核定锁定，禁止删除单据！若需调整请先在页面右上角执行【解除锁定】或【申请取消核定】。")
-
 	if doc_type not in ["Oil Card Recharge", "Oil Card Refuel Log"]:
 		frappe.throw("非法的单据类型")
 
@@ -851,41 +830,47 @@ def delete_ledger_record(doc_type, name, oil_card, year, month, reason=None):
 		return {"status": "ok"}
 
 	doc = frappe.get_doc(doc_type, name)
+	target_oil_card = str(doc.oil_card or "").strip()
+	if not target_oil_card:
+		frappe.throw("目标流水未绑定油卡，无法执行作废。")
+	if oil_card and str(oil_card).strip() != target_oil_card:
+		frappe.throw("请求油卡与目标流水所属油卡不一致，已拒绝操作。", frappe.PermissionError)
+	assert_oil_ledger_access("unlock_approve", target_oil_card)
+
+	posting_date = getdate(doc.posting_date)
+	y = int(year)
+	m = int(month)
+	if posting_date.year != y or posting_date.month != m:
+		frappe.throw("请求期间与目标流水记账期间不一致，已拒绝操作。", frappe.PermissionError)
+	closing_name = f"{target_oil_card}-{y}-{m}"
+	if frappe.db.exists("Oil Card Monthly Closing", closing_name):
+		closing_doc = frappe.get_doc("Oil Card Monthly Closing", closing_name)
+		if closing_doc.get("closing_locked") or closing_doc.get("is_locked"):
+			frappe.throw(f"该月份 ({y}年{m}月) 已被核定锁定，禁止作废单据！请先按流程申请并批准解锁。")
+	if not str(reason or "").strip():
+		frappe.throw("作废油卡流水必须填写原因。")
 
 	# 记录操作审计
 	try:
 		audit_entry = {
 			"user": frappe.session.user,
-			"action": "Delete",
+		"action": "Cancel",
 			"doc_type": doc_type,
 			"doc_name": name,
-			"oil_card": oil_card,
+			"oil_card": target_oil_card,
 			"year": y,
 			"month": m,
 			"amount": getattr(doc, "amount", None) or getattr(doc, "recharge_amount", None) or 0,
-			"reason": reason or "用户行内删除",
+		"reason": str(reason).strip(),
 			"timestamp": str(now_datetime()),
 		}
 		frappe.logger("oil_card").info(f"Oil Card Record Deleted: {audit_entry}")
 	except Exception:
 		pass
 
-	frappe.delete_doc(doc_type, name, ignore_permissions=True)
-
-	# 重新计算卡内当前总余额
-	card = frappe.get_doc("Oil Card", oil_card)
-	recharges_sum = frappe.db.sql(
-		"SELECT COALESCE(SUM(COALESCE(effective_amount, recharge_amount)), 0) as total FROM `tabOil Card Recharge` WHERE oil_card = %s AND docstatus != 2",
-		oil_card,
-		as_dict=True,
-	)[0].total
-	refuels_sum = frappe.db.sql(
-		"SELECT COALESCE(SUM(amount), 0) as total FROM `tabOil Card Refuel Log` WHERE oil_card = %s AND docstatus != 2",
-		oil_card,
-		as_dict=True,
-	)[0].total
-	new_card_bal = flt(card.opening_balance) + flt(recharges_sum) - flt(refuels_sum)
-	frappe.db.set_value("Oil Card", oil_card, "current_balance", new_card_bal, update_modified=True)
-
-	frappe.db.commit()
-	return {"status": "ok", "message": "记录已成功删除并重新核算！"}
+	if doc.docstatus == 1:
+		doc.cancel()
+	else:
+		doc.delete(ignore_permissions=True)
+	_recalculate_oil_card_balance(target_oil_card)
+	return {"status": "ok", "message": "记录已作废并重新核算。"}

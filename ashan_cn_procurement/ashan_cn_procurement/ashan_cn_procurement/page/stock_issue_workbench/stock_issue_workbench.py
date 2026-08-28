@@ -7,7 +7,10 @@ from datetime import datetime
 import frappe
 from frappe.utils import flt, nowdate, getdate, formatdate
 
-from ashan_cn_procurement.services.authorization_service import assert_company_access
+from ashan_cn_procurement.services.authorization_service import (
+    assert_company_access,
+    get_allowed_companies,
+)
 
 
 def get_current_user_company() -> str:
@@ -18,15 +21,108 @@ def get_current_user_company() -> str:
     sys_default = frappe.db.get_single_value("Global Defaults", "default_company")
     if sys_default:
         return sys_default
-    return "天津吉众科技有限公司"
+    return ""
+
+
+def _warehouse_lineage(warehouse: str) -> list[str]:
+    """Return the warehouse and its parent path without assuming a company field."""
+    lineage: list[str] = []
+    current = warehouse
+    while current and current not in lineage:
+        lineage.append(current)
+        current = frappe.db.get_value("Warehouse", current, "parent_warehouse") or ""
+    return lineage
+
+
+def _get_warehouse_company(warehouse: str, strict: bool = True) -> str:
+    """Resolve a warehouse owner from a stored company or immutable stock history."""
+    if not frappe.db.exists("Warehouse", warehouse):
+        frappe.throw("发货仓库不存在。", frappe.DoesNotExistError)
+
+    if frappe.db.has_column("Warehouse", "company"):
+        company = frappe.db.get_value("Warehouse", warehouse, "company")
+        if company:
+            return str(company)
+
+    candidates = set()
+    lineage = _warehouse_lineage(warehouse)
+    if frappe.db.has_column("Company", "default_warehouse"):
+        default_companies = frappe.get_all(
+            "Company",
+            filters={"default_warehouse": ["in", lineage]},
+            pluck="name",
+            order_by="name asc",
+        )
+        candidates.update(str(company) for company in default_companies if company)
+
+    if frappe.db.has_column("Stock Ledger Entry", "company"):
+        ledger_companies = frappe.db.sql(
+            """
+            SELECT DISTINCT company
+            FROM `tabStock Ledger Entry`
+            WHERE warehouse = %s AND IFNULL(company, '') != ''
+            ORDER BY company ASC
+            LIMIT 2
+            """,
+            (warehouse,),
+            pluck="company",
+        )
+        candidates.update(str(company) for company in ledger_companies if company)
+
+    if len(candidates) == 1:
+        return candidates.pop()
+    if strict:
+        frappe.throw(
+            "无法从仓库主数据或库存流水确定所属公司，已拒绝库存访问。",
+            frappe.PermissionError,
+        )
+    return ""
+
+
+def _get_company_warehouses(company: str) -> list[dict]:
+    """Return only warehouses whose persisted ownership resolves to the requested company."""
+    filters = {"is_group": 0, "disabled": 0}
+    if frappe.db.has_column("Warehouse", "company"):
+        filters["company"] = company
+        return frappe.get_all(
+            "Warehouse",
+            filters=filters,
+            fields=["name", "warehouse_name"],
+            order_by="name asc",
+        )
+
+    warehouses = frappe.get_all(
+        "Warehouse",
+        filters=filters,
+        fields=["name", "warehouse_name"],
+        order_by="name asc",
+    )
+    return [
+        warehouse
+        for warehouse in warehouses
+        if _get_warehouse_company(warehouse.name, strict=False) == company
+    ]
+
+
+def _assert_warehouse_company(company: str, warehouse: str) -> str:
+    """Bind a warehouse request to its persisted company before reading stock."""
+    warehouse_company = _get_warehouse_company(warehouse)
+    if warehouse_company != company:
+        frappe.throw("发货仓库不属于所选公司，已拒绝跨公司库存访问。", frappe.PermissionError)
+    assert_company_access(warehouse_company)
+    return warehouse_company
 
 
 @frappe.whitelist()
 def get_stock_issue_meta(company: str | None = None) -> dict:
     """获取材料出库工作台元数据（公司、发货仓库、领用部门等）"""
-    all_companies = [c.name for c in frappe.get_all("Company", fields=["name"], order_by="name asc")]
+    allowed_companies = get_allowed_companies()
+    company_filters = {"name": ["in", sorted(allowed_companies)]} if allowed_companies is not None else {}
+    all_companies = [
+        c.name for c in frappe.get_all("Company", filters=company_filters, fields=["name"], order_by="name asc")
+    ]
     if not all_companies:
-        all_companies = ["天津吉众科技有限公司", "天津祺富机械加工有限公司"]
+        frappe.throw("当前账号未配置可访问的公司范围。", frappe.PermissionError)
 
     selected_company = company or get_current_user_company()
     if selected_company not in all_companies and all_companies:
@@ -34,12 +130,7 @@ def get_stock_issue_meta(company: str | None = None) -> dict:
 
     assert_company_access(selected_company)
 
-    warehouses = frappe.get_all(
-        "Warehouse",
-        filters={"company": selected_company, "is_group": 0, "disabled": 0},
-        fields=["name", "warehouse_name"],
-        order_by="name asc",
-    )
+    warehouses = _get_company_warehouses(selected_company)
 
     departments = frappe.get_all(
         "Department",
@@ -167,6 +258,7 @@ def get_stock_issue_list(
 
     # 仓库过滤
     if warehouse and warehouse not in ("全部仓库", "All", "All Warehouses", ""):
+        _assert_warehouse_company(comp, warehouse)
         conditions.append("EXISTS (SELECT 1 FROM `tabStock Entry Detail` sed_wh WHERE sed_wh.parent = se.name AND sed_wh.s_warehouse = %(warehouse)s)")
         params["warehouse"] = warehouse
 
@@ -365,6 +457,8 @@ def get_company_stock_inventory(
     if not company:
         company = get_current_user_company()
     assert_company_access(company)
+    if warehouse and warehouse not in ("全部仓库", "All Warehouses", ""):
+        _assert_warehouse_company(company, warehouse)
 
     page_idx = max(int(page_index or 1), 1)
     p_size = max(int(page_size or 50), 1)
@@ -453,6 +547,7 @@ def get_warehouse_stock_items(
         return []
 
     assert_company_access(company)
+    _assert_warehouse_company(company, warehouse)
 
     only_pos = str(only_positive_stock).strip() in ("1", "true", "True")
     txt = (search_text or "").strip()
@@ -512,6 +607,7 @@ def get_item_stock_balance(company: str, warehouse: str, item_code: str) -> dict
         return {"actual_qty": 0.0, "stock_uom": "Nos"}
 
     assert_company_access(company)
+    _assert_warehouse_company(company, warehouse)
 
     bin_data = frappe.db.get_value(
         "Bin",
@@ -552,6 +648,7 @@ def create_stock_issue(
 
     if not warehouse or warehouse in ("全部仓库", "All Warehouses", ""):
         frappe.throw("请选择具体的出库发货仓库")
+    _assert_warehouse_company(company, warehouse)
 
     if isinstance(items, str):
         try:

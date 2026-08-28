@@ -22,22 +22,22 @@
    "label": "发票附件生命周期与清理设置"
   },
   {
-   "default": "1",
+   "default": "0",
    "fieldname": "auto_cleanup_enabled",
    "fieldtype": "Check",
-   "label": "启用自动清理过期 PDF 附件 (每日自动调度)"
+   "label": "启用原始 PDF 留存审计提示（不删除原件）"
   },
   {
    "default": "730",
    "fieldname": "pdf_retention_days",
    "fieldtype": "Int",
-   "label": "PDF 附件保留天数 (默认 730 天 / 约 2 年)"
+   "label": "原始 PDF 法定留存天数（仅记录策略）"
   },
   {
    "default": "发票日期",
    "fieldname": "cleanup_reference",
    "fieldtype": "Select",
-   "label": "到期清理基准日期",
+   "label": "留存基准日期",
    "options": "发票日期\n创建日期"
   },
   {
@@ -76,7 +76,19 @@
  "module": "Ashan CN Procurement",
  "name": "Tax Invoice Settings",
  "owner": "Administrator",
- "permissions": [
+  "permissions": [
+   {
+   "role": "Tax Invoice Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "share": 1
+  },
   {
    "create": 1,
    "delete": 1,

@@ -103,7 +103,14 @@
       "delete": 1
     },
     {
-      "role": "Stock User",
+      "role": "Oil Card Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "Oil Card Operator",
       "read": 1,
       "write": 0,
       "create": 0,

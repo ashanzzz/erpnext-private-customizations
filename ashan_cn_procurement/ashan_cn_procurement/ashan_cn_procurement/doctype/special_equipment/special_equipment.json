@@ -336,6 +336,15 @@
       "import": 1
     },
     {
+      "role": "Compliance Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1,
+      "export": 1,
+      "import": 1
+    },
+    {
       "role": "Compliance Operator",
       "read": 1,
       "write": 1,

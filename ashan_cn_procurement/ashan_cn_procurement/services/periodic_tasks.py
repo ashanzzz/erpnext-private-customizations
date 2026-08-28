@@ -579,7 +579,7 @@ def get_compliance_expiry_status():
             "items": []
         }
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def record_compliance_inspection(doctype, docname, done_date=None, next_due_date=None, notes=None):
     """
     快速记录周期性检测/检验/续租完成，直接就地推进下一周期到期日，无需跳转

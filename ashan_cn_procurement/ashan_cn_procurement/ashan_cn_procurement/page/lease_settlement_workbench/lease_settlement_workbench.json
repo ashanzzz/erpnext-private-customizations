@@ -14,13 +14,10 @@
       "role": "System Manager"
     },
     {
-      "role": "Administrator"
+      "role": "Property Manager"
     },
     {
-      "role": "Accounts Manager"
-    },
-    {
-      "role": "Accounts User"
+      "role": "Property Operator"
     }
   ],
   "standard": "Yes",

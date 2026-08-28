@@ -178,7 +178,7 @@ def get_meal_workbench_data(settlement_month):
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def save_meal_workbench_data(settlement_month, records, default_meal_price=15.0, catering_supplier=None, remark=None):
 	"""
 	保存每日订餐数据 (支持内联表格自动保存)
@@ -216,12 +216,11 @@ def save_meal_workbench_data(settlement_month, records, default_meal_price=15.0,
 		})
 
 	doc.save(ignore_permissions=True)
-	frappe.db.commit()
 
 	return get_meal_workbench_data(settlement_month)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def upload_and_parse_meal_excel():
 	"""
 	上传 Excel 订餐记录并智能解析
@@ -497,7 +496,7 @@ def export_meal_settlement_excel(settlement_month):
 	frappe.response["type"] = "binary"
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def finalize_meal_settlement(settlement_month):
 	"""核定锁定当月餐费账目"""
 	check_meal_permission()
@@ -508,12 +507,11 @@ def finalize_meal_settlement(settlement_month):
 	doc = frappe.get_doc("Ashan Monthly Meal Settlement", doc_name)
 	doc.status = "已核定"
 	doc.save(ignore_permissions=True)
-	frappe.db.commit()
 
 	return get_meal_workbench_data(settlement_month)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def revert_finalize_meal_settlement(settlement_month):
 	"""取消核定 (重新录入)"""
 	check_meal_permission()
@@ -524,12 +522,11 @@ def revert_finalize_meal_settlement(settlement_month):
 	doc = frappe.get_doc("Ashan Monthly Meal Settlement", doc_name)
 	doc.status = "草稿"
 	doc.save(ignore_permissions=True)
-	frappe.db.commit()
 
 	return get_meal_workbench_data(settlement_month)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def clear_meal_workbench_data(settlement_month):
 	"""清空当月所有订餐明细（重置为0）"""
 	check_meal_permission()
@@ -547,6 +544,5 @@ def clear_meal_workbench_data(settlement_month):
 		item.remark = ""
 
 	doc.save(ignore_permissions=True)
-	frappe.db.commit()
 
 	return get_meal_workbench_data(settlement_month)

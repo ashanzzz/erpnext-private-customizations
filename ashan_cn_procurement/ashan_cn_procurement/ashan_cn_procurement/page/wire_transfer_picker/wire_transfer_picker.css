@@ -431,8 +431,8 @@
     padding: 0 14px;
     font-size: 12px;
     font-weight: 700;
-    background: #8e44ad;
-    border: 1px solid #7d3c98;
+    background: var(--ashan-color-primary, #1e40af);
+    border: 1px solid var(--ashan-color-primary-dark, #1e3a8a);
     border-radius: 4px;
     color: #ffffff;
     cursor: pointer;
@@ -446,7 +446,7 @@
 }
 
 .picker-btn-create-wire:hover {
-    background: #7d3c98;
+    background: var(--ashan-color-primary-dark, #1e3a8a);
 }
 
 /* --- Table Container & Sticky Panes --- */

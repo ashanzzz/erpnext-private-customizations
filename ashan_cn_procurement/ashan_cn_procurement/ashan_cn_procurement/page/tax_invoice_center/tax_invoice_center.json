@@ -15,10 +15,10 @@
    "role": "System Manager"
   },
   {
-   "role": "Accounts Manager"
+   "role": "Tax Invoice Manager"
   },
   {
-   "role": "Accounts User"
+   "role": "Tax Invoice Operator"
   }
  ],
  "standard": "Yes",

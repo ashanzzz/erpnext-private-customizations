@@ -13,8 +13,6 @@
     {
       "role": "System Manager"
     },
-    {"role": "Accounts Manager"},
-    {"role": "Accounts User"},
     {"role": "Property Manager"},
     {"role": "Property Operator"}
   ],

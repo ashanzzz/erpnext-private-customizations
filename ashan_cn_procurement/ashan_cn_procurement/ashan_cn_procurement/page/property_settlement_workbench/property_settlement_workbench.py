@@ -10,8 +10,10 @@ from ashan_cn_procurement.services.property_settlement import (
 	save_draft_settlement,
 	finalize_monthly_settlement,
 	revert_settlement_to_draft,
+	assert_property_settlement_access,
 	export_utility_settlement_excel
 )
+from ashan_cn_procurement.services.authorization_service import assert_company_access, assert_module_access
 
 
 @frappe.whitelist()
@@ -20,7 +22,7 @@ def get_settlement(year, month):
 	return get_month_settlement_data(year, month)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def save_settlement(data):
 	"""保存水电费草稿月结"""
 	if isinstance(data, str):
@@ -28,7 +30,7 @@ def save_settlement(data):
 	return save_draft_settlement(data)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def finalize_settlement(data):
 	"""完成并锁定本月水电费结算"""
 	if isinstance(data, str):
@@ -36,10 +38,10 @@ def finalize_settlement(data):
 	return finalize_monthly_settlement(data)
 
 
-@frappe.whitelist()
-def revert_settlement(name):
+@frappe.whitelist(methods=["POST"])
+def revert_settlement(name, reason=None):
 	"""取消结算并退回草稿"""
-	return revert_settlement_to_draft(name)
+	return revert_settlement_to_draft(name, reason=reason)
 
 
 @frappe.whitelist()
@@ -49,6 +51,9 @@ def get_company_bill_data(settlement_name, company):
 	"""
 	doc = frappe.get_doc("Property Monthly Settlement", settlement_name)
 	doc_dict = doc.as_dict()
+	assert_module_access("property", "read")
+	assert_company_access(company)
+	assert_property_settlement_access(doc_dict, "read")
 
 	company_meters = [
 		m for m in doc_dict.get("meter_readings", [])
@@ -123,6 +128,7 @@ def get_total_bill_data(settlement_name):
 	"""
 	doc = frappe.get_doc("Property Monthly Settlement", settlement_name)
 	doc_dict = doc.as_dict()
+	assert_property_settlement_access(doc_dict, "read")
 
 	total_adjs = []
 	for adj in doc_dict.get("adjustments", []):

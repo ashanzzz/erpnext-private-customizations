@@ -11,18 +11,52 @@ import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from ashan_cn_procurement.ashan_cn_procurement.payroll_engine import AshanPayrollCalculator
 from ashan_cn_procurement.services.payroll_settlement_service import check_payroll_workbench_permission
+from ashan_cn_procurement.services.authorization_service import get_allowed_companies
 
-@frappe.whitelist()
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_payroll_workbench_context():
+    """Return the caller's dynamic payroll company and period defaults."""
+    check_payroll_workbench_permission("read")
+    allowed_companies = get_allowed_companies()
+    filters = {"name": ["in", sorted(allowed_companies)]} if allowed_companies is not None else {}
+    companies = frappe.get_all(
+        "Company",
+        filters=filters,
+        fields=["name", "company_name"],
+        order_by="name asc",
+    )
+    if not companies:
+        frappe.throw("当前账号没有可用的薪酬公司范围。", frappe.PermissionError)
+
+    default_company = frappe.defaults.get_user_default("Company")
+    company_names = {company.name for company in companies}
+    if default_company not in company_names:
+        default_company = companies[0].name
+
+    current_period = datetime.datetime.now().strftime("%Y-%m")
+    return {
+        "companies": companies,
+        "default_company": default_company,
+        "default_period": current_period,
+        "default_tax_cycle_start_month": f"{current_period[:4]}-01",
+    }
+
+
+@frappe.whitelist(methods=["GET", "POST"])
 def get_payroll_workbench_data(period_month=None, company=None, tax_cycle_start_month=None):
     """
     加载月度人事薪酬工作台核心数据 (支持吉众与祺富双模，支持自定义个税起始计税月)
     """
-    check_payroll_workbench_permission("read")
-    if not period_month:
-        now = datetime.datetime.now()
-        period_month = now.strftime('%Y-%m')
     if not company:
-        company = "天津吉众科技有限公司"
+        frappe.throw("必须指定薪酬公司。")
+    if not period_month:
+        frappe.throw("必须指定薪酬核算期间。")
+    try:
+        datetime.datetime.strptime(period_month, "%Y-%m")
+    except (TypeError, ValueError):
+        frappe.throw("薪酬核算期间必须采用 YYYY-MM 格式。")
+    check_payroll_workbench_permission("read", company)
 
     # 1. 查询法定日历获取当月满勤工作日天数
     year, month = period_month.split('-')
@@ -360,12 +394,14 @@ def save_payroll_settlement(data):
     """
     保存月度薪资核算草稿
     """
-    check_payroll_workbench_permission("write")
     if isinstance(data, str):
         data = json.loads(data)
 
-    company = data.get("company")
-    period_month = data.get("period_month")
+    company = str(data.get("company") or "").strip()
+    period_month = str(data.get("period_month") or "").strip()
+    if not company or not period_month:
+        frappe.throw("保存薪酬月结必须指定公司和核算期间。")
+    check_payroll_workbench_permission("write", company)
     name = f"{company}-薪资月结-{period_month}"
 
     if frappe.db.exists("Ashan Payroll Settlement", name):
@@ -396,7 +432,6 @@ def save_payroll_settlement(data):
         doc.append("settlement_items", item)
 
     doc.save(ignore_permissions=True)
-    frappe.db.commit()
 
     return {"success": True, "name": doc.name, "message": "薪资月结草稿已成功保存"}
 
@@ -409,12 +444,11 @@ def finalize_payroll_settlement(data):
         frappe.ValidationError,
     )
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET"])
 def export_payroll_excel(period_month=None, company=None, tax_cycle_start_month=None):
     """
     导出 1:1 多工作表标准人事薪酬 Excel 文件
     """
-    check_payroll_workbench_permission("read")
     data = get_payroll_workbench_data(period_month, company, tax_cycle_start_month)
     items = data.get("items", [])
     summary = data.get("summary", {})
@@ -525,12 +559,11 @@ def export_payroll_excel(period_month=None, company=None, tax_cycle_start_month=
     frappe.response['filecontent'] = stream.getvalue()
     frappe.response['type'] = 'binary'
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_payslip_print_data(period_month=None, company=None, mode="A4", tax_cycle_start_month=None):
     """
     获取 A4 签收单或信封工资条打印数据
     """
-    check_payroll_workbench_permission("read")
     data = get_payroll_workbench_data(period_month, company, tax_cycle_start_month)
     return {
         "company": company,

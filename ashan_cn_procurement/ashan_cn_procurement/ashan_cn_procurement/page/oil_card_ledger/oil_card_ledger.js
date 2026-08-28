@@ -651,7 +651,7 @@ class UnifiedOilCardLedgerConsole {
 			});
 		});
 
-		// 删除单笔记录（带删除原因授权与审计）
+		// 作废单笔记录并保留审计原因。
 		this.wrapper.on("click", ".btn-delete-row", function () {
 			const docType = $(this).data("doctype");
 			const docName = $(this).data("name");
@@ -661,25 +661,39 @@ class UnifiedOilCardLedgerConsole {
 				return;
 			}
 
-			frappe.confirm(`确定要删除此笔流水记录 [${docName}] 吗？<br><span style="color:#dc2626; font-size:11.5px;">删除后卡内实时余额将自动重算并留存操作审计。</span>`, function () {
-				frappe.call({
-					method: "ashan_cn_procurement.ashan_cn_procurement.page.oil_card_ledger.oil_card_ledger.delete_ledger_record",
-					args: {
-						doc_type: docType,
-						name: docName,
-						oil_card: self.activeCard.name,
-						year: self.selectedYear,
-						month: self.selectedMonth,
-						reason: "用户行内删除",
+			frappe.prompt(
+				[
+					{
+						fieldname: "reason",
+						fieldtype: "Small Text",
+						label: "作废原因",
+						reqd: 1,
 					},
-					callback: function (r) {
-						if (r.message && r.message.status === "ok") {
-							frappe.show_alert({ message: "记录已成功删除并重新核算！", indicator: "green" }, 3);
-							self.loadLedgerData();
-						}
-					},
-				});
-			});
+				],
+				(values) => {
+					frappe.confirm("确认作废该笔油卡流水吗？作废后将重新核算余额并保留审计记录。", () => {
+						frappe.call({
+							method: "ashan_cn_procurement.ashan_cn_procurement.page.oil_card_ledger.oil_card_ledger.delete_ledger_record",
+							args: {
+								doc_type: docType,
+								name: docName,
+								oil_card: self.activeCard.name,
+								year: self.selectedYear,
+								month: self.selectedMonth,
+								reason: values.reason,
+							},
+							callback: function (r) {
+								if (r.message && r.message.status === "ok") {
+									frappe.show_alert({ message: "记录已作废并重新核算。", indicator: "green" }, 3);
+									self.loadLedgerData();
+								}
+							},
+						});
+					});
+				},
+				"作废油卡流水",
+				"继续"
+			);
 		});
 	}
 
@@ -1718,10 +1732,10 @@ class UnifiedOilCardLedgerConsole {
 					? '<span class="status-pill-subtle status-pill-green">已开票</span>'
 					: '<span class="status-pill-subtle status-pill-amber">未开票</span>';
 
-				// 操作列（锁定状态下禁止删除，显示🔒只读）
+				// 操作列仅向可作废流水的管理员开放。
 				let actionHtml = '<span style="color:#94a3b8; font-size:11.5px;">🔒 只读</span>';
-				if (!isLocked) {
-					actionHtml = `<a href="javascript:void(0)" class="btn-delete-row" data-doctype="${t.doc_type}" data-name="${t.name}" style="color:#dc2626; font-weight:600; text-decoration:none; cursor:pointer;" title="删除记录">🗑️ 删除</a>`;
+				if (!isLocked && this.isManager) {
+					actionHtml = `<a href="javascript:void(0)" class="btn-delete-row" data-doctype="${t.doc_type}" data-name="${t.name}" style="color:#dc2626; font-weight:600; text-decoration:none; cursor:pointer;" title="作废记录">作废</a>`;
 				}
 
 				html += `

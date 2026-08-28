@@ -52,6 +52,10 @@ class AshanStockIssueWorkbench {
         this.init();
     }
 
+    escape_html(value) {
+        return $('<div>').text(value == null ? '' : String(value)).html();
+    }
+
     init() {
         this.render_layout();
         this.load_meta().then(() => {
@@ -419,6 +423,7 @@ class AshanStockIssueWorkbench {
     }
 
     render_vouchers_rows(records) {
+		const h = (value) => this.escape_html(value);
         if (!records || records.length === 0) {
             this.$table_body.html(`
                 <tr>
@@ -442,27 +447,27 @@ class AshanStockIssueWorkbench {
                 <tr class="${row_class}">
                     <td class="si-col-sticky-1">${idx + 1}</td>
                     <td class="si-col-sticky-2">
-                        <a href="javascript:void(0)" class="si-link si-voucher-link" data-name="${r.name}">${r.name}</a>
+                        <a href="javascript:void(0)" class="si-link si-voucher-link" data-name="${h(r.name)}">${h(r.name)}</a>
                     </td>
-                    <td>${r.posting_date} ${r.posting_time || ''}</td>
-                    <td>${r.s_warehouse || '-'}</td>
+                    <td>${h(r.posting_date)} ${h(r.posting_time)}</td>
+                    <td>${h(r.s_warehouse || '-')}</td>
                     <td>
-                        <span class="si-item-title">${r.purpose_label || r.purpose}</span>
-                        ${r.remarks ? `<div class="si-item-remarks">${r.remarks}</div>` : ''}
+                        <span class="si-item-title">${h(r.purpose_label || r.purpose)}</span>
+                        ${r.remarks ? `<div class="si-item-remarks">${h(r.remarks)}</div>` : ''}
                     </td>
                     <td>
-                        <div class="si-item-summary">${r.items_summary || '-'}</div>
+                        <div class="si-item-summary">${h(r.items_summary || '-')}</div>
                     </td>
-                    <td class="si-qty-out">${r.qty_display || `-${(flt(r.total_qty) || 0).toFixed(2)} ${r.stock_uom || 'Nos'}`}</td>
+                    <td class="si-qty-out">${h(r.qty_display || `-${(flt(r.total_qty) || 0).toFixed(2)} ${r.stock_uom || 'Nos'}`)}</td>
                     <td class="si-text-right">
-                        <span class="si-stock-text" title="${r.current_stock_tooltip || ''}">${r.current_stock_display || '-'}</span>
+                        <span class="si-stock-text" title="${h(r.current_stock_tooltip)}">${h(r.current_stock_display || '-')}</span>
                     </td>
                     <td>
-                        <span class="si-status-badge ${status_class}">${r.status_label}</span>
+                        <span class="si-status-badge ${status_class}">${h(r.status_label)}</span>
                     </td>
                     <td class="si-text-center">
-                        <button type="button" class="btn btn-xs btn-default si-view-detail-btn" data-name="${r.name}">查看明细</button>
-                        ${r.docstatus === 1 ? `<button type="button" class="btn btn-xs btn-default si-cancel-btn si-btn-danger-text" data-name="${r.name}">作废</button>` : ''}
+                        <button type="button" class="btn btn-xs btn-default si-view-detail-btn" data-name="${h(r.name)}">查看明细</button>
+                        ${r.docstatus === 1 ? `<button type="button" class="btn btn-xs btn-default si-cancel-btn si-btn-danger-text" data-name="${h(r.name)}">作废</button>` : ''}
                     </td>
                 </tr>
             `;
@@ -537,6 +542,7 @@ class AshanStockIssueWorkbench {
 
     render_inventory_rows(records, total_stock_qty) {
         const self = this;
+		const h = (value) => this.escape_html(value);
         if (!records || records.length === 0) {
             this.$table_body.html(`
                 <tr>
@@ -557,24 +563,24 @@ class AshanStockIssueWorkbench {
             const avail = flt(r.actual_qty) || 0;
 
             rows_html += `
-                <tr class="${row_class}" data-key="${key}" data-code="${r.item_code}" data-name="${r.item_name || ''}" data-desc="${r.description || ''}" data-uom="${r.stock_uom || 'Nos'}" data-wh="${r.warehouse}" data-avail="${avail}">
+                <tr class="${row_class}" data-key="${h(key)}" data-code="${h(r.item_code)}" data-name="${h(r.item_name)}" data-desc="${h(r.description)}" data-uom="${h(r.stock_uom || 'Nos')}" data-wh="${h(r.warehouse)}" data-avail="${avail}">
                     <td class="si-checkbox-cell">
                         <input type="checkbox" class="si-checkbox-input si-row-inventory-check" ${is_selected ? 'checked' : ''} />
                     </td>
                     <td class="si-col-sticky-1">${idx + 1}</td>
                     <td class="si-col-sticky-2">
-                        <strong class="si-link si-inventory-item-code">${r.item_code}</strong>
+                        <strong class="si-link si-inventory-item-code">${h(r.item_code)}</strong>
                     </td>
                     <td>
-                        <span class="si-item-title">${r.item_name || r.item_code}</span>
+                        <span class="si-item-title">${h(r.item_name || r.item_code)}</span>
                     </td>
                     <td>
-                        <span class="si-row-spec-text">${r.description || '-'}</span>
+                        <span class="si-row-spec-text">${h(r.description || '-')}</span>
                     </td>
-                    <td>${r.item_group || '-'}</td>
-                    <td>${r.warehouse_name || r.warehouse}</td>
+                    <td>${h(r.item_group || '-')}</td>
+                    <td>${h(r.warehouse_name || r.warehouse)}</td>
                     <td class="si-text-right">
-                        <span class="si-stock-text ${avail <= 0 ? 'zero' : ''}">${avail.toFixed(2)} ${r.stock_uom || 'Nos'}</span>
+                        <span class="si-stock-text ${avail <= 0 ? 'zero' : ''}">${avail.toFixed(2)} ${h(r.stock_uom || 'Nos')}</span>
                     </td>
                     <td class="si-text-center">
                         <button type="button" class="btn btn-xs btn-default si-single-issue-btn">领料出库</button>
@@ -654,9 +660,10 @@ class AshanStockIssueWorkbench {
         }
 
         const items_array = Array.from(this.selected_inventory_items.values());
+		const h = (value) => this.escape_html(value);
         let tags_html = '';
         items_array.slice(0, 3).forEach(it => {
-            tags_html += `<span class="si-cart-tag">${it.item_name || it.item_code} (${it.actual_qty} ${it.stock_uom})</span>`;
+            tags_html += `<span class="si-cart-tag">${h(it.item_name || it.item_code)} (${h(it.actual_qty)} ${h(it.stock_uom)})</span>`;
         });
         if (items_array.length > 3) {
             tags_html += `<span class="si-cart-tag">+${items_array.length - 3}...</span>`;
@@ -694,6 +701,7 @@ class AshanStockIssueWorkbench {
 
     async open_quick_issue_dialog(prefill_items = null) {
         const self = this;
+		const h = (value) => self.escape_html(value);
         this.company = this.$company_select ? (this.$company_select.val() || this.company) : this.company;
         await this.load_meta();
         
@@ -709,7 +717,7 @@ class AshanStockIssueWorkbench {
 
         let wh_options = '';
         (this.meta.warehouses || []).forEach(w => {
-            wh_options += `<option value="${w.name}">${w.warehouse_name || w.name}</option>`;
+            wh_options += `<option value="${h(w.name)}">${h(w.warehouse_name || w.name)}</option>`;
         });
 
         const modal_html = `
@@ -718,7 +726,7 @@ class AshanStockIssueWorkbench {
                     <div class="si-modal-header">
                         <div class="si-modal-title">
                             <span>新建材料出库单</span>
-                            <span class="si-modal-company-tag">· ${this.company}</span>
+                            <span class="si-modal-company-tag">· ${h(this.company)}</span>
                         </div>
                         <button type="button" class="si-modal-close-btn">✕</button>
                     </div>
@@ -807,17 +815,17 @@ class AshanStockIssueWorkbench {
                     <td class="si-row-idx">${row_idx}</td>
                     <td>
                         <div class="si-relative-box">
-                            <input type="text" class="si-form-control si-row-item-input" value="${item_code ? `${item_name || item_code} (${item_code})` : ''}" placeholder="点击挑选实存物料或搜索..." data-code="${item_code}" data-name="${item_name}" data-uom="${stock_uom}" />
+                            <input type="text" class="si-form-control si-row-item-input" value="${h(item_code ? `${item_name || item_code} (${item_code})` : '')}" placeholder="点击挑选实存物料或搜索..." data-code="${h(item_code)}" data-name="${h(item_name)}" data-uom="${h(stock_uom)}" />
                         </div>
                     </td>
-                    <td class="si-row-spec si-row-spec-text">${description || '-'}</td>
+                    <td class="si-row-spec si-row-spec-text">${h(description || '-')}</td>
                     <td class="si-text-right">
-                        <span class="si-stock-text ${available_qty <= 0 ? 'si-stock-text-low' : ''} si-row-stock-text si-stock-text-clickable" data-avail="${available_qty}" title="点击可一键自动填入最大可用库存">${(flt(available_qty) || 0).toFixed(2)} ${stock_uom}</span>
+                        <span class="si-stock-text ${available_qty <= 0 ? 'si-stock-text-low' : ''} si-row-stock-text si-stock-text-clickable" data-avail="${available_qty}" title="点击可一键自动填入最大可用库存">${(flt(available_qty) || 0).toFixed(2)} ${h(stock_uom)}</span>
                     </td>
                     <td class="si-text-right">
                         <div class="si-relative-box">
                             <input type="number" step="any" min="0.001" class="si-form-control si-row-qty si-qty-input" value="${qty}" />
-                            <span class="si-row-uom-label si-row-uom-text">${stock_uom}</span>
+                            <span class="si-row-uom-label si-row-uom-text">${h(stock_uom)}</span>
                             <div class="si-stock-warning"></div>
                         </div>
                     </td>
@@ -1023,10 +1031,10 @@ class AshanStockIssueWorkbench {
                 const item_el = $(`
                     <div class="si-suggest-item">
                         <div class="si-suggest-item-left">
-                            <span class="si-suggest-code">${it.item_code}</span>
-                            <span class="si-suggest-name">${it.item_name || ''} ${it.description ? `· ${it.description}` : ''}</span>
+                            <span class="si-suggest-code">${h(it.item_code)}</span>
+                            <span class="si-suggest-name">${h(it.item_name || '')} ${it.description ? `· ${h(it.description)}` : ''}</span>
                         </div>
-                        <span class="si-suggest-stock ${avail <= 0 ? 'zero' : ''}">${avail.toFixed(2)} ${it.stock_uom || 'Nos'}</span>
+                        <span class="si-suggest-stock ${avail <= 0 ? 'zero' : ''}">${avail.toFixed(2)} ${h(it.stock_uom || 'Nos')}</span>
                     </div>
                 `).appendTo(box);
 
@@ -1090,20 +1098,21 @@ class AshanStockIssueWorkbench {
         }
 
         function render_picker_dialog(stock_items, warehouse, company) {
+			const h = (value) => self.escape_html(value);
             let rows_html = '';
             stock_items.forEach((it, i) => {
                 const avail = flt(it.actual_qty) || 0;
                 rows_html += `
-                    <tr class="si-picker-row" data-code="${it.item_code}" data-name="${it.item_name || ''}" data-desc="${it.description || ''}">
+                    <tr class="si-picker-row" data-code="${h(it.item_code)}" data-name="${h(it.item_name)}" data-desc="${h(it.description)}">
                         <td class="si-col-idx">${i + 1}</td>
-                        <td><strong class="si-link">${it.item_code}</strong></td>
-                        <td>${it.item_name || '-'}</td>
-                        <td class="si-row-spec-text">${it.description || '-'}</td>
+                        <td><strong class="si-link">${h(it.item_code)}</strong></td>
+                        <td>${h(it.item_name || '-')}</td>
+                        <td class="si-row-spec-text">${h(it.description || '-')}</td>
                         <td class="si-text-right">
-                            <span class="si-stock-text">${avail.toFixed(2)} ${it.stock_uom || 'Nos'}</span>
+                            <span class="si-stock-text">${avail.toFixed(2)} ${h(it.stock_uom || 'Nos')}</span>
                         </td>
                         <td class="si-text-right">
-                            <input type="number" step="any" min="0" max="${avail}" class="si-form-control si-picker-qty-input" placeholder="0.00" data-code="${it.item_code}" data-name="${it.item_name || ''}" data-desc="${it.description || ''}" data-uom="${it.stock_uom || 'Nos'}" data-avail="${avail}" />
+                            <input type="number" step="any" min="0" max="${avail}" class="si-form-control si-picker-qty-input" placeholder="0.00" data-code="${h(it.item_code)}" data-name="${h(it.item_name)}" data-desc="${h(it.description)}" data-uom="${h(it.stock_uom || 'Nos')}" data-avail="${avail}" />
                         </td>
                         <td class="si-text-center">
                             <button type="button" class="btn btn-xs btn-default si-picker-fill-max-btn" data-max="${avail}">领完</button>
@@ -1402,16 +1411,17 @@ class AshanStockIssueWorkbench {
     }
 
     render_detail_modal(doc) {
+		const h = (value) => this.escape_html(value);
         let items_html = '';
         (doc.items || []).forEach((it, i) => {
             items_html += `
                 <tr>
                     <td class="si-row-idx">${i + 1}</td>
-                    <td><span class="si-row-item-code">${it.item_code}</span></td>
-                    <td>${it.item_name || '-'}</td>
-                    <td class="si-row-spec-text">${it.description || '-'}</td>
-                    <td>${it.s_warehouse || '-'}</td>
-                    <td class="si-qty-out">-${(flt(it.qty) || 0).toFixed(2)} ${it.stock_uom || 'Nos'}</td>
+                    <td><span class="si-row-item-code">${h(it.item_code)}</span></td>
+                    <td>${h(it.item_name || '-')}</td>
+                    <td class="si-row-spec-text">${h(it.description || '-')}</td>
+                    <td>${h(it.s_warehouse || '-')}</td>
+                    <td class="si-qty-out">-${(flt(it.qty) || 0).toFixed(2)} ${h(it.stock_uom || 'Nos')}</td>
                 </tr>
             `;
         });
@@ -1423,17 +1433,17 @@ class AshanStockIssueWorkbench {
                 <div class="si-modal-dialog">
                     <div class="si-modal-header">
                         <div class="si-modal-title">
-                            <span>材料出库单明细 · ${doc.name}</span>
-                            <span class="si-status-badge ${status_badge} si-status-badge-inline">${doc.status_label}</span>
+                            <span>材料出库单明细 · ${h(doc.name)}</span>
+                            <span class="si-status-badge ${status_badge} si-status-badge-inline">${h(doc.status_label)}</span>
                         </div>
                         <button type="button" class="si-modal-close-btn">✕</button>
                     </div>
                     <div class="si-modal-body">
                         <div class="si-detail-grid">
-                            <div><span class="si-detail-label">所属公司：</span><strong>${doc.company}</strong></div>
-                            <div><span class="si-detail-label">记账时间：</span><strong>${doc.posting_date} ${doc.posting_time || ''}</strong></div>
-                            <div><span class="si-detail-label">业务性质：</span><strong>${doc.purpose_label || doc.purpose}</strong></div>
-                            <div><span class="si-detail-label">领料说明：</span><strong>${doc.remarks || '-'}</strong></div>
+                            <div><span class="si-detail-label">所属公司：</span><strong>${h(doc.company)}</strong></div>
+                            <div><span class="si-detail-label">记账时间：</span><strong>${h(doc.posting_date)} ${h(doc.posting_time)}</strong></div>
+                            <div><span class="si-detail-label">业务性质：</span><strong>${h(doc.purpose_label || doc.purpose)}</strong></div>
+                            <div><span class="si-detail-label">领料说明：</span><strong>${h(doc.remarks || '-')}</strong></div>
                         </div>
 
                         <div class="si-section-title si-section-header">出库物料清单</div>

@@ -120,8 +120,8 @@ class WireTransferPicker {
                     <div class="picker-btn-group">
                         <button type="button" class="picker-btn-sub" id="wire-select-all-btn">全选本页</button>
                         <button type="button" class="picker-btn-sub" id="wire-clear-sel-btn">清空选择</button>
-                        <button type="button" class="picker-btn-sub" id="wire-batch-issue-btn" title="为所选发票一键生成领料出库单并关联整算单">📦 全部出库</button>
-                        <button type="button" class="picker-btn-create-wire" id="wire-open-create-modal-btn">➕ 新建自办电汇</button>
+                        <button type="button" class="picker-btn-sub" id="wire-batch-issue-btn" title="为所选发票生成并提交领料出库单及整算单">批量生成领料出库及整算单</button>
+                        <button type="button" class="picker-btn-create-wire" id="wire-open-create-modal-btn">新建自办电汇</button>
                     </div>
                 </div>
 
@@ -892,7 +892,7 @@ class WireTransferPicker {
     }
 
     // =========================================================================
-    // Batch Issue All Stock Action ("全部出库")
+    // Batch creation of stock issues and reimbursement requests.
     // =========================================================================
 
     async batch_issue_selected_stock() {
@@ -910,7 +910,10 @@ class WireTransferPicker {
         }
 
         frappe.confirm(
-            __("确定要为已选的 {0} 笔自办发票一键生成【领料出库单】并关联整算单吗？", [pi_names.length]),
+            __(
+                "将为已选的 {0} 笔自办发票生成并提交领料出库单及整算单。该操作会影响库存和结算状态，确认继续？",
+                [pi_names.length]
+            ),
             async function () {
                 try {
                     frappe.dom.freeze(__("正在批量生成出库单与关联整算单..."));
@@ -922,7 +925,7 @@ class WireTransferPicker {
 
                     if (r.message && r.message.success) {
                         frappe.show_alert({
-                            message: r.message.message || __("全部出库完成！"),
+                            message: r.message.message || __("领料出库单及整算单已生成并提交。"),
                             indicator: "green",
                         }, 5);
                         self.clear_selection();

@@ -18,10 +18,22 @@ def load_env_file(env_path='.env'):
 
 load_env_file()
 
-SITE_URL = os.getenv('ERPNEXT_SITE_URL_LOCAL', 'http://192.168.8.11:6888')
-ERPNEXT_USER = os.getenv('ERPNEXT_USER', 'Administrator')
+SITE_URL = os.getenv('ERPNEXT_TEST_SITE_URL', '').strip()
+ERPNEXT_USER = os.getenv('ERPNEXT_TEST_USER', '').strip()
 ERPNEXT_PASS = os.getenv('ERPNEXT_PASSWORD', '')
-OUTPUT_DIR = r"C:\Users\ashan\.gemini\antigravity\brain\49a429d8-4554-471e-974e-f9d70d7ec2f8"
+OUTPUT_DIR = os.getenv('ERPNEXT_TEST_OUTPUT_DIR', '').strip()
+TEST_COMPANY = os.getenv('ERPNEXT_TEST_COMPANY', '').strip()
+TEST_SUPPLIER = os.getenv('ERPNEXT_TEST_SUPPLIER', '').strip()
+TEST_ITEM_CODES = [
+    value.strip() for value in os.getenv('ERPNEXT_TEST_ITEM_CODES', '').split(',') if value.strip()
+]
+
+if os.getenv('TEST_SITE') != '1':
+    raise SystemExit('拒绝执行：必须显式设置 TEST_SITE=1。')
+if not all([SITE_URL, ERPNEXT_USER, ERPNEXT_PASS, OUTPUT_DIR, TEST_COMPANY, TEST_SUPPLIER]):
+    raise SystemExit('拒绝执行：必须配置完整的 ERPNEXT_TEST_* 测试环境变量。')
+if len(TEST_ITEM_CODES) < 3:
+    raise SystemExit('拒绝执行：ERPNEXT_TEST_ITEM_CODES 必须提供三个隔离测试物料。')
 
 # 1. API 验证
 cj = CookieJar()
@@ -46,18 +58,9 @@ def call_api(endpoint, method='GET', data=None):
 def verify_backend_multi_tax():
     print("=== [步骤 1] 后端多税率计算与 GL Entry 过账验证 ===")
     
-    # 查找可用供应商
-    suppliers = call_api('/api/resource/Supplier?limit=1')
-    supp_name = suppliers['data'][0]['name'] if suppliers.get('data') else "默认供应商"
-    
-    # 查找可用物料
-    items = call_api('/api/resource/Item?limit=3')
-    item_list = [i['name'] for i in items.get('data', [])]
-    if not item_list:
-        item_list = ["TEST-ITEM-1"]
-
-    # 查找公司
-    comp = call_api('/api/resource/Company?limit=1')['data'][0]['name']
+    supp_name = TEST_SUPPLIER
+    item_list = TEST_ITEM_CODES
+    comp = TEST_COMPANY
 
     pi_doc = {
         "doctype": "Purchase Invoice",

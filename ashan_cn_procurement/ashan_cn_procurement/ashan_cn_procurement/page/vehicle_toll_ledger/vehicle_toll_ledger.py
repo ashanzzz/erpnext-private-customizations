@@ -4,6 +4,11 @@ import calendar
 import frappe
 from frappe import _
 from frappe.utils import now_datetime, cint, flt, getdate
+from ashan_cn_procurement.services.authorization_service import (
+    assert_module_access,
+    can_module_access,
+    get_allowed_companies,
+)
 
 WEEKDAYS_CN = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
 
@@ -18,16 +23,36 @@ DEFAULT_TOLL_ROUTES = [
 ]
 
 def is_toll_manager():
-    if frappe.session.user == "Administrator":
-        return True
-    roles = frappe.get_roles()
-    return any(r in ["System Manager", "Fleet Manager", "Oil Card Manager", "油卡管理员"] for r in roles)
+    """Return whether the user can manage vehicle-toll configuration and locks."""
+    return can_module_access("oil_card", "configure")
 
 def is_toll_user():
-    if is_toll_manager():
-        return True
-    roles = frappe.get_roles()
-    return any(r in ["Oil Card Operator", "油卡操作员"] for r in roles)
+    """Return whether the user can perform daily vehicle-toll operations."""
+    return can_module_access("oil_card", "write")
+
+
+def _get_toll_config_with_access(vehicle_config, action="read"):
+    """Load a toll configuration and authorize it through the linked vehicle's company."""
+    if not frappe.db.exists("Vehicle Toll Config", vehicle_config):
+        frappe.throw(_("车辆配置不存在：{0}").format(vehicle_config))
+
+    config = frappe.get_doc("Vehicle Toll Config", vehicle_config)
+    company = frappe.db.get_value("Vehicle", config.vehicle, "company")
+    if not company:
+        frappe.throw(_("车辆【{0}】未设置所属公司，无法确认数据权限范围。").format(config.vehicle))
+    assert_module_access("oil_card", action, company)
+    return config, company
+
+
+def _assert_vehicle_toll_access(vehicle, action="read"):
+    """Authorize an operation against the real company of a vehicle master record."""
+    if not frappe.db.exists("Vehicle", vehicle):
+        frappe.throw(_("车辆不存在：{0}").format(vehicle))
+    company = frappe.db.get_value("Vehicle", vehicle, "company")
+    if not company:
+        frappe.throw(_("车辆【{0}】未设置所属公司，无法确认数据权限范围。").format(vehicle))
+    assert_module_access("oil_card", action, company)
+    return company
 
 def get_prev_ym(year, month):
     return (year - 1, 12) if month == 1 else (year, month - 1)
@@ -38,6 +63,8 @@ def get_next_ym(year, month):
 @frappe.whitelist()
 def get_enrolled_vehicles():
     """获取所有入池的高速费车辆列表（自动过滤封存车辆）"""
+    assert_module_access("oil_card", "read")
+    allowed_companies = get_allowed_companies()
     configs = frappe.get_list(
         "Vehicle Toll Config",
         filters={"is_active": 1},
@@ -46,6 +73,11 @@ def get_enrolled_vehicles():
     )
     result = []
     for c in configs:
+        vehicle_company = frappe.db.get_value("Vehicle", c.vehicle, "company")
+        if not vehicle_company or (
+            allowed_companies is not None and vehicle_company not in allowed_companies
+        ):
+            continue
         # 检查底层车辆是否已封存
         disp_name = c.display_name or c.vehicle or c.name
         if c.vehicle and frappe.db.exists("Vehicle", c.vehicle):
@@ -86,10 +118,7 @@ def get_vehicle_monthly_sheet(vehicle_config, year=None, month=None):
     year = cint(year) if year else now.year
     month = cint(month) if month else now.month
 
-    if not frappe.db.exists("Vehicle Toll Config", vehicle_config):
-        frappe.throw(_("车辆配置不存在：{0}").format(vehicle_config))
-
-    cfg = frappe.get_doc("Vehicle Toll Config", vehicle_config)
+    cfg, _ = _get_toll_config_with_access(vehicle_config, "read")
     toll_routes = DEFAULT_TOLL_ROUTES
 
     _, num_days = calendar.monthrange(year, month)
@@ -196,14 +225,13 @@ def get_vehicle_monthly_sheet(vehicle_config, year=None, month=None):
         "is_manager": is_toll_manager()
     }
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def save_vehicle_toll_sheet(vehicle_config, year, month, daily_records, remark=""):
     """保存某辆车月度高速费台账（离开单元格/自动保存调用，固定6趟）"""
     year = cint(year)
     month = cint(month)
 
-    if not frappe.db.exists("Vehicle Toll Config", vehicle_config):
-        frappe.throw(_("车辆配置不存在：{0}").format(vehicle_config))
+    _get_toll_config_with_access(vehicle_config, "write")
 
     if isinstance(daily_records, str):
         daily_records = json.loads(daily_records)
@@ -274,7 +302,6 @@ def save_vehicle_toll_sheet(vehicle_config, year, month, daily_records, remark="
     doc.daily_records = json.dumps(sanitized, ensure_ascii=False)
     doc.remark = remark or ""
     doc.save(ignore_permissions=True)
-    frappe.db.commit()
 
     return {
         "success": True,
@@ -282,11 +309,10 @@ def save_vehicle_toll_sheet(vehicle_config, year, month, daily_records, remark="
         "closing_balance": doc.closing_balance
     }
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def add_toll_deposit(vehicle_config, deposit_date, amount, deposit_type="现金预支", reference_no="", remark=""):
     """新增公司预支/充值记录"""
-    if not frappe.db.exists("Vehicle Toll Config", vehicle_config):
-        frappe.throw(_("车辆配置不存在：{0}").format(vehicle_config))
+    _get_toll_config_with_access(vehicle_config, "write")
 
     amount = flt(amount)
     if amount <= 0:
@@ -303,7 +329,6 @@ def add_toll_deposit(vehicle_config, deposit_date, amount, deposit_type="现金�
     dep.fiscal_year = d.year
     dep.fiscal_month = d.month
     dep.insert(ignore_permissions=True)
-    frappe.db.commit()
 
     return {
         "success": True,
@@ -311,20 +336,20 @@ def add_toll_deposit(vehicle_config, deposit_date, amount, deposit_type="现金�
         "doc_name": dep.name
     }
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def delete_toll_deposit(deposit_name):
     """删除预支记录"""
     if not frappe.db.exists("Vehicle Toll Deposit", deposit_name):
         frappe.throw(_("预支记录不存在！"))
+    deposit = frappe.get_doc("Vehicle Toll Deposit", deposit_name)
+    _get_toll_config_with_access(deposit.vehicle_config, "delete")
     frappe.delete_doc("Vehicle Toll Deposit", deposit_name, ignore_permissions=True)
-    frappe.db.commit()
     return {"success": True}
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def close_vehicle_toll_sheet(vehicle_config, year, month):
     """月度核定锁定"""
-    if not is_toll_manager():
-        frappe.throw(_("仅油卡/系统管理员具备执行月度核定的权限！"))
+    _get_toll_config_with_access(vehicle_config, "lock")
 
     year = cint(year)
     month = cint(month)
@@ -377,7 +402,6 @@ def close_vehicle_toll_sheet(vehicle_config, year, month):
                 frappe.log_error(str(e), "Vehicle Toll Sheet - cascade next month")
             next_doc.save(ignore_permissions=True)
 
-    frappe.db.commit()
     return {
         "success": True,
         "message": _("{0} {1}年{2}月已核定锁定！期末结存 ￥{3:,.2f} 自动结转至下月。").format(
@@ -388,11 +412,10 @@ def close_vehicle_toll_sheet(vehicle_config, year, month):
         "locked_at": str(doc.locked_at)
     }
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def reopen_vehicle_toll_sheet(vehicle_config, year, month):
     """取消核定解锁"""
-    if not is_toll_manager():
-        frappe.throw(_("仅管理员具备取消月度核定的权限！"))
+    _get_toll_config_with_access(vehicle_config, "unlock")
 
     year = cint(year)
     month = cint(month)
@@ -405,37 +428,36 @@ def reopen_vehicle_toll_sheet(vehicle_config, year, month):
     doc.locked_by = None
     doc.locked_at = None
     doc.save(ignore_permissions=True)
-    frappe.db.commit()
 
     return {
         "success": True,
         "message": _("{0} {1}年{2}月已解锁，恢复录入状态。").format(vehicle_config, year, month)
     }
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def add_vehicle_to_toll(vehicle, display_name=None, opening_balance=0, primary_user=None, vehicle_manager=None):
     """将车辆加入高速费管理入池（校验封存状态并同步主要驾驶员）"""
-    if frappe.db.exists("Vehicle", vehicle):
-        v_status = frappe.db.get_value("Vehicle", vehicle, "custom_vehicle_status")
-        if v_status == "封存停用":
-            frappe.throw(_("车辆【{0}】当前处于【封存停用】状态，无法加入高速费管理！请先在车辆档案中恢复在用。").format(vehicle))
+    _assert_vehicle_toll_access(vehicle, "configure")
+    v_status = frappe.db.get_value("Vehicle", vehicle, "custom_vehicle_status")
+    if v_status == "封存停用":
+        frappe.throw(_("车辆【{0}】当前处于【封存停用】状态，无法加入高速费管理！请先在车辆档案中恢复在用。").format(vehicle))
 
-        # 若未填驾驶员，优先从车辆档案读取
-        if not primary_user:
-            primary_user = frappe.db.get_value("Vehicle", vehicle, "custom_primary_driver") or ""
-        else:
-            # 填了驾驶员，反向同步到车辆档案
-            frappe.db.set_value("Vehicle", vehicle, "custom_primary_driver", primary_user)
+    # 若未填驾驶员，优先从车辆档案读取
+    if not primary_user:
+        primary_user = frappe.db.get_value("Vehicle", vehicle, "custom_primary_driver") or ""
+    else:
+        # 填了驾驶员，反向同步到车辆档案
+        frappe.db.set_value("Vehicle", vehicle, "custom_primary_driver", primary_user)
 
-        # 若 display_name 中包含备注用途（如“应急车”），反向同步到车辆档案
-        if display_name and "(" in display_name and ")" in display_name:
-            rmk = display_name.split("(")[-1].split(")")[0].strip()
-            if rmk and frappe.db.has_column("Vehicle", "custom_vehicle_remark"):
-                frappe.db.set_value("Vehicle", vehicle, "custom_vehicle_remark", rmk)
-        elif display_name and "（" in display_name and "）" in display_name:
-            rmk = display_name.split("（")[-1].split("）")[0].strip()
-            if rmk and frappe.db.has_column("Vehicle", "custom_vehicle_remark"):
-                frappe.db.set_value("Vehicle", vehicle, "custom_vehicle_remark", rmk)
+    # 若 display_name 中包含备注用途（如“应急车”），反向同步到车辆档案
+    if display_name and "(" in display_name and ")" in display_name:
+        rmk = display_name.split("(")[-1].split(")")[0].strip()
+        if rmk and frappe.db.has_column("Vehicle", "custom_vehicle_remark"):
+            frappe.db.set_value("Vehicle", vehicle, "custom_vehicle_remark", rmk)
+    elif display_name and "（" in display_name and "）" in display_name:
+        rmk = display_name.split("（")[-1].split("）")[0].strip()
+        if rmk and frappe.db.has_column("Vehicle", "custom_vehicle_remark"):
+            frappe.db.set_value("Vehicle", vehicle, "custom_vehicle_remark", rmk)
 
 
     if frappe.db.exists("Vehicle Toll Config", vehicle):
@@ -457,24 +479,19 @@ def add_vehicle_to_toll(vehicle, display_name=None, opening_balance=0, primary_u
         doc.primary_user = primary_user or ""
         doc.vehicle_manager = vehicle_manager or ""
         doc.insert(ignore_permissions=True)
-    frappe.db.commit()
     return {"success": True, "config_name": doc.name}
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def remove_vehicle_from_toll(vehicle_config):
     """从高速费管理中停用车辆"""
-    if not frappe.db.exists("Vehicle Toll Config", vehicle_config):
-        frappe.throw(_("车辆配置不存在！"))
+    _get_toll_config_with_access(vehicle_config, "configure")
     frappe.db.set_value("Vehicle Toll Config", vehicle_config, "is_active", 0)
-    frappe.db.commit()
     return {"success": True}
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def update_vehicle_personnel(vehicle_config, primary_user=None, vehicle_manager=None):
     """更新车辆主要驾驶员姓名（双向同步至 Vehicle Toll Config 和 Vehicle 车辆档案）"""
-    if not frappe.db.exists("Vehicle Toll Config", vehicle_config):
-        frappe.throw(_("车辆配置不存在！"))
-    doc = frappe.get_doc("Vehicle Toll Config", vehicle_config)
+    doc, _ = _get_toll_config_with_access(vehicle_config, "configure")
     if primary_user is not None:
         doc.primary_user = primary_user
     if vehicle_manager is not None:
@@ -486,6 +503,4 @@ def update_vehicle_personnel(vehicle_config, primary_user=None, vehicle_manager=
         driver_val = primary_user or vehicle_manager or ""
         frappe.db.set_value("Vehicle", doc.vehicle, "custom_primary_driver", driver_val)
 
-    frappe.db.commit()
     return {"success": True}
-

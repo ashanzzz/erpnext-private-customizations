@@ -20,6 +20,7 @@ from ashan_cn_procurement.services.tax_invoice_validation import (
 	get_buyer_validation_error,
 	normalize_buyer_name,
 )
+from ashan_cn_procurement.services.authorization_service import assert_company_access, assert_module_access
 
 def decode_zip_entry_name(info):
 	"""
@@ -128,6 +129,7 @@ def process_import_batch(batch_name):
 		return {"ok": False, "error": f"批次 {batch_name} 不存在"}
 
 	batch = frappe.get_doc("Tax Invoice Import Batch", batch_name)
+	assert_module_access("tax_invoice", "write", user=batch.uploaded_by)
 	batch.batch_status = "处理中"
 	batch.started_at = now_datetime()
 	batch.progress_percent = 5
@@ -303,6 +305,9 @@ def process_import_batch(batch_name):
 				# 4. 去重与更新检查
 				if frappe.db.exists("Tax Invoice", inv_no):
 					existing_doc = frappe.get_doc("Tax Invoice", inv_no)
+					assert_module_access(
+						"tax_invoice", "write", existing_doc.company, user=batch.uploaded_by
+					)
 					is_same_amount = (
 						abs(flt(existing_doc.invoice_grand_total) - flt(parsed_data.get("invoice_grand_total"))) < 0.05 and
 						abs(flt(existing_doc.amount_without_tax) - flt(parsed_data.get("amount_without_tax"))) < 0.05
@@ -328,6 +333,8 @@ def process_import_batch(batch_name):
 					continue
 
 				# 5. 创建新 Tax Invoice 记录
+				if comp:
+					assert_company_access(comp, user=batch.uploaded_by)
 				doc = frappe.new_doc("Tax Invoice")
 				doc.invoice_no = inv_no
 				doc.issue_date = parsed_data.get("issue_date")

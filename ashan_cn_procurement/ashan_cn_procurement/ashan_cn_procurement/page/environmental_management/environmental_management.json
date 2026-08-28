@@ -13,7 +13,6 @@
     {
       "role": "System Manager"
     },
-    {"role": "Purchase Manager"},
     {"role": "Compliance Manager"},
     {"role": "Compliance Operator"}
   ],

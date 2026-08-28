@@ -80,10 +80,6 @@
       "read": 1, "write": 1, "create": 1, "delete": 1
     },
     {
-      "role": "Fleet Manager",
-      "read": 1, "write": 1, "create": 1, "delete": 1
-    },
-    {
       "role": "Oil Card Manager",
       "read": 1, "write": 1, "create": 1, "delete": 1
     },

@@ -11,6 +11,51 @@ import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
+from ashan_cn_procurement.services.authorization_service import (
+	assert_company_access,
+	assert_module_access,
+	get_allowed_companies,
+)
+
+
+def _row_value(row, fieldname):
+	"""Read one field from a Frappe row or a plain request dictionary."""
+	return row.get(fieldname) if isinstance(row, dict) else getattr(row, fieldname, None)
+
+
+def _property_companies_from_data(data):
+	"""Return every company that a settlement payload can read or change."""
+	companies = set()
+	for section in ("meter_readings", "lease_charges", "company_summaries"):
+		for row in data.get(section) or []:
+			company = str(_row_value(row, "company") or "").strip()
+			if company:
+				companies.add(company)
+	for row in data.get("adjustments") or []:
+		for fieldname in ("company", "from_company", "to_company"):
+			company = str(_row_value(row, fieldname) or "").strip()
+			if company:
+				companies.add(company)
+	return companies
+
+
+def assert_property_settlement_access(data, action="read"):
+	"""Authorize a property settlement against every real company it contains."""
+	assert_module_access("property", action)
+	companies = _property_companies_from_data(data)
+	if not companies:
+		frappe.throw("结算数据未包含公司归属，无法确认权限范围。", frappe.PermissionError)
+	for company in sorted(companies):
+		assert_company_access(company)
+
+
+def _apply_property_company_scope(filters, company_field="company"):
+	"""Add the caller's explicit company scope to a Frappe query filter."""
+	allowed_companies = get_allowed_companies()
+	if allowed_companies is not None:
+		filters[company_field] = ["in", sorted(allowed_companies)]
+	return filters
+
 
 def get_month_range(year, month):
 	"""获取指定年月的起始日期、截止日期与当月总天数"""
@@ -21,16 +66,17 @@ def get_month_range(year, month):
 	return start_date, end_date, last_day
 
 
-def get_annual_lease_settlement_data(year=2026):
+def get_annual_lease_settlement_data(year=None):
 	"""
 	获取指定年度的房租与物业费年度结算总控数据
 	按合同年度周期管理，直接关联 5% 房租发票与 6% 物业费发票，进行年度对账
 	"""
-	year = cint(year or 2026)
+	assert_module_access("property", "read")
+	year = cint(year or nowdate()[:4])
 
 	leases = frappe.get_all(
 		"Property Lease",
-		filters={"enabled": 1},
+		filters=_apply_property_company_scope({"enabled": 1}),
 		fields=[
 			"name",
 			"property_name",
@@ -158,12 +204,13 @@ def get_annual_lease_settlement_data(year=2026):
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def update_lease_invoice_link(lease_name, rent_invoice_no=None, rent_invoice_date=None, rent_invoice_amount=None, rent_invoice_tax=None, property_fee_invoice_no=None, property_fee_invoice_date=None, property_fee_invoice_amount=None, property_fee_invoice_tax=None, annual_discount_amount=None):
 	"""
 	更新租约的关联发票信息与开票对账状态
 	"""
 	doc = frappe.get_doc("Property Lease", lease_name)
+	assert_module_access("property", "write", doc.company)
 	if rent_invoice_no is not None:
 		doc.rent_invoice_no = rent_invoice_no
 	if rent_invoice_date is not None:
@@ -192,7 +239,6 @@ def update_lease_invoice_link(lease_name, rent_invoice_no=None, rent_invoice_dat
 		doc.annual_discount_amount = flt(annual_discount_amount)
 
 	doc.save(ignore_permissions=True)
-	frappe.db.commit()
 	return {"status": "success", "message": "发票与对账信息已成功更新！"}
 
 
@@ -732,14 +778,19 @@ def get_month_settlement_data(year, month):
 	"""
 	获取或构建指定月份的物业月结数据（优先读取数据库，无则自动带出基准并构建草稿视图）
 	"""
+	assert_module_access("property", "read")
 	year, month = cint(year), cint(month)
+	if year < 2000 or month < 1 or month > 12:
+		frappe.throw("结算年月无效。")
 	start_date, end_date, days_in_month = get_month_range(year, month)
 
 	doc_name = f"PROP-SET-{start_date}"
 	if frappe.db.exists("Property Monthly Settlement", doc_name):
 		doc = frappe.get_doc("Property Monthly Settlement", doc_name)
 		d = doc.as_dict()
-		return calculate_settlement_matrix(d)
+		d = calculate_settlement_matrix(d)
+		assert_property_settlement_access(d, "read")
+		return d
 
 	# 数据库中尚无此月份记录，构建新月份草稿数据
 	elec_price = 1.1957
@@ -748,7 +799,7 @@ def get_month_settlement_data(year, month):
 	# 1. 水电表列表及上期表数
 	meters = frappe.get_all(
 		"Utility Meter",
-		filters={"enabled": 1},
+		filters=_apply_property_company_scope({"enabled": 1}),
 		fields=["name", "meter_no", "meter_name", "utility_type", "company", "multiplier", "unit", "initial_reading"],
 		order_by="utility_type ASC, meter_no ASC"
 	)
@@ -777,7 +828,7 @@ def get_month_settlement_data(year, month):
 	# 2. 租赁固定费用 (直接读取合并后的 Property Lease 档案)
 	leases = frappe.get_all(
 		"Property Lease",
-		filters={"enabled": 1},
+		filters=_apply_property_company_scope({"enabled": 1}),
 		fields=[
 			"name",
 			"property_name",
@@ -895,22 +946,28 @@ def get_month_settlement_data(year, month):
 		"remark": ""
 	}
 
-	return calculate_settlement_matrix(data)
+	data = calculate_settlement_matrix(data)
+	assert_property_settlement_access(data, "read")
+	return data
 
 
 def save_draft_settlement(data):
 	"""
 	保存物业月结草稿
 	"""
+	if not isinstance(data, dict):
+		frappe.throw("结算数据格式无效。")
 	settlement_month = data.get("settlement_month")
 	if not settlement_month:
 		frappe.throw("结算月份不能为空")
 
 	doc_name = f"PROP-SET-{settlement_month}"
 	calc_data = calculate_settlement_matrix(data)
+	assert_property_settlement_access(calc_data, "write")
 
 	if frappe.db.exists("Property Monthly Settlement", doc_name):
 		doc = frappe.get_doc("Property Monthly Settlement", doc_name)
+		assert_property_settlement_access(doc.as_dict(), "write")
 		if doc.status == "已结算":
 			frappe.throw("当前月份已完成月结锁定，如需修改请先取消结算！")
 	else:
@@ -934,7 +991,6 @@ def save_draft_settlement(data):
 
 	doc.flags.ignore_permissions = True
 	doc.save()
-	frappe.db.commit()
 
 	return {
 		"success": True,
@@ -948,6 +1004,9 @@ def finalize_monthly_settlement(data):
 	"""
 	完成本月结算并锁定单据
 	"""
+	if not isinstance(data, dict):
+		frappe.throw("结算数据格式无效。")
+	assert_property_settlement_access(calculate_settlement_matrix(data), "lock")
 	save_res = save_draft_settlement(data)
 	doc = frappe.get_doc("Property Monthly Settlement", save_res["name"])
 
@@ -972,27 +1031,31 @@ def finalize_monthly_settlement(data):
 	doc.settled_at = now_datetime()
 	doc.flags.ignore_permissions = True
 	doc.save()
-	frappe.db.commit()
 
 	return {
 		"success": True,
 		"name": doc.name,
 		"data": calculate_settlement_matrix(doc.as_dict()),
-		"message": f"🎉 {doc.settlement_month[:7]} 物业月结已成功核定并锁定！"
+		"message": f"{doc.settlement_month[:7]} 物业月结已成功核定并锁定。"
 	}
 
 
-def revert_settlement_to_draft(name):
+def revert_settlement_to_draft(name, reason=None):
 	"""
 	管理员解锁/取消结算，退回草稿状态
 	"""
 	doc = frappe.get_doc("Property Monthly Settlement", name)
+	assert_property_settlement_access(doc.as_dict(), "unlock")
+	if not str(reason or "").strip():
+		frappe.throw("解除物业月结锁定必须填写原因。")
+	if doc.status != "已结算":
+		frappe.throw("当前月结未处于已结算状态，不能解除锁定。")
 	doc.status = "草稿"
 	doc.settled_by = None
 	doc.settled_at = None
 	doc.flags.ignore_permissions = True
 	doc.save()
-	frappe.db.commit()
+	doc.add_comment("Comment", text=f"物业月结解锁原因：{str(reason).strip()}")
 
 	return {
 		"success": True,
@@ -1762,6 +1825,9 @@ def export_settlement_excel(settlement_month, company=None, property_management_
 	settlement_month = str(settlement_month).strip()
 	year, month = cint(settlement_month.split("-")[0]), cint(settlement_month.split("-")[1])
 	data = get_month_settlement_data(year, month)
+	assert_property_settlement_access(data, "export")
+	if company:
+		assert_company_access(company)
 
 	if property_management_company:
 		data["property_management_company"] = property_management_company
@@ -1793,6 +1859,9 @@ def export_utility_settlement_excel(settlement_month, company=None, property_man
 	settlement_month = str(settlement_month).strip()
 	year, month = cint(settlement_month.split("-")[0]), cint(settlement_month.split("-")[1])
 	data = get_month_settlement_data(year, month)
+	assert_property_settlement_access(data, "export")
+	if company:
+		assert_company_access(company)
 
 	prop_mgmt = property_management_company or data.get("property_management_company") or "天津金利达物业管理有限公司"
 	wb = openpyxl.Workbook()
@@ -1902,6 +1971,9 @@ def export_lease_settlement_excel(settlement_month, company=None, property_manag
 	settlement_month = str(settlement_month).strip()
 	year, month = cint(settlement_month.split("-")[0]), cint(settlement_month.split("-")[1])
 	data = get_month_settlement_data(year, month)
+	assert_property_settlement_access(data, "export")
+	if company:
+		assert_company_access(company)
 
 	prop_mgmt = property_management_company or data.get("property_management_company") or "天津金利达物业管理有限公司"
 	wb = openpyxl.Workbook()

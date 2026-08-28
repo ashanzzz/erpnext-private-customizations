@@ -223,7 +223,7 @@ def get_holiday_configs(year):
 		configs = get_national_holiday_template(y)
 	return configs
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def save_holiday_configs_and_rebuild_calendar(year, configs_json):
 	"""
 	保存节假日与调休补班配置，并全自动生成/重建全年 365/366 天日历底册数据

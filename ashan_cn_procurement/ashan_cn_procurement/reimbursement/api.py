@@ -34,7 +34,7 @@ def preview_unpaid_purchase_invoice_items(
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def import_unpaid_purchase_invoices(
     reimbursement_request_name: str,
     purchase_invoice_names: str | Iterable[str] | None = None,

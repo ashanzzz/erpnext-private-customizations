@@ -15,20 +15,70 @@ class AshanPayrollWorkbench {
     constructor(wrapper, page) {
         this.wrapper = $(wrapper);
         this.page = page;
-        this.currentCompany = '天津吉众科技有限公司';
-
-        // 默认 2026-06 (历史真实数据月)
-        this.currentPeriod = '2026-06';
-        this.taxCycleStartMonth = '2026-01'; // 默认当年 1 月，支持手动配置
+        const today = new Date();
+        this.currentCompany = '';
+        this.currentPeriod = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        this.taxCycleStartMonth = `${today.getFullYear()}-01`;
+        this.companyOptions = [];
 
         this.currentView = 'summary'; // summary | attendance | insurance | tax | cash
         this.data = null;
         this._autoSaveTimer = null;
         this._lastSavedTime = null;
 
-        this.init_dom();
-        this.bind_events();
-        this.load_data();
+        this.load_context();
+    }
+
+    fmtMoney(value, fractionDigits = 2) {
+        const amount = Number(value || 0);
+        if (fractionDigits === 2 && window.AshanUI?.formatMoney) {
+            return window.AshanUI.formatMoney(amount);
+        }
+        return `¥ ${amount.toLocaleString('zh-CN', {
+            minimumFractionDigits: fractionDigits,
+            maximumFractionDigits: fractionDigits,
+        })}`;
+    }
+
+    escapeHtml(value) {
+        return $('<div>').text(String(value || '')).html();
+    }
+
+    getYearOptions() {
+        const activeYear = Number(this.currentPeriod.split('-')[0]);
+        const currentYear = new Date().getFullYear();
+        return [...new Set([currentYear - 1, currentYear, currentYear + 1, activeYear])]
+            .sort((left, right) => left - right);
+    }
+
+    getTaxCycleMonthOptions() {
+        const [year] = this.currentPeriod.split('-').map(Number);
+        const months = [];
+        for (let month = 1; month <= 12; month += 1) {
+            months.push(`${year}-${String(month).padStart(2, '0')}`);
+        }
+        return [`${year - 1}-12`, ...months];
+    }
+
+    load_context() {
+        frappe.call({
+            method: 'ashan_cn_procurement.ashan_cn_procurement.page.payroll_settlement_workbench.payroll_settlement_workbench.get_payroll_workbench_context',
+            type: 'GET',
+            callback: (response) => {
+                const context = response.message;
+                if (!context?.default_company) {
+                    frappe.msgprint('未取得当前账号的薪酬公司范围。');
+                    return;
+                }
+                this.companyOptions = context.companies || [];
+                this.currentCompany = context.default_company;
+                this.currentPeriod = context.default_period || this.currentPeriod;
+                this.taxCycleStartMonth = context.default_tax_cycle_start_month || this.taxCycleStartMonth;
+                this.init_dom();
+                this.bind_events();
+                this.load_data();
+            },
+        });
     }
 
     init_dom() {
@@ -52,9 +102,9 @@ class AshanPayrollWorkbench {
                         <div class="payroll-period-capsule">
                             <button type="button" class="payroll-period-nav-btn" id="btn-prev-month" title="上个月">‹</button>
                             <select class="payroll-period-select" id="sel-year">
-                                <option value="2025" ${yStr==='2025'?'selected':''}>2025年</option>
-                                <option value="2026" ${yStr==='2026'?'selected':''}>2026年</option>
-                                <option value="2027" ${yStr==='2027'?'selected':''}>2027年</option>
+                                ${this.getYearOptions().map(year => `
+                                    <option value="${year}" ${String(year) === yStr ? 'selected' : ''}>${year}年</option>
+                                `).join('')}
                             </select>
                             <select class="payroll-period-select" id="sel-month">
                                 ${Array.from({length:12}, (_,i)=>String(i+1).padStart(2,'0')).map(m=>`
@@ -65,23 +115,24 @@ class AshanPayrollWorkbench {
                         </div>
 
                         <!-- 个税计税起始月份胶囊 (支持手动灵活设定) -->
-                        <div class="payroll-period-capsule" style="background:#fef3c7;border-color:#fde68a;" title="可手动设定个税计税累计起始月份 (如 2026-01 或 2025-12)">
+                        <div class="payroll-period-capsule" style="background:#fef3c7;border-color:#fde68a;" title="可手动设定个税计税累计起始月份">
                             <span style="font-size:11px;font-weight:700;color:#92400e;padding:0 2px;">🏛️ 个税起始:</span>
                             <select class="payroll-period-select" id="sel-tax-start-month" style="color:#92400e;font-weight:700;">
-                                <option value="2025-12" ${this.taxCycleStartMonth==='2025-12'?'selected':''}>2025-12</option>
-                                <option value="2026-01" ${this.taxCycleStartMonth==='2026-01'?'selected':''}>2026-01</option>
-                                <option value="2026-02" ${this.taxCycleStartMonth==='2026-02'?'selected':''}>2026-02</option>
-                                <option value="2026-03" ${this.taxCycleStartMonth==='2026-03'?'selected':''}>2026-03</option>
-                                <option value="2026-04" ${this.taxCycleStartMonth==='2026-04'?'selected':''}>2026-04</option>
-                                <option value="2026-05" ${this.taxCycleStartMonth==='2026-05'?'selected':''}>2026-05</option>
-                                <option value="2026-06" ${this.taxCycleStartMonth==='2026-06'?'selected':''}>2026-06</option>
+                                ${this.getTaxCycleMonthOptions().map(month => `
+                                    <option value="${month}" ${month === this.taxCycleStartMonth ? 'selected' : ''}>${month}</option>
+                                `).join('')}
                             </select>
                         </div>
 
-                        <!-- 公司切换芯片 (吉众 vs 祺富) -->
+                        <!-- 公司范围由当前账号的授权上下文动态提供。 -->
                         <div class="payroll-company-tabs" id="payroll-comp-tabs">
-                            <button type="button" class="payroll-comp-tab-btn ${this.currentCompany.includes('吉众')?'active':''}" data-comp="天津吉众科技有限公司">🏢 吉众科技</button>
-                            <button type="button" class="payroll-comp-tab-btn ${this.currentCompany.includes('祺富')?'active':''}" data-comp="天津祺富机械加工有限公司">🏢 祺富机械</button>
+                            <select class="payroll-period-select" id="sel-payroll-company">
+                                ${this.companyOptions.map(company => {
+                                    const companyName = this.escapeHtml(company.name);
+                                    const companyLabel = this.escapeHtml(company.company_name || company.name);
+                                    return `<option value="${companyName}" ${company.name === this.currentCompany ? 'selected' : ''}>${companyLabel}</option>`;
+                                }).join('')}
+                            </select>
                         </div>
                     </div>
 
@@ -159,10 +210,8 @@ class AshanPayrollWorkbench {
         });
 
         // 公司切换
-        this.page.main.find('#payroll-comp-tabs .payroll-comp-tab-btn').on('click', function() {
-            self.page.main.find('#payroll-comp-tabs .payroll-comp-tab-btn').removeClass('active');
-            $(this).addClass('active');
-            self.currentCompany = $(this).attr('data-comp');
+        this.page.main.find('#sel-payroll-company').on('change', function() {
+            self.currentCompany = $(this).val();
 
             // 切换老板娘工资表导入按钮的可见性
             const $btn = self.page.main.find('#btn-import-boss-sheet');
@@ -507,27 +556,27 @@ class AshanPayrollWorkbench {
                                 <td class="center-cell" style="font-weight:700;">${it.employee_no || ''}</td>
                                 <td class="center-cell" style="font-weight:700;">${it.employee_name || ''}</td>
                                 <td class="center-cell"><span class="badge ${it.salary_mode==='税后管理工资'?'badge-primary':'badge-info'}">${it.salary_mode || '税前动态'}</span></td>
-                                <td class="num-cell">¥ ${(it.base_salary || it.salary_piecework_daily || 0).toFixed(2)}</td>
+                                <td class="num-cell qifu-money-cell">${this.fmtMoney(it.base_salary || it.salary_piecework_daily || 0)}</td>
                                 <td class="center-cell">${it.attendance_days || 0}</td>
                                 <td class="center-cell">${it.work_hours_regular || 0}</td>
                                 <td class="center-cell">${it.overtime_1_5 || 0}</td>
                                 <td class="center-cell">${it.overtime_2_0 || 0}</td>
                                 <td class="center-cell">${it.overtime_3_0 || 0}</td>
-                                <td class="num-cell">¥ ${(it.salary_regular_hours || it.salary_piecework_daily || 0).toFixed(2)}</td>
-                                <td class="num-cell">¥ ${((it.salary_overtime_1_5 || 0) + (it.salary_overtime_2_0 || 0) + (it.salary_overtime_3_0 || 0)).toFixed(2)}</td>
-                                <td class="num-cell">¥ ${mid1.toFixed(2)}</td>
-                                <td class="num-cell">¥ ${mid2.toFixed(2)}</td>
-                                <td class="num-cell">¥ ${extraAllow.toFixed(2)}</td>
-                                <td class="num-cell">¥ ${(it.salary_meal_subsidy || 0).toFixed(2)}</td>
+                                <td class="num-cell qifu-money-cell">${this.fmtMoney(it.salary_regular_hours || it.salary_piecework_daily || 0)}</td>
+                                <td class="num-cell qifu-money-cell">${this.fmtMoney((it.salary_overtime_1_5 || 0) + (it.salary_overtime_2_0 || 0) + (it.salary_overtime_3_0 || 0))}</td>
+                                <td class="num-cell qifu-money-cell">${this.fmtMoney(mid1)}</td>
+                                <td class="num-cell qifu-money-cell">${this.fmtMoney(mid2)}</td>
+                                <td class="num-cell qifu-money-cell">${this.fmtMoney(extraAllow)}</td>
+                                <td class="num-cell qifu-money-cell">${this.fmtMoney(it.salary_meal_subsidy || 0)}</td>
                                 <td class="center-cell">
                                     <input type="number" class="payroll-inline-input payroll-adjust-input" data-emp="${it.employee_no}" value="${it.salary_adjustment || 0}" step="10">
                                 </td>
-                                <td class="num-cell highlight-gross">¥ ${(it.gross_pay || 0).toFixed(2)}</td>
-                                <td class="num-cell" style="color:#b91c1c;">-¥ ${(it.social_security_p || 0).toFixed(2)}</td>
-                                <td class="num-cell" style="color:#b91c1c;">-¥ ${(it.housing_fund_p || 0).toFixed(2)}</td>
-                                <td class="num-cell" style="color:#d97706;">-¥ ${(it.individual_tax || 0).toFixed(2)}</td>
-                                <td class="num-cell highlight-net">¥ ${(it.net_pay || 0).toFixed(2)}</td>
-                                <td class="num-cell highlight-net">¥ ${(it.cash_pay || 0).toFixed(0)}</td>
+                                <td class="num-cell qifu-money-cell highlight-gross">${this.fmtMoney(it.gross_pay || 0)}</td>
+                                <td class="num-cell qifu-money-cell" style="color:#b91c1c;">-${this.fmtMoney(it.social_security_p || 0)}</td>
+                                <td class="num-cell qifu-money-cell" style="color:#b91c1c;">-${this.fmtMoney(it.housing_fund_p || 0)}</td>
+                                <td class="num-cell qifu-money-cell" style="color:#d97706;">-${this.fmtMoney(it.individual_tax || 0)}</td>
+                                <td class="num-cell qifu-money-cell highlight-net">${this.fmtMoney(it.net_pay || 0)}</td>
+                                <td class="num-cell qifu-money-cell highlight-net">${this.fmtMoney(it.cash_pay || 0, 0)}</td>
                             </tr>
                         `;
                     }).join('')}
@@ -537,12 +586,12 @@ class AshanPayrollWorkbench {
                         <td colspan="5" class="center-cell">—</td>
                         <td colspan="6" class="center-cell">—</td>
                         <td class="center-cell">—</td>
-                        <td class="num-cell highlight-gross">¥ ${(sum.total_gross_pay || 0).toFixed(2)}</td>
-                        <td class="num-cell" style="color:#b91c1c;">-¥ ${(sum.total_social_security_p || 0).toFixed(2)}</td>
-                        <td class="num-cell" style="color:#b91c1c;">-¥ ${(sum.total_housing_fund_p || 0).toFixed(2)}</td>
-                        <td class="num-cell" style="color:#d97706;">-¥ ${(sum.total_individual_tax || 0).toFixed(2)}</td>
-                        <td class="num-cell highlight-net">¥ ${(sum.total_net_pay || 0).toFixed(2)}</td>
-                        <td class="num-cell highlight-net">¥ ${(sum.total_net_pay || 0).toFixed(0)}</td>
+                        <td class="num-cell qifu-money-cell highlight-gross">${this.fmtMoney(sum.total_gross_pay || 0)}</td>
+                        <td class="num-cell qifu-money-cell" style="color:#b91c1c;">-${this.fmtMoney(sum.total_social_security_p || 0)}</td>
+                        <td class="num-cell qifu-money-cell" style="color:#b91c1c;">-${this.fmtMoney(sum.total_housing_fund_p || 0)}</td>
+                        <td class="num-cell qifu-money-cell" style="color:#d97706;">-${this.fmtMoney(sum.total_individual_tax || 0)}</td>
+                        <td class="num-cell qifu-money-cell highlight-net">${this.fmtMoney(sum.total_net_pay || 0)}</td>
+                        <td class="num-cell qifu-money-cell highlight-net">${this.fmtMoney(sum.total_net_pay || 0, 0)}</td>
                     </tr>
                 </tbody>
             </table>
@@ -614,18 +663,18 @@ class AshanPayrollWorkbench {
                             <td class="center-cell">${idx + 1}</td>
                             <td class="center-cell" style="font-weight:700;">${it.employee_no}</td>
                             <td class="center-cell" style="font-weight:700;">${it.employee_name}</td>
-                            <td class="num-cell">¥ ${(it.social_security_base || 0).toFixed(2)}</td>
-                            <td class="num-cell">¥ ${(it.ss_pension_p || 0).toFixed(2)}</td>
-                            <td class="num-cell">¥ ${(it.ss_medical_p || 0).toFixed(2)}</td>
-                            <td class="num-cell">¥ ${(it.ss_unemployment_p || 0).toFixed(2)}</td>
-                            <td class="num-cell">¥ ${(it.ss_large_medical_p || 0).toFixed(2)}</td>
-                            <td class="num-cell" style="font-weight:700;color:#b91c1c;">¥ ${(it.social_security_p || 0).toFixed(2)}</td>
-                            <td class="num-cell">¥ ${(it.housing_fund_base || 0).toFixed(2)}</td>
-                            <td class="num-cell" style="font-weight:700;color:#b91c1c;">¥ ${(it.housing_fund_p || 0).toFixed(2)}</td>
-                            <td class="num-cell highlight-gross">¥ ${(it.special_deduction_total || 0).toFixed(2)}</td>
-                            <td class="num-cell">¥ ${(it.social_security_c || 0).toFixed(2)}</td>
-                            <td class="num-cell">¥ ${(it.housing_fund_c || 0).toFixed(2)}</td>
-                            <td class="num-cell" style="font-weight:700;color:#475569;">¥ ${((it.social_security_p || 0) + (it.housing_fund_p || 0) + (it.social_security_c || 0) + (it.housing_fund_c || 0)).toFixed(2)}</td>
+                            <td class="num-cell qifu-money-cell">${this.fmtMoney(it.social_security_base || 0)}</td>
+                            <td class="num-cell qifu-money-cell">${this.fmtMoney(it.ss_pension_p || 0)}</td>
+                            <td class="num-cell qifu-money-cell">${this.fmtMoney(it.ss_medical_p || 0)}</td>
+                            <td class="num-cell qifu-money-cell">${this.fmtMoney(it.ss_unemployment_p || 0)}</td>
+                            <td class="num-cell qifu-money-cell">${this.fmtMoney(it.ss_large_medical_p || 0)}</td>
+                            <td class="num-cell qifu-money-cell" style="font-weight:700;color:#b91c1c;">${this.fmtMoney(it.social_security_p || 0)}</td>
+                            <td class="num-cell qifu-money-cell">${this.fmtMoney(it.housing_fund_base || 0)}</td>
+                            <td class="num-cell qifu-money-cell" style="font-weight:700;color:#b91c1c;">${this.fmtMoney(it.housing_fund_p || 0)}</td>
+                            <td class="num-cell qifu-money-cell highlight-gross">${this.fmtMoney(it.special_deduction_total || 0)}</td>
+                            <td class="num-cell qifu-money-cell">${this.fmtMoney(it.social_security_c || 0)}</td>
+                            <td class="num-cell qifu-money-cell">${this.fmtMoney(it.housing_fund_c || 0)}</td>
+                            <td class="num-cell qifu-money-cell" style="font-weight:700;color:#475569;">${this.fmtMoney((it.social_security_p || 0) + (it.housing_fund_p || 0) + (it.social_security_c || 0) + (it.housing_fund_c || 0))}</td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -659,16 +708,16 @@ class AshanPayrollWorkbench {
                             <td class="center-cell">${idx + 1}</td>
                             <td class="center-cell" style="font-weight:700;">${it.employee_no}</td>
                             <td class="center-cell" style="font-weight:700;">${it.employee_name}</td>
-                            <td class="num-cell">¥ ${(it.gross_pay || 0).toFixed(2)}</td>
-                            <td class="num-cell">¥ ${(it.cum_gross_income || 0).toFixed(2)}</td>
-                            <td class="num-cell">¥ ${(it.cum_tax_exemption || 0).toFixed(2)}</td>
-                            <td class="num-cell">¥ ${(it.cum_special_deduction || 0).toFixed(2)}</td>
-                            <td class="num-cell">¥ ${(it.cum_additional_deduction || 0).toFixed(2)}</td>
-                            <td class="num-cell" style="font-weight:700;">¥ ${(it.cum_taxable_income || 0).toFixed(2)}</td>
-                            <td class="num-cell">¥ ${(it.cum_tax_due || 0).toFixed(2)}</td>
-                            <td class="num-cell">¥ ${(it.cum_tax_paid_prior || 0).toFixed(2)}</td>
-                            <td class="num-cell highlight-gross" style="color:#d97706;">¥ ${(it.individual_tax || 0).toFixed(2)}</td>
-                            <td class="num-cell highlight-net">¥ ${(it.net_pay || 0).toFixed(2)}</td>
+                            <td class="num-cell qifu-money-cell">${this.fmtMoney(it.gross_pay || 0)}</td>
+                            <td class="num-cell qifu-money-cell">${this.fmtMoney(it.cum_gross_income || 0)}</td>
+                            <td class="num-cell qifu-money-cell">${this.fmtMoney(it.cum_tax_exemption || 0)}</td>
+                            <td class="num-cell qifu-money-cell">${this.fmtMoney(it.cum_special_deduction || 0)}</td>
+                            <td class="num-cell qifu-money-cell">${this.fmtMoney(it.cum_additional_deduction || 0)}</td>
+                            <td class="num-cell qifu-money-cell" style="font-weight:700;">${this.fmtMoney(it.cum_taxable_income || 0)}</td>
+                            <td class="num-cell qifu-money-cell">${this.fmtMoney(it.cum_tax_due || 0)}</td>
+                            <td class="num-cell qifu-money-cell">${this.fmtMoney(it.cum_tax_paid_prior || 0)}</td>
+                            <td class="num-cell qifu-money-cell highlight-gross" style="color:#d97706;">${this.fmtMoney(it.individual_tax || 0)}</td>
+                            <td class="num-cell qifu-money-cell highlight-net">${this.fmtMoney(it.net_pay || 0)}</td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -701,7 +750,7 @@ class AshanPayrollWorkbench {
                             <td class="center-cell">${idx + 1}</td>
                             <td class="center-cell" style="font-weight:700;">${it.employee_no}</td>
                             <td class="center-cell" style="font-weight:700;">${it.employee_name}</td>
-                            <td class="num-cell highlight-net">¥ ${(it.net_pay || 0).toFixed(2)}</td>
+                            <td class="num-cell qifu-money-cell highlight-net">${this.fmtMoney(it.net_pay || 0)}</td>
                             <td class="num-cell">${it.bill_100 || 0}</td>
                             <td class="num-cell">${it.bill_50 || 0}</td>
                             <td class="num-cell">${it.bill_20 || 0}</td>
@@ -712,7 +761,7 @@ class AshanPayrollWorkbench {
                     `).join('')}
                     <tr style="background:#f1f5f9;font-weight:700;">
                         <td colspan="3" class="center-cell">全公司提现配钞合计</td>
-                        <td class="num-cell highlight-net">¥ ${(sum.total_net_pay || 0).toFixed(2)}</td>
+                        <td class="num-cell qifu-money-cell highlight-net">${this.fmtMoney(sum.total_net_pay || 0)}</td>
                         <td class="num-cell" style="color:#0284c7;">${bills.b100 || 0} 张</td>
                         <td class="num-cell" style="color:#0284c7;">${bills.b50 || 0} 张</td>
                         <td class="num-cell" style="color:#0284c7;">${bills.b20 || 0} 张</td>

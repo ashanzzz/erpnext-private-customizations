@@ -145,6 +145,13 @@ def _company_values_from_user_permissions(user: str) -> set[str]:
     return {str(value).strip() for value in values if str(value).strip()}
 
 
+def _company_from_user_field(user: str) -> str:
+    """Return a legacy User.company value only when the database stores it."""
+    if not frappe.db.has_column("User", "company"):
+        return ""
+    return str(frappe.db.get_value("User", user, "company") or "").strip()
+
+
 def get_allowed_companies(user: str | None = None) -> set[str] | None:
     """Return a user's company scope; ``None`` means deliberate global scope.
 
@@ -167,7 +174,7 @@ def get_allowed_companies(user: str | None = None) -> set[str] | None:
             companies.add(str(employee_company).strip())
 
     default_company = (
-        frappe.db.get_value("User", user, "company")
+        _company_from_user_field(user)
         or frappe.defaults.get_user_default("Company", user=user)
         or frappe.defaults.get_user_default("company", user=user)
     )

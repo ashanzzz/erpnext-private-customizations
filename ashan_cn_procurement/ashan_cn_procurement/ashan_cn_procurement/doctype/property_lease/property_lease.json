@@ -375,25 +375,18 @@
       "delete": 1
     },
     {
-      "role": "Accounts Manager",
+      "role": "Property Operator",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 0
+    },
+    {
+      "role": "Property Manager",
       "read": 1,
       "write": 1,
       "create": 1,
       "delete": 1
-    },
-    {
-      "role": "Accounts User",
-      "read": 1,
-      "write": 1,
-      "create": 1
-    },
-    {
-      "role": "Property Operator",
-      "read": 1
-    },
-    {
-      "role": "Property Manager",
-      "read": 1
     }
   ]
 }

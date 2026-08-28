@@ -512,11 +512,11 @@ class TaxInvoiceCenter {
         const self = this;
         const menu = [
             {
-                label: '📄 查看发票详情 (Form)',
+                label: '查看发票详情',
                 action: () => { frappe.set_route('Form', 'Tax Invoice', inv.invoice_no); }
             },
             {
-                label: '🔄 重新匹配采购发票',
+                label: '重新匹配采购发票',
                 action: () => {
                     frappe.call({
                         method: 'ashan_cn_procurement.ashan_cn_procurement.page.tax_invoice_center.tax_invoice_center.rematch_tax_invoice',
@@ -532,7 +532,7 @@ class TaxInvoiceCenter {
 
         if (inv.business_status === '已对冲') {
             menu.push({
-                label: '🔓 解除红冲对冲关联 (恢复待录入)',
+                label: '解除红冲对冲关联（恢复待录入）',
                 action: () => {
                     frappe.confirm(__('确定解除此发票的红冲对冲关联？解除后双方发票将恢复为【待录入】。'), () => {
                         frappe.call({
@@ -548,7 +548,7 @@ class TaxInvoiceCenter {
             });
         } else if (inv.is_red_invoice || flt(inv.payable_total) < 0) {
             menu.push({
-                label: '🔄 检测并执行红冲自动对冲',
+                label: '检测并执行红冲自动对冲',
                 action: () => {
                     frappe.call({
                         method: 'ashan_cn_procurement.ashan_cn_procurement.page.tax_invoice_center.tax_invoice_center.trigger_red_invoice_reconciliation',
@@ -563,12 +563,12 @@ class TaxInvoiceCenter {
 
         if (inv.business_status !== '已废弃' && inv.business_status !== '已对冲') {
             menu.push({
-                label: '🗑️ 标记已废弃 (无需录入)',
+                label: '标记已废弃（无需录入）',
                 action: () => { self.open_abandon_dialog(inv.invoice_no); }
             });
         } else if (inv.business_status === '已废弃') {
             menu.push({
-                label: '↩️ 恢复为待录入',
+                label: '恢复为待录入',
                 action: () => {
                     frappe.confirm(__('确定将此发票恢复为待录入？系统将自动重新检测采购发票匹配状态。'), () => {
                         frappe.call({
@@ -586,26 +586,8 @@ class TaxInvoiceCenter {
 
         if (self.can_delete_invalid_buyer_invoice(inv)) {
             menu.push({
-                label: '🗑️ 永久删除购买方错误发票',
+                label: '归档购买方错误发票',
                 action: () => { self.open_delete_invalid_buyer_invoice_dialog(inv); }
-            });
-        }
-
-        if (inv.invoice_pdf && !inv.pdf_removed) {
-            menu.push({
-                label: '🧹 清理 PDF 原始附件',
-                action: () => {
-                    frappe.confirm(__('仅删除原始 PDF 附件，发票主记录、结构化明细与 ERP 匹配关系将永久保留。确认清理？'), () => {
-                        frappe.call({
-                            method: 'ashan_cn_procurement.ashan_cn_procurement.page.tax_invoice_center.tax_invoice_center.delete_tax_invoice_pdf',
-                            args: { invoice_no: inv.invoice_no },
-                            callback: (r) => {
-                                frappe.show_alert({ message: __('PDF 附件已清理'), indicator: 'gray' });
-                                self.load_data();
-                            }
-                        });
-                    });
-                }
             });
         }
 
@@ -660,7 +642,7 @@ class TaxInvoiceCenter {
                 return;
             }
             frappe.confirm(
-                __('将永久删除此错误发票及其原始附件；如存在红冲对冲关联，系统会先解除关联。删除原因和操作人会写入审计记录。确认继续？'),
+                __('将归档此购买方错误发票并保留原始附件；如存在红冲对冲关联，系统会先解除关联。原因和操作人会写入审计记录。确认继续？'),
                 () => {
                     frappe.call({
                         method: 'ashan_cn_procurement.ashan_cn_procurement.page.tax_invoice_center.tax_invoice_center.delete_invalid_buyer_tax_invoice',
@@ -672,7 +654,7 @@ class TaxInvoiceCenter {
                         callback: (r) => {
                             if (r.message && r.message.ok) {
                                 frappe.show_alert({
-                                    message: __('购买方错误发票已永久删除'),
+                                    message: __('购买方错误发票已归档，原始附件已保留'),
                                     indicator: 'green'
                                 });
                                 self.expanded_invoices.delete(inv.invoice_no);
@@ -682,7 +664,7 @@ class TaxInvoiceCenter {
                     });
                 }
             );
-        }, __('永久删除购买方错误发票'), __('确认删除'));
+        }, __('归档购买方错误发票'), __('确认归档'));
     }
 
     open_abandon_dialog(invoice_no) {
@@ -994,22 +976,22 @@ class TaxInvoiceCenter {
             callback: (r) => {
                 const s = r.message || {};
                 const dlg = new frappe.ui.Dialog({
-                    title: __('⚙️ 税局发票设置'),
+                    title: __('税局发票设置'),
                     fields: [
                         {
-                            label: __('启用自动清理过期 PDF 附件 (每日自动调度)'),
+                            label: __('启用原始 PDF 留存审计提示（不删除原件）'),
                             fieldname: 'auto_cleanup_enabled',
                             fieldtype: 'Check',
                             default: s.auto_cleanup_enabled
                         },
                         {
-                            label: __('PDF 附件保留天数'),
+                            label: __('原始 PDF 法定留存天数（仅记录策略）'),
                             fieldname: 'pdf_retention_days',
                             fieldtype: 'Int',
                             default: s.pdf_retention_days || 730
                         },
                         {
-                            label: __('到期清理基准日期'),
+                            label: __('留存基准日期'),
                             fieldname: 'cleanup_reference',
                             fieldtype: 'Select',
                             options: '发票日期\n创建日期',
@@ -1017,14 +999,13 @@ class TaxInvoiceCenter {
                         },
                         {
                             fieldtype: 'Section Break',
-                            label: __('即时运维操作')
+                            label: __('留存策略状态')
                         },
                         {
                             fieldtype: 'HTML',
                             fieldname: 'cleanup_action_html',
                             options: `
-                                <button class="tax-btn tax-btn-danger" id="btn-run-cleanup-now">🧹 立即执行一次到期附件清理</button>
-                                <span style="font-size: 11px; color: #64748b; margin-left: 8px;">仅删除物理文件，发票主记录及明细永久保留</span>
+                                <span class="tax-source-retention-note">原始 PDF 凭证受留存保护，系统不会通过此页面删除原件。</span>
                             `
                         }
                     ],
@@ -1039,17 +1020,6 @@ class TaxInvoiceCenter {
                             }
                         });
                     }
-                });
-
-                dlg.$wrapper.find('#btn-run-cleanup-now').on('click', () => {
-                    frappe.confirm(__('确定立即执行到期附件清理？'), () => {
-                        frappe.call({
-                            method: 'ashan_cn_procurement.ashan_cn_procurement.page.tax_invoice_center.tax_invoice_center.run_cleanup_now',
-                            callback: (res) => {
-                                frappe.msgprint(__('清理完成！本次共清理过期发票附件: ') + (res.message ? res.message.cleaned_count : 0) + ' 份');
-                            }
-                        });
-                    });
                 });
 
                 dlg.show();

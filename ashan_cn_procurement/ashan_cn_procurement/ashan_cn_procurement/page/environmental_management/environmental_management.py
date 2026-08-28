@@ -3,13 +3,17 @@
 
 import frappe
 from frappe.utils import add_months, getdate, nowdate, date_diff, cint
-from ashan_cn_procurement.services.procurement_picker_service import assert_company_access
+from ashan_cn_procurement.services.authorization_service import (
+	assert_company_access,
+	assert_module_access,
+	get_allowed_companies,
+)
 
 
 def _assert_env_permission(permission, doc=None):
 	"""Enforce DocType permission for every environmental ledger mutation."""
-	if not frappe.has_permission("Environmental Compliance Item", permission, doc=doc):
-		frappe.throw("您没有执行该环保台账操作的权限。", frappe.PermissionError)
+	company = doc.company if doc else None
+	assert_module_access("compliance", "write", company)
 
 
 @frappe.whitelist()
@@ -18,12 +22,18 @@ def get_environmental_dashboard_data(tab_type="inspection", company=None, status
 	获取环保管理工作台看板数据（按 Tab 隔离，包含 KPI 统计与紧急度排序明细）
 	tab_type: 'waste' (危废管理) | 'inspection' (环保定期检测)
 	"""
+	assert_module_access("compliance", "read")
 	tab_type = tab_type or "inspection"
 	if company and company != "全部":
 		assert_company_access(company)
+	allowed_companies = get_allowed_companies()
 
 	# 1. 构造基础过滤条件
 	base_filters = {"is_active": 1}
+	if company and company != "全部":
+		base_filters["company"] = company
+	elif allowed_companies is not None:
+		base_filters["company"] = ["in", sorted(allowed_companies)]
 	if tab_type == "waste":
 		base_filters["env_type"] = "危废"
 	else:
@@ -74,14 +84,14 @@ def get_environmental_dashboard_data(tab_type="inspection", company=None, status
 	if overdue_count > 0:
 		banner_type = "danger"
 		unit_name = "危废转移事项" if tab_type == "waste" else "环保检测事项"
-		banner_msg = f"⚠️ 当前有 {overdue_count} 项{unit_name}已经逾期，请立即安排处理！"
+		banner_msg = f"当前有 {overdue_count} 项{unit_name}已经逾期，请立即安排处理。"
 	elif upcoming_count > 0:
 		banner_type = "warning"
 		unit_name = "危废转移" if tab_type == "waste" else "环保检测"
-		banner_msg = f"⏰ 近期 30 天内有 {upcoming_count} 项{unit_name}即将到期，请提前做好准备。"
+		banner_msg = f"近期 30 天内有 {upcoming_count} 项{unit_name}即将到期，请提前做好准备。"
 	else:
 		banner_type = "success"
-		banner_msg = "🟢 当前所有事项均在正常周期内，暂无临期风险。"
+		banner_msg = "当前所有事项均在正常周期内，暂无临期风险。"
 
 	# 3. 应用前端交互筛选 (公司 / 状态 / 搜索词)
 	filtered_items = all_tab_items
@@ -124,7 +134,8 @@ def get_environmental_dashboard_data(tab_type="inspection", company=None, status
 	filtered_items.sort(key=sort_key)
 
 	# 5. 获取所有可用公司列表
-	companies = frappe.get_all("Company", fields=["name"], order_by="name ASC")
+	company_filters = {"name": ["in", sorted(allowed_companies)]} if allowed_companies is not None else {}
+	companies = frappe.get_all("Company", filters=company_filters, fields=["name"], order_by="name ASC")
 	company_list = [c.name for c in companies]
 
 	return {
@@ -141,7 +152,7 @@ def get_environmental_dashboard_data(tab_type="inspection", company=None, status
 		},
 		"items": filtered_items,
 		"companies": company_list,
-		"can_create": frappe.has_permission("Environmental Compliance Item", "create")
+		"can_create": True
 	}
 
 

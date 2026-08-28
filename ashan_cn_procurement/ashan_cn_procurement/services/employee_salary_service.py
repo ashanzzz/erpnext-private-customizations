@@ -12,6 +12,22 @@ def _check_payroll_permission(perm_type="read", company=None):
 	return check_payroll_workbench_permission(perm_type, company)
 
 
+def _require_company(company):
+	"""Require an explicit company for payroll RPCs and batch mutations."""
+	company = str(company or "").strip()
+	if not company:
+		frappe.throw("必须明确选择所属公司，不能使用历史默认公司。")
+	return company
+
+
+def _require_period_month(period_month):
+	"""Require a YYYY-MM payroll period before changing payroll master data."""
+	period_month = str(period_month or "").strip()
+	if not period_month or len(period_month) != 7 or period_month[4:5] != "-":
+		frappe.throw("必须明确选择工资核算月份（YYYY-MM）。")
+	return period_month
+
+
 def _default_insurance_setting_values(company, year):
 	"""Return read-only defaults; reading configuration must never create database rows."""
 	company_text = str(company or "")
@@ -313,9 +329,10 @@ def calculate_employee_age_and_retirement(
 	certificate_type=None,
 	retirement_category=None,
 	period_month=None,
-	company="天津祺富机械加工有限公司",
+	company=None,
 ):
 	"""按选定账期返回年龄、原退休、延迟法定退休和弹性退休年龄窗口。"""
+	company = _require_company(company)
 	_check_payroll_permission("read", company)
 	return calculate_age_and_retirement_details(
 		id_card=id_card,
@@ -331,8 +348,9 @@ def calculate_employee_age_and_retirement(
 
 
 @frappe.whitelist()
-def get_retirement_policy_metadata(company="天津祺富机械加工有限公司"):
+def get_retirement_policy_metadata(company=None):
 	"""Expose policy version and parameters to the workbench for transparent UI hints."""
+	company = _require_company(company)
 	_check_payroll_permission("read", company)
 	from ashan_cn_procurement.services.retirement_policy_service import (
 		POLICY_VERSION, POLICY_EFFECTIVE_FROM, POLICY_SOURCE_URLS, RETIREMENT_CATEGORIES,
@@ -358,10 +376,11 @@ def get_retirement_policy_metadata(company="天津祺富机械加工有限公司
 
 
 @frappe.whitelist()
-def get_employee_profiles(company="天津祺富机械加工有限公司", search_text=None, employee_type=None, period_month=None):
+def get_employee_profiles(company=None, search_text=None, employee_type=None, period_month=None):
 	"""
 	获取指定公司的人员薪酬档案列表与统计指标
 	"""
+	company = _require_company(company)
 	_check_payroll_permission("read", company)
 	filters = {"company": company}
 	if employee_type and employee_type != "全部":
@@ -541,21 +560,24 @@ def get_employee_profiles(company="天津祺富机械加工有限公司", search
 
 
 @frappe.whitelist()
-def get_qifu_employees(company="天津祺富机械加工有限公司", period_month=None):
+def get_qifu_employees(company=None, period_month=None):
 	"""获取在职及当月离职员工档案母表列表 (支持动态按月份基准计算年龄与退休)"""
+	company = _require_company(company)
 	_check_payroll_permission("read", company)
 	res = get_employee_profiles(company=company, period_month=period_month)
 	return res.get("records", [])
 
 
 @frappe.whitelist(methods=["POST"])
-def set_employee_resignation(employee_no, relieving_date=None, resignation_reason=None, company="天津祺富机械加工有限公司", period_month="2026-07"):
+def set_employee_resignation(employee_no, relieving_date=None, resignation_reason=None, company=None, period_month=None):
 	"""
 	办理单名员工离职：
 	1. 离职日期默认为当前核算月份最后一天 (如 2026-07-31)
 	2. employment_status 设为 离职，employee_type 可显示本月离职
 	3. 自动触发次月社保公积金减员
 	"""
+	company = _require_company(company)
+	period_month = _require_period_month(period_month)
 	_check_payroll_permission("write", company)
 	doc_name = frappe.db.get_value("Ashan Employee Salary Profile", {"company": company, "employee_no": employee_no}, "name")
 	if not doc_name:
@@ -585,11 +607,13 @@ def set_employee_resignation(employee_no, relieving_date=None, resignation_reaso
 
 
 @frappe.whitelist(methods=["POST"])
-def batch_set_employee_resignation(employee_nos, relieving_date=None, resignation_reason=None, company="天津祺富机械加工有限公司", period_month="2026-07"):
+def batch_set_employee_resignation(employee_nos, relieving_date=None, resignation_reason=None, company=None, period_month=None):
 	"""
 	批量办理员工离职：
 	可多选人员，填入离职日期（默认当月最后一天），一键全部办理离职并实现次月社保公积金自动减员
 	"""
+	company = _require_company(company)
+	period_month = _require_period_month(period_month)
 	_check_payroll_permission("write", company)
 	if isinstance(employee_nos, str):
 		try:
@@ -632,10 +656,12 @@ def batch_set_employee_resignation(employee_nos, relieving_date=None, resignatio
 
 
 @frappe.whitelist(methods=["POST"])
-def cancel_employee_resignation(employee_no, company="天津祺富机械加工有限公司", period_month=None):
+def cancel_employee_resignation(employee_no, company=None, period_month=None):
 	"""
 	撤销员工离职，恢复在职
 	"""
+	company = _require_company(company)
+	period_month = _require_period_month(period_month)
 	_check_payroll_permission("write", company)
 	doc_name = frappe.db.get_value("Ashan Employee Salary Profile", {"company": company, "employee_no": employee_no}, "name")
 	if not doc_name:
@@ -660,7 +686,7 @@ def cancel_employee_resignation(employee_no, company="天津祺富机械加工�
 @frappe.whitelist(methods=["POST"])
 def create_employee_salary_profile(**kwargs):
 	"""新建员工薪酬档案"""
-	target_company = str(kwargs.get("company") or "天津祺富机械加工有限公司").strip()
+	target_company = _require_company(kwargs.get("company"))
 	_check_payroll_permission("write", target_company)
 	period_month = kwargs.pop("period_month", None)
 	payload, _calc = _normalize_employee_identity_retirement_payload(kwargs, period_month=period_month)
@@ -887,13 +913,15 @@ def update_employee_contribution_base(company, period_month, employee_no, base_t
 
 
 @frappe.whitelist(methods=["POST"])
-def set_qifu_social_security_batch(mode="min", period_month=None, company="天津祺富机械加工有限公司"):
+def set_qifu_social_security_batch(mode="min", period_month=None, company=None):
 	"""
 	祺富全员社保一键批量设置：全部档案改为绑定公司年度最低缴费基数。
 
 	这不是复制一次最低数值；今后调整年度最低基数时，所有绑定员工都会
 	自动联动。社保业务边界（临时工、返聘等不参保人员）仍由结算规则控制。
 	"""
+	company = _require_company(company)
+	period_month = _require_period_month(period_month)
 	_check_payroll_permission("write", company)
 	year = cint(str(period_month or "")[:4]) or datetime.now().year
 	doc_setting = get_insurance_setting(company, year)
@@ -926,13 +954,15 @@ def set_qifu_social_security_batch(mode="min", period_month=None, company="天�
 
 
 @frappe.whitelist(methods=["POST"])
-def set_qifu_housing_fund_batch(mode="min", period_month=None, company="天津祺富机械加工有限公司"):
+def set_qifu_housing_fund_batch(mode="min", period_month=None, company=None):
 	"""Deprecated compatibility endpoint.
 
 	V5 no longer turns the employee master housing-fund base on/off by writing 0.
 	Callers must use company automatic months, employee long-term policy, or a
 	period-only override so the authoritative long-term base remains intact.
 	"""
+	company = _require_company(company)
+	period_month = _require_period_month(period_month)
 	_check_payroll_permission("write", company)
 	frappe.throw(
 		"旧版‘一键设置/清零公积金基数’已停用。请在住房公积金台账与配置中使用“自动缴纳规则”、"
@@ -940,8 +970,9 @@ def set_qifu_housing_fund_batch(mode="min", period_month=None, company="天津�
 	)
 
 @frappe.whitelist()
-def get_insurance_setting(company="天津祺富机械加工有限公司", year=2026):
+def get_insurance_setting(company=None, year=None):
 	"""读取指定公司与年份的社保、公积金和个税基础参数；GET 永不写数据库。"""
+	company = _require_company(company)
 	_check_payroll_permission("read", company)
 	year = cint(year) or datetime.now().year
 	setting_name = f"{company}-{year}"
@@ -1011,10 +1042,11 @@ def save_insurance_setting(company, year, data, period_month=None):
 
 
 @frappe.whitelist()
-def get_tax_setting(company="天津祺富机械加工有限公司", year=2026, period_month=None):
+def get_tax_setting(company=None, year=None, period_month=None):
     """读取个税参数。7级累计预扣税率为法定参数，仅展示、不允许从前端随意修改。"""
+    company = _require_company(company)
     _check_payroll_permission("read", company)
-    year = cint(year) or 2026
+    year = cint(year) or datetime.now().year
     setting = get_insurance_setting(company, year)
     threshold = flt(setting.get("tax_threshold")) or 5000.0
     cycle_start_month = cint(setting.get("tax_cycle_start_month")) or 12
@@ -1044,7 +1076,7 @@ def get_tax_setting(company="天津祺富机械加工有限公司", year=2026, p
 def save_tax_setting(company, year, tax_threshold, tax_cycle_start_month, period_month=None):
     """仅保存个税参数，不触碰社保、公积金费率。"""
     _check_payroll_permission("write", company)
-    year = cint(year) or 2026
+    year = cint(year) or datetime.now().year
     tax_threshold = flt(tax_threshold)
     tax_cycle_start_month = cint(tax_cycle_start_month)
     if tax_threshold <= 0:

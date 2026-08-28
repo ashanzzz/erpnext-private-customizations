@@ -1262,13 +1262,19 @@ class PropertySettlementWorkbench {
 
     revert_settlement() {
         const self = this;
-        frappe.confirm(
-            `<b>⚠️ 确定取消本月水电费结算并退回草稿？</b>`,
-            () => {
+        frappe.prompt(
+            [{
+                label: '解除锁定原因',
+                fieldname: 'reason',
+                fieldtype: 'Small Text',
+                reqd: 1,
+            }],
+            (values) => {
                 frappe.call({
                     method: 'ashan_cn_procurement.ashan_cn_procurement.page.property_settlement_workbench.property_settlement_workbench.revert_settlement',
                     args: {
-                        name: self.data.settlement_name || self.data.name
+                        name: self.data.settlement_name || self.data.name,
+                        reason: values.reason,
                     },
                     callback(r) {
                         if (r.message?.success) {
@@ -1277,7 +1283,9 @@ class PropertySettlementWorkbench {
                         }
                     }
                 });
-            }
+            },
+            '解除本月水电费结算锁定',
+            '确认解除锁定'
         );
     }
 

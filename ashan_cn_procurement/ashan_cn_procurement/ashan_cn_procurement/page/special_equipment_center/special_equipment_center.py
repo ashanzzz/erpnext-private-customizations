@@ -10,6 +10,11 @@ from ashan_cn_procurement.services.special_equipment import (
 	calculate_days_remaining,
 	calculate_expiry_status
 )
+from ashan_cn_procurement.services.authorization_service import (
+	assert_company_access,
+	assert_module_access,
+	get_allowed_companies,
+)
 
 
 @frappe.whitelist()
@@ -17,8 +22,12 @@ def get_dashboard_data(company=None, category=None, equipment_status=None, inspe
 	"""
 	获取特种设备管理工作台全量聚合数据与过滤列表
 	"""
-	# 1. 基础元数据
-	companies = frappe.get_all("Company", fields=["name", "company_name"], order_by="name asc")
+	assert_module_access("compliance", "read")
+	allowed_companies = get_allowed_companies()
+	if company:
+		assert_company_access(company)
+	company_filters = {"name": ["in", sorted(allowed_companies)]} if allowed_companies is not None else {}
+	companies = frappe.get_all("Company", filters=company_filters, fields=["name", "company_name"], order_by="name asc")
 	categories = [
 		"场（厂）内专用机动车辆",
 		"起重机械",
@@ -33,6 +42,8 @@ def get_dashboard_data(company=None, category=None, equipment_status=None, inspe
 	kpi_filters = {}
 	if company:
 		kpi_filters["company"] = company
+	elif allowed_companies is not None:
+		kpi_filters["company"] = ["in", sorted(allowed_companies)]
 
 	all_equipments = frappe.get_all(
 		"Special Equipment",
@@ -67,6 +78,8 @@ def get_dashboard_data(company=None, category=None, equipment_status=None, inspe
 	list_filters = {}
 	if company:
 		list_filters["company"] = company
+	elif allowed_companies is not None:
+		list_filters["company"] = ["in", sorted(allowed_companies)]
 	if category:
 		list_filters["equipment_category"] = category
 	if equipment_status and equipment_status != "全部":
@@ -138,7 +151,7 @@ def get_dashboard_data(company=None, category=None, equipment_status=None, inspe
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def quick_create_equipment(
 	company, equipment_name, equipment_category="场（厂）内专用机动车辆",
 	equipment_variety=None, plate_number=None, internal_number=None,
@@ -152,6 +165,7 @@ def quick_create_equipment(
 		frappe.throw(_("设备名称为必填项！"))
 	if not company:
 		frappe.throw(_("所属公司为必填项！"))
+	assert_module_access("compliance", "write", company)
 
 	doc = frappe.new_doc("Special Equipment")
 	doc.company = company
@@ -168,7 +182,6 @@ def quick_create_equipment(
 	doc.inspection_status = "待录入"
 	doc.annual_check_status = "待检查"
 	doc.insert(ignore_permissions=True)
-	frappe.db.commit()
 
 	return {
 		"status": "ok",
@@ -177,7 +190,7 @@ def quick_create_equipment(
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def quick_add_inspection(special_equipment, inspection_date, valid_until=None, inspection_type="定期检验", inspection_report_no=None, inspection_report_attachment=None, inspection_agency=None):
 	"""
 	弹窗极速录入法定检验记录（默认有效2年）
@@ -193,6 +206,7 @@ def quick_add_inspection(special_equipment, inspection_date, valid_until=None, i
 		valid_until = add_to_date(getdate(inspection_date), years=2)
 
 	company = frappe.db.get_value("Special Equipment", special_equipment, "company")
+	assert_module_access("compliance", "write", company)
 
 	doc = frappe.new_doc("Special Equipment Inspection")
 	doc.special_equipment = special_equipment
@@ -206,7 +220,6 @@ def quick_add_inspection(special_equipment, inspection_date, valid_until=None, i
 	doc.inspection_agency = inspection_agency.strip() if inspection_agency else ""
 	doc.inspection_report_attachment = inspection_report_attachment or None
 	doc.insert(ignore_permissions=True)
-	frappe.db.commit()
 
 	sync_inspection_snapshot(special_equipment)
 
@@ -217,7 +230,7 @@ def quick_add_inspection(special_equipment, inspection_date, valid_until=None, i
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def quick_add_annual_inspection(special_equipment, check_date, next_check_date=None, check_result="合格", annual_check_attachment=None, remarks=None):
 	"""
 	弹窗极速录入年度检查记录（默认有效1年）
@@ -233,6 +246,7 @@ def quick_add_annual_inspection(special_equipment, check_date, next_check_date=N
 		next_check_date = add_to_date(getdate(check_date), years=1)
 
 	company = frappe.db.get_value("Special Equipment", special_equipment, "company")
+	assert_module_access("compliance", "write", company)
 	c_year = getdate(check_date).year
 
 	doc = frappe.new_doc("Special Equipment Annual Inspection")
@@ -245,7 +259,6 @@ def quick_add_annual_inspection(special_equipment, check_date, next_check_date=N
 	doc.annual_check_attachment = annual_check_attachment or None
 	doc.remarks = remarks.strip() if remarks else ""
 	doc.insert(ignore_permissions=True)
-	frappe.db.commit()
 
 	sync_annual_check_snapshot(special_equipment)
 
@@ -254,4 +267,3 @@ def quick_add_annual_inspection(special_equipment, check_date, next_check_date=N
 		"message": f"年度自查记录【{doc.name}】已成功录入并同步至主档！",
 		"name": doc.name
 	}
-

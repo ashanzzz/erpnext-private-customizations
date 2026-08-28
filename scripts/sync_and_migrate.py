@@ -1,3 +1,4 @@
+import base64
 import os
 import sys
 import tarfile
@@ -83,6 +84,34 @@ def clear_confirmed_orphan_migrate_lock(client):
         client,
         f"docker exec -u frappe -w {workdir} erpnext16 rm -f {lock_path}",
     )
+
+
+def ensure_socketio_origin_header(client):
+    """Keep Socket.IO Origin aligned with the request Host after container restarts."""
+    remote_script = """set -eu
+config=/etc/nginx/conf.d/frappe.conf
+backup=/etc/nginx/conf.d/frappe.conf.bak-20260828-socket-origin
+if grep -Fq 'proxy_set_header Origin $proxy_x_forwarded_proto://$host;' "$config"; then
+    nginx -t
+    exit 0
+fi
+if ! grep -Fq 'proxy_set_header Origin $proxy_x_forwarded_proto://site1.local;' "$config"; then
+    echo "Expected Socket.IO Origin header was not found."
+    exit 1
+fi
+cp "$config" "$backup"
+sed -i 's#proxy_set_header Origin $proxy_x_forwarded_proto://site1.local;#proxy_set_header Origin $proxy_x_forwarded_proto://$host;#' "$config"
+if nginx -t; then
+    nginx -s reload
+else
+    cp "$backup" "$config"
+    nginx -s reload
+    exit 1
+fi
+"""
+    encoded_script = base64.b64encode(remote_script.encode("utf-8")).decode("ascii")
+    run_cmd(client, f"echo {encoded_script} | base64 -d | docker exec -i erpnext16 sh")
+
 
 def connect_ssh():
     client = paramiko.SSHClient()
@@ -174,6 +203,7 @@ def sync_and_migrate():
     print("Clearing cache & restarting container...")
     run_cmd(client, "docker exec -u frappe -w /home/frappe/frappe-bench erpnext16 bench --site site1.local clear-cache")
     run_cmd(client, "docker restart erpnext16")
+    ensure_socketio_origin_header(client)
 
     client.close()
     print("\n[OK] Sync & Migrate completed successfully!")
