@@ -222,7 +222,6 @@ class AshanStockIssueWorkbench {
             self.load_meta().then(() => self.refresh_all());
         });
 
-        // 视图切换（单据台账 vs 现存库存）
         this.$body.find('.si-view-switch-btn').on('click', function () {
             $(this).siblings().removeClass('active');
             $(this).addClass('active');
@@ -571,7 +570,7 @@ class AshanStockIssueWorkbench {
                     <td>${r.item_group || '-'}</td>
                     <td>${r.warehouse_name || r.warehouse}</td>
                     <td class="si-text-right">
-                        <span class="si-stock-badge">${avail.toFixed(2)} ${r.stock_uom || 'Nos'}</span>
+                        <span class="si-stock-text ${avail <= 0 ? 'zero' : ''}">${avail.toFixed(2)} ${r.stock_uom || 'Nos'}</span>
                     </td>
                     <td class="si-text-center">
                         <button type="button" class="btn btn-xs btn-default si-single-issue-btn">领料出库</button>
@@ -582,7 +581,6 @@ class AshanStockIssueWorkbench {
 
         this.$table_body.html(rows_html);
 
-        // 全选/取消全选
         this.$table_head.find('.si-select-all-inventory').on('change', function () {
             const checked = $(this).is(':checked');
             self.$table_body.find('.si-row-inventory-check').prop('checked', checked);
@@ -608,7 +606,6 @@ class AshanStockIssueWorkbench {
             self.render_floating_cart();
         });
 
-        // 行选择事件
         this.$table_body.find('.si-row-inventory-check').on('change', function () {
             const $tr = $(this).closest('tr');
             const key = $tr.data('key');
@@ -631,7 +628,6 @@ class AshanStockIssueWorkbench {
             self.render_floating_cart();
         });
 
-        // 单行直接出库
         this.$table_body.find('.si-single-issue-btn').on('click', function () {
             const $tr = $(this).closest('tr');
             const item_obj = {
@@ -646,7 +642,6 @@ class AshanStockIssueWorkbench {
         });
     }
 
-    // 渲染底部微立体浮动操作条（购物车）
     render_floating_cart() {
         const count = this.selected_inventory_items.size;
         if (count === 0 || this.view_mode !== 'inventory') {
@@ -813,7 +808,7 @@ class AshanStockIssueWorkbench {
                     </td>
                     <td class="si-row-spec si-row-spec-text">${description || '-'}</td>
                     <td class="si-text-right">
-                        <span class="si-stock-badge ${available_qty <= 0 ? 'si-stock-badge-low' : ''} si-row-stock-badge si-stock-badge-clickable" data-avail="${available_qty}" title="点击可一键自动填入最大可用库存">${(flt(available_qty) || 0).toFixed(2)} ${stock_uom}</span>
+                        <span class="si-stock-text ${available_qty <= 0 ? 'si-stock-text-low' : ''} si-row-stock-text si-stock-text-clickable" data-avail="${available_qty}" title="点击可一键自动填入最大可用库存">${(flt(available_qty) || 0).toFixed(2)} ${stock_uom}</span>
                     </td>
                     <td class="si-text-right">
                         <div class="si-relative-box">
@@ -839,7 +834,7 @@ class AshanStockIssueWorkbench {
             const $input = $tr.find('.si-row-item-input');
             const $qty = $tr.find('.si-row-qty');
             const $warning = $tr.find('.si-stock-warning');
-            const $badge = $tr.find('.si-row-stock-badge');
+            const $badge = $tr.find('.si-row-stock-text');
             
             const code = $input.data('code');
             const val = flt($qty.val()) || 0;
@@ -888,7 +883,7 @@ class AshanStockIssueWorkbench {
 
         let draft_timer = null;
         function save_draft_debounced() {
-            if (prefill_items) return; // 外部注入物料不自动覆盖本地普通草稿
+            if (prefill_items) return;
             clearTimeout(draft_timer);
             draft_timer = setTimeout(() => {
                 const items = [];
@@ -901,7 +896,7 @@ class AshanStockIssueWorkbench {
                             item_name: $input.data('name'),
                             description: $(this).find('.si-row-spec').text(),
                             stock_uom: $input.data('uom'),
-                            available_qty: flt($(this).find('.si-row-stock-badge').data('avail')),
+                            available_qty: flt($(this).find('.si-row-stock-text').data('avail')),
                             qty: flt($(this).find('.si-row-qty').val()) || 1
                         });
                     }
@@ -921,7 +916,7 @@ class AshanStockIssueWorkbench {
             const $input = $tr.find('.si-row-item-input');
             const $qty = $tr.find('.si-row-qty');
             const $del = $tr.find('.si-row-del-btn');
-            const $badge = $tr.find('.si-row-stock-badge');
+            const $badge = $tr.find('.si-row-stock-text');
 
             $del.on('click', function () {
                 $tr.remove();
@@ -1041,10 +1036,10 @@ class AshanStockIssueWorkbench {
                     $tr.find('.si-row-spec').text(it.description || '-');
                     $tr.find('.si-row-uom-label').text(it.stock_uom || 'Nos');
 
-                    const $badge = $tr.find('.si-row-stock-badge');
+                    const $badge = $tr.find('.si-row-stock-text');
                     $badge.text(`${avail.toFixed(2)} ${it.stock_uom || 'Nos'}`);
                     $badge.data('avail', avail);
-                    $badge.toggleClass('si-stock-badge-low', avail <= 0);
+                    $badge.toggleClass('si-stock-text-low', avail <= 0);
 
                     const $qty = $tr.find('.si-row-qty');
                     const cur_qty = flt($qty.val()) || 1;
@@ -1095,13 +1090,13 @@ class AshanStockIssueWorkbench {
             stock_items.forEach((it, i) => {
                 const avail = flt(it.actual_qty) || 0;
                 rows_html += `
-                    <tr class="si-picker-row" data-code="${it.item_code}">
+                    <tr class="si-picker-row" data-code="${it.item_code}" data-name="${it.item_name || ''}" data-desc="${it.description || ''}">
                         <td class="si-col-idx">${i + 1}</td>
                         <td><strong class="si-link">${it.item_code}</strong></td>
                         <td>${it.item_name || '-'}</td>
                         <td class="si-row-spec-text">${it.description || '-'}</td>
                         <td class="si-text-right">
-                            <span class="si-stock-badge">${avail.toFixed(2)} ${it.stock_uom || 'Nos'}</span>
+                            <span class="si-stock-text">${avail.toFixed(2)} ${it.stock_uom || 'Nos'}</span>
                         </td>
                         <td class="si-text-right">
                             <input type="number" step="any" min="0" max="${avail}" class="si-form-control si-picker-qty-input" placeholder="0.00" data-code="${it.item_code}" data-name="${it.item_name || ''}" data-desc="${it.description || ''}" data-uom="${it.stock_uom || 'Nos'}" data-avail="${avail}" />
@@ -1174,6 +1169,23 @@ class AshanStockIssueWorkbench {
                 $(this).closest('tr').find('.si-picker-qty-input').val(max).focus();
             });
 
+            // 键盘回车与下方向键极速流式录入
+            $picker.find('.si-picker-qty-input').on('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    const $next_row = $(this).closest('tr').next('.si-picker-row');
+                    if ($next_row.length) {
+                        $next_row.find('.si-picker-qty-input').focus().select();
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    const $prev_row = $(this).closest('tr').prev('.si-picker-row');
+                    if ($prev_row.length) {
+                        $prev_row.find('.si-picker-qty-input').focus().select();
+                    }
+                }
+            });
+
             $picker.find('.si-picker-close-btn, .si-picker-cancel-btn').on('click', () => $picker.remove());
 
             $picker.find('.si-picker-confirm-btn').on('click', function () {
@@ -1199,7 +1211,7 @@ class AshanStockIssueWorkbench {
                             $input.val(`${name || code} (${code})`).data('code', code).data('name', name).data('uom', uom);
                             $target_row.find('.si-row-spec').text(desc || '-');
                             $target_row.find('.si-row-uom-label').text(uom);
-                            const $badge = $target_row.find('.si-row-stock-badge');
+                            const $badge = $target_row.find('.si-row-stock-text');
                             $badge.text(`${avail.toFixed(2)} ${uom}`).data('avail', avail);
                             $target_row.find('.si-row-qty').val(qty);
                             validate_row($target_row);
@@ -1223,7 +1235,6 @@ class AshanStockIssueWorkbench {
 
         const valid_whs = (this.meta.warehouses || []).map(w => w.name);
 
-        // 如果传入了预选物料 (从现存库存清单一键发起出库)
         if (prefill_items && prefill_items.length > 0) {
             const first_wh = prefill_items[0].warehouse;
             if (first_wh && valid_whs.includes(first_wh)) {
@@ -1281,9 +1292,9 @@ class AshanStockIssueWorkbench {
                         if (bal_res && bal_res.message) {
                             const bal = bal_res.message.actual_qty || 0;
                             const uom = bal_res.message.stock_uom || 'Nos';
-                            const $badge = $(this).find('.si-row-stock-badge');
+                            const $badge = $(this).find('.si-row-stock-text');
                             $badge.text(`${bal.toFixed(2)} ${uom}`).data('avail', bal);
-                            $badge.toggleClass('si-stock-badge-low', bal <= 0);
+                            $badge.toggleClass('si-stock-text-low', bal <= 0);
                             validate_row($(this));
                             update_totals();
                         }
@@ -1307,7 +1318,7 @@ class AshanStockIssueWorkbench {
                 const $input = $(this).find('.si-row-item-input');
                 const code = $input.data('code');
                 const qty = flt($(this).find('.si-row-qty').val()) || 0;
-                const avail = flt($(this).find('.si-row-stock-badge').data('avail')) || 0;
+                const avail = flt($(this).find('.si-row-stock-text').data('avail')) || 0;
 
                 if (code && qty > 0) {
                     if (qty > avail + 0.0001) {

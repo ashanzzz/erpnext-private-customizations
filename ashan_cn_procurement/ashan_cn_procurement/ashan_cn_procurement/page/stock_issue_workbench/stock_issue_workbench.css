@@ -654,20 +654,26 @@
     text-align: center;
 }
 
-.si-stock-badge {
-    display: inline-block;
-    padding: 1px 6px;
-    font-size: 11px;
+.si-stock-text {
+    font-size: 12px;
     font-weight: 600;
-    border-radius: 3px;
-    background: #f0fdf4;
-    color: #15803d;
-    border: 1px solid #bbf7d0;
+    font-variant-numeric: tabular-nums;
+    color: #166534;
+    text-align: right;
+    display: inline-block;
+    white-space: nowrap;
 }
-.si-stock-badge-low {
-    background: #fef2f2;
-    color: #b91c1c;
-    border-color: #fecaca;
+.si-stock-text.zero, .si-stock-text-low {
+    color: #94a3b8;
+    font-weight: 400;
+}
+.si-stock-text-clickable {
+    cursor: pointer;
+    transition: color 0.15s ease, text-decoration 0.15s ease;
+}
+.si-stock-text-clickable:hover {
+    color: #15803d;
+    text-decoration: underline;
 }
 
 /* Suggest Dropdown Floating Box */
@@ -734,29 +740,16 @@
 }
 
 .si-suggest-stock {
-    font-size: 11px;
-    font-weight: 700;
-    color: #15803d;
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
-    padding: 1px 6px;
-    border-radius: 4px;
+    font-size: 11.5px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: #166534;
     white-space: nowrap;
+    text-align: right;
 }
 .si-suggest-stock.zero {
     color: #94a3b8;
-    background: #f1f5f9;
-    border-color: #e2e8f0;
-}
-
-.si-stock-badge-clickable {
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-.si-stock-badge-clickable:hover {
-    transform: scale(1.05);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    background: #dcfce7;
+    font-weight: 400;
 }
 
 .si-qty-invalid {
