@@ -1,7 +1,7 @@
 frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
     var page = frappe.ui.make_app_page({
         parent: wrapper,
-        title: '⚡ 吉众人事薪酬工作台*',
+        title: '吉众人事薪酬工作台',
         single_column: true
     });
 
@@ -15,7 +15,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         <div class="jz-header">
             <div>
                 <div class="jz-title">
-                    <span>⚡ 天津吉众科技有限公司 · 人事薪酬综合中枢</span>
+                    <span>天津吉众科技有限公司 · 人事薪酬综合中枢</span>
                 </div>
                 <div class="jz-subtitle">
                     结构化薪资体系 (底薪+岗位津贴+绩效+各项补贴) · 独立工伤社保与公积金 · 月度核定锁定与归档
@@ -24,16 +24,16 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
             <div style="display: flex; gap: 10px; align-items: center;">
                 <label style="font-size: 13px; font-weight: 600; color: #475569; margin: 0;">核算月份：</label>
                 <input type="month" id="jz-month-select" class="form-control" style="width: 140px; display: inline-block; font-weight: 600;" value="2026-06">
-                <button class="btn btn-default btn-sm" id="btn-jz-refresh-all">🔄 刷新数据</button>
+                <button class="btn btn-default btn-sm" id="btn-jz-refresh-all">刷新数据</button>
             </div>
         </div>
 
         <!-- 4大业务 Tab -->
         <div class="jz-nav-tabs">
-            <button class="jz-tab-btn active" data-tab="payroll">📊 1. 月度薪酬核定结算</button>
-            <button class="jz-tab-btn" data-tab="employees">👥 2. 吉众员工薪酬档案</button>
-            <button class="jz-tab-btn" data-tab="insurance">⚙️ 3. 吉众社保公积金配置</button>
-            <button class="jz-tab-btn" data-tab="attendance">📅 4. 吉众当月考勤工时</button>
+            <button class="jz-tab-btn active" data-tab="payroll">1. 月度薪酬核定结算</button>
+            <button class="jz-tab-btn" data-tab="employees">2. 吉众员工薪酬档案</button>
+            <button class="jz-tab-btn" data-tab="insurance">3. 吉众社保公积金配置</button>
+            <button class="jz-tab-btn" data-tab="attendance">4. 吉众当月考勤工时</button>
         </div>
 
         <!-- Tab 1: 月度薪酬核定结算 -->
@@ -641,4 +641,13 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
 
     // 初始化加载
     load_payroll_settlement();
+
+    // 挂载实例至 wrapper 供 SPA 重新切入时唤醒
+    wrapper.load_payroll_settlement = load_payroll_settlement;
+};
+
+frappe.pages['jizhong-hr-salary-workbench'].on_page_show = function(wrapper) {
+    if (wrapper && typeof wrapper.load_payroll_settlement === "function") {
+        wrapper.load_payroll_settlement();
+    }
 };

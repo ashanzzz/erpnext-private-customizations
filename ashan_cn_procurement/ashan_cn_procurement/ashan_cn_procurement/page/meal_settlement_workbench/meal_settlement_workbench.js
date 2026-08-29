@@ -2,14 +2,20 @@
 // For license information, please see license.txt
 
 frappe.pages['meal-settlement-workbench'].on_page_load = function(wrapper) {
-    new MealSettlementWorkbench(wrapper);
+    wrapper.meal_settlement_wb = new MealSettlementWorkbench(wrapper);
+};
+
+frappe.pages['meal-settlement-workbench'].on_page_show = function(wrapper) {
+    if (wrapper.meal_settlement_wb) {
+        wrapper.meal_settlement_wb.load_data(wrapper.meal_settlement_wb.current_month);
+    }
 };
 
 class MealSettlementWorkbench {
     constructor(wrapper) {
         this.page = frappe.ui.make_app_page({
             parent: wrapper,
-            title: __('🍱 工作餐费月结工作台'),
+            title: __('工作餐费月结工作台'),
             single_column: true
         });
 
@@ -40,7 +46,7 @@ class MealSettlementWorkbench {
                 <div class="meal-top-bar">
                     <div class="meal-bar-left">
                         <div class="meal-page-title">
-                            🍱 <strong>吉众 & 祺富 员工工作餐月结</strong>
+                            <strong>吉众 & 祺富 员工工作餐月结</strong>
                         </div>
 
                         <!-- 稳态零位移自动保存指示器 (AshanUI Kit 挂载点) -->
@@ -57,29 +63,29 @@ class MealSettlementWorkbench {
                                 <span class="meal-price-unit">元/份</span>
                             </div>
                             <button class="btn-apply-base-price" id="btn-apply-base-price" title="保存基准单价并同步重新核算全月日明细">
-                                💾 保存并应用
+                                保存并应用
                             </button>
                         </div>
                     </div>
 
                     <div class="meal-bar-right">
                         <button class="btn-meal-outline" id="btn-upload-excel">
-                            📥 导入订餐 Excel
+                            导入订餐 Excel
                         </button>
                         <button class="btn-meal-outline" id="btn-export-excel">
-                            📥 导出 1:1 Excel
+                            导出 1:1 Excel
                         </button>
                         <button class="btn-meal-outline" id="btn-print-summary">
-                            🖨️ 单证预览/打印
+                            单证预览/打印
                         </button>
                         <button class="btn-meal-danger" id="btn-clear-month" title="清空当月所有用餐明细数据">
-                            🗑️ 清空本月
+                            清空本月
                         </button>
                         <button class="btn-meal-primary" id="btn-save-draft" title="手动保存当前草稿 (快捷键: Ctrl+S)">
-                            💾 保存草稿
+                            保存草稿
                         </button>
                         <button class="btn-meal-primary" id="btn-finalize-settlement" style="background: #059669; border-color: #047857;">
-                            ✅ 完成本月核定
+                            完成本月核定
                         </button>
                     </div>
                 </div>
@@ -88,7 +94,7 @@ class MealSettlementWorkbench {
                 <div class="meal-kpi-grid">
                     <div class="meal-kpi-card qifu">
                         <div class="meal-kpi-label">
-                            <span>🏢 祺富机械用餐</span>
+                            <span>祺富机械用餐</span>
                             <span id="kpi-qifu-price-tag">¥15.00/份</span>
                         </div>
                         <div class="meal-kpi-count" id="kpi-qifu-count">0 份</div>
@@ -96,7 +102,7 @@ class MealSettlementWorkbench {
                     </div>
                     <div class="meal-kpi-card jizhong">
                         <div class="meal-kpi-label">
-                            <span>🏢 吉众机电用餐</span>
+                            <span>吉众机电用餐</span>
                             <span id="kpi-jizhong-price-tag">¥15.00/份</span>
                         </div>
                         <div class="meal-kpi-count" id="kpi-jizhong-count">0 份</div>

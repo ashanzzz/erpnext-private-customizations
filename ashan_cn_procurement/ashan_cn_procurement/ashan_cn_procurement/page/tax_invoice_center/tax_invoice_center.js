@@ -7,7 +7,13 @@ frappe.pages['tax-invoice-center'].on_page_load = function(wrapper) {
         title: __('税局发票'),
         single_column: true
     });
-    new TaxInvoiceCenter(page);
+    wrapper.tax_invoice_center = new TaxInvoiceCenter(page);
+};
+
+frappe.pages['tax-invoice-center'].on_page_show = function(wrapper) {
+    if (wrapper.tax_invoice_center && typeof wrapper.tax_invoice_center.load_data === 'function') {
+        wrapper.tax_invoice_center.load_data();
+    }
 };
 
 class TaxInvoiceCenter {

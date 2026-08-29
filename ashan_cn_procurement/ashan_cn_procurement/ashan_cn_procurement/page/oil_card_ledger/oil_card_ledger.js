@@ -13,7 +13,13 @@ frappe.pages["oil-card-ledger"].on_page_load = function (wrapper) {
 		single_column: true,
 	});
 
-	new UnifiedOilCardLedgerConsole(page);
+	wrapper.oil_card_console = new UnifiedOilCardLedgerConsole(page);
+};
+
+frappe.pages["oil-card-ledger"].on_page_show = function (wrapper) {
+	if (wrapper.oil_card_console && typeof wrapper.oil_card_console.loadLedger === "function") {
+		wrapper.oil_card_console.loadLedger();
+	}
 };
 
 class UnifiedOilCardLedgerConsole {

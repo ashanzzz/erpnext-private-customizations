@@ -1,7 +1,7 @@
 frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     var page = frappe.ui.make_app_page({
         parent: wrapper,
-        title: '🏢 祺富人事薪酬工作台*',
+        title: '祺富人事薪酬工作台',
         single_column: true
     });
 
@@ -5517,4 +5517,16 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     recalculation_poll_timer = setInterval(function() {
         if (document.visibilityState === 'visible') load_calculation_center();
     }, 10000);
+
+    wrapper.refresh_workbench = function() {
+        load_qifu_employees();
+        load_monthly_workflow_hub();
+        load_calculation_center();
+    };
+};
+
+frappe.pages['qifu-hr-salary-workbench'].on_page_show = function(wrapper) {
+    if (wrapper && typeof wrapper.refresh_workbench === 'function') {
+        wrapper.refresh_workbench();
+    }
 };

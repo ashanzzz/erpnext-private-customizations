@@ -80,6 +80,18 @@
       "doctype": "Workspace Sidebar Item"
     },
     {
+      "label": "采购合同",
+      "link_type": "Page",
+      "type": "Link",
+      "link_to": "contract-workbench",
+      "child": 1,
+      "collapsible": 0,
+      "indent": 0,
+      "keep_closed": 0,
+      "show_arrow": 0,
+      "doctype": "Workspace Sidebar Item"
+    },
+    {
       "label": "月结补录",
       "link_type": "Page",
       "type": "Link",

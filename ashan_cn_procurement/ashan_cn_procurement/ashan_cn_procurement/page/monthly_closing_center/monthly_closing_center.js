@@ -618,4 +618,12 @@ frappe.pages['monthly-closing-center'].on_page_load = function(wrapper) {
 
   // 初始加载
   loadAllData();
+
+  wrapper.loadAllData = loadAllData;
+};
+
+frappe.pages['monthly-closing-center'].on_page_show = function(wrapper) {
+  if (wrapper && typeof wrapper.loadAllData === "function") {
+    wrapper.loadAllData();
+  }
 };

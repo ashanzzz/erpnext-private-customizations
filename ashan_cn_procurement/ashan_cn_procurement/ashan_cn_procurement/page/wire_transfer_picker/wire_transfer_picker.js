@@ -12,6 +12,12 @@ frappe.pages["wire-transfer-picker"].on_page_load = function (wrapper) {
     wrapper.wire_transfer_picker = new WireTransferPicker(page);
 };
 
+frappe.pages["wire-transfer-picker"].on_page_show = function (wrapper) {
+    if (wrapper.wire_transfer_picker && typeof wrapper.wire_transfer_picker.refresh_all === "function") {
+        wrapper.wire_transfer_picker.refresh_all();
+    }
+};
+
 class WireTransferPicker {
     constructor(page) {
         this.page = page;
@@ -48,7 +54,7 @@ class WireTransferPicker {
                 <!-- Top Header & Company Dropdown -->
                 <div class="picker-top-bar">
                     <div class="picker-title-group">
-                        <h2>⚡ 自办电汇</h2>
+                        <h2>自办电汇</h2>
                         <div class="picker-subtitle">付款导向 · 资金出账、实物入库与税局发票全生命周期闭环</div>
                     </div>
                     <div class="picker-company-group">
@@ -83,8 +89,8 @@ class WireTransferPicker {
                         <label>单据状态:</label>
                         <div class="ashan-segmented-control picker-lifecycle-segment-group" data-filter="lifecycle_status">
                             <button type="button" class="ashan-segment-btn picker-lifecycle-seg-btn active" data-value="all">全部</button>
-                            <button type="button" class="ashan-segment-btn picker-lifecycle-seg-btn" data-value="paid_pending_receipt">🔵 款付货未到</button>
-                            <button type="button" class="ashan-segment-btn picker-lifecycle-seg-btn" data-value="received_pending_invoice">🟡 货到票未到</button>
+                            <button type="button" class="ashan-segment-btn picker-lifecycle-seg-btn" data-value="paid_pending_receipt">款付货未到</button>
+                            <button type="button" class="ashan-segment-btn picker-lifecycle-seg-btn" data-value="received_pending_invoice">货到票未到</button>
                             <button type="button" class="ashan-segment-btn picker-lifecycle-seg-btn" data-value="completed_closed">🟢 全部完成</button>
                             <button type="button" class="ashan-segment-btn picker-lifecycle-seg-btn" data-value="pending_payment">🟠 待电汇付款</button>
                         </div>
@@ -357,8 +363,9 @@ class WireTransferPicker {
             const pi_name = $(this).attr("data-pi");
             const supplier = $(this).attr("data-supplier");
             const amt = $(this).attr("data-amt");
+            const total = $(this).attr("data-total");
             if (pi_name) {
-                self.open_create_payment_modal(pi_name, supplier, amt);
+                self.open_create_payment_modal(pi_name, supplier, amt, total);
             }
         });
 
@@ -506,7 +513,7 @@ class WireTransferPicker {
             },
             {
                 id: "paid_pending_receipt",
-                name: "🔵 款付货未到",
+                name: "款付货未到",
                 count: this.kpis.paid_pending_receipt?.count || 0,
                 sub: `在途 ${this.fmt_money(this.kpis.paid_pending_receipt?.amount || 0)}`,
                 badge: "待入库",
@@ -514,7 +521,7 @@ class WireTransferPicker {
             },
             {
                 id: "received_pending_invoice",
-                name: "🟡 货到票未到",
+                name: "货到票未到",
                 count: this.kpis.received_pending_invoice?.count || 0,
                 sub: `暂估 ${this.fmt_money(this.kpis.received_pending_invoice?.amount || 0)}`,
                 badge: "待补票",
@@ -717,7 +724,7 @@ class WireTransferPicker {
                     <td>${this.render_linked_badges(r.linked_pr_names, "purchase-receipt", r.pi_name, r.supplier, null, r.has_stock_items)}</td>
                     <td>${this.render_linked_badges(r.linked_se_names, "stock-entry", r.pi_name, r.supplier, null, r.has_stock_items)}</td>
                     <td>${this.render_linked_badges(r.linked_rr_names, "reimbursement-request", r.pi_name, r.supplier, null, r.has_stock_items)}</td>
-                    <td>${this.render_linked_badges(r.linked_pe_names, "payment-entry", r.pi_name, r.supplier, r.net_available_amount || r.outstanding_amount, r.has_stock_items)}</td>
+                    <td>${this.render_linked_badges(r.linked_pe_names, "payment-entry", r.pi_name, r.supplier, r.net_available_amount || r.outstanding_amount, r.has_stock_items, r.grand_total || r.total_amount)}</td>
                     <td>${action_btns}</td>
                 `;
             } else {
@@ -741,7 +748,7 @@ class WireTransferPicker {
                     <td>${this.render_linked_badges(r.linked_pr_names, "purchase-receipt", r.pi_name, r.supplier, null, r.has_stock_items)}</td>
                     <td>${this.render_linked_badges(r.linked_se_names, "stock-entry", r.pi_name, r.supplier, null, r.has_stock_items)}</td>
                     <td>${this.render_linked_badges(r.linked_rr_names, "reimbursement-request", r.pi_name, r.supplier, null, r.has_stock_items)}</td>
-                    <td>${this.render_linked_badges(r.linked_pe_names, "payment-entry", r.pi_name, r.supplier, r.net_available_amount || r.outstanding_amount, r.has_stock_items)}</td>
+                    <td>${this.render_linked_badges(r.linked_pe_names, "payment-entry", r.pi_name, r.supplier, r.net_available_amount || r.outstanding_amount, r.has_stock_items, r.grand_total || r.total_amount)}</td>
                     <td>${action_btns}</td>
                 `;
             }
@@ -852,7 +859,7 @@ class WireTransferPicker {
         }).join(" ");
     }
 
-    render_linked_badges(linked_str, doctype_class, pi_name, supplier, amount, has_stock_items = true) {
+    render_linked_badges(linked_str, doctype_class, pi_name, supplier, amount, has_stock_items = true, grand_total = 0) {
         if ((doctype_class === "purchase-receipt" || doctype_class === "stock-entry") && has_stock_items === false) {
             return `<span class="picker-not-required-badge" title="纯非库存/服务类物料，无需实物出入库">/</span>`;
         }
@@ -865,6 +872,7 @@ class WireTransferPicker {
         const pi_attr = pi_name ? `data-pi="${frappe.utils.escape_html(pi_name)}"` : "";
         const sup_attr = supplier ? `data-supplier="${frappe.utils.escape_html(supplier)}"` : "";
         const amt_attr = amount !== undefined ? `data-amt="${amount}"` : "";
+        const total_attr = grand_total ? `data-total="${grand_total}"` : "";
 
         if (doctype_class === "purchase-receipt") {
             return `<button type="button" class="wire-quick-create-btn wire-quick-create-pr" ${pi_attr} ${sup_attr} title="为此发票一键补建采购入库单">➕ 补建入库单</button>`;
@@ -876,7 +884,7 @@ class WireTransferPicker {
             return `<button type="button" class="wire-quick-create-btn wire-quick-create-rr" ${pi_attr} ${sup_attr} title="为此发票一键补建电汇整算单">➕ 补建整算单</button>`;
         }
         if (doctype_class === "payment-entry") {
-            return `<button type="button" class="wire-quick-create-btn wire-quick-create-pe" ${pi_attr} ${sup_attr} ${amt_attr} title="为此发票一键新建电汇付款单">➕ 新建付款</button>`;
+            return `<button type="button" class="wire-quick-create-btn wire-quick-create-pe" ${pi_attr} ${sup_attr} ${amt_attr} ${total_attr} title="为此发票一键新建电汇付款单">➕ 新建付款</button>`;
         }
 
         return `<span class="picker-linked-none">-</span>`;
@@ -1521,12 +1529,15 @@ class WireTransferPicker {
     // One-Click Action: 新建付款单弹窗
     // =========================================================================
 
-    open_create_payment_modal(pi_name, supplier, default_amt) {
+    open_create_payment_modal(pi_name, supplier, default_amt, grand_total = 0) {
         const self = this;
-        const formatted_amt = flt(default_amt) > 0 ? flt(default_amt) : 0;
+        const outstandingAmt = flt(default_amt) > 0 ? flt(default_amt) : 0;
+        const totalOrderAmt = flt(grand_total) > 0 ? flt(grand_total) : (outstandingAmt > 0 ? outstandingAmt : 0);
+        const alreadyPaidAmt = Math.max(0, flt(totalOrderAmt - outstandingAmt, 2));
+
         const d = new frappe.ui.Dialog({
-            title: __("自办电汇 · 新建付款单"),
-            size: "small",
+            title: __("自办电汇 · 智能分期付款"),
+            size: "medium",
             static: true,
             fields: [
                 {
@@ -1535,9 +1546,9 @@ class WireTransferPicker {
                 },
                 {
                     fieldname: "paid_amount",
-                    label: __("本次付款金额 (¥)"),
+                    label: __("本次实付金额 (¥)"),
                     fieldtype: "Currency",
-                    default: formatted_amt,
+                    default: outstandingAmt,
                     reqd: 1,
                 },
                 {
@@ -1574,8 +1585,13 @@ class WireTransferPicker {
                 d.hide();
             },
             primary_action: async function (values) {
-                if (!values.paid_amount || flt(values.paid_amount) <= 0) {
+                const payAmt = flt(values.paid_amount);
+                if (!payAmt || payAmt <= 0) {
                     frappe.msgprint(__("付款金额必须大于 0！"));
+                    return;
+                }
+                if (payAmt > outstandingAmt + 0.01) {
+                    frappe.msgprint(__("本次付款金额 (¥ {0}) 不能大于待付余额 (¥ {1})！", [payAmt.toFixed(2), outstandingAmt.toFixed(2)]));
                     return;
                 }
                 try {
@@ -1607,24 +1623,96 @@ class WireTransferPicker {
             },
         });
 
+        d.$wrapper.find(".modal-dialog").addClass("ashan-smart-modal");
+
+        const update_calculations = (payAmt) => {
+            const currentPay = Math.max(0, flt(payAmt, 2));
+            const remainAfter = Math.max(0, flt(outstandingAmt - currentPay, 2));
+            const totalPaidAfter = flt(alreadyPaidAmt + currentPay, 2);
+            
+            const totalBase = totalOrderAmt > 0 ? totalOrderAmt : outstandingAmt;
+            const paidPct = totalBase > 0 ? (alreadyPaidAmt / totalBase * 100).toFixed(1) : "0.0";
+            const currentPct = totalBase > 0 ? (currentPay / totalBase * 100).toFixed(1) : "0.0";
+            const remainPct = totalBase > 0 ? (remainAfter / totalBase * 100).toFixed(1) : "0.0";
+
+            d.$wrapper.find("#smart-pay-current-amt").text(self.fmt_money(currentPay));
+            d.$wrapper.find("#smart-pay-current-pct").text(`${currentPct}%`);
+            d.$wrapper.find("#smart-pay-remain-amt").text(self.fmt_money(remainAfter));
+            d.$wrapper.find("#smart-pay-remain-pct").text(`${remainPct}%`);
+
+            d.$wrapper.find("#smart-bar-paid").css("width", `${Math.min(100, flt(paidPct))}%`);
+            d.$wrapper.find("#smart-bar-current").css("width", `${Math.min(100, flt(currentPct))}%`);
+
+            if (currentPay > outstandingAmt + 0.01) {
+                d.$wrapper.find("#smart-pay-remain-badge").addClass("warning").html(`⚠️ 超出待付欠款 ¥ ${self.fmt_money(currentPay - outstandingAmt)}`);
+            } else {
+                d.$wrapper.find("#smart-pay-remain-badge").removeClass("warning").html(`付款后剩余待付: <strong>${self.fmt_money(remainAfter)}</strong> (${remainPct}%)`);
+            }
+        };
+
         const pay_info_html = `
-            <div class="wire-modal-card">
-                <div class="wire-modal-row">
-                    <span class="wire-modal-label">采购发票：</span>
-                    <span class="wire-modal-value font-mono text-blue-700 font-semibold">${frappe.utils.escape_html(pi_name)}</span>
+            <div class="ashan-payment-calc-card">
+                <div class="ashan-smart-grid-3">
+                    <div><span class="text-xs text-muted">采购发票:</span> <span class="font-mono text-primary font-bold">${frappe.utils.escape_html(pi_name)}</span></div>
+                    <div><span class="text-xs text-muted">收款商户:</span> <span class="font-bold text-slate-800">${frappe.utils.escape_html(supplier || '-')}</span></div>
+                    <div><span class="text-xs text-muted">单据总额:</span> <span class="font-mono text-slate-700 font-bold">${self.fmt_money(totalOrderAmt)}</span></div>
                 </div>
-                <div class="wire-modal-row">
-                    <span class="wire-modal-label">收款供应商：</span>
-                    <span class="wire-modal-value font-medium text-slate-800">${frappe.utils.escape_html(supplier || '-')}</span>
+
+                <div class="ashan-payment-divider">
+                    <div class="ashan-payment-preset-header">
+                        <span class="text-xs font-bold text-slate-700">🎯 快捷比例分期付款:</span>
+                        <span class="ashan-remain-badge" id="smart-pay-remain-badge">付款后剩余待付: <strong>${self.fmt_money(0)}</strong></span>
+                    </div>
+                    <div class="ashan-percent-pill-group">
+                        <button type="button" class="ashan-percent-pill" data-pct="20">20% 预付/定金</button>
+                        <button type="button" class="ashan-percent-pill" data-pct="30">30% 进度款</button>
+                        <button type="button" class="ashan-percent-pill" data-pct="50">50% 中期款</button>
+                        <button type="button" class="ashan-percent-pill" data-pct="80">80% 验收款</button>
+                        <button type="button" class="ashan-percent-pill active" data-pct="100">100% 全额付清</button>
+                    </div>
                 </div>
-                <div class="wire-modal-row">
-                    <span class="wire-modal-label">待付欠款余额：</span>
-                    <span class="wire-modal-value font-bold text-amber-700">${self.fmt_money(formatted_amt)}</span>
+
+                <div class="ashan-payment-progress-wrap">
+                    <div class="ashan-payment-progress-labels">
+                        <span>已付累计: ${self.fmt_money(alreadyPaidAmt)}</span>
+                        <span>本次实付: <strong class="text-blue-600 font-mono" id="smart-pay-current-amt">${self.fmt_money(outstandingAmt)}</strong> (<span id="smart-pay-current-pct">100%</span>)</span>
+                    </div>
+                    <div class="ashan-payment-progress-bar">
+                        <div class="ashan-progress-paid ashan-progress-init-0" id="smart-bar-paid"></div>
+                        <div class="ashan-progress-current ashan-progress-init-100" id="smart-bar-current"></div>
+                        <div class="ashan-progress-remain"></div>
+                    </div>
                 </div>
             </div>
         `;
         d.set_value("pay_info_html", pay_info_html);
         d.show();
+
+        // 绑定比例点击事件
+        d.$wrapper.on("click", ".ashan-percent-pill", function () {
+            d.$wrapper.find(".ashan-percent-pill").removeClass("active");
+            $(this).addClass("active");
+            const pct = flt($(this).data("pct"));
+            let targetAmt = 0;
+            if (pct === 100) {
+                targetAmt = outstandingAmt;
+            } else {
+                const base = totalOrderAmt > 0 ? totalOrderAmt : outstandingAmt;
+                targetAmt = flt(base * (pct / 100), 2);
+                if (targetAmt > outstandingAmt) targetAmt = outstandingAmt;
+            }
+            d.set_value("paid_amount", targetAmt);
+            update_calculations(targetAmt);
+        });
+
+        // 监听金额输入变动
+        d.$wrapper.find('input[data-fieldname="paid_amount"]').on("input change", function () {
+            d.$wrapper.find(".ashan-percent-pill").removeClass("active");
+            const val = flt($(this).val());
+            update_calculations(val);
+        });
+
+        update_calculations(outstandingAmt);
     }
 
     async show_doc_detail_modal(doctype, name) {

@@ -12,6 +12,12 @@ frappe.pages["monthly-settlement-picker"].on_page_load = function (wrapper) {
     wrapper.monthly_picker = new MonthlySettlementPicker(page);
 };
 
+frappe.pages["monthly-settlement-picker"].on_page_show = function (wrapper) {
+    if (wrapper.monthly_picker && typeof wrapper.monthly_picker.refresh_all === "function") {
+        wrapper.monthly_picker.refresh_all();
+    }
+};
+
 class MonthlySettlementPicker {
     constructor(page) {
         this.page = page;

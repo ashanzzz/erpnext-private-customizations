@@ -71,16 +71,45 @@
     border: 1px solid var(--ashan-color-slate-300);
 }
 
-.ashan-money-cell {
+.ashan-money-cell,
+.qifu-money-cell {
     text-align: right !important;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
-    font-variant-numeric: tabular-nums;
+    font-variant-numeric: tabular-nums !important;
+    white-space: nowrap !important;
 }
 
 .ashan-money-cell--deduction { color: #dc2626; }
 .ashan-money-cell--allowance { color: var(--ashan-color-amber-700); }
 .ashan-money-cell--payable { color: var(--ashan-color-blue-600); }
 .ashan-money-cell--net { color: #16a34a; }
+
+/* ===========================================================================
+   标准大宽表与台账语义化列宽原子类体系 (Column Width System)
+   =========================================================================== */
+.col-w-seq        { width: 44px;  min-width: 44px;  max-width: 44px; text-align: center; white-space: nowrap; }
+.col-w-check      { width: 40px;  min-width: 40px;  max-width: 40px; text-align: center; white-space: nowrap; }
+.col-w-status     { width: 92px;  min-width: 88px;  max-width: 96px; text-align: center; white-space: nowrap; }
+.col-w-docname    { width: 130px; min-width: 110px; text-align: left; }
+.col-w-item-code  { width: 120px; min-width: 110px; text-align: left; }
+.col-w-date       { width: 110px; min-width: 104px; text-align: center; white-space: nowrap; }
+.col-w-period     { width: 108px; min-width: 100px; text-align: center; white-space: nowrap; }
+.col-w-biz-mode   { width: 120px; min-width: 112px; text-align: center; white-space: nowrap; }
+.col-w-uom        { width: 76px;  min-width: 70px;  text-align: center; white-space: nowrap; }
+.col-w-qty        { width: 96px;  min-width: 88px;  text-align: right;  white-space: nowrap; font-variant-numeric: tabular-nums; }
+.col-w-rate       { width: 118px; min-width: 112px; text-align: right;  white-space: nowrap; font-variant-numeric: tabular-nums; }
+.col-w-tax-rate   { width: 84px;  min-width: 76px;  text-align: right;  white-space: nowrap; font-variant-numeric: tabular-nums; }
+.col-w-tax-amount { width: 118px; min-width: 112px; text-align: right;  white-space: nowrap; font-variant-numeric: tabular-nums; }
+.col-w-amount     { width: 128px; min-width: 118px; text-align: right;  white-space: nowrap; font-variant-numeric: tabular-nums; }
+.col-w-total      { width: 136px; min-width: 120px; text-align: right;  white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 700; }
+.col-w-invoice-no { width: 170px; min-width: 160px; text-align: left; }
+.col-w-supplier   { width: 220px; min-width: 180px; text-align: left; }
+.col-w-company    { width: 220px; min-width: 180px; text-align: left; }
+.col-w-item-name  { min-width: 200px; flex: 1; text-align: left; }
+.col-w-spec       { min-width: 240px; flex: 1; text-align: left; }
+.col-w-details    { min-width: 260px; flex: 1.5; text-align: left; }
+.col-w-remarks    { min-width: 280px; flex: 1.5; text-align: left; }
+.col-w-action     { width: 100px; min-width: 96px;  max-width: 120px; text-align: center; white-space: nowrap; }
 
 .ashan-cell-auto-derived,
 .qifu-cell-auto-derived {
@@ -537,10 +566,26 @@
     gap: 12px;
 }
 
+.ashan-smart-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+}
+
 .ashan-smart-field {
     display: flex;
     flex-direction: column;
     gap: 4px;
+}
+
+.ashan-smart-static-val {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #1e293b;
+    padding: 3px 0;
+    word-break: break-word;
+    display: flex;
+    align-items: center;
 }
 
 .ashan-smart-field-label {
@@ -1653,4 +1698,367 @@
 .my-biz-toggle-input:checked ~ .my-biz-toggle-state-text {
     color: #16a34a;
 }
+
+/* =========================================================================
+   Document Detail Modal & Flow Cards Styling
+   ========================================================================= */
+.picker-doc-modal-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 6px 2px;
+}
+
+.picker-doc-meta-card {
+    background: #ffffff;
+    border: 1px solid var(--ashan-color-border, #e2e8f0);
+    border-radius: var(--ashan-radius-md, 8px);
+    padding: 16px 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.picker-doc-meta-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--ashan-color-border-subtle, #f1f5f9);
+}
+
+.picker-doc-title-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.picker-doc-title-text {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ashan-color-text-main, #1e293b);
+}
+
+.picker-doc-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px 18px;
+}
+
+.picker-doc-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.picker-doc-meta-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ashan-color-text-muted, #64748b);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.picker-doc-meta-val {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ashan-color-text-main, #1e293b);
+    word-break: break-word;
+}
+
+.picker-meta-val-highlight {
+    color: var(--ashan-color-primary, #0f766e);
+    font-size: 15px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.picker-doc-flow-card {
+    background: #ffffff;
+    border: 1px solid var(--ashan-color-border, #e2e8f0);
+    border-radius: var(--ashan-radius-md, 8px);
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.picker-doc-flow-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ashan-color-text-main, #334155);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed var(--ashan-color-border, #e2e8f0);
+}
+
+.picker-detail-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--ashan-color-border, #e2e8f0);
+    border-radius: var(--ashan-radius-sm, 6px);
+}
+
+.reim-details-item-text {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-right: 8px;
+    font-size: 12px;
+    color: var(--ashan-color-text-main, #334155);
+}
+
+.reim-details-qty-text {
+    color: var(--ashan-color-text-muted, #64748b);
+    font-family: var(--ashan-font-mono, monospace);
+    font-size: 11px;
+}
+
+/* =========================================================================
+   Modal Fluid Detail Table - Enterprise Grid & Proportional Adaptive Fit
+   ========================================================================= */
+.picker-modal-detail-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: 12px;
+    background: #ffffff;
+    border: 1px solid var(--ashan-color-border, #cbd5e1);
+}
+
+.picker-modal-detail-table th,
+.picker-modal-detail-table td {
+    padding: 8px 10px;
+    border: 1px solid var(--ashan-color-border-subtle, #e2e8f0);
+    vertical-align: middle;
+    line-height: 1.45;
+}
+
+.picker-modal-detail-table thead th {
+    background: var(--ashan-color-slate-100, #f1f5f9);
+    color: var(--ashan-color-slate-700, #334155);
+    font-weight: 700;
+    font-size: 12px;
+    border-bottom: 2px solid var(--ashan-color-border, #cbd5e1);
+    white-space: nowrap;
+    text-align: left;
+}
+
+.picker-modal-detail-table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+.picker-modal-detail-table tbody tr:nth-child(even) {
+    background-color: #fafbfc;
+}
+
+.picker-modal-detail-table tbody tr:hover {
+    background-color: var(--ashan-color-blue-50, #f0f7ff);
+}
+
+/* Proportional Column Percentages (Sum = 100%) */
+.picker-modal-col-seq {
+    width: 3.5%;
+    min-width: 32px;
+    text-align: center !important;
+}
+
+.picker-modal-col-name {
+    width: 18%;
+    word-break: break-word;
+    font-weight: 600;
+    color: var(--ashan-color-text-main, #1e293b);
+}
+
+.picker-modal-col-spec {
+    width: 14%;
+    word-break: break-word;
+    color: var(--ashan-color-text-muted, #64748b);
+}
+
+.picker-modal-col-uom {
+    width: 4.5%;
+    text-align: center !important;
+    white-space: nowrap;
+}
+
+.picker-modal-col-qty {
+    width: 6%;
+    text-align: right !important;
+    white-space: nowrap;
+    font-family: var(--ashan-font-mono, monospace);
+    font-variant-numeric: tabular-nums;
+}
+
+.picker-modal-col-rate {
+    width: 8.5%;
+    text-align: right !important;
+    white-space: nowrap;
+    font-family: var(--ashan-font-mono, monospace);
+    font-variant-numeric: tabular-nums;
+}
+
+.picker-modal-col-amount {
+    width: 9.5%;
+    text-align: right !important;
+    white-space: nowrap;
+    font-family: var(--ashan-font-mono, monospace);
+    font-variant-numeric: tabular-nums;
+}
+
+.picker-modal-col-tax-rate {
+    width: 5%;
+    text-align: right !important;
+    white-space: nowrap;
+    font-family: var(--ashan-font-mono, monospace);
+}
+
+.picker-modal-col-tax-amount {
+    width: 8%;
+    text-align: right !important;
+    white-space: nowrap;
+    font-family: var(--ashan-font-mono, monospace);
+    font-variant-numeric: tabular-nums;
+    color: var(--ashan-color-text-muted, #64748b);
+}
+
+.picker-modal-col-total {
+    width: 10.5%;
+    text-align: right !important;
+    white-space: nowrap;
+    font-family: var(--ashan-font-mono, monospace);
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: var(--ashan-color-primary, #0f766e);
+}
+
+.picker-modal-col-remarks {
+    width: 12.5%;
+    word-break: break-word;
+    color: var(--ashan-color-text-muted, #64748b);
+    font-size: 11.5px;
+}
+
+/* =========================================================================
+   Smart Percentage Payment Engine Components
+   ========================================================================= */
+
+.ashan-payment-calc-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.ashan-percent-pill-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.ashan-percent-pill {
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #334155;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.ashan-percent-pill:hover {
+    border-color: #3b82f6;
+    color: #1d4ed8;
+    background: #eff6ff;
+}
+
+.ashan-percent-pill.active {
+    background: #1e293b;
+    color: #ffffff;
+    border-color: #1e293b;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.ashan-payment-progress-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ashan-payment-progress-bar {
+    display: flex;
+    height: 8px;
+    width: 100%;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.ashan-progress-paid {
+    background: #10b981;
+    transition: width 0.2s ease;
+}
+
+.ashan-progress-current {
+    background: #3b82f6;
+    transition: width 0.2s ease;
+}
+
+.ashan-progress-remain {
+    background: #e2e8f0;
+    flex: 1;
+}
+
+.ashan-remain-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+
+.ashan-payment-divider {
+    border-top: 1px dashed #e2e8f0;
+    padding-top: 8px;
+}
+
+.ashan-payment-preset-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.ashan-payment-progress-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #64748b;
+}
+
+.ashan-progress-init-0 {
+    width: 0%;
+}
+
+.ashan-progress-init-100 {
+    width: 100%;
+}
+
+
+
+
 

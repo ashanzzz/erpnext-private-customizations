@@ -1050,3 +1050,100 @@ def delete_bundle_and_cancel_pi(rr_name: str) -> dict:
     """Compatibility alias for delete_reimbursement_bundle."""
     return delete_reimbursement_bundle(rr_name)
 
+
+# =========================================================================
+# 7. Reimbursement Payment Entry Engine (Smart Partial / Percentage Payment)
+# =========================================================================
+
+@frappe.whitelist(methods=["POST"])
+def create_reimbursement_payment_entry(
+    rr_name: str,
+    paid_amount: float | None = None,
+    mode_of_payment: str | None = None,
+    posting_date: str | None = None,
+    reference_no: str | None = None,
+    remarks: str | None = None,
+) -> dict:
+    """Create and submit a Payment Entry (Pay) for a Reimbursement Request."""
+    if not rr_name or not rr_name.strip():
+        frappe.throw(_("请指定报销单号。"))
+    rr = frappe.get_doc("Reimbursement Request", rr_name.strip())
+    assert_company_access(rr.company)
+
+    if rr.docstatus != 1:
+        frappe.throw(_("只有已提交过账的报销单才能进行付款结算。"))
+
+    outstanding = flt(rr.outstanding_amount)
+    if outstanding <= 0.0001:
+        frappe.throw(_("报销单【{0}】待结款余额为 0，无需重复生成付款单。").format(rr.name))
+
+    pay_amt = flt(paid_amount) if (paid_amount and flt(paid_amount) > 0) else outstanding
+    if pay_amt > outstanding + 0.01:
+        frappe.throw(_("本次付款金额 (¥ {0:,.2f}) 不能大于待付欠款余额 (¥ {1:,.2f})。").format(pay_amt, outstanding))
+
+    # 查找关联的采购发票
+    pi_names = list(dict.fromkeys([it.source_pi for it in rr.invoice_items if it.source_pi]))
+    valid_pis = []
+    for pi_n in pi_names:
+        if frappe.db.exists("Purchase Invoice", pi_n):
+            pi_doc = frappe.get_doc("Purchase Invoice", pi_n)
+            if pi_doc.docstatus == 1 and flt(pi_doc.outstanding_amount) > 0.0001:
+                valid_pis.append(pi_doc)
+
+    created_pes = []
+    rem_to_pay = pay_amt
+
+    if valid_pis:
+        from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+
+        # 确保结算方式存在
+        mop = mode_of_payment
+        if not mop or not frappe.db.exists("Mode of Payment", mop):
+            for candidate in ["电汇", "银行转账", "Wire Transfer", "Bank Draft", "现金", "Cash"]:
+                if frappe.db.exists("Mode of Payment", candidate):
+                    mop = candidate
+                    break
+
+        for pi_doc in valid_pis:
+            if rem_to_pay <= 0.0001:
+                break
+            pi_out = flt(pi_doc.outstanding_amount)
+            curr_pay = min(rem_to_pay, pi_out)
+
+            pe = get_payment_entry(
+                "Purchase Invoice",
+                pi_doc.name,
+                party_amount=curr_pay,
+            )
+            pe.posting_date = posting_date or rr.posting_date or get_effective_work_date()
+            if mop:
+                pe.mode_of_payment = mop
+            pe.reference_no = reference_no or rr.name
+            pe.reference_date = pe.posting_date
+            pe.remarks = remarks or f"现金报销付款出账 · 报销单: {rr.name} · 发票: {pi_doc.name} · 供应商: {pi_doc.supplier}"
+            if _meta_has("Payment Entry", "custom_biz_mode"):
+                pe.custom_biz_mode = "现金报销"
+
+            pe.flags.ignore_permissions = True
+            pe.insert()
+            pe.submit()
+            created_pes.append(pe.name)
+            rem_to_pay = flt(rem_to_pay - curr_pay, 2)
+
+    # 重新核算 RR 的 outstanding_amount
+    new_outstanding = max(0.0, flt(outstanding - pay_amt, 2))
+    frappe.db.set_value("Reimbursement Request", rr.name, "outstanding_amount", new_outstanding, update_modified=True)
+    if _meta_has("Reimbursement Request", "custom_paid_amount"):
+        new_paid = flt(rr.get("custom_paid_amount", 0)) + pay_amt
+        frappe.db.set_value("Reimbursement Request", rr.name, "custom_paid_amount", new_paid, update_modified=False)
+
+    rr.add_comment("Comment", text=f"【现金报销】已完成付款结算：金额 ¥ {pay_amt:,.2f}，付款单：{', '.join(created_pes) or '已核销'}")
+
+    return {
+        "success": True,
+        "rr_name": rr.name,
+        "paid_amount": pay_amt,
+        "remaining_outstanding": new_outstanding,
+        "pe_names": created_pes,
+        "message": _("报销付款单生成成功！本次实付金额：¥ {0:,.2f}，剩余待结款：¥ {1:,.2f}").format(pay_amt, new_outstanding),
+    }

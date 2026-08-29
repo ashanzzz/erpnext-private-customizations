@@ -11,6 +11,12 @@ frappe.pages['payroll-settlement-workbench'].on_page_load = function(wrapper) {
     frappe.payroll_workbench = new AshanPayrollWorkbench(wrapper, page);
 };
 
+frappe.pages['payroll-settlement-workbench'].on_page_show = function(wrapper) {
+    if (frappe.payroll_workbench && typeof frappe.payroll_workbench.load_payroll === 'function') {
+        frappe.payroll_workbench.load_payroll();
+    }
+};
+
 class AshanPayrollWorkbench {
     constructor(wrapper, page) {
         this.wrapper = $(wrapper);

@@ -12,6 +12,12 @@ frappe.pages["reimbursement-picker"].on_page_load = function (wrapper) {
     wrapper.reim_picker = new ReimbursementPicker(page);
 };
 
+frappe.pages["reimbursement-picker"].on_page_show = function (wrapper) {
+    if (wrapper.reim_picker && typeof wrapper.reim_picker.refresh_all === "function") {
+        wrapper.reim_picker.refresh_all();
+    }
+};
+
 const REIM_API = {
     overview_kpis: "ashan_cn_procurement.services.reimbursement_picker_service.get_reimbursement_picker_overview_kpis",
     doc_summary: "ashan_cn_procurement.services.reimbursement_picker_service.get_reimbursement_picker_doc_summary_rows",
@@ -314,6 +320,18 @@ class ReimbursementPicker {
             me.open_reimbursement_row($(this).data("rr-name"), $(this).data("docstatus"));
         });
 
+        $("#reim-data-table").on("click", ".reim-quick-pay-btn", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const rrName = $(this).attr("data-rr-name");
+            const supplier = $(this).attr("data-supplier");
+            const amt = $(this).attr("data-amt");
+            const total = $(this).attr("data-total");
+            if (rrName) {
+                me.open_reimbursement_payment_modal(rrName, supplier, amt, total);
+            }
+        });
+
         this.sync_scrollbars();
     }
 
@@ -428,18 +446,18 @@ class ReimbursementPicker {
     render_doc_view(rows) {
         const thead = `
             <tr>
-                <th class="picker-col-sticky-1 ashan-col-w40">#</th>
-                <th class="picker-col-sticky-2 ashan-col-code">报销单号</th>
-                <th class="ashan-col-code">所属公司</th>
-                <th class="ashan-col-status">报销日期</th>
-                <th class="ashan-col-code">发票信息</th>
-                <th class="ashan-col-name">供应商</th>
-                <th class="ashan-col-remarks">单据明细</th>
-                <th class="ashan-col-money">报销总额</th>
-                <th class="ashan-col-money">待结款金额</th>
-                <th class="ashan-col-status">单据状态</th>
-                <th class="ashan-col-code">关联采购单据</th>
-                <th class="ashan-col-action">操作</th>
+                <th class="picker-col-sticky-1 col-w-seq text-center">#</th>
+                <th class="picker-col-sticky-2 col-w-docname">报销单号</th>
+                <th class="col-w-company">所属公司</th>
+                <th class="col-w-date text-center">报销日期</th>
+                <th class="col-w-invoice-no">发票信息</th>
+                <th class="col-w-supplier">供应商</th>
+                <th class="col-w-details">单据明细</th>
+                <th class="col-w-total text-right">报销总额</th>
+                <th class="col-w-amount text-right">待结款金额</th>
+                <th class="col-w-status text-center">单据状态</th>
+                <th class="col-w-docname">关联采购单据</th>
+                <th class="col-w-action text-center">操作</th>
             </tr>
         `;
         $("#reim-table-head").html(thead);
@@ -464,7 +482,7 @@ class ReimbursementPicker {
             totalAmt += flt(r.total_amount);
             totalOut += flt(r.outstanding_amount);
 
-            // Format item details capsules
+            // Format item details text cleanly (Zero-Badge Clutter & Pure Tabular Data)
             const detailText = r.doc_details || r.auto_items_summary || "";
             const detailItems = detailText.split("、").map(s => s.trim()).filter(Boolean);
             let detailCapsulesHtml = "";
@@ -472,10 +490,10 @@ class ReimbursementPicker {
                 detailCapsulesHtml = detailItems.map(d => {
                     const match = d.match(/^(.*?)\s*(\(.*?\))$/);
                     if (match) {
-                        return `<span class="reim-item-capsule"><span class="reim-item-name-part">${frappe.utils.escape_html(match[1])}</span><span class="reim-item-capsule-qty">${frappe.utils.escape_html(match[2])}</span></span>`;
+                        return `<span class="reim-details-item-text"><span>${frappe.utils.escape_html(match[1])}</span><span class="reim-details-qty-text">${frappe.utils.escape_html(match[2])}</span></span>`;
                     }
-                    return `<span class="reim-item-capsule">${frappe.utils.escape_html(d)}</span>`;
-                }).join("");
+                    return `<span class="reim-details-item-text">${frappe.utils.escape_html(d)}</span>`;
+                }).join(" ");
             } else {
                 detailCapsulesHtml = `<span class="text-muted text-xs font-mono">-</span>`;
             }
@@ -508,7 +526,7 @@ class ReimbursementPicker {
                         <span class="${tagClass}">${r.status_label}</span>
                     </td>
                     <td><span class="text-muted text-xs font-mono">${r.linked_pis || '-'}</span></td>
-                    <td class="text-center">${r.is_draft && r.can_delete ? `<button type="button" class="reim-btn-delete-doc" data-rr-name="${r.rr_name}" title="删除草稿及关联草稿单据">删除</button>` : '-'}</td>
+                    <td class="text-center">${r.is_draft && r.can_delete ? `<button type="button" class="reim-btn-delete-doc" data-rr-name="${r.rr_name}" title="删除草稿及关联草稿单据">删除</button>` : (!r.is_draft && flt(r.outstanding_amount) > 0 ? `<button type="button" class="btn btn-default btn-xs reim-quick-pay-btn" data-rr-name="${r.rr_name}" data-supplier="${frappe.utils.escape_html(r.supplier_preview || r.suppliers || '')}" data-amt="${r.outstanding_amount}" data-total="${r.total_amount}" title="为此报销单快速执行比例付款">💳 付款</button>` : '-')}</td>
                 </tr>
             `;
         }).join("");
@@ -529,20 +547,20 @@ class ReimbursementPicker {
     render_detail_view(rows) {
         const thead = `
             <tr>
-                <th class="picker-col-sticky-1 ashan-col-w40">#</th>
-                <th class="picker-col-sticky-2 ashan-col-code">报销单号</th>
-                <th class="ashan-col-code">所属公司</th>
-                <th class="ashan-col-name">供应商</th>
-                <th class="ashan-col-code">发票号码</th>
-                <th class="ashan-col-status">发票类型</th>
-                <th class="ashan-col-name">物料名称</th>
-                <th class="ashan-col-spec">规格</th>
-                <th class="ashan-col-quantity">数量</th>
-                <th class="ashan-col-money">单价</th>
-                <th class="ashan-col-money">报销金额</th>
-                <th class="ashan-col-status">单据状态</th>
-                <th class="ashan-col-code">来源采购发票</th>
-                <th class="ashan-col-action">操作</th>
+                <th class="picker-col-sticky-1 col-w-seq text-center">#</th>
+                <th class="picker-col-sticky-2 col-w-docname">报销单号</th>
+                <th class="col-w-company">所属公司</th>
+                <th class="col-w-supplier">供应商</th>
+                <th class="col-w-invoice-no">发票号码</th>
+                <th class="col-w-status text-center">发票类型</th>
+                <th class="col-w-item-name">物料名称</th>
+                <th class="col-w-spec">规格</th>
+                <th class="col-w-qty text-right">数量</th>
+                <th class="col-w-rate text-right">单价</th>
+                <th class="col-w-total text-right">报销金额</th>
+                <th class="col-w-status text-center">单据状态</th>
+                <th class="col-w-docname">来源采购发票</th>
+                <th class="col-w-action text-center">操作</th>
             </tr>
         `;
         $("#reim-table-head").html(thead);
@@ -647,6 +665,7 @@ class ReimbursementPicker {
                 } else {
                     this.add_invoice_card();
                 }
+                this.recalculate_all();
             }
         } catch (e) {
             console.error("Failed to load reimbursement detail:", e);
@@ -672,68 +691,312 @@ class ReimbursementPicker {
         const invoiceHtml = (data.invoices || []).map((invoice, invoiceIndex) => {
             const itemRows = (invoice.items || []).map((item, itemIndex) => `
                 <tr>
-                    <td class="text-center">${itemIndex + 1}</td>
-                    <td>${frappe.utils.escape_html(item.item_name || "-")}</td>
-                    <td>${frappe.utils.escape_html(item.spec || "-")}</td>
-                    <td>${frappe.utils.escape_html(item.uom || "-")}</td>
-                    <td class="text-right qifu-money-cell">${flt(item.qty).toFixed(2)}</td>
-                    <td class="text-right qifu-money-cell">${format_currency(item.rate)}</td>
-                    <td class="text-right qifu-money-cell">${format_currency(item.amount)}</td>
-                    <td class="text-right">${flt(item.tax_rate).toFixed(2)}%</td>
-                    <td class="text-right qifu-money-cell">${format_currency(item.tax_amount)}</td>
-                    <td class="text-right qifu-money-cell font-bold">${format_currency(item.line_total)}</td>
-                    <td>${frappe.utils.escape_html(item.remarks || "-")}</td>
+                    <td class="picker-modal-col-seq font-bold text-muted">${itemIndex + 1}</td>
+                    <td class="picker-modal-col-name">${frappe.utils.escape_html(item.item_name || "-")}</td>
+                    <td class="picker-modal-col-spec">${frappe.utils.escape_html(item.spec || "-")}</td>
+                    <td class="picker-modal-col-uom">${frappe.utils.escape_html(item.uom || "-")}</td>
+                    <td class="picker-modal-col-qty qifu-money-cell">${flt(item.qty).toFixed(2)}</td>
+                    <td class="picker-modal-col-rate qifu-money-cell">${format_currency(item.rate)}</td>
+                    <td class="picker-modal-col-amount qifu-money-cell">${format_currency(item.amount)}</td>
+                    <td class="picker-modal-col-tax-rate">${flt(item.tax_rate).toFixed(2)}%</td>
+                    <td class="picker-modal-col-tax-amount qifu-money-cell">${format_currency(item.tax_amount)}</td>
+                    <td class="picker-modal-col-total qifu-money-cell">${format_currency(item.line_total)}</td>
+                    <td class="picker-modal-col-remarks">${frappe.utils.escape_html(item.remarks || "-")}</td>
                 </tr>
             `).join("") || '<tr><td colspan="11" class="text-center text-muted">无物料明细</td></tr>';
             return `
-                <section class="picker-doc-flow-card">
-                    <div class="picker-doc-flow-title">发票 ${invoiceIndex + 1}：${frappe.utils.escape_html(invoice.invoice_no || "系统自动编号")}</div>
-                    <div class="picker-doc-meta-grid">
-                        <div class="picker-doc-meta-item"><span class="picker-doc-meta-label">发票类型</span><span class="picker-doc-meta-val">${frappe.utils.escape_html(invoice.invoice_type || "-")}</span></div>
-                        <div class="picker-doc-meta-item"><span class="picker-doc-meta-label">供应商</span><span class="picker-doc-meta-val">${frappe.utils.escape_html(invoice.supplier || "-")}</span></div>
-                        <div class="picker-doc-meta-item"><span class="picker-doc-meta-label">开票日期</span><span class="picker-doc-meta-val">${frappe.utils.escape_html(invoice.invoice_date || "-")}</span></div>
+                <div class="ashan-smart-section">
+                    <div class="ashan-smart-section-header">
+                        <div class="ashan-smart-section-title">
+                            <span>发票 ${invoiceIndex + 1}：${frappe.utils.escape_html(invoice.invoice_no || "系统自动编号")}</span>
+                        </div>
                     </div>
-                    <div class="picker-detail-table-wrap">
-                        <table class="picker-data-table">
-                            <thead><tr><th>#</th><th>物料名称</th><th>规格</th><th>单位</th><th class="text-right">数量</th><th class="text-right">单价</th><th class="text-right">不含税金额</th><th class="text-right">税率</th><th class="text-right">税额</th><th class="text-right">价税合计</th><th>备注</th></tr></thead>
+                    <div class="ashan-smart-grid-3">
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">发票类型</label>
+                            <div class="ashan-smart-static-val">${frappe.utils.escape_html(invoice.invoice_type || "-")}</div>
+                        </div>
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">供应商</label>
+                            <div class="ashan-smart-static-val font-bold">${frappe.utils.escape_html(invoice.supplier || "-")}</div>
+                        </div>
+                        <div class="ashan-smart-field">
+                            <label class="ashan-smart-field-label">开票日期</label>
+                            <div class="ashan-smart-static-val font-mono">${frappe.utils.escape_html(invoice.invoice_date || "-")}</div>
+                        </div>
+                    </div>
+                    <div class="ashan-smart-table-wrap">
+                        <table class="picker-modal-detail-table">
+                            <thead>
+                                <tr>
+                                    <th class="picker-modal-col-seq">#</th>
+                                    <th class="picker-modal-col-name">物料名称</th>
+                                    <th class="picker-modal-col-spec">规格</th>
+                                    <th class="picker-modal-col-uom">单位</th>
+                                    <th class="picker-modal-col-qty">数量</th>
+                                    <th class="picker-modal-col-rate">单价</th>
+                                    <th class="picker-modal-col-amount">不含税金额</th>
+                                    <th class="picker-modal-col-tax-rate">税率</th>
+                                    <th class="picker-modal-col-tax-amount">税额</th>
+                                    <th class="picker-modal-col-total">价税合计</th>
+                                    <th class="picker-modal-col-remarks">备注</th>
+                                </tr>
+                            </thead>
                             <tbody>${itemRows}</tbody>
                         </table>
                     </div>
-                </section>
+                </div>
             `;
-        }).join("") || '<div class="picker-doc-empty-state">无发票明细</div>';
+        }).join("") || '<div class="ashan-smart-section text-center text-muted">无发票明细</div>';
 
-        const d = new frappe.ui.Dialog({
+        const self = this;
+        const canPay = !isDraft && flt(data.outstanding_amount) > 0;
+        const d = AshanUI.createDialog({
             title: __("报销单详情 · {0}", [data.rr_name]),
-            size: "large",
-            static: isDraft,
             fields: [{
                 fieldtype: "HTML",
                 fieldname: "detail_html",
                 options: `
-                    <div class="picker-doc-modal-container">
-                        <div class="picker-doc-meta-card">
-                            <div class="picker-doc-meta-header"><div class="picker-doc-title-box"><span class="picker-doc-title-text">${frappe.utils.escape_html(data.title || "现金报销")}</span><span class="ashan-status-badge ${isDraft ? 'ashan-status-amber' : 'ashan-status-green'}">${isDraft ? '待提交草稿' : '已提交只读'}</span></div></div>
-                            <div class="picker-doc-meta-grid">
-                                <div class="picker-doc-meta-item"><span class="picker-doc-meta-label">所属公司</span><span class="picker-doc-meta-val">${frappe.utils.escape_html(data.company || "-")}</span></div>
-                                <div class="picker-doc-meta-item"><span class="picker-doc-meta-label">申请日期</span><span class="picker-doc-meta-val">${frappe.utils.escape_html(data.posting_date || "-")}</span></div>
-                                <div class="picker-doc-meta-item"><span class="picker-doc-meta-label">报销总额</span><span class="picker-doc-meta-val picker-meta-val-highlight">${format_currency(data.total_amount)}</span></div>
-                                <div class="picker-doc-meta-item"><span class="picker-doc-meta-label">待结款金额</span><span class="picker-doc-meta-val">${format_currency(data.outstanding_amount)}</span></div>
+                    <div class="ashan-smart-modal-body">
+                        <!-- Section 1: Business Context -->
+                        <div class="ashan-smart-section">
+                            <div class="ashan-smart-section-header">
+                                <div class="ashan-smart-section-title">
+                                    <span>${frappe.utils.escape_html(data.title || "现金报销申请")}</span>
+                                    <span class="ashan-status-badge ${isDraft ? 'ashan-status-amber' : 'ashan-status-green'}">
+                                        ${isDraft ? '待提交草稿' : '已提交只读'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="ashan-smart-grid-4">
+                                <div class="ashan-smart-field">
+                                    <label class="ashan-smart-field-label">所属公司</label>
+                                    <div class="ashan-smart-static-val">${frappe.utils.escape_html(data.company || "-")}</div>
+                                </div>
+                                <div class="ashan-smart-field">
+                                    <label class="ashan-smart-field-label">申请日期</label>
+                                    <div class="ashan-smart-static-val font-mono">${frappe.utils.escape_html(data.posting_date || "-")}</div>
+                                </div>
+                                <div class="ashan-smart-field">
+                                    <label class="ashan-smart-field-label">报销总额</label>
+                                    <div class="ashan-smart-static-val font-bold text-primary">${format_currency(data.total_amount)}</div>
+                                </div>
+                                <div class="ashan-smart-field">
+                                    <label class="ashan-smart-field-label">待结款金额</label>
+                                    <div class="ashan-smart-static-val font-mono font-bold">${format_currency(data.outstanding_amount)}</div>
+                                </div>
                             </div>
                         </div>
+
+                        <!-- Section 2: Invoices List -->
                         ${invoiceHtml}
                     </div>
                 `,
             }],
+            primary_action_label: canPay ? __("💳 执行比例付款") : null,
+            primary_action: canPay ? function () {
+                d.hide();
+                const firstSupp = (data.invoices && data.invoices[0]) ? data.invoices[0].supplier : "";
+                self.open_reimbursement_payment_modal(data.rr_name, firstSupp, data.outstanding_amount, data.total_amount);
+            } : null,
             secondary_action_label: __("关闭"),
             secondary_action() {
                 d.hide();
+                setTimeout(() => {
+                    $(".modal-backdrop").remove();
+                    $("body").removeClass("modal-open");
+                }, 300);
             },
         });
+        d.$wrapper.find(".modal-dialog").addClass("ashan-smart-modal");
         d.show();
-        if (isDraft) {
-            d.$wrapper.attr("data-backdrop", "static").attr("data-keyboard", "false");
-        }
+    }
+
+    open_reimbursement_payment_modal(rr_name, supplier, default_amt, grand_total = 0) {
+        const self = this;
+        const outstandingAmt = flt(default_amt) > 0 ? flt(default_amt) : 0;
+        const totalOrderAmt = flt(grand_total) > 0 ? flt(grand_total) : (outstandingAmt > 0 ? outstandingAmt : 0);
+        const alreadyPaidAmt = Math.max(0, flt(totalOrderAmt - outstandingAmt, 2));
+
+        const d = new frappe.ui.Dialog({
+            title: __("报销整算 · 智能分期付款"),
+            size: "medium",
+            static: true,
+            fields: [
+                {
+                    fieldtype: "HTML",
+                    fieldname: "pay_info_html",
+                },
+                {
+                    fieldname: "paid_amount",
+                    label: __("本次实付金额 (¥)"),
+                    fieldtype: "Currency",
+                    default: outstandingAmt,
+                    reqd: 1,
+                },
+                {
+                    fieldname: "mode_of_payment",
+                    label: __("付款方式"),
+                    fieldtype: "Select",
+                    options: ["电汇", "银行转账", "现金", "支票", "Wire Transfer"],
+                    default: "电汇",
+                    reqd: 1,
+                },
+                {
+                    fieldname: "posting_date",
+                    label: __("付款/出账日期"),
+                    fieldtype: "Date",
+                    default: frappe.datetime.get_today(),
+                    reqd: 1,
+                },
+                {
+                    fieldname: "reference_no",
+                    label: __("银行交易流水号 / 付款参考号"),
+                    fieldtype: "Data",
+                    placeholder: "选填，例如：WT-BANK-20260829-001 或 银行回单号",
+                },
+                {
+                    fieldname: "remarks",
+                    label: __("付款备注"),
+                    fieldtype: "Small Text",
+                    default: `现金报销款项出账 · 报销单: ${rr_name} · 收款方: ${supplier || '-'}`,
+                },
+            ],
+            primary_action_label: __("确认执行付款"),
+            secondary_action_label: __("取消"),
+            secondary_action: function () {
+                d.hide();
+            },
+            primary_action: async function (values) {
+                const payAmt = flt(values.paid_amount);
+                if (!payAmt || payAmt <= 0) {
+                    frappe.msgprint(__("付款金额必须大于 0！"));
+                    return;
+                }
+                if (payAmt > outstandingAmt + 0.01) {
+                    frappe.msgprint(__("本次付款金额 (¥ {0}) 不能大于待结款余额 (¥ {1})！", [payAmt.toFixed(2), outstandingAmt.toFixed(2)]));
+                    return;
+                }
+                try {
+                    frappe.dom.freeze(__("正在生成并提交付款单..."));
+                    const r = await frappe.call({
+                        method: "ashan_cn_procurement.services.reimbursement_picker_service.create_reimbursement_payment_entry",
+                        args: {
+                            rr_name: rr_name,
+                            paid_amount: values.paid_amount,
+                            mode_of_payment: values.mode_of_payment,
+                            posting_date: values.posting_date,
+                            reference_no: values.reference_no,
+                            remarks: values.remarks,
+                        },
+                    });
+                    frappe.dom.unfreeze();
+                    d.hide();
+                    if (r.message && r.message.success) {
+                        frappe.show_alert({
+                            message: r.message.message || __("报销付款单生成成功！"),
+                            indicator: "green",
+                        }, 5);
+                        self.load_overview_data();
+                        self.load_reimbursements();
+                    }
+                } catch (err) {
+                    frappe.dom.unfreeze();
+                    console.error("Failed to create reimbursement payment entry:", err);
+                }
+            },
+        });
+
+        d.$wrapper.find(".modal-dialog").addClass("ashan-smart-modal");
+
+        const update_calculations = (payAmt) => {
+            const currentPay = Math.max(0, flt(payAmt, 2));
+            const remainAfter = Math.max(0, flt(outstandingAmt - currentPay, 2));
+            const totalPaidAfter = flt(alreadyPaidAmt + currentPay, 2);
+
+            const totalBase = totalOrderAmt > 0 ? totalOrderAmt : outstandingAmt;
+            const paidPct = totalBase > 0 ? (alreadyPaidAmt / totalBase * 100).toFixed(1) : "0.0";
+            const currentPct = totalBase > 0 ? (currentPay / totalBase * 100).toFixed(1) : "0.0";
+            const remainPct = totalBase > 0 ? (remainAfter / totalBase * 100).toFixed(1) : "0.0";
+
+            d.$wrapper.find("#smart-rr-pay-current-amt").text(format_currency(currentPay));
+            d.$wrapper.find("#smart-rr-pay-current-pct").text(`${currentPct}%`);
+            d.$wrapper.find("#smart-rr-pay-remain-amt").text(format_currency(remainAfter));
+            d.$wrapper.find("#smart-rr-pay-remain-pct").text(`${remainPct}%`);
+
+            d.$wrapper.find("#smart-rr-bar-paid").css("width", `${Math.min(100, flt(paidPct))}%`);
+            d.$wrapper.find("#smart-rr-bar-current").css("width", `${Math.min(100, flt(currentPct))}%`);
+
+            if (currentPay > outstandingAmt + 0.01) {
+                d.$wrapper.find("#smart-rr-pay-remain-badge").addClass("warning").html(`⚠️ 超出待结款欠款 ¥ ${format_currency(currentPay - outstandingAmt)}`);
+            } else {
+                d.$wrapper.find("#smart-rr-pay-remain-badge").removeClass("warning").html(`付款后剩余待结: <strong>${format_currency(remainAfter)}</strong> (${remainPct}%)`);
+            }
+        };
+
+        const pay_info_html = `
+            <div class="ashan-payment-calc-card">
+                <div class="ashan-smart-grid-3">
+                    <div><span class="text-xs text-muted">报销单号:</span> <span class="font-mono text-primary font-bold">${frappe.utils.escape_html(rr_name)}</span></div>
+                    <div><span class="text-xs text-muted">涉及商户:</span> <span class="font-bold text-slate-800">${frappe.utils.escape_html(supplier || '-')}</span></div>
+                    <div><span class="text-xs text-muted">报销总额:</span> <span class="font-mono text-slate-700 font-bold">${format_currency(totalOrderAmt)}</span></div>
+                </div>
+
+                <div class="ashan-payment-divider">
+                    <div class="ashan-payment-preset-header">
+                        <span class="text-xs font-bold text-slate-700">🎯 快捷比例分期付款:</span>
+                        <span class="ashan-remain-badge" id="smart-rr-pay-remain-badge">付款后剩余待结: <strong>${format_currency(0)}</strong></span>
+                    </div>
+                    <div class="ashan-percent-pill-group">
+                        <button type="button" class="ashan-percent-pill" data-pct="20">20% 预付/定金</button>
+                        <button type="button" class="ashan-percent-pill" data-pct="30">30% 进度款</button>
+                        <button type="button" class="ashan-percent-pill" data-pct="50">50% 中期款</button>
+                        <button type="button" class="ashan-percent-pill" data-pct="80">80% 阶段款</button>
+                        <button type="button" class="ashan-percent-pill active" data-pct="100">100% 全额结清</button>
+                    </div>
+                </div>
+
+                <div class="ashan-payment-progress-wrap">
+                    <div class="ashan-payment-progress-labels">
+                        <span>已结累计: ${format_currency(alreadyPaidAmt)}</span>
+                        <span>本次实付: <strong class="text-blue-600 font-mono" id="smart-rr-pay-current-amt">${format_currency(outstandingAmt)}</strong> (<span id="smart-rr-pay-current-pct">100%</span>)</span>
+                    </div>
+                    <div class="ashan-payment-progress-bar">
+                        <div class="ashan-progress-paid ashan-progress-init-0" id="smart-rr-bar-paid"></div>
+                        <div class="ashan-progress-current ashan-progress-init-100" id="smart-rr-bar-current"></div>
+                        <div class="ashan-progress-remain"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+        d.set_value("pay_info_html", pay_info_html);
+        d.show();
+
+        // 绑定比例点击事件
+        d.$wrapper.on("click", ".ashan-percent-pill", function () {
+            d.$wrapper.find(".ashan-percent-pill").removeClass("active");
+            $(this).addClass("active");
+            const pct = flt($(this).data("pct"));
+            let targetAmt = 0;
+            if (pct === 100) {
+                targetAmt = outstandingAmt;
+            } else {
+                const base = totalOrderAmt > 0 ? totalOrderAmt : outstandingAmt;
+                targetAmt = flt(base * (pct / 100), 2);
+                if (targetAmt > outstandingAmt) targetAmt = outstandingAmt;
+            }
+            d.set_value("paid_amount", targetAmt);
+            update_calculations(targetAmt);
+        });
+
+        // 监听金额输入变动
+        d.$wrapper.find('input[data-fieldname="paid_amount"]').on("input change", function () {
+            d.$wrapper.find(".ashan-percent-pill").removeClass("active");
+            const val = flt($(this).val());
+            update_calculations(val);
+        });
+
+        update_calculations(outstandingAmt);
     }
 
     reset_creation_state(isEdit = false, rrName = null) {
@@ -755,19 +1018,19 @@ class ReimbursementPicker {
         if (this.creation.dialog) {
             try {
                 this.creation.dialog.hide();
-                this.creation.dialog.$wrapper.remove();
             } catch (e) {}
             this.creation.dialog = null;
         }
+        $(".modal-backdrop").remove();
+        $("body").removeClass("modal-open");
         $(".modal:has(.reim-v2-modal-container)").remove();
 
         const isEdit = this.creation.is_edit;
         const me = this;
 
-        const d = new frappe.ui.Dialog({
+        const d = AshanUI.createDialog({
             title: title,
             size: "extra-large",
-            static: true,
             fields: [
                 {
                     fieldtype: "HTML",
@@ -791,15 +1054,13 @@ class ReimbursementPicker {
         } else if (this.creation.can_delete) {
             d.add_custom_action(__("删除整单"), () => {
                 me.confirm_delete_reimbursement(me.creation.current_rr_name, () => {
-                    d.hide();
+                    me.close_dialog();
                 });
             }, "reim-btn-danger");
         }
 
         this.creation.dialog = d;
         d.show();
-
-        d.$wrapper.attr("data-backdrop", "static").attr("data-keyboard", "false");
 
         // 显式在 modal-header 注入右上角关闭按钮
         const $modalHeader = d.$wrapper.find(".modal-header");
@@ -822,11 +1083,12 @@ class ReimbursementPicker {
         if (this.creation.dialog) {
             try {
                 this.creation.dialog.hide();
-                this.creation.dialog.$wrapper.remove();
             } catch (e) {}
             this.creation.dialog = null;
         }
         this.creation.$wrapper = null;
+        $(".modal-backdrop").remove();
+        $("body").removeClass("modal-open");
     }
 
     populate_company_dropdown($wrapper) {
@@ -1354,16 +1616,16 @@ class ReimbursementPicker {
                         <thead>
                             <tr>
                                 <th class="ashan-col-w40 text-center">#</th>
-                                <th class="ashan-col-w160">物料名称<span class="req">*</span></th>
-                                <th class="ashan-col-spec">规格</th>
-                                <th class="ashan-col-w70 text-center">单位</th>
-                                <th class="ashan-col-w70 text-right">数量<span class="req">*</span></th>
-                                <th class="ashan-col-w80 text-right">单价(元)<span class="req">*</span></th>
-                                <th class="ashan-col-w70 text-right">税率(%)</th>
-                                <th class="ashan-col-w90 text-right">金额(不含税)</th>
+                                <th class="ashan-col-w180">物料名称<span class="req">*</span></th>
+                                <th class="ashan-col-w100">规格</th>
+                                <th class="ashan-col-w50 text-center">单位</th>
+                                <th class="ashan-col-w80 text-right">数量<span class="req">*</span></th>
+                                <th class="ashan-col-w90 text-right">单价(元)<span class="req">*</span></th>
+                                <th class="ashan-col-w60 text-right">税率(%)</th>
+                                <th class="ashan-col-w100 text-right">金额(不含税)</th>
                                 <th class="ashan-col-w80 text-right">税额</th>
-                                <th class="ashan-col-w90 text-right">价税合计</th>
-                                <th class="ashan-col-w110">备注<span class="req">*</span></th>
+                                <th class="ashan-col-w100 text-right">价税合计</th>
+                                <th class="ashan-col-w140">备注<span class="req">*</span></th>
                                 <th class="ashan-col-w40 text-center">操作</th>
                             </tr>
                         </thead>
@@ -1484,7 +1746,12 @@ class ReimbursementPicker {
         let totalTax = 0;
 
         $card.find(".modal-inv-tbody tr").each(function () {
-            const amt = flt($(this).find(".modal-row-amount-input").val() || 0);
+            const qty = flt($(this).find(".modal-row-qty").val() || 0);
+            const rate = flt($(this).find(".modal-row-rate").val() || 0);
+            let amt = flt($(this).find(".modal-row-amount-input").val() || 0);
+            if (!amt && qty && rate) {
+                amt = flt(qty * rate, 2);
+            }
             const taxAmt = flt($(this).find(".modal-row-tax-amount-input").val() || 0);
             subtotal += amt;
             totalTax += taxAmt;
@@ -1492,9 +1759,9 @@ class ReimbursementPicker {
 
         const totalAmt = flt(subtotal + totalTax, 2);
 
-        $(`#reim-inv-subtotal-${invId}`).text(format_currency(subtotal));
-        $(`#reim-inv-tax-${invId}`).text(format_currency(totalTax));
-        $(`#reim-inv-total-${invId}`).text(format_currency(totalAmt));
+        $card.find(`#reim-inv-subtotal-${invId}`).text(format_currency(subtotal));
+        $card.find(`#reim-inv-tax-${invId}`).text(format_currency(totalTax));
+        $card.find(`#reim-inv-total-${invId}`).text(format_currency(totalAmt));
 
         this.recalculate_all();
     }
@@ -1503,18 +1770,43 @@ class ReimbursementPicker {
         let invCount = 0;
         const suppliers = new Set();
         let grandTotal = 0;
+        const $wrap = this.creation.$wrapper || $("body");
+        const $cards = $wrap.find(".reim-inv-card").length ? $wrap.find(".reim-inv-card") : $(".reim-inv-card");
 
-        $(".reim-inv-card").each(function () {
+        $cards.each(function () {
             invCount++;
-            const supp = $(this).find(".modal-inv-supplier-input").val().trim();
+            const invId = $(this).attr("id") ? $(this).attr("id").replace("reim-inv-card-", "") : "";
+            let subtotal = 0;
+            let totalTax = 0;
+
+            const supp = $(this).find(".modal-inv-supplier-input").val()?.trim() || "";
             if (supp) suppliers.add(supp);
 
             $(this).find(".modal-inv-tbody tr").each(function () {
-                const lineTotal = flt($(this).find(".modal-row-line-total-input").val() || 0);
+                const qty = flt($(this).find(".modal-row-qty").val() || 0);
+                const rate = flt($(this).find(".modal-row-rate").val() || 0);
+                let amt = flt($(this).find(".modal-row-amount-input").val() || 0);
+                if (!amt && qty && rate) {
+                    amt = flt(qty * rate, 2);
+                }
+                const taxAmt = flt($(this).find(".modal-row-tax-amount-input").val() || 0);
+                const lineTotal = flt($(this).find(".modal-row-line-total-input").val() || (amt + taxAmt));
+                subtotal += amt;
+                totalTax += taxAmt;
                 grandTotal += lineTotal;
             });
+
+            if (invId) {
+                const totalAmt = flt(subtotal + totalTax, 2);
+                $(this).find(`#reim-inv-subtotal-${invId}`).text(format_currency(subtotal));
+                $(this).find(`#reim-inv-tax-${invId}`).text(format_currency(totalTax));
+                $(this).find(`#reim-inv-total-${invId}`).text(format_currency(totalAmt));
+            }
         });
 
+        $wrap.find("#modal-reim-sum-inv-count").text(`${invCount} 张`);
+        $wrap.find("#modal-reim-sum-supp-count").text(`${suppliers.size} 个`);
+        $wrap.find("#modal-reim-sum-grand-total").text(format_currency(grandTotal));
         $("#modal-reim-sum-inv-count").text(`${invCount} 张`);
         $("#modal-reim-sum-supp-count").text(`${suppliers.size} 个`);
         $("#modal-reim-sum-grand-total").text(format_currency(grandTotal));

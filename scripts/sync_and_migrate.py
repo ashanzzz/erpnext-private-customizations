@@ -102,10 +102,15 @@ fi
 cp "$config" "$backup"
 sed -i 's#proxy_set_header Origin $proxy_x_forwarded_proto://site1.local;#proxy_set_header Origin $proxy_x_forwarded_proto://$host;#' "$config"
 if nginx -t; then
-    nginx -s reload
+    for i in 1 2 3 4 5; do
+        if [ -s /run/nginx.pid ] && kill -0 "$(cat /run/nginx.pid 2>/dev/null)" 2>/dev/null; then
+            nginx -s reload && break || true
+        fi
+        sleep 1
+    done
 else
     cp "$backup" "$config"
-    nginx -s reload
+    nginx -t || true
     exit 1
 fi
 """

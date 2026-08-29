@@ -2,7 +2,7 @@
 frappe.pages['employee-salary-workbench'].on_page_load = function(wrapper) {
     var page = frappe.ui.make_app_page({
         parent: wrapper,
-        title: '👥 人员薪酬档案管理工作台',
+        title: '人员薪酬档案管理工作台',
         single_column: true
     });
 
@@ -21,10 +21,10 @@ frappe.pages['employee-salary-workbench'].on_page_load = function(wrapper) {
             <!-- 顶部公司切换 Tabs -->
             <div class="emp-company-tabs">
                 <div class="emp-company-tab active" data-company="天津祺富机械加工有限公司">
-                    <span>🏢 天津祺富机械加工有限公司</span>
+                    <span>天津祺富机械加工有限公司</span>
                 </div>
                 <div class="emp-company-tab" data-company="天津吉众科技有限公司">
-                    <span>⚡ 天津吉众科技有限公司</span>
+                    <span>天津吉众科技有限公司</span>
                 </div>
             </div>
 
@@ -58,7 +58,7 @@ frappe.pages['employee-salary-workbench'].on_page_load = function(wrapper) {
                     已选中 <strong id="batch-selected-count">0</strong> 位员工
                 </div>
                 <div style="display: flex; gap: 8px;">
-                    <button class="emp-batch-btn" id="btn-open-batch-modal">⚙️ 批量修改参数</button>
+                    <button class="emp-batch-btn" id="btn-open-batch-modal">批量修改参数</button>
                     <button class="btn btn-default btn-xs" id="btn-clear-selection" style="background:#fff;">取消选择</button>
                 </div>
             </div>
@@ -66,7 +66,7 @@ frappe.pages['employee-salary-workbench'].on_page_load = function(wrapper) {
             <!-- 工具栏与过滤栏 -->
             <div class="emp-toolbar">
                 <div class="emp-toolbar-left">
-                    <input type="text" class="emp-search-input" id="emp-search-input" placeholder="🔍 快速搜索工号、姓名、手机号、部门..." />
+                    <input type="text" class="emp-search-input" id="emp-search-input" placeholder="快速搜索工号、姓名、手机号、部门..." />
                     <select class="emp-type-filter" id="emp-type-filter">
                         <option value="全部">全部人员类型</option>
                         <option value="正式工">正式工</option>
@@ -79,17 +79,17 @@ frappe.pages['employee-salary-workbench'].on_page_load = function(wrapper) {
                     <!-- 祺富专属快捷公积金一键控制组 -->
                     <div id="qifu-quick-actions" style="display: flex; gap: 8px; align-items: center;">
                         <button class="btn btn-default btn-sm" id="btn-qifu-hf-min" style="border-color: #2563eb; color: #2563eb; font-weight: 600;" title="将符合条件的参保员工公积金基数批量设为最低基数">
-                            ⚡ 一键全员公积金 (最低基数)
+                            一键全员公积金 (最低基数)
                         </button>
                         <button class="btn btn-default btn-sm" id="btn-qifu-hf-zero" style="border-color: #ef4444; color: #ef4444; font-weight: 600;" title="将符合批量规则的员工公积金基数清零">
-                            🚫 一键取消公积金 (清零)
+                            一键取消公积金 (清零)
                         </button>
                         <span style="font-size: 12px; color: #64748b; background: #f1f5f9; padding: 2px 8px; border-radius: 4px;">批量操作按员工参保状态动态执行</span>
                     </div>
                 </div>
                 <div class="emp-toolbar-right">
-                    <button class="btn btn-default btn-sm" id="btn-refresh-list">🔄 刷新数据</button>
-                    <button class="btn btn-primary btn-sm" id="btn-new-employee">➕ 新增人员档案</button>
+                    <button class="btn btn-default btn-sm" id="btn-refresh-list">刷新数据</button>
+                    <button class="btn btn-primary btn-sm" id="btn-new-employee">新增人员档案</button>
                 </div>
             </div>
 
@@ -695,4 +695,13 @@ frappe.pages['employee-salary-workbench'].on_page_load = function(wrapper) {
 
     // 初始加载
     load_data();
+
+    // 挂载实例至 wrapper 供 SPA 重新切入时唤醒
+    wrapper.load_data = load_data;
+};
+
+frappe.pages['employee-salary-workbench'].on_page_show = function(wrapper) {
+    if (wrapper && typeof wrapper.load_data === "function") {
+        wrapper.load_data();
+    }
 };

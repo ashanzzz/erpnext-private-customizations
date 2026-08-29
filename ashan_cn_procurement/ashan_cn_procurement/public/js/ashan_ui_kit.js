@@ -277,7 +277,7 @@
         },
 
         /**
-         * 7. 统一单据状态中文语义化徽章 (Standard Chinese Document Status Badges)
+         * 7. 统一单据状态中文语义化徽章 (Standard Chinese Document Status Badges - 纯净严肃规范)
          * @param {string} doctype 单据类型 (e.g. "Purchase Order", "Material Request")
          * @param {string} status 原始状态字符串
          * @param {number} docstatus 文档状态代码 (0: Draft, 1: Submitted, 2: Cancelled)
@@ -287,43 +287,43 @@
         formatDocStatus: function (doctype, status, docstatus, r) {
             status = (status || "").trim();
             if (docstatus === 0 || status === "Draft" || status === "草稿") {
-                return `<span class="ashan-status-badge ashan-status-amber">🟡 待提交草稿</span>`;
+                return `<span class="ashan-status-badge ashan-status-amber">待提交草稿</span>`;
             }
             if (docstatus === 2 || status === "Cancelled" || status === "已作废") {
-                return `<span class="ashan-status-badge ashan-status-gray">⚪ 已作废</span>`;
+                return `<span class="ashan-status-badge ashan-status-gray">已作废</span>`;
             }
 
             const STATUS_MAP = {
                 // 采购订单与入库单状态 (Purchase Order / Receipt)
-                "To Receive and Bill": { label: "🔵 待收货待开票", cls: "ashan-status-blue" },
-                "To Receive": { label: "🚚 待收货入库", cls: "ashan-status-blue" },
-                "To Bill": { label: "📑 待开票结算", cls: "ashan-status-purple" },
-                "Completed": { label: "✅ 已完成", cls: "ashan-status-green" },
-                "Submitted": { label: "✅ 已生效", cls: "ashan-status-green" },
-                "Closed": { label: "🔒 已关闭", cls: "ashan-status-gray" },
-                "Stopped": { label: "🛑 已停止", cls: "ashan-status-red" },
-                "On Hold": { label: "⏸️ 挂起中", cls: "ashan-status-amber" },
-                "Delivered": { label: "📦 已交付", cls: "ashan-status-green" },
+                "To Receive and Bill": { label: "待收货待开票", cls: "ashan-status-blue" },
+                "To Receive": { label: "待收货入库", cls: "ashan-status-blue" },
+                "To Bill": { label: "待开票结算", cls: "ashan-status-purple" },
+                "Completed": { label: "已完成", cls: "ashan-status-green" },
+                "Submitted": { label: "已生效", cls: "ashan-status-green" },
+                "Closed": { label: "已关闭", cls: "ashan-status-gray" },
+                "Stopped": { label: "已停止", cls: "ashan-status-red" },
+                "On Hold": { label: "挂起中", cls: "ashan-status-amber" },
+                "Delivered": { label: "已交付", cls: "ashan-status-green" },
 
                 // 工作流状态 (Workflow Statuses)
-                "Pending": { label: "🟡 待处理", cls: "ashan-status-amber" },
-                "Ordered": { label: "📦 已订购", cls: "ashan-status-green" },
-                "Issued": { label: "📤 已发料", cls: "ashan-status-green" },
-                "Transferred": { label: "🔄 已调拨", cls: "ashan-status-blue" },
-                "Approved": { label: "✅ 已核准", cls: "ashan-status-green" },
-                "Rejected": { label: "❌ 已驳回", cls: "ashan-status-red" },
+                "Pending": { label: "待处理", cls: "ashan-status-amber" },
+                "Ordered": { label: "已订购", cls: "ashan-status-green" },
+                "Issued": { label: "已发料", cls: "ashan-status-green" },
+                "Transferred": { label: "已调拨", cls: "ashan-status-blue" },
+                "Approved": { label: "已核准", cls: "ashan-status-green" },
+                "Rejected": { label: "已驳回", cls: "ashan-status-red" },
 
                 // 支付/结算/开票状态 (Payment / Settlement Statuses)
-                "Paid": { label: "✅ 已付款", cls: "ashan-status-green" },
-                "Unpaid": { label: "🔴 待付款", cls: "ashan-status-red" },
-                "未付款": { label: "🔴 待付款", cls: "ashan-status-red" },
-                "已付款": { label: "✅ 已付款", cls: "ashan-status-green" },
-                "已结清": { label: "✅ 已结清", cls: "ashan-status-green" },
-                "Partly Paid": { label: "🟠 部分付款", cls: "ashan-status-amber" },
-                "部分付款": { label: "🟠 部分付款", cls: "ashan-status-amber" },
-                "Overdue": { label: "⏰ 已逾期", cls: "ashan-status-red" },
-                "Partly Billed": { label: "📑 部分开票", cls: "ashan-status-purple" },
-                "Partly Received": { label: "🚚 部分收货", cls: "ashan-status-blue" },
+                "Paid": { label: "已付款", cls: "ashan-status-green" },
+                "Unpaid": { label: "待付款", cls: "ashan-status-red" },
+                "未付款": { label: "待付款", cls: "ashan-status-red" },
+                "已付款": { label: "已付款", cls: "ashan-status-green" },
+                "已结清": { label: "已结清", cls: "ashan-status-green" },
+                "Partly Paid": { label: "部分付款", cls: "ashan-status-amber" },
+                "部分付款": { label: "部分付款", cls: "ashan-status-amber" },
+                "Overdue": { label: "已逾期", cls: "ashan-status-red" },
+                "Partly Billed": { label: "部分开票", cls: "ashan-status-purple" },
+                "Partly Received": { label: "部分收货", cls: "ashan-status-blue" },
             };
 
             const conf = STATUS_MAP[status];
@@ -333,5 +333,25 @@
 
             return `<span class="ashan-status-badge ashan-status-blue">${window.frappe && frappe.utils ? frappe.utils.escape_html(status || "已生效") : (status || "已生效")}</span>`;
         },
+
+        /**
+         * 8. 统一标准防误触业务弹窗工厂 (Static Backdrop Dialog Factory)
+         * 默认注入 static: true, backdrop: "static", 确保点击遮罩不丢失未提交工作
+         * @param {Object} opts frappe.ui.Dialog 配置选项
+         * @returns {frappe.ui.Dialog}
+         */
+        createDialog: function (opts = {}) {
+            opts.static = opts.static !== undefined ? opts.static : true;
+            if (window.frappe && frappe.ui && frappe.ui.Dialog) {
+                const dialog = new frappe.ui.Dialog(opts);
+                // 确保底层 modal 也是 static
+                if (dialog.$wrapper) {
+                    dialog.$wrapper.attr("data-backdrop", "static");
+                    dialog.$wrapper.attr("data-keyboard", "false");
+                }
+                return dialog;
+            }
+            return null;
+        }
     };
 })();
