@@ -431,6 +431,32 @@
 }
 
 /* Ledger Modal Structured Dashboard */
+.contract-detail-header-card {
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.contract-detail-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.contract-detail-title-text {
+    font-size: 15px;
+    font-weight: 800;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .contract-ledger-kpi-bar {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -443,6 +469,7 @@
     border: 1px solid #e2e8f0;
     border-radius: 6px;
     padding: 10px 12px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 .contract-ledger-metric-title {
@@ -460,10 +487,10 @@
 }
 
 .contract-ledger-progress-wrap {
-    margin-top: 10px;
-    background: #f1f5f9;
+    margin-top: 12px;
+    background: #e2e8f0;
     border-radius: 9999px;
-    height: 8px;
+    height: 9px;
     overflow: hidden;
     display: flex;
 }
@@ -483,7 +510,8 @@
     gap: 14px;
     font-size: 11px;
     color: #64748b;
-    margin-top: 6px;
+    margin-top: 8px;
+    font-weight: 500;
 }
 
 .contract-legend-dot {
@@ -497,3 +525,71 @@
 .legend-dot-paid { background: #10b981; }
 .legend-dot-settled { background: #3b82f6; }
 .legend-dot-remain { background: #cbd5e1; }
+
+/* Ledger Table Enterprise Styling (High Density, Zebra, Borders) */
+.contract-ledger-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.contract-ledger-table thead th {
+    background: #f1f5f9;
+    color: #334155;
+    font-weight: 700;
+    font-size: 11.5px;
+    padding: 10px 12px;
+    border-bottom: 2px solid #cbd5e1;
+    border-right: 1px solid #e2e8f0;
+    white-space: nowrap;
+    text-align: left;
+}
+
+.contract-ledger-table thead th:last-child {
+    border-right: none;
+}
+
+.contract-ledger-table tbody tr {
+    border-bottom: 1px solid #e2e8f0;
+    transition: background-color 0.15s ease;
+}
+
+.contract-ledger-table tbody tr:nth-child(even) {
+    background-color: #f8fafc;
+}
+
+.contract-ledger-table tbody tr:hover {
+    background-color: #eff6ff;
+}
+
+.contract-ledger-table tbody td {
+    padding: 10px 12px;
+    vertical-align: middle;
+    border-bottom: 1px solid #e2e8f0;
+    border-right: 1px solid #f1f5f9;
+    color: #1e293b;
+    line-height: 1.4;
+}
+
+.contract-ledger-table tbody td:last-child {
+    border-right: none;
+}
+
+.contract-ledger-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.contract-ledger-empty-box {
+    text-align: center;
+    padding: 30px 20px;
+    color: #94a3b8;
+    background: #fafbfc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 6px;
+    margin-top: 4px;
+    font-size: 12px;
+}

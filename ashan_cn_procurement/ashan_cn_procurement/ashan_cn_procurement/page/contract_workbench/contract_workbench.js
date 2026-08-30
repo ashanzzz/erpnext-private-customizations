@@ -865,31 +865,74 @@ class ProcurementContractWorkbench {
             const settledOnlyPct = Math.min(100 - paidPct, Math.max(0, ((settledAmt - paidAmt) / totalAmt) * 100));
             const remainPct = Math.max(0, 100 - paidPct - settledOnlyPct);
 
-            const termsRows = (c.payment_terms || []).map((t, idx) => `
-                <tr>
-                    <td class="text-center font-mono text-xs">${idx + 1}</td>
-                    <td class="font-bold text-slate-800">${frappe.utils.escape_html(t.stage_name)}</td>
-                    <td class="text-right font-mono">${t.payment_ratio}%</td>
-                    <td class="text-right font-mono font-bold text-slate-900">${format_currency(t.term_amount)}</td>
-                    <td class="text-right font-mono text-green-600 font-bold">${format_currency(t.paid_amount)}</td>
-                    <td class="text-right font-mono text-amber-600 font-bold">${format_currency(t.outstanding_amount)}</td>
-                    <td class="text-center font-mono text-xs">${t.planned_date || '-'}</td>
-                    <td class="text-center">${t.linked_reimbursement ? `<span class="picker-linked-badge badge-reimbursement-request">${t.linked_reimbursement}</span>` : '-'}</td>
-                    <td class="text-center"><span class="ashan-status-badge ${t.term_status === '已付清' ? 'ashan-status-green' : (t.linked_reimbursement ? 'ashan-status-blue' : 'ashan-status-amber')}">${t.term_status || '待发起'}</span></td>
-                </tr>
-            `).join("");
+            const seqDigits = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"];
 
-            const rrRows = rrs.map((rr, idx) => `
-                <tr>
-                    <td class="text-center font-mono text-xs">${idx + 1}</td>
-                    <td class="font-mono font-bold text-primary">${rr.name}</td>
-                    <td>${frappe.utils.escape_html(rr.title || '-')}</td>
-                    <td class="font-mono text-xs">${rr.posting_date || '-'}</td>
-                    <td class="text-right font-mono font-bold text-slate-900">${format_currency(rr.total_amount)}</td>
-                    <td class="text-right font-mono font-bold ${flt(rr.outstanding_amount) > 0 ? 'text-amber-600' : 'text-green-600'}">${format_currency(rr.outstanding_amount)}</td>
-                    <td class="text-center"><span class="ashan-status-badge ${rr.docstatus === 1 ? 'ashan-status-green' : 'ashan-status-amber'}">${rr.docstatus === 1 ? '已过账' : '草稿'}</span></td>
-                </tr>
-            `).join("") || '<tr><td colspan="7" class="contract-table-empty">暂无关联整算单</td></tr>';
+            const termsRows = (c.payment_terms || []).map((t, idx) => {
+                const isPaid = t.term_status === "已付清";
+                const isSettled = Boolean(t.linked_reimbursement);
+                const statusBadge = isPaid
+                    ? '<span class="ashan-status-badge ashan-status-green">已付清</span>'
+                    : (isSettled ? '<span class="ashan-status-badge ashan-status-blue">整算中</span>' : '<span class="ashan-status-badge ashan-status-amber">待发起</span>');
+                const seqChar = seqDigits[idx] || `${idx + 1}.`;
+
+                const linkBadge = t.linked_reimbursement
+                    ? `<a href="/desk/reimbursement-picker" class="step-doc-link" title="点击穿透查看关联整算单据">${t.linked_reimbursement}</a>`
+                    : '<span class="text-muted text-xs">-</span>';
+
+                return `
+                    <tr>
+                        <td class="text-center font-mono font-bold text-slate-600">${seqChar}</td>
+                        <td class="font-bold text-slate-900">${frappe.utils.escape_html(t.stage_name)}</td>
+                        <td class="text-right font-mono font-bold text-slate-700">${t.payment_ratio}%</td>
+                        <td class="text-right font-mono font-bold text-slate-900">${format_currency(t.term_amount)}</td>
+                        <td class="text-right font-mono text-green-600 font-bold">${format_currency(t.paid_amount)}</td>
+                        <td class="text-right font-mono text-amber-600 font-bold">${format_currency(t.outstanding_amount)}</td>
+                        <td class="text-center font-mono text-xs text-slate-600">${t.planned_date || '-'}</td>
+                        <td class="text-center">${linkBadge}</td>
+                        <td class="text-center">${statusBadge}</td>
+                    </tr>
+                `;
+            }).join("");
+
+            let rrContentHtml = "";
+            if (rrs && rrs.length > 0) {
+                const rrRows = rrs.map((rr, idx) => `
+                    <tr>
+                        <td class="text-center font-mono text-xs font-bold text-slate-600">${idx + 1}</td>
+                        <td class="font-mono font-bold"><a href="/desk/reimbursement-picker" class="step-doc-link">${rr.name}</a></td>
+                        <td class="font-bold text-slate-800">${frappe.utils.escape_html(rr.title || '-')}</td>
+                        <td class="font-mono text-xs text-slate-600">${rr.posting_date || '-'}</td>
+                        <td class="text-right font-mono font-bold text-slate-900">${format_currency(rr.total_amount)}</td>
+                        <td class="text-right font-mono font-bold ${flt(rr.outstanding_amount) > 0 ? 'text-amber-600' : 'text-green-600'}">${format_currency(rr.outstanding_amount)}</td>
+                        <td class="text-center"><span class="ashan-status-badge ${rr.docstatus === 1 ? 'ashan-status-green' : 'ashan-status-amber'}">${rr.docstatus === 1 ? '已过账' : '草稿'}</span></td>
+                    </tr>
+                `).join("");
+
+                rrContentHtml = `
+                    <div class="ashan-smart-table-wrap">
+                        <table class="contract-ledger-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-w-seq text-center">#</th>
+                                    <th>整算单号</th>
+                                    <th>整算标题 / 说明</th>
+                                    <th>业务日期</th>
+                                    <th class="text-right">整算金额</th>
+                                    <th class="text-right">待结款金额</th>
+                                    <th class="text-center">单据状态</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rrRows}</tbody>
+                        </table>
+                    </div>
+                `;
+            } else {
+                rrContentHtml = `
+                    <div class="contract-ledger-empty-box">
+                        暂无关联派生的电汇整算单据。当针对上方分期节点发起【⚡ 派生整算】后，对应单据将自动归集于此。
+                    </div>
+                `;
+            }
 
             const d = new frappe.ui.Dialog({
                 title: __("采购合同台账 · {0}", [c.name]),
@@ -900,16 +943,17 @@ class ProcurementContractWorkbench {
                         fieldname: "ledger_html",
                         options: `
                             <div class="ashan-smart-modal-body">
-                                <div class="ashan-smart-section">
-                                    <div class="ashan-smart-section-header">
-                                        <div class="ashan-smart-section-title">
+                                <div class="contract-detail-header-card">
+                                    <div class="contract-detail-title-row">
+                                        <div class="contract-detail-title-text">
                                             <span>${frappe.utils.escape_html(c.contract_title)}</span>
                                             <span class="ashan-status-badge ${c.status === '已结清' ? 'ashan-status-green' : 'ashan-status-blue'}">${c.status}</span>
                                         </div>
                                     </div>
-                                    <div class="ashan-smart-grid-2">
+                                    <div class="ashan-smart-grid-3">
                                         <div><span class="text-xs text-muted">签约主体:</span> <strong class="text-slate-800">${frappe.utils.escape_html(c.company)}</strong></div>
                                         <div><span class="text-xs text-muted">合作供应商:</span> <strong class="text-slate-800">${frappe.utils.escape_html(c.supplier)}</strong></div>
+                                        <div><span class="text-xs text-muted">合同类别:</span> <strong class="text-slate-800">${frappe.utils.escape_html(c.contract_type || '专项采购合同')}</strong></div>
                                     </div>
 
                                     <!-- Structured KPI Bar -->
@@ -951,10 +995,10 @@ class ProcurementContractWorkbench {
                                         </div>
                                     </div>
                                     <div class="ashan-smart-table-wrap">
-                                        <table class="picker-modal-detail-table">
+                                        <table class="contract-ledger-table">
                                             <thead>
                                                 <tr>
-                                                    <th>#</th>
+                                                    <th class="col-w-seq text-center">#</th>
                                                     <th>阶段名称</th>
                                                     <th class="text-right">比例</th>
                                                     <th class="text-right">期款应付</th>
@@ -976,22 +1020,7 @@ class ProcurementContractWorkbench {
                                             <span>关联派生的电汇整算单据</span>
                                         </div>
                                     </div>
-                                    <div class="ashan-smart-table-wrap">
-                                        <table class="picker-modal-detail-table">
-                                            <thead>
-                                                <tr>
-                                                    <th>#</th>
-                                                    <th>整算单号</th>
-                                                    <th>整算标题</th>
-                                                    <th>业务日期</th>
-                                                    <th class="text-right">整算金额</th>
-                                                    <th class="text-right">待结款金额</th>
-                                                    <th class="text-center">单据状态</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>${rrRows}</tbody>
-                                        </table>
-                                    </div>
+                                    ${rrContentHtml}
                                 </div>
                             </div>
                         `
