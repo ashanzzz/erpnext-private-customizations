@@ -76,57 +76,13 @@
     margin-top: 4px;
 }
 
-/* Dual-line Header Badges (Single-tier Semantic Freeze Panes) */
-.dual-header-cell {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+/* Table Header Styles */
+.picker-data-table thead th {
     white-space: nowrap;
-}
-
-.dual-header-badge {
-    display: inline-block;
-    font-size: 9px;
-    font-weight: 700;
-    color: #64748b;
-    background: #f1f5f9;
-    padding: 1px 5px;
-    border-radius: 4px;
-    width: fit-content;
-    line-height: 1.2;
-    letter-spacing: 0.03em;
-    border: 1px solid #e2e8f0;
-}
-
-.dual-header-badge.badge-subject {
-    color: #0369a1;
-    background: #e0f2fe;
-    border-color: #bae6fd;
-}
-
-.dual-header-badge.badge-finance {
-    color: #0f766e;
-    background: #ccfbf1;
-    border-color: #99f6e4;
-}
-
-.dual-header-badge.badge-stream {
-    color: #4338ca;
-    background: #e0e7ff;
-    border-color: #c7d2fe;
-}
-
-.dual-header-badge.badge-audit {
-    color: #6b21a8;
-    background: #f3e8ff;
-    border-color: #e9d5ff;
-}
-
-.dual-header-title {
-    font-size: 12px;
+    vertical-align: middle;
     font-weight: 700;
     color: #1e293b;
-    line-height: 1.3;
+    font-size: 12px;
 }
 
 /* Compact Stepper Stream Flow (Clean, High Density, Zero-Badge Clutter) */

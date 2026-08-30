@@ -115,89 +115,24 @@ class ProcurementContractWorkbench {
                     </div>
                 </div>
 
-                <!-- Contracts Table View with Dual-line Semantic Header -->
+                <!-- Contracts Table View with Clean Single-line Table Header -->
                 <div class="picker-table-wrapper contract-table-wrap">
                     <table class="picker-data-table" id="contract-data-table">
                         <thead>
                             <tr>
-                                <th class="picker-col-sticky-1 col-w-seq text-center">
-                                    <div class="dual-header-cell">
-                                        <span class="dual-header-badge badge-subject">标的</span>
-                                        <span class="dual-header-title">#</span>
-                                    </div>
-                                </th>
-                                <th class="picker-col-sticky-2 col-w-docname">
-                                    <div class="dual-header-cell">
-                                        <span class="dual-header-badge badge-subject">标的</span>
-                                        <span class="dual-header-title">合同编号</span>
-                                    </div>
-                                </th>
-                                <th class="picker-col-sticky-3 col-w-company">
-                                    <div class="dual-header-cell">
-                                        <span class="dual-header-badge badge-subject">标的</span>
-                                        <span class="dual-header-title">合同名称 / 标的</span>
-                                    </div>
-                                </th>
-                                <th class="contract-col-w160">
-                                    <div class="dual-header-cell">
-                                        <span class="dual-header-badge badge-subject">标的</span>
-                                        <span class="dual-header-title">合作供应商</span>
-                                    </div>
-                                </th>
-                                <th class="contract-col-w120">
-                                    <div class="dual-header-cell">
-                                        <span class="dual-header-badge badge-subject">标的</span>
-                                        <span class="dual-header-title">合同类别</span>
-                                    </div>
-                                </th>
-                                <th class="text-right contract-col-w140">
-                                    <div class="dual-header-cell">
-                                        <span class="dual-header-badge badge-finance">资金四柱</span>
-                                        <span class="dual-header-title text-right">标的总额</span>
-                                    </div>
-                                </th>
-                                <th class="text-right contract-col-w140">
-                                    <div class="dual-header-cell">
-                                        <span class="dual-header-badge badge-finance">资金四柱</span>
-                                        <span class="dual-header-title text-right">已整算额</span>
-                                    </div>
-                                </th>
-                                <th class="text-right contract-col-w140">
-                                    <div class="dual-header-cell">
-                                        <span class="dual-header-badge badge-finance">资金四柱</span>
-                                        <span class="dual-header-title text-right">实际已付</span>
-                                    </div>
-                                </th>
-                                <th class="text-right contract-col-w140">
-                                    <div class="dual-header-cell">
-                                        <span class="dual-header-badge badge-finance">资金四柱</span>
-                                        <span class="dual-header-title text-right">待付履约额</span>
-                                    </div>
-                                </th>
-                                <th class="contract-col-w360">
-                                    <div class="dual-header-cell">
-                                        <span class="dual-header-badge badge-stream">分期执行流</span>
-                                        <span class="dual-header-title">分期付款里程碑规划与整算派生</span>
-                                    </div>
-                                </th>
-                                <th class="contract-col-w100 text-center">
-                                    <div class="dual-header-cell">
-                                        <span class="dual-header-badge badge-audit">生命周期</span>
-                                        <span class="dual-header-title text-center">生效日期</span>
-                                    </div>
-                                </th>
-                                <th class="text-center contract-col-w90">
-                                    <div class="dual-header-cell">
-                                        <span class="dual-header-badge badge-audit">生命周期</span>
-                                        <span class="dual-header-title text-center">状态</span>
-                                    </div>
-                                </th>
-                                <th class="text-center contract-col-w100">
-                                    <div class="dual-header-cell">
-                                        <span class="dual-header-badge badge-audit">生命周期</span>
-                                        <span class="dual-header-title text-center">操作</span>
-                                    </div>
-                                </th>
+                                <th class="picker-col-sticky-1 col-w-seq text-center">#</th>
+                                <th class="picker-col-sticky-2 col-w-docname">合同编号</th>
+                                <th class="picker-col-sticky-3 contract-col-w220">合同名称 / 标的</th>
+                                <th class="contract-col-w160">合作供应商</th>
+                                <th class="contract-col-w120">合同类别</th>
+                                <th class="text-right contract-col-w140">合同标的总额</th>
+                                <th class="text-right contract-col-w140">已整算金额</th>
+                                <th class="text-right contract-col-w140">实际已付款</th>
+                                <th class="text-right contract-col-w140">履约待付余额</th>
+                                <th class="contract-col-w360">分期付款里程碑规划与整算派生</th>
+                                <th class="contract-col-w100 text-center">生效日期</th>
+                                <th class="text-center contract-col-w90">状态</th>
+                                <th class="text-center contract-col-w100">操作</th>
                             </tr>
                         </thead>
                         <tbody id="contract-table-body">
