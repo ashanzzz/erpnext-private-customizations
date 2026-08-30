@@ -52,7 +52,7 @@ class ProcurementContractWorkbench {
                 <div class="contract-header-bar">
                     <div class="contract-header-titles">
                         <h2>采购合同履约工作台</h2>
-                        <div class="contract-subtitle">合同分期规划 · 比例整算派生 · 资金出账闭环</div>
+                        <div class="contract-subtitle">合同分期规划 · 动态比例整算 · 资金出账闭环</div>
                     </div>
                     <div class="contract-header-actions" id="contract-company-selector-wrap">
                         <select class="picker-select" id="contract-company-select">
@@ -66,26 +66,32 @@ class ProcurementContractWorkbench {
                     <div class="contract-kpi-card">
                         <div class="contract-kpi-label">合同总数</div>
                         <div class="contract-kpi-val" id="kpi-contract-total">0 份</div>
+                        <div class="contract-kpi-sub">在册采购合同</div>
                     </div>
                     <div class="contract-kpi-card">
                         <div class="contract-kpi-label">履约中合同</div>
                         <div class="contract-kpi-val text-primary" id="kpi-contract-active">0 份</div>
+                        <div class="contract-kpi-sub">执行中业务合同</div>
                     </div>
                     <div class="contract-kpi-card">
                         <div class="contract-kpi-label">合同标的总额</div>
                         <div class="contract-kpi-val" id="kpi-contract-total-amt">¥ 0.00</div>
+                        <div class="contract-kpi-sub">签约法定总标的</div>
                     </div>
                     <div class="contract-kpi-card">
                         <div class="contract-kpi-label">已整算金额</div>
                         <div class="contract-kpi-val text-primary" id="kpi-contract-settled-amt">¥ 0.00</div>
+                        <div class="contract-kpi-sub">已派生电汇整算</div>
                     </div>
                     <div class="contract-kpi-card">
                         <div class="contract-kpi-label">实际已付款</div>
                         <div class="contract-kpi-val text-green" id="kpi-contract-paid-amt">¥ 0.00</div>
+                        <div class="contract-kpi-sub">财务出账核销</div>
                     </div>
                     <div class="contract-kpi-card">
                         <div class="contract-kpi-label">履约待付余额</div>
                         <div class="contract-kpi-val text-amber" id="kpi-contract-out-amt">¥ 0.00</div>
+                        <div class="contract-kpi-sub">剩余应付守恒平账</div>
                     </div>
                 </div>
 
@@ -109,24 +115,89 @@ class ProcurementContractWorkbench {
                     </div>
                 </div>
 
-                <!-- Contracts Table View -->
+                <!-- Contracts Table View with Dual-line Semantic Header -->
                 <div class="picker-table-wrapper contract-table-wrap">
                     <table class="picker-data-table" id="contract-data-table">
                         <thead>
                             <tr>
-                                <th class="picker-col-sticky-1 col-w-seq text-center">#</th>
-                                <th class="picker-col-sticky-2 col-w-docname">合同编号</th>
-                                <th class="picker-col-sticky-3 col-w-company">合同名称 / 标的</th>
-                                <th class="contract-col-w160">合作供应商</th>
-                                <th class="contract-col-w120">合同类别</th>
-                                <th class="text-right contract-col-w120">标的总额</th>
-                                <th class="text-right contract-col-w120">已整算金额</th>
-                                <th class="text-right contract-col-w120">实际已付</th>
-                                <th class="text-right contract-col-w120">待付履约额</th>
-                                <th class="contract-col-w320">分期付款里程碑与整算派生</th>
-                                <th class="contract-col-w100">生效日期</th>
-                                <th class="text-center contract-col-w90">状态</th>
-                                <th class="text-center contract-col-w100">操作</th>
+                                <th class="picker-col-sticky-1 col-w-seq text-center">
+                                    <div class="dual-header-cell">
+                                        <span class="dual-header-badge badge-subject">标的</span>
+                                        <span class="dual-header-title">#</span>
+                                    </div>
+                                </th>
+                                <th class="picker-col-sticky-2 col-w-docname">
+                                    <div class="dual-header-cell">
+                                        <span class="dual-header-badge badge-subject">标的</span>
+                                        <span class="dual-header-title">合同编号</span>
+                                    </div>
+                                </th>
+                                <th class="picker-col-sticky-3 col-w-company">
+                                    <div class="dual-header-cell">
+                                        <span class="dual-header-badge badge-subject">标的</span>
+                                        <span class="dual-header-title">合同名称 / 标的</span>
+                                    </div>
+                                </th>
+                                <th class="contract-col-w160">
+                                    <div class="dual-header-cell">
+                                        <span class="dual-header-badge badge-subject">标的</span>
+                                        <span class="dual-header-title">合作供应商</span>
+                                    </div>
+                                </th>
+                                <th class="contract-col-w120">
+                                    <div class="dual-header-cell">
+                                        <span class="dual-header-badge badge-subject">标的</span>
+                                        <span class="dual-header-title">合同类别</span>
+                                    </div>
+                                </th>
+                                <th class="text-right contract-col-w140">
+                                    <div class="dual-header-cell">
+                                        <span class="dual-header-badge badge-finance">资金四柱</span>
+                                        <span class="dual-header-title text-right">标的总额</span>
+                                    </div>
+                                </th>
+                                <th class="text-right contract-col-w140">
+                                    <div class="dual-header-cell">
+                                        <span class="dual-header-badge badge-finance">资金四柱</span>
+                                        <span class="dual-header-title text-right">已整算额</span>
+                                    </div>
+                                </th>
+                                <th class="text-right contract-col-w140">
+                                    <div class="dual-header-cell">
+                                        <span class="dual-header-badge badge-finance">资金四柱</span>
+                                        <span class="dual-header-title text-right">实际已付</span>
+                                    </div>
+                                </th>
+                                <th class="text-right contract-col-w140">
+                                    <div class="dual-header-cell">
+                                        <span class="dual-header-badge badge-finance">资金四柱</span>
+                                        <span class="dual-header-title text-right">待付履约额</span>
+                                    </div>
+                                </th>
+                                <th class="contract-col-w360">
+                                    <div class="dual-header-cell">
+                                        <span class="dual-header-badge badge-stream">分期执行流</span>
+                                        <span class="dual-header-title">分期付款里程碑规划与整算派生</span>
+                                    </div>
+                                </th>
+                                <th class="contract-col-w100 text-center">
+                                    <div class="dual-header-cell">
+                                        <span class="dual-header-badge badge-audit">生命周期</span>
+                                        <span class="dual-header-title text-center">生效日期</span>
+                                    </div>
+                                </th>
+                                <th class="text-center contract-col-w90">
+                                    <div class="dual-header-cell">
+                                        <span class="dual-header-badge badge-audit">生命周期</span>
+                                        <span class="dual-header-title text-center">状态</span>
+                                    </div>
+                                </th>
+                                <th class="text-center contract-col-w100">
+                                    <div class="dual-header-cell">
+                                        <span class="dual-header-badge badge-audit">生命周期</span>
+                                        <span class="dual-header-title text-center">操作</span>
+                                    </div>
+                                </th>
                             </tr>
                         </thead>
                         <tbody id="contract-table-body">
@@ -182,7 +253,8 @@ class ProcurementContractWorkbench {
             const stageName = $(this).data("stage-name");
             const ratio = $(this).data("ratio");
             const amount = $(this).data("amt");
-            self.open_milestone_settlement_modal(contractNo, termIdx, stageName, ratio, amount);
+            const contractTotal = $(this).data("contract-total");
+            self.open_milestone_settlement_modal(contractNo, termIdx, stageName, ratio, amount, contractTotal);
         });
 
         // Open contract detail modal
@@ -259,6 +331,8 @@ class ProcurementContractWorkbench {
             return;
         }
 
+        const seqDigits = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"];
+
         let bodyHtml = "";
         this.contracts.forEach((c, idx) => {
             const isDraft = c.docstatus === 0;
@@ -268,24 +342,27 @@ class ProcurementContractWorkbench {
                     ? '<span class="ashan-status-badge ashan-status-green">已结清</span>'
                     : '<span class="ashan-status-badge ashan-status-blue">履约中</span>');
 
-            // Render embedded milestone pills
-            const termsHtml = (c.payment_terms || []).map((t) => {
+            // Render Compact Stepper Stream Flow
+            const termsHtml = (c.payment_terms || []).map((t, tIdx) => {
                 const isPaid = t.term_status === "已付清";
                 const isSettled = Boolean(t.linked_reimbursement);
-                const pillCls = isPaid ? "status-paid" : (isSettled ? "status-progress" : "status-pending");
+                const nodeCls = isPaid ? "is-paid" : (isSettled ? "is-settled" : "is-pending");
+                const seqChar = seqDigits[tIdx] || `${tIdx + 1}.`;
 
-                let actionBtn = "";
+                let actionLink = "";
                 if (!isDraft && !isSettled) {
-                    actionBtn = `<button type="button" class="contract-quick-rr-btn" data-contract-no="${c.contract_no}" data-term-idx="${t.idx}" data-stage-name="${frappe.utils.escape_html(t.stage_name)}" data-ratio="${t.payment_ratio}" data-amt="${t.term_amount}" title="按此分期一键生成电汇整算单">➕ 派生整算</button>`;
+                    actionLink = `<a href="#" class="step-action-link contract-quick-rr-btn" data-contract-no="${c.contract_no}" data-term-idx="${t.idx}" data-stage-name="${frappe.utils.escape_html(t.stage_name)}" data-ratio="${t.payment_ratio}" data-amt="${t.term_amount}" data-contract-total="${c.total_contract_amount}" title="按此分期动态派生整算单">⚡ 派生整算</a>`;
                 } else if (t.linked_reimbursement) {
-                    actionBtn = `<span class="picker-linked-badge badge-reimbursement-request picker-doc-clickable-link" data-doctype="Reimbursement Request" data-name="${t.linked_reimbursement}">${t.linked_reimbursement}</span>`;
+                    actionLink = `<a href="/desk/reimbursement-picker" class="step-doc-link" title="点击穿透查看关联整算单据">${t.linked_reimbursement}</a>`;
                 }
 
                 return `
-                    <div class="contract-milestone-pill ${pillCls}">
-                        <span>${frappe.utils.escape_html(t.stage_name)} (${t.payment_ratio}%)</span>
-                        <strong class="font-mono">${format_currency(t.term_amount)}</strong>
-                        ${actionBtn}
+                    <div class="contract-step-node ${nodeCls}">
+                        <span class="step-seq-circle">${seqChar}</span>
+                        <span class="step-label-text">${frappe.utils.escape_html(t.stage_name)}</span>
+                        <span class="step-ratio-pct">${t.payment_ratio}%</span>
+                        <span class="step-amt-val">${format_currency(t.term_amount)}</span>
+                        ${actionLink}
                     </div>
                 `;
             }).join("");
@@ -301,8 +378,8 @@ class ProcurementContractWorkbench {
                     <td class="text-right font-mono font-bold text-primary">${format_currency(c.total_settled_amount)}</td>
                     <td class="text-right font-mono font-bold text-green-600">${format_currency(c.total_paid_amount)}</td>
                     <td class="text-right font-mono font-bold ${flt(c.outstanding_amount) > 0 ? 'text-amber-600' : 'text-green-600'}">${format_currency(c.outstanding_amount)}</td>
-                    <td><div class="contract-milestone-flow">${termsHtml || '<span class="text-muted text-xs">无分期规划</span>'}</div></td>
-                    <td class="font-mono text-xs">${c.effective_date || '-'}</td>
+                    <td><div class="contract-stepper-wrap">${termsHtml || '<span class="text-muted text-xs">无分期规划</span>'}</div></td>
+                    <td class="font-mono text-xs text-center">${c.effective_date || '-'}</td>
                     <td class="text-center">${statusBadge}</td>
                     <td class="text-center">
                         <button type="button" class="btn btn-default btn-xs contract-view-detail-btn" data-contract-no="${c.contract_no}" title="查看合同履约台账与明细穿透">台账</button>
@@ -610,12 +687,16 @@ class ProcurementContractWorkbench {
         });
     }
 
-    // Modal 2: Generate Reimbursement Request from Contract Milestone
-    open_milestone_settlement_modal(contractNo, termIdx, stageName, ratio, amount) {
+    // Modal 2: Generate Reimbursement Request from Contract Milestone (Dynamic Custom Ratio Engine)
+    open_milestone_settlement_modal(contractNo, termIdx, stageName, plannedRatio, plannedAmount, contractTotal) {
         const self = this;
+        const totalContract = flt(contractTotal) || (flt(plannedAmount) / (flt(plannedRatio) / 100.0));
+        let currentSettleAmt = flt(plannedAmount);
+        let currentSettleRatio = flt(plannedRatio);
+
         const d = new frappe.ui.Dialog({
-            title: __("根据合同分期派生电汇整算单"),
-            size: "medium",
+            title: __("根据合同分期派生电汇整算单 · 智能比例动态核算"),
+            size: "large",
             static: true,
             fields: [
                 {
@@ -647,7 +728,7 @@ class ProcurementContractWorkbench {
                     fieldname: "remarks",
                     label: __("整算备注说明"),
                     fieldtype: "Small Text",
-                    default: `依据采购合同【${contractNo}】第 ${termIdx} 期（${stageName} · 比例 ${ratio}%）派生电汇整算`,
+                    default: `依据采购合同【${contractNo}】第 ${termIdx} 期（${stageName}）派生电汇整算`,
                 },
                 {
                     fieldname: "auto_submit",
@@ -663,6 +744,14 @@ class ProcurementContractWorkbench {
             },
             primary_action: async function (values) {
                 try {
+                    const customAmt = flt(d.$wrapper.find("#dynamic-settle-amt-input").val());
+                    const customRatio = flt(d.$wrapper.find("#dynamic-settle-ratio-input").val());
+
+                    if (!customAmt || customAmt <= 0) {
+                        frappe.msgprint(__("派生整算金额必须大于 0！"));
+                        return;
+                    }
+
                     frappe.dom.freeze(__("正在根据合同分期派生整算单..."));
                     const r = await frappe.call({
                         method: "ashan_cn_procurement.services.contract_service.create_settlement_from_milestone",
@@ -672,6 +761,8 @@ class ProcurementContractWorkbench {
                             posting_date: values.posting_date,
                             invoice_no: values.invoice_no,
                             invoice_type: values.invoice_type,
+                            custom_amount: customAmt,
+                            custom_ratio: customRatio,
                             remarks: values.remarks,
                             auto_submit: values.auto_submit
                         }
@@ -700,17 +791,116 @@ class ProcurementContractWorkbench {
 
         d.$wrapper.find(".modal-dialog").addClass("ashan-smart-modal");
 
+        const update_dynamic_calculations = () => {
+            const remainInTerm = Math.max(0, flt(plannedAmount) - flt(currentSettleAmt));
+            const netAmt = values_invoice_type === "专用发票" ? flt(currentSettleAmt / 1.13, 2) : currentSettleAmt;
+            const taxAmt = values_invoice_type === "专用发票" ? flt(currentSettleAmt - netAmt, 2) : 0.0;
+
+            d.$wrapper.find("#calc-term-remain").text(format_currency(remainInTerm));
+            d.$wrapper.find("#calc-net-amt").text(format_currency(netAmt));
+            d.$wrapper.find("#calc-tax-amt").text(format_currency(taxAmt));
+            d.$wrapper.find("#calc-eff-pct").text(`${currentSettleRatio.toFixed(1)}%`);
+        };
+
+        let values_invoice_type = "专用发票";
+
         const info_html = `
-            <div class="ashan-payment-calc-card">
+            <div class="contract-dynamic-calc-box">
                 <div class="ashan-smart-grid-3">
                     <div><span class="text-xs text-muted">采购合同:</span> <span class="font-mono text-primary font-bold">${frappe.utils.escape_html(contractNo)}</span></div>
-                    <div><span class="text-xs text-muted">分期阶段:</span> <span class="font-bold text-slate-800">${frappe.utils.escape_html(stageName)} (${ratio}%)</span></div>
-                    <div><span class="text-xs text-muted">期款金额:</span> <span class="font-mono text-slate-900 font-bold text-primary">${format_currency(amount)}</span></div>
+                    <div><span class="text-xs text-muted">分期阶段:</span> <span class="font-bold text-slate-800">${frappe.utils.escape_html(stageName)} (规划 ${plannedRatio}%)</span></div>
+                    <div><span class="text-xs text-muted">本期规划总额:</span> <span class="font-mono text-slate-900 font-bold">${format_currency(plannedAmount)}</span></div>
+                </div>
+
+                <!-- Smart Percentage / Custom Amount Selector -->
+                <div class="ashan-section-gap">
+                    <label class="text-xs font-bold text-slate-700">选择或输入本次整算比例 / 自定义金额 (动态实时双向换算):</label>
+                    <div class="ashan-percent-pill-group contract-grid-gap">
+                        <button type="button" class="ashan-percent-pill" data-pct="20">20% 预付</button>
+                        <button type="button" class="ashan-percent-pill" data-pct="30">30% 进度</button>
+                        <button type="button" class="ashan-percent-pill" data-pct="50">50% 中期</button>
+                        <button type="button" class="ashan-percent-pill" data-pct="80">80% 阶段</button>
+                        <button type="button" class="ashan-percent-pill active" data-pct="${plannedRatio}">本期全额 (${plannedRatio}%)</button>
+                        <button type="button" class="ashan-percent-pill" data-pct="custom">自定义输入</button>
+                    </div>
+
+                    <div class="contract-calc-row">
+                        <div>
+                            <label class="text-xs font-bold text-slate-700">本次派生整算金额 (¥)*</label>
+                            <input type="number" class="reim-v2-input-control font-mono font-bold text-primary" id="dynamic-settle-amt-input" value="${currentSettleAmt.toFixed(2)}" step="100" />
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-700">占合同总标的比例 (%)*</label>
+                            <input type="number" class="reim-v2-input-control font-mono font-bold" id="dynamic-settle-ratio-input" value="${currentSettleRatio.toFixed(1)}" step="1" min="0.1" max="100" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dynamic Real-Time Metric Cards -->
+                <div class="ashan-smart-grid-4 contract-grid-gap">
+                    <div class="contract-calc-metric">
+                        <div class="contract-calc-metric-lbl">不含税金额 (Net)</div>
+                        <div class="contract-calc-metric-val" id="calc-net-amt">¥ 0.00</div>
+                    </div>
+                    <div class="contract-calc-metric">
+                        <div class="contract-calc-metric-lbl">增值税额 (Tax)</div>
+                        <div class="contract-calc-metric-val text-primary" id="calc-tax-amt">¥ 0.00</div>
+                    </div>
+                    <div class="contract-calc-metric">
+                        <div class="contract-calc-metric-lbl">本期剩余未整算额</div>
+                        <div class="contract-calc-metric-val text-amber" id="calc-term-remain">¥ 0.00</div>
+                    </div>
+                    <div class="contract-calc-metric">
+                        <div class="contract-calc-metric-lbl">本次实际整算比例</div>
+                        <div class="contract-calc-metric-val text-green" id="calc-eff-pct">${currentSettleRatio.toFixed(1)}%</div>
+                    </div>
                 </div>
             </div>
         `;
+
         d.set_value("milestone_info_html", info_html);
         d.show();
+        update_dynamic_calculations();
+
+        // Bind interactive bidirectional changes
+        d.$wrapper.on("click", ".ashan-percent-pill", function () {
+            d.$wrapper.find(".ashan-percent-pill").removeClass("active");
+            $(this).addClass("active");
+            const pct = $(this).data("pct");
+            if (pct !== "custom") {
+                currentSettleRatio = flt(pct);
+                currentSettleAmt = flt(totalContract * (currentSettleRatio / 100.0), 2);
+                d.$wrapper.find("#dynamic-settle-ratio-input").val(currentSettleRatio.toFixed(1));
+                d.$wrapper.find("#dynamic-settle-amt-input").val(currentSettleAmt.toFixed(2));
+                update_dynamic_calculations();
+            }
+        });
+
+        // When amount changed, dynamically calculate ratio
+        d.$wrapper.on("input change", "#dynamic-settle-amt-input", function () {
+            currentSettleAmt = flt($(this).val());
+            currentSettleRatio = totalContract > 0 ? flt((currentSettleAmt / totalContract) * 100.0, 2) : 0;
+            d.$wrapper.find("#dynamic-settle-ratio-input").val(currentSettleRatio.toFixed(1));
+            d.$wrapper.find(".ashan-percent-pill").removeClass("active");
+            d.$wrapper.find('.ashan-percent-pill[data-pct="custom"]').addClass("active");
+            update_dynamic_calculations();
+        });
+
+        // When ratio changed, dynamically calculate amount
+        d.$wrapper.on("input change", "#dynamic-settle-ratio-input", function () {
+            currentSettleRatio = flt($(this).val());
+            currentSettleAmt = flt(totalContract * (currentSettleRatio / 100.0), 2);
+            d.$wrapper.find("#dynamic-settle-amt-input").val(currentSettleAmt.toFixed(2));
+            d.$wrapper.find(".ashan-percent-pill").removeClass("active");
+            d.$wrapper.find('.ashan-percent-pill[data-pct="custom"]').addClass("active");
+            update_dynamic_calculations();
+        });
+
+        // Track invoice type select change
+        d.fields_dict.invoice_type.$input.on("change", function () {
+            values_invoice_type = $(this).val();
+            update_dynamic_calculations();
+        });
     }
 
     // Modal 3: View Contract Ledger & Full Audit Trail

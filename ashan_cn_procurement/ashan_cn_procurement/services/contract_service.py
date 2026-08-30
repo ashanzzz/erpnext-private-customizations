@@ -249,11 +249,13 @@ def create_settlement_from_milestone(
     posting_date: str | None = None,
     invoice_no: str | None = None,
     invoice_type: str = "专用发票",
+    custom_amount: float | str | None = None,
+    custom_ratio: float | str | None = None,
     item_name: str | None = None,
     remarks: str | None = None,
     auto_submit: bool = True
 ) -> dict:
-    """Generate a Reimbursement Request (电汇整算单) directly from a contract payment milestone."""
+    """Generate a Reimbursement Request (电汇整算单) directly from a contract payment milestone with dynamic custom ratio."""
     if not contract_no or not frappe.db.exists("Procurement Contract", contract_no):
         frappe.throw(_("采购合同不存在。"))
 
@@ -273,28 +275,40 @@ def create_settlement_from_milestone(
         frappe.throw(_("第 {0} 期款（{1}）已关联整算单【{2}】，请勿重复派生。").format(term_idx, term.stage_name, term.linked_reimbursement))
 
     work_date = posting_date or get_effective_work_date()
-    term_amt = flt(term.term_amount)
+    full_term_amt = flt(term.term_amount)
+    contract_total = flt(contract.total_contract_amount) or 1.0
+
+    # Determine dynamic settlement amount
+    settle_amt = full_term_amt
+    eff_ratio = flt(term.payment_ratio)
+    if custom_amount is not None and flt(custom_amount) > 0:
+        settle_amt = flt(custom_amount, 2)
+        eff_ratio = flt((settle_amt / contract_total) * 100.0, 2)
+    elif custom_ratio is not None and flt(custom_ratio) > 0:
+        eff_ratio = flt(custom_ratio, 2)
+        settle_amt = flt(contract_total * (eff_ratio / 100.0), 2)
+
     eff_item_name = item_name or f"{contract.contract_title} - {term.stage_name}"
     eff_inv_no = invoice_no or f"HT-INV-{contract.name.replace('HT-', '')}-{term_idx:02d}"
 
     # Create Reimbursement Request
     rr = frappe.new_doc("Reimbursement Request")
-    rr.title = f"【合同整算】{contract.contract_title} · {term.stage_name} ({term.payment_ratio}%)"
+    rr.title = f"【合同整算】{contract.contract_title} · {term.stage_name} ({eff_ratio:.1f}%)"
     rr.company = contract.company
     rr.posting_date = work_date
     rr.custom_contract = contract.name
     rr.custom_contract_stage = term.stage_name
-    rr.remarks = remarks or f"依据采购合同【{contract.name}】第 {term_idx} 期（{term.stage_name} · 比例 {term.payment_ratio}%）派生电汇整算"
+    rr.remarks = remarks or f"依据采购合同【{contract.name}】第 {term_idx} 期（{term.stage_name} · 比例 {eff_ratio:.1f}%）派生电汇整算"
 
     from ashan_cn_procurement.services.reimbursement_picker_service import _ensure_uom, _ensure_item
     uom_val = _ensure_uom("项")
-    spec_val = f"合同履约款 · 比例 {term.payment_ratio}%"
+    spec_val = f"合同履约款 · 比例 {eff_ratio:.1f}%"
     _ensure_item(eff_item_name, uom_val, spec_val)
 
     # Add Invoice Item
     # Calculate tax if 专用发票 (assume 13% default if not specified, or 0% / 13%)
-    rate_net = flt(term_amt / 1.13, 2) if invoice_type == "专用发票" else term_amt
-    tax_amt = flt(term_amt - rate_net, 2) if invoice_type == "专用发票" else 0.0
+    rate_net = flt(settle_amt / 1.13, 2) if invoice_type == "专用发票" else settle_amt
+    tax_amt = flt(settle_amt - rate_net, 2) if invoice_type == "专用发票" else 0.0
 
     rr.append("invoice_items", {
         "invoice_type": invoice_type,
@@ -309,12 +323,12 @@ def create_settlement_from_milestone(
         "amount": rate_net,
         "tax_rate": 13.0 if invoice_type == "专用发票" else 0.0,
         "tax_amount": tax_amt,
-        "line_total": term_amt,
+        "line_total": settle_amt,
         "remarks": f"合同【{contract.name}】{term.stage_name}"
     })
 
-    rr.total_amount = term_amt
-    rr.outstanding_amount = term_amt
+    rr.total_amount = settle_amt
+    rr.outstanding_amount = settle_amt
     rr.flags.ignore_permissions = True
     rr.insert()
 
