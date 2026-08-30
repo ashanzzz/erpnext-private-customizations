@@ -616,9 +616,11 @@ class ProcurementContractWorkbench {
                             <span>分期付款里程碑规划 (各项比例合计需为 100%)</span>
                         </div>
                         <div class="contract-flex-gap">
-                            <button type="button" class="btn btn-default btn-xs modal-preset-btn" data-preset="20-30-50">20% + 30% + 50%</button>
-                            <button type="button" class="btn btn-default btn-xs modal-preset-btn" data-preset="30-40-30">30% + 40% + 30%</button>
-                            <button type="button" class="btn btn-default btn-xs modal-preset-btn" data-preset="10-80-10">10% + 80% + 10%</button>
+                            <div class="ashan-percent-pill-group">
+                                <button type="button" class="ashan-percent-pill modal-preset-btn" data-preset="20-30-50">20% + 30% + 50%</button>
+                                <button type="button" class="ashan-percent-pill modal-preset-btn" data-preset="30-40-30">30% + 40% + 30%</button>
+                                <button type="button" class="ashan-percent-pill modal-preset-btn" data-preset="10-80-10">10% + 80% + 10%</button>
+                            </div>
                             <button type="button" class="btn btn-primary btn-xs" id="modal-add-term-btn">➕ 添加分期</button>
                         </div>
                     </div>
@@ -663,6 +665,8 @@ class ProcurementContractWorkbench {
         });
 
         d.$wrapper.on("click", ".modal-preset-btn", function () {
+            d.$wrapper.find(".modal-preset-btn").removeClass("active");
+            $(this).addClass("active");
             const p = $(this).data("preset");
             if (p === "20-30-50") {
                 terms = [
@@ -917,12 +921,21 @@ class ProcurementContractWorkbench {
             const c = r.message.contract;
             const rrs = r.message.linked_reimbursements || [];
 
+            const totalAmt = flt(c.total_contract_amount) || 1.0;
+            const paidAmt = flt(c.total_paid_amount);
+            const settledAmt = flt(c.total_settled_amount);
+            const outAmt = flt(c.outstanding_amount);
+
+            const paidPct = Math.min(100, Math.max(0, (paidAmt / totalAmt) * 100));
+            const settledOnlyPct = Math.min(100 - paidPct, Math.max(0, ((settledAmt - paidAmt) / totalAmt) * 100));
+            const remainPct = Math.max(0, 100 - paidPct - settledOnlyPct);
+
             const termsRows = (c.payment_terms || []).map((t, idx) => `
                 <tr>
                     <td class="text-center font-mono text-xs">${idx + 1}</td>
-                    <td class="font-bold">${frappe.utils.escape_html(t.stage_name)}</td>
+                    <td class="font-bold text-slate-800">${frappe.utils.escape_html(t.stage_name)}</td>
                     <td class="text-right font-mono">${t.payment_ratio}%</td>
-                    <td class="text-right font-mono font-bold">${format_currency(t.term_amount)}</td>
+                    <td class="text-right font-mono font-bold text-slate-900">${format_currency(t.term_amount)}</td>
                     <td class="text-right font-mono text-green-600 font-bold">${format_currency(t.paid_amount)}</td>
                     <td class="text-right font-mono text-amber-600 font-bold">${format_currency(t.outstanding_amount)}</td>
                     <td class="text-center font-mono text-xs">${t.planned_date || '-'}</td>
@@ -959,11 +972,40 @@ class ProcurementContractWorkbench {
                                             <span class="ashan-status-badge ${c.status === '已结清' ? 'ashan-status-green' : 'ashan-status-blue'}">${c.status}</span>
                                         </div>
                                     </div>
-                                    <div class="ashan-smart-grid-4">
-                                        <div><span class="text-xs text-muted">签约主体:</span> <div class="font-bold">${frappe.utils.escape_html(c.company)}</div></div>
-                                        <div><span class="text-xs text-muted">合作供应商:</span> <div class="font-bold">${frappe.utils.escape_html(c.supplier)}</div></div>
-                                        <div><span class="text-xs text-muted">合同标的总额:</span> <div class="font-mono font-bold text-primary">${format_currency(c.total_contract_amount)}</div></div>
-                                        <div><span class="text-xs text-muted">履约待付余额:</span> <div class="font-mono font-bold text-amber-600">${format_currency(c.outstanding_amount)}</div></div>
+                                    <div class="ashan-smart-grid-2">
+                                        <div><span class="text-xs text-muted">签约主体:</span> <strong class="text-slate-800">${frappe.utils.escape_html(c.company)}</strong></div>
+                                        <div><span class="text-xs text-muted">合作供应商:</span> <strong class="text-slate-800">${frappe.utils.escape_html(c.supplier)}</strong></div>
+                                    </div>
+
+                                    <!-- Structured KPI Bar -->
+                                    <div class="contract-ledger-kpi-bar">
+                                        <div class="contract-ledger-metric-card">
+                                            <div class="contract-ledger-metric-title">合同标的总额 (100%)</div>
+                                            <div class="contract-ledger-metric-number">${format_currency(c.total_contract_amount)}</div>
+                                        </div>
+                                        <div class="contract-ledger-metric-card">
+                                            <div class="contract-ledger-metric-title">累计已整算 (${((settledAmt/totalAmt)*100).toFixed(1)}%)</div>
+                                            <div class="contract-ledger-metric-number text-primary">${format_currency(c.total_settled_amount)}</div>
+                                        </div>
+                                        <div class="contract-ledger-metric-card">
+                                            <div class="contract-ledger-metric-title">实际已出账付款 (${paidPct.toFixed(1)}%)</div>
+                                            <div class="contract-ledger-metric-number text-green-600">${format_currency(c.total_paid_amount)}</div>
+                                        </div>
+                                        <div class="contract-ledger-metric-card">
+                                            <div class="contract-ledger-metric-title">履约待付余额 (${((outAmt/totalAmt)*100).toFixed(1)}%)</div>
+                                            <div class="contract-ledger-metric-number text-amber-600">${format_currency(c.outstanding_amount)}</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Triple-Segment Progress Bar -->
+                                    <div class="contract-ledger-progress-wrap">
+                                        <div class="contract-progress-segment-paid"></div>
+                                        <div class="contract-progress-segment-settled"></div>
+                                    </div>
+                                    <div class="contract-progress-legend">
+                                        <span><span class="contract-legend-dot legend-dot-paid"></span>实际已付款: ${format_currency(paidAmt)} (${paidPct.toFixed(1)}%)</span>
+                                        <span><span class="contract-legend-dot legend-dot-settled"></span>整算待付款: ${format_currency(Math.max(0, settledAmt - paidAmt))} (${settledOnlyPct.toFixed(1)}%)</span>
+                                        <span><span class="contract-legend-dot legend-dot-remain"></span>未整算额: ${format_currency(Math.max(0, totalAmt - settledAmt))} (${remainPct.toFixed(1)}%)</span>
                                     </div>
                                 </div>
 
@@ -1028,6 +1070,10 @@ class ProcurementContractWorkbench {
 
             d.$wrapper.find(".modal-dialog").addClass("ashan-smart-modal");
             d.show();
+
+            // Set progress bar dynamic widths smoothly
+            d.$wrapper.find(".contract-progress-segment-paid").css("width", `${paidPct}%`);
+            d.$wrapper.find(".contract-progress-segment-settled").css("width", `${settledOnlyPct}%`);
         } catch (e) {
             frappe.dom.unfreeze();
             console.error("Open contract detail modal failed:", e);

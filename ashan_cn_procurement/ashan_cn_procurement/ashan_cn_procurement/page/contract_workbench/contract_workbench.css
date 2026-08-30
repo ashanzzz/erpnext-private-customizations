@@ -473,3 +473,71 @@
     font-family: ui-monospace, SFMono-Regular, monospace;
     color: #0f172a;
 }
+
+/* Ledger Modal Structured Dashboard */
+.contract-ledger-kpi-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.contract-ledger-metric-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 10px 12px;
+}
+
+.contract-ledger-metric-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    margin-bottom: 4px;
+}
+
+.contract-ledger-metric-number {
+    font-size: 16px;
+    font-weight: 800;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    color: #0f172a;
+}
+
+.contract-ledger-progress-wrap {
+    margin-top: 10px;
+    background: #f1f5f9;
+    border-radius: 9999px;
+    height: 8px;
+    overflow: hidden;
+    display: flex;
+}
+
+.contract-progress-segment-paid {
+    background: #10b981;
+    height: 100%;
+}
+
+.contract-progress-segment-settled {
+    background: #3b82f6;
+    height: 100%;
+}
+
+.contract-progress-legend {
+    display: flex;
+    gap: 14px;
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 6px;
+}
+
+.contract-legend-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+}
+
+.legend-dot-paid { background: #10b981; }
+.legend-dot-settled { background: #3b82f6; }
+.legend-dot-remain { background: #cbd5e1; }
