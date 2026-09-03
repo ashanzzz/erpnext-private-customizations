@@ -31,7 +31,8 @@
   {
    "fieldname": "job_title",
    "fieldtype": "Data",
-   "label": "岗位职务"
+   "label": "岗位职务",
+   "hidden": 1
   },
   {
    "fieldname": "employee_type",

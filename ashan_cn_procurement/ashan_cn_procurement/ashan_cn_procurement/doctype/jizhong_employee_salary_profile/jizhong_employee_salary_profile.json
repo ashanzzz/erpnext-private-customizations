@@ -87,7 +87,8 @@
       "fieldname": "job_title",
       "fieldtype": "Data",
       "label": "岗位职务",
-      "default": "操作工"
+      "default": "操作工",
+      "hidden": 1
     },
     {
       "fieldname": "employee_type",
