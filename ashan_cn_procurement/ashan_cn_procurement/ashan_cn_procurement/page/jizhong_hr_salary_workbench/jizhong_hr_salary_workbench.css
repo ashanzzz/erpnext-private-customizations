@@ -476,3 +476,148 @@
 .jz-hist-col-empno { left: 121px !important; }
 .jz-hist-col-empname { left: 196px !important; }
 
+/* 原始考勤表视角 (5行大宽表矩阵) 专属样式 */
+.jz-raw-table-box {
+    max-height: calc(100vh - 275px);
+    overflow: auto;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.jz-raw-matrix-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: max-content;
+    min-width: 100%;
+    font-size: 12px;
+}
+.jz-raw-matrix-table th {
+    background: #f8fafc;
+    color: #334155;
+    font-weight: 700;
+    border-bottom: 2px solid #cbd5e1;
+    border-right: 1px solid #e2e8f0;
+    padding: 6px 4px;
+    text-align: center;
+    position: sticky;
+    top: 0;
+    z-index: 3;
+}
+.jz-raw-matrix-table td {
+    border-bottom: 1px solid #f1f5f9;
+    border-right: 1px solid #f1f5f9;
+    padding: 4px 6px;
+    white-space: nowrap;
+    background-color: #ffffff;
+}
+.jz-raw-day-th {
+    min-width: 46px;
+    width: 46px;
+    padding: 4px 2px !important;
+}
+.jz-th-daynum {
+    font-size: 12px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.2;
+}
+.jz-th-tag {
+    font-size: 10px;
+    font-weight: 600;
+    color: #64748b;
+    margin-top: 2px;
+    line-height: 1.1;
+}
+.jz-th-weekend {
+    background: #eff6ff !important;
+}
+.jz-th-weekend .jz-th-tag {
+    color: #2563eb;
+}
+.jz-th-holiday {
+    background: #fef2f2 !important;
+}
+.jz-th-holiday .jz-th-tag {
+    color: #dc2626;
+}
+.jz-cell-weekend {
+    background-color: #f8fafc !important;
+}
+.jz-cell-holiday {
+    background-color: #fff1f2 !important;
+}
+.jz-col-sticky-4 {
+    position: sticky !important;
+    left: 195px !important;
+    background-color: #ffffff !important;
+    z-index: 2 !important;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.06);
+}
+.jz-raw-matrix-table th.jz-col-sticky-1,
+.jz-raw-matrix-table th.jz-col-sticky-2,
+.jz-raw-matrix-table th.jz-col-sticky-3,
+.jz-raw-matrix-table th.jz-col-sticky-4 {
+    z-index: 4 !important;
+    background-color: #f8fafc !important;
+}
+.jz-metric-badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+.jz-mb-shift {
+    background: #f1f5f9;
+    color: #334155;
+}
+.jz-mb-work {
+    background: #e0f2fe;
+    color: #0284c7;
+}
+.jz-mb-ot {
+    background: #ffedd5;
+    color: #c2410c;
+}
+.jz-mb-meal {
+    background: #dcfce7;
+    color: #15803d;
+}
+.jz-mb-remark {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+.jz-raw-row-boundary td {
+    border-bottom: 2px solid #cbd5e1 !important;
+}
+.jz-raw-val-work {
+    font-weight: 600;
+    color: #0284c7;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+.jz-raw-val-ot {
+    font-weight: 600;
+    color: #ea580c;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+.jz-raw-val-meal {
+    font-weight: 600;
+    color: #16a34a;
+    text-align: center;
+}
+.jz-raw-val-shift {
+    text-align: center;
+    color: #1e293b;
+}
+.jz-raw-val-remark {
+    color: #64748b;
+    font-size: 11px;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+

@@ -35,15 +35,16 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
             </div>
         </div>
 
-        <!-- 7大业务 Tab 切换 -->
+        <!-- 8大业务 Tab 切换 -->
         <div class="jz-nav-tabs">
             <button class="jz-tab-btn active" data-tab="payroll">1. 月度薪酬核定表</button>
             <button class="jz-tab-btn" data-tab="attendance">2. 考勤工时管理</button>
-            <button class="jz-tab-btn" data-tab="cash_bills">3. 现金发放与配钞点钞</button>
-            <button class="jz-tab-btn" data-tab="tax">4. 个人所得税台账</button>
-            <button class="jz-tab-btn" data-tab="employees">5. 员工薪酬档案</button>
-            <button class="jz-tab-btn" data-tab="insurance">6. 社保公积金配置</button>
-            <button class="jz-tab-btn" data-tab="history">7. 历史薪资穿透 (421条)</button>
+            <button class="jz-tab-btn" data-tab="raw_attendance">3. 原始考勤表视角</button>
+            <button class="jz-tab-btn" data-tab="cash_bills">4. 现金发放与配钞点钞</button>
+            <button class="jz-tab-btn" data-tab="tax">5. 个人所得税台账</button>
+            <button class="jz-tab-btn" data-tab="employees">6. 员工薪酬档案</button>
+            <button class="jz-tab-btn" data-tab="insurance">7. 社保公积金配置</button>
+            <button class="jz-tab-btn" data-tab="history">8. 历史薪资穿透 (421条)</button>
         </div>
 
         <!-- Tab 1: 月度薪酬核定表 -->
@@ -136,6 +137,10 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                     <button class="btn btn-default btn-sm jz-btn-danger-outline" id="btn-jz-clear-attendance">一键清空本月考勤</button>
                     <button class="btn btn-default btn-sm jz-hidden" id="btn-jz-download-attendance-file">下载原始考勤凭证</button>
                     <button class="btn btn-default btn-sm jz-text-primary" id="btn-jz-sync-calc-payroll">按考勤一键核算当月工资</button>
+                    <div class="jz-segmented-control" id="jz-att-view-toggle">
+                        <button class="jz-segment-btn active" data-view="summary">月度工时汇总</button>
+                        <button class="jz-segment-btn" data-view="raw">原始考勤表视角</button>
+                    </div>
                 </div>
                 <div class="jz-toolbar-right">
                     <span class="jz-tip-text">支持标准5行格式: 班次、作业时间、加班时间、餐补、备注</span>
@@ -169,7 +174,37 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
             </div>
         </div>
 
-        <!-- Tab 3: 现金发放与配钞点钞 -->
+        <!-- Tab 3: 原始考勤表视角 (5行大宽表打卡矩阵) -->
+        <div id="jz-tab-raw_attendance" class="jz-tab-content jz-hidden">
+            <div class="jz-toolbar">
+                <div class="jz-toolbar-left">
+                    <div class="jz-segmented-control" id="jz-raw-filter-metric">
+                        <button class="jz-segment-btn active" data-metric="all">全部5行维度</button>
+                        <button class="jz-segment-btn" data-metric="shifts">仅班次</button>
+                        <button class="jz-segment-btn" data-metric="work">仅作业时间</button>
+                        <button class="jz-segment-btn" data-metric="ot">仅加班时间</button>
+                        <button class="jz-segment-btn" data-metric="meal">仅订餐</button>
+                        <button class="jz-segment-btn" data-metric="remark">仅备注</button>
+                    </div>
+                    <button class="btn btn-default btn-sm" id="btn-jz-raw-to-summary">返回工时汇总</button>
+                </div>
+                <div class="jz-toolbar-right">
+                    <span class="jz-tip-text">班: 工作日 | 休: 周末公休 | 节: 法定节假日</span>
+                    <button class="btn btn-default btn-sm" id="btn-jz-export-raw-attendance">导出原始考勤表 (Excel)</button>
+                </div>
+            </div>
+
+            <div class="jz-table-box jz-raw-table-box">
+                <table class="jz-table jz-raw-matrix-table" id="table-jz-raw-attendance">
+                    <thead id="thead-jz-raw-attendance"></thead>
+                    <tbody id="tbody-jz-raw-attendance">
+                        <tr><td class="jz-empty-cell">正在加载吉众原始考勤打卡矩阵...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tab 4: 现金发放与配钞点钞 -->
         <div id="jz-tab-cash_bills" class="jz-tab-content jz-hidden">
             <div class="jz-cash-stat-bar" id="jz-cash-summary-bar">
                 <div class="jz-cash-stat-item"><span class="jz-cash-denom-label">现金总盘:</span> <span class="jz-cash-denom-count" id="stat-cash-total">¥ 0.00</span></div>
@@ -356,6 +391,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
 
         if (tab === 'payroll') load_payroll_data();
         else if (tab === 'attendance') load_attendance_data();
+        else if (tab === 'raw_attendance') load_raw_attendance_data();
         else if (tab === 'cash_bills') load_cash_data();
         else if (tab === 'tax') load_tax_data();
         else if (tab === 'employees') load_employees_data();
@@ -376,6 +412,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
     function refresh_current_view() {
         if (current_tab === 'payroll') load_payroll_data();
         else if (current_tab === 'attendance') load_attendance_data();
+        else if (current_tab === 'raw_attendance') load_raw_attendance_data();
         else if (current_tab === 'cash_bills') load_cash_data();
         else if (current_tab === 'tax') load_tax_data();
         else if (current_tab === 'employees') load_employees_data();
@@ -995,7 +1032,285 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         $('#btn-jz-calc-payroll').click();
     });
 
-    // 3. 加载现金发放与配钞点钞表
+    // ==========================================
+    // 3. 原始考勤表视角 (5行大宽表打卡矩阵)
+    // ==========================================
+    let raw_metric_filter = 'all';
+
+    // 视角快捷切换与过滤事件
+    $('#jz-att-view-toggle .jz-segment-btn').on('click', function() {
+        const view = $(this).data('view');
+        if (view === 'raw') {
+            $('.jz-tab-btn[data-tab="raw_attendance"]').click();
+        }
+    });
+
+    $('#btn-jz-raw-to-summary').on('click', function() {
+        $('.jz-tab-btn[data-tab="attendance"]').click();
+        $('#jz-att-view-toggle .jz-segment-btn').removeClass('active');
+        $('#jz-att-view-toggle .jz-segment-btn[data-view="summary"]').addClass('active');
+    });
+
+    $('#jz-raw-filter-metric .jz-segment-btn').on('click', function() {
+        $('#jz-raw-filter-metric .jz-segment-btn').removeClass('active');
+        $(this).addClass('active');
+        raw_metric_filter = $(this).data('metric');
+        render_raw_attendance_table();
+    });
+
+    function load_raw_attendance_data() {
+        if (!attendance_cache || attendance_cache.length === 0) {
+            frappe.call({
+                method: 'ashan_cn_procurement.services.jizhong_attendance_service.get_jizhong_attendance_table',
+                args: { company: COMPANY, period_month: current_month },
+                callback: function(r) {
+                    if (r.message) {
+                        attendance_cache = r.message.records || [];
+                        render_raw_attendance_table();
+                    }
+                }
+            });
+        } else {
+            render_raw_attendance_table();
+        }
+    }
+
+    function render_raw_attendance_table() {
+        const thead = $('#thead-jz-raw-attendance');
+        const tbody = $('#tbody-jz-raw-attendance');
+        thead.empty();
+        tbody.empty();
+
+        if (!attendance_cache || attendance_cache.length === 0) {
+            tbody.html('<tr><td colspan="45" class="jz-empty-cell">当前月份尚未上传考勤表，请在“2. 考勤工时管理”中点击“上传吉众月度考勤 (Excel)”。</td></tr>');
+            return;
+        }
+
+        // 提取打卡日历天数
+        let days = [];
+        for (let i = 0; i < attendance_cache.length; i++) {
+            if (attendance_cache[i].daily_records_json) {
+                try {
+                    const parsed = JSON.parse(attendance_cache[i].daily_records_json);
+                    if (parsed && parsed.length > 0) {
+                        days = parsed;
+                        break;
+                    }
+                } catch(e) {}
+            }
+        }
+
+        if (!days || days.length === 0) {
+            tbody.html('<tr><td colspan="45" class="jz-empty-cell">该月份无每日结构化打卡明细。</td></tr>');
+            return;
+        }
+
+        // 1. 构建表头
+        let thHtml = `
+            <tr>
+                <th class="jz-col-seq jz-col-sticky-1">序号</th>
+                <th class="jz-col-no jz-col-sticky-2">工号</th>
+                <th class="jz-col-name jz-col-sticky-3">姓名</th>
+                <th class="jz-raw-col-metric jz-col-sticky-4">打卡项目</th>
+        `;
+
+        days.forEach(d => {
+            let cls = 'jz-raw-day-th';
+            let tag = '班';
+            const nat = d.nature || '';
+            if (nat.includes('周末') || nat.includes('公休')) {
+                cls += ' jz-th-weekend';
+                tag = '休';
+            } else if (nat.includes('节假日')) {
+                cls += ' jz-th-holiday';
+                tag = '节';
+            }
+            thHtml += `
+                <th class="${cls}">
+                    <div class="jz-th-daynum">${d.day}日</div>
+                    <div class="jz-th-tag">${tag}</div>
+                </th>
+            `;
+        });
+
+        thHtml += `
+                <th class="jz-text-right">正班工时</th>
+                <th class="jz-text-right">平日加班</th>
+                <th class="jz-text-right">周末加班</th>
+                <th class="jz-text-right">节日加班</th>
+                <th class="jz-text-right">倒休工时</th>
+                <th class="jz-text-right">餐补次数</th>
+            </tr>
+        `;
+        thead.html(thHtml);
+
+        // 2. 筛选展示的打卡项目
+        const allMetrics = [
+            { key: 'shifts', label: '班次', badgeCls: 'jz-mb-shift' },
+            { key: 'work', label: '作业工时', badgeCls: 'jz-mb-work' },
+            { key: 'ot', label: '加班工时', badgeCls: 'jz-mb-ot' },
+            { key: 'meal', label: '订餐', badgeCls: 'jz-mb-meal' },
+            { key: 'remark', label: '备注', badgeCls: 'jz-mb-remark' }
+        ];
+
+        let activeMetrics = allMetrics;
+        if (raw_metric_filter !== 'all') {
+            activeMetrics = allMetrics.filter(m => m.key === raw_metric_filter);
+        }
+        const rSpan = activeMetrics.length;
+
+        // 3. 逐人渲染行
+        attendance_cache.forEach((emp, idx) => {
+            let empDays = [];
+            try {
+                if (emp.daily_records_json) empDays = JSON.parse(emp.daily_records_json);
+            } catch(e) {}
+            const dayMap = {};
+            empDays.forEach(d => { dayMap[d.day] = d; });
+
+            activeMetrics.forEach((m, mIdx) => {
+                const isFirst = (mIdx === 0);
+                const isLast = (mIdx === rSpan - 1);
+                let rowCls = isLast ? 'jz-raw-row-boundary' : '';
+
+                let trHtml = `<tr class="${rowCls}">`;
+
+                if (isFirst) {
+                    trHtml += `
+                        <td class="jz-col-seq jz-col-sticky-1" rowspan="${rSpan}">${idx + 1}</td>
+                        <td class="jz-col-no jz-col-sticky-2" rowspan="${rSpan}"><strong>${emp.employee_no}</strong></td>
+                        <td class="jz-col-name jz-col-sticky-3" rowspan="${rSpan}"><strong>${emp.employee_name}</strong></td>
+                    `;
+                }
+
+                trHtml += `
+                    <td class="jz-raw-col-metric jz-col-sticky-4">
+                        <span class="jz-metric-badge ${m.badgeCls}">${m.label}</span>
+                    </td>
+                `;
+
+                // 逐日单元格
+                days.forEach(d => {
+                    const dayRec = dayMap[d.day] || {};
+                    let cellVal = '-';
+                    let cellCls = '';
+                    const nat = d.nature || '';
+                    if (nat.includes('周末') || nat.includes('公休')) cellCls += ' jz-cell-weekend';
+                    else if (nat.includes('节假日')) cellCls += ' jz-cell-holiday';
+
+                    if (m.key === 'shifts') {
+                        cellVal = dayRec.shift || '-';
+                        cellCls += ' jz-raw-val-shift';
+                    } else if (m.key === 'work') {
+                        const wh = flt(dayRec.work_hours);
+                        cellVal = wh > 0 ? wh.toFixed(1) : '-';
+                        cellCls += ' jz-raw-val-work';
+                    } else if (m.key === 'ot') {
+                        const ot = flt(dayRec.overtime);
+                        cellVal = ot > 0 ? '+' + ot.toFixed(1) : '-';
+                        cellCls += ' jz-raw-val-ot';
+                    } else if (m.key === 'meal') {
+                        const ml = cint(dayRec.meal);
+                        cellVal = ml > 0 ? ml : '-';
+                        cellCls += ' jz-raw-val-meal';
+                    } else if (m.key === 'remark') {
+                        cellVal = dayRec.remark || '-';
+                        cellCls += ' jz-raw-val-remark';
+                    }
+
+                    trHtml += `<td class="${cellCls}">${cellVal}</td>`;
+                });
+
+                if (isFirst) {
+                    trHtml += `
+                        <td class="jz-num-cell jz-text-info" rowspan="${rSpan}">${fmtHours(emp.work_hours_regular)}</td>
+                        <td class="jz-num-cell" rowspan="${rSpan}">${fmtHours(emp.overtime_regular_1_5)}</td>
+                        <td class="jz-num-cell" rowspan="${rSpan}">${fmtHours(emp.overtime_weekend_2_0)}</td>
+                        <td class="jz-num-cell" rowspan="${rSpan}">${fmtHours(emp.overtime_holiday_3_0)}</td>
+                        <td class="jz-num-cell jz-text-muted" rowspan="${rSpan}">${fmtHours(emp.leave_compensatory_hours)}</td>
+                        <td class="jz-num-cell jz-text-success" rowspan="${rSpan}">${emp.meal_count || 0} 次</td>
+                    `;
+                }
+
+                trHtml += '</tr>';
+                tbody.append(trHtml);
+            });
+        });
+    }
+
+    // 导出原始考勤表 (Excel / CSV)
+    $('#btn-jz-export-raw-attendance').on('click', function() {
+        if (!attendance_cache || attendance_cache.length === 0) {
+            frappe.msgprint('当前月份暂无考勤数据可导出');
+            return;
+        }
+        let days = [];
+        for (let i = 0; i < attendance_cache.length; i++) {
+            if (attendance_cache[i].daily_records_json) {
+                try {
+                    days = JSON.parse(attendance_cache[i].daily_records_json);
+                    if (days && days.length > 0) break;
+                } catch(e) {}
+            }
+        }
+        let csv = '\uFEFF序号,工号,姓名,打卡项目,' + days.map(d => `${d.day}日(${d.nature || ''})`).join(',') + ',正班工时,平日加班,周末加班,节日加班,倒休工时,餐补次数\n';
+        attendance_cache.forEach((emp, idx) => {
+            let empDays = [];
+            try {
+                if (emp.daily_records_json) empDays = JSON.parse(emp.daily_records_json);
+            } catch(e) {}
+            const dayMap = {};
+            empDays.forEach(d => { dayMap[d.day] = d; });
+
+            const metricDefs = [
+                { key: 'shifts', label: '班次' },
+                { key: 'work', label: '作业工时' },
+                { key: 'ot', label: '加班工时' },
+                { key: 'meal', label: '订餐' },
+                { key: 'remark', label: '备注' }
+            ];
+
+            metricDefs.forEach((m, mIdx) => {
+                let row = [
+                    mIdx === 0 ? (idx + 1) : '',
+                    mIdx === 0 ? emp.employee_no : '',
+                    mIdx === 0 ? `"${emp.employee_name}"` : '',
+                    m.label
+                ];
+                days.forEach(d => {
+                    const dayRec = dayMap[d.day] || {};
+                    let v = '';
+                    if (m.key === 'shifts') v = dayRec.shift || '';
+                    else if (m.key === 'work') v = dayRec.work_hours > 0 ? flt(dayRec.work_hours).toFixed(1) : '';
+                    else if (m.key === 'ot') v = dayRec.overtime > 0 ? flt(dayRec.overtime).toFixed(1) : '';
+                    else if (m.key === 'meal') v = dayRec.meal > 0 ? dayRec.meal : '';
+                    else if (m.key === 'remark') v = (dayRec.remark || '').replace(/"/g, '""');
+                    row.push(`"${v}"`);
+                });
+                if (mIdx === 0) {
+                    row.push(flt(emp.work_hours_regular).toFixed(1));
+                    row.push(flt(emp.overtime_regular_1_5).toFixed(1));
+                    row.push(flt(emp.overtime_weekend_2_0).toFixed(1));
+                    row.push(flt(emp.overtime_holiday_3_0).toFixed(1));
+                    row.push(flt(emp.leave_compensatory_hours).toFixed(1));
+                    row.push(emp.meal_count || 0);
+                } else {
+                    row.push('', '', '', '', '', '');
+                }
+                csv += row.join(',') + '\n';
+            });
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute('download', `吉众原始打卡考勤表_${current_month}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    });
+
+    // 4. 加载现金发放与配钞点钞表
     function load_cash_data() {
         frappe.call({
             method: 'ashan_cn_procurement.services.jizhong_payroll_service.get_jizhong_payroll_overview',
