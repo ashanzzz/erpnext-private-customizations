@@ -94,7 +94,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                             <th class="jz-col-seq jz-col-sticky-1">序号</th>
                             <th class="jz-col-no jz-col-sticky-2">工号</th>
                             <th class="jz-col-name jz-col-sticky-3">姓名</th>
-                            <th>身份证号</th>
+                            <th>证件号码</th>
                             <th>用工性质</th>
                             <th>计薪方式</th>
                             <th class="jz-text-right">实发约定净薪</th>
@@ -1639,11 +1639,13 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                 { fieldtype: 'Section Break', label: '基本身份与用工' },
                 { fieldtype: 'Data', fieldname: 'employee_no', label: '工号', reqd: 1, default: emp_data.employee_no || '', read_only: isEdit ? 1 : 0 },
                 { fieldtype: 'Data', fieldname: 'employee_name', label: '员工姓名', reqd: 1, default: emp_data.employee_name || '' },
-                { fieldtype: 'Data', fieldname: 'id_card', label: '身份证号码', default: emp_data.id_card || '' },
+                { fieldtype: 'Select', fieldname: 'certificate_type', label: '证件类型', options: ['居民身份证','护照','港澳台居民居住证/通行证','外国人永久居留身份证','其他'], default: emp_data.certificate_type || '居民身份证' },
+                { fieldtype: 'Data', fieldname: 'id_card', label: '证件号码', default: emp_data.id_card || '' },
+                { fieldtype: 'Button', fieldname: 'btn_parse_id_card', label: '自动识别身份证性别出生日期' },
                 { fieldtype: 'Column Break' },
-                { fieldtype: 'Data', fieldname: 'mobile', label: '手机号', default: emp_data.mobile || '' },
                 { fieldtype: 'Select', fieldname: 'gender', label: '性别', options: ['','男','女'], default: emp_data.gender || '' },
                 { fieldtype: 'Date', fieldname: 'birth_date', label: '出生日期', default: emp_data.birth_date || '' },
+                { fieldtype: 'Data', fieldname: 'mobile', label: '手机号', default: emp_data.mobile || '' },
                 { fieldtype: 'Select', fieldname: 'employee_type', label: '用工性质', options: ['正式工','其他-管理','其他-返聘工','临时工','本月离职'], default: emp_data.employee_type || '正式工' },
                 { fieldtype: 'Select', fieldname: 'employment_status', label: '在职状态', options: ['在职','离职'], default: emp_data.employment_status || '在职' },
 
@@ -1698,7 +1700,77 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                 });
             }
         });
+
+        // 识别身份证号码获取出生日期和性别
+        function parse_and_apply_id_card(silent) {
+            const certType = d.get_value('certificate_type') || '居民身份证';
+            if (certType !== '居民身份证') {
+                if (!silent) {
+                    frappe.msgprint('当前证件类型非居民身份证，无法自动识别，请手动选择性别与出生日期。');
+                }
+                return;
+            }
+            const idVal = (d.get_value('id_card') || '').trim().toUpperCase();
+            if (!idVal) {
+                if (!silent) frappe.msgprint('请先输入居民身份证号码。');
+                return;
+            }
+            if (idVal.length === 18 && /^\d{17}[\dXx]$/.test(idVal)) {
+                const year = idVal.substring(6, 10);
+                const month = idVal.substring(10, 12);
+                const day = idVal.substring(12, 14);
+                const birthDate = `${year}-${month}-${day}`;
+                const genderCode = parseInt(idVal.substring(16, 17), 10);
+                const gender = (genderCode % 2 === 1) ? '男' : '女';
+
+                d.set_value('birth_date', birthDate);
+                d.set_value('gender', gender);
+                if (!silent) {
+                    frappe.show_alert({
+                        message: `身份证识别成功：${gender}性，出生日期 ${birthDate}`,
+                        indicator: 'green'
+                    });
+                }
+            } else if (idVal.length === 15 && /^\d{15}$/.test(idVal)) {
+                const year = '19' + idVal.substring(6, 8);
+                const month = idVal.substring(8, 10);
+                const day = idVal.substring(10, 12);
+                const birthDate = `${year}-${month}-${day}`;
+                const genderCode = parseInt(idVal.substring(14, 15), 10);
+                const gender = (genderCode % 2 === 1) ? '男' : '女';
+
+                d.set_value('birth_date', birthDate);
+                d.set_value('gender', gender);
+                if (!silent) {
+                    frappe.show_alert({
+                        message: `身份证识别成功：${gender}性，出生日期 ${birthDate}`,
+                        indicator: 'green'
+                    });
+                }
+            } else if (!silent) {
+                frappe.msgprint('请输入有效的18位居民身份证号码。');
+            }
+        }
+
         d.show();
+
+        // 绑定按钮事件与失去焦点自动识别
+        if (d.fields_dict.btn_parse_id_card) {
+            const $btn = d.fields_dict.btn_parse_id_card.$input || $(d.fields_dict.btn_parse_id_card.input);
+            $btn.on('click', function() {
+                parse_and_apply_id_card(false);
+            });
+        }
+        if (d.fields_dict.id_card && d.fields_dict.id_card.$input) {
+            d.fields_dict.id_card.$input.on('blur', function() {
+                if ((d.get_value('certificate_type') || '居民身份证') === '居民身份证') {
+                    const val = (d.get_value('id_card') || '').trim();
+                    if (val.length === 18 && (!d.get_value('birth_date') || !d.get_value('gender'))) {
+                        parse_and_apply_id_card(true);
+                    }
+                }
+            });
+        }
     }
 
     // 新建员工薪资档案按钮事件绑定

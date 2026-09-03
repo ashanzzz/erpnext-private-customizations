@@ -8,11 +8,26 @@ from frappe.utils import flt
 class JizhongEmployeeSalaryProfile(Document):
 	def validate(self):
 		self.validate_company()
+		self.parse_id_card_info()
 		self.calculate_special_additional_deductions()
 
 	def validate_company(self):
 		if not self.company:
 			self.company = "天津吉众科技有限公司"
+
+	def parse_id_card_info(self):
+		cert_type = (self.certificate_type or "居民身份证").strip()
+		if cert_type == "居民身份证" and self.id_card:
+			id_clean = str(self.id_card).strip().upper()
+			if len(id_clean) == 18 and id_clean[:17].isdigit():
+				year = id_clean[6:10]
+				month = id_clean[10:12]
+				day = id_clean[12:14]
+				if not self.birth_date:
+					self.birth_date = f"{year}-{month}-{day}"
+				if not self.gender:
+					gender_code = int(id_clean[16])
+					self.gender = "男" if gender_code % 2 == 1 else "女"
 
 	def calculate_special_additional_deductions(self):
 		self.special_additional_deductions_total = (

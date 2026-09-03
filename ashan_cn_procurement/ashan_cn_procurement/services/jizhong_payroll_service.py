@@ -597,7 +597,7 @@ def get_jizhong_employee_profiles(company="天津吉众科技有限公司"):
 	assert_company_access(company)
 	fields = [
 		"name", "employee_no", "employee_name", "company", "employee_type", "employment_status",
-		"salary_mode", "fixed_salary", "base_salary", "house_rent_allowance", "post_allowance", "performance_base",
+		"certificate_type", "salary_mode", "fixed_salary", "base_salary", "house_rent_allowance", "post_allowance", "performance_base",
 		"meal_allowance", "social_security_base", "housing_fund_base", "id_card", "mobile", "gender", "birth_date",
 		"department", "job_title", "deduction_child_education", "deduction_continuing_education",
 		"deduction_serious_illness", "deduction_housing_loan", "deduction_housing_rent",
@@ -649,6 +649,7 @@ def save_jizhong_employee_profile(data=None):
 
 	# 更新基础字段
 	doc.employee_name = emp_name
+	doc.certificate_type = (data.get("certificate_type") or "居民身份证").strip()
 	doc.id_card = (data.get("id_card") or "").strip()
 	doc.mobile = (data.get("mobile") or "").strip()
 	doc.gender = data.get("gender") or ""
