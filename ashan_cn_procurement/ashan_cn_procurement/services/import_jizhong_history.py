@@ -64,9 +64,13 @@ def execute():
 			tot_ss_pers += s_pers
 			tot_hf_pers += h_pers
 
+			emp_no = it.get("employee_no")
+			emp_type = "其他-正式工" if emp_no == "QG0002" else ("其他-返聘工" if emp_no in ["QG0001", "QF0001", "QF0002", "QG0003", "QG0004"] else "正式工")
+
 			doc.append("items", {
-				"employee_no": it.get("employee_no"),
+				"employee_no": emp_no,
 				"employee_name": it.get("employee_name"),
+				"employee_type": emp_type,
 				"id_card": it.get("id_card"),
 				"salary_mode": it.get("salary_mode"),
 				"base_salary": flt(it.get("base_salary", 0)),
