@@ -1,5 +1,5 @@
 /* Copyright (c) 2026, Ashan CN Procurement */
-/* 吉众人事薪酬工作台专属样式库 - 严格贯彻 Ashan UI Kit 标准与零Emoji铁律 */
+/* 吉众人事薪酬工作台专属样式库 - 严格单层表头、精确前3列冻结、纯净财务数据排版 */
 
 .jz-wb-wrapper {
     padding: 16px 24px;
@@ -47,7 +47,7 @@
     align-items: center;
 }
 
-/* 7大业务 Tab 切换 */
+/* 业务 Tab 切换 */
 .jz-nav-tabs {
     display: flex;
     gap: 8px;
@@ -188,141 +188,176 @@
     box-shadow: 0 1px 2px rgba(0,0,0,0.08);
 }
 
-/* 表格容器与滚动支持 */
+/* 表格容器与视口控制 */
 .jz-table-box {
     background: #ffffff;
     border-radius: 8px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #cbd5e1;
     overflow-x: auto;
-    max-height: calc(100vh - 240px);
+    max-height: calc(100vh - 260px);
     position: relative;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .jz-table {
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    font-size: 12px;
+    font-size: 13px;
     text-align: left;
 }
-.jz-table th {
-    background: #f8fafc;
-    color: #334155;
-    font-weight: 600;
-    padding: 8px 10px;
-    border-bottom: 1px solid #cbd5e1;
-    border-right: 1px solid #f1f5f9;
-    white-space: nowrap;
-    position: sticky;
-    top: 0;
-    z-index: 10;
+
+/* 单层纯净表头：彻底杜绝双层小卡片堆叠 */
+.jz-table thead th {
+    background: #f8fafc !important;
+    color: #334155 !important;
+    font-weight: 700 !important;
+    font-size: 12px !important;
+    padding: 9px 10px !important;
+    border-bottom: 2px solid #cbd5e1 !important;
+    border-right: 1px solid #e2e8f0 !important;
+    white-space: nowrap !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 15 !important;
+    height: 38px !important;
+    vertical-align: middle !important;
 }
 
-/* 单层语义复合表头 Dual-line Badges */
-.jz-th-compound {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-}
-.jz-th-badge {
-    font-size: 9px;
-    font-weight: 600;
-    color: #64748b;
-    background: #e2e8f0;
-    padding: 1px 4px;
-    border-radius: 3px;
-    text-transform: uppercase;
-}
-.jz-th-title {
-    font-size: 12px;
-    font-weight: 700;
-    color: #1e293b;
+/* 冻结前3列：严格精确累加像素宽度，绝不脱轨 */
+/* 第1列：序号 (46px) */
+.jz-table th.jz-col-seq,
+.jz-table td.jz-col-seq {
+    position: sticky !important;
+    left: 0px !important;
+    width: 46px !important;
+    min-width: 46px !important;
+    max-width: 46px !important;
+    text-align: center !important;
 }
 
-.jz-table td {
-    padding: 8px 10px;
-    border-bottom: 1px solid #f1f5f9;
-    border-right: 1px solid #f8fafc;
-    color: #334155;
-    white-space: nowrap;
-    background: #ffffff;
-}
-.jz-table tr:hover td {
-    background: #fffbf5;
-}
-.jz-table tr.selected td {
-    background: #ffedd5;
+/* 第2列：工号 (75px, 累加 46px) */
+.jz-table th.jz-col-no,
+.jz-table td.jz-col-no {
+    position: sticky !important;
+    left: 46px !important;
+    width: 75px !important;
+    min-width: 75px !important;
+    max-width: 75px !important;
+    text-align: center !important;
 }
 
-/* 冻结列 (前4列) */
-.jz-freeze-1 {
+/* 第3列：姓名 (105px, 累加 46 + 75 = 121px) */
+.jz-table th.jz-col-name,
+.jz-table td.jz-col-name {
     position: sticky !important;
-    left: 0;
-    z-index: 11;
-    background: #ffffff;
+    left: 121px !important;
+    width: 105px !important;
+    min-width: 105px !important;
+    max-width: 105px !important;
+    text-align: left !important;
+    border-right: 2px solid #cbd5e1 !important;
+    box-shadow: 3px 0 6px rgba(0, 0, 0, 0.06) !important;
 }
-.jz-freeze-2 {
-    position: sticky !important;
-    left: 45px;
-    z-index: 11;
-    background: #ffffff;
+
+/* 表头冻结列最高层级 */
+.jz-table thead th.jz-col-seq,
+.jz-table thead th.jz-col-no,
+.jz-table thead th.jz-col-name {
+    z-index: 30 !important;
+    background: #f8fafc !important;
 }
-.jz-freeze-3 {
-    position: sticky !important;
-    left: 110px;
-    z-index: 11;
-    background: #ffffff;
+
+/* 数据行普通单元格 */
+.jz-table tbody td {
+    padding: 7px 10px !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+    border-right: 1px solid #f8fafc !important;
+    color: #1e293b !important;
+    white-space: nowrap !important;
+    background: #ffffff !important;
+    height: 36px !important;
+    vertical-align: middle !important;
 }
-.jz-freeze-4 {
-    position: sticky !important;
-    left: 190px;
-    z-index: 11;
-    background: #ffffff;
-    box-shadow: 2px 0 4px rgba(0,0,0,0.06);
+
+/* 数据行冻结单元格 */
+.jz-table tbody td.jz-col-seq,
+.jz-table tbody td.jz-col-no,
+.jz-table tbody td.jz-col-name {
+    z-index: 10 !important;
+    background: #ffffff !important;
 }
-.jz-table th.jz-freeze-1,
-.jz-table th.jz-freeze-2,
-.jz-table th.jz-freeze-3,
-.jz-table th.jz-freeze-4 {
-    background: #f8fafc;
-    z-index: 20;
+
+/* 数据行 Hover 保持整行包括冻结列高亮 */
+.jz-table tbody tr:hover td {
+    background: #f8fafc !important;
+}
+.jz-table tbody tr:hover td.jz-col-seq,
+.jz-table tbody tr:hover td.jz-col-no,
+.jz-table tbody tr:hover td.jz-col-name {
+    background: #f8fafc !important;
 }
 
 /* 数值单元格等宽靠右排版 */
 .jz-num-cell {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    font-family: Consolas, "SF Mono", Monaco, Menlo, monospace;
+    text-align: right !important;
+    font-variant-numeric: tabular-nums !important;
+    font-family: Consolas, "SF Mono", Monaco, Menlo, monospace !important;
+    min-width: 80px;
 }
 .jz-money-cell {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    font-weight: 500;
-    color: #0f172a;
-    font-family: Consolas, "SF Mono", Monaco, Menlo, monospace;
+    text-align: right !important;
+    font-variant-numeric: tabular-nums !important;
+    font-weight: 500 !important;
+    color: #0f172a !important;
+    font-family: Consolas, "SF Mono", Monaco, Menlo, monospace !important;
+    min-width: 95px;
 }
-.jz-money-pos {
-    color: #15803d;
+.jz-money-bold {
+    font-weight: 700 !important;
 }
-.jz-money-neg {
-    color: #b91c1c;
+.jz-money-primary {
+    font-weight: 700 !important;
+    color: #ea580c !important;
+}
+.jz-money-cash {
+    font-weight: 700 !important;
+    color: #0284c7 !important;
+}
+.jz-money-cost {
+    font-weight: 700 !important;
+    color: #059669 !important;
 }
 
-/* 底部合计行 */
-.jz-table tfoot tr td {
-    position: sticky;
-    bottom: 0;
-    background: #f8fafc;
-    font-weight: 700;
-    color: #0f172a;
-    border-top: 2px solid #cbd5e1;
-    z-index: 10;
+/* 底部合计行吸底与锁定 */
+.jz-table tfoot td {
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 15 !important;
+    background: #f8fafc !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    border-top: 2px solid #cbd5e1 !important;
+    padding: 7px 10px !important;
+    white-space: nowrap !important;
+    height: 36px !important;
+    vertical-align: middle !important;
+}
+
+.jz-table tfoot td.jz-col-foot-label {
+    position: sticky !important;
+    left: 0px !important;
+    bottom: 0px !important;
+    z-index: 35 !important;
+    width: 226px !important;
+    min-width: 226px !important;
+    max-width: 226px !important;
+    background: #f8fafc !important;
+    border-right: 2px solid #cbd5e1 !important;
+    box-shadow: 3px 0 6px rgba(0, 0, 0, 0.06) !important;
+    text-align: center !important;
 }
 
 /* 考勤每日穿透明细抽屉/行 */
-.jz-attendance-detail-row {
-    background: #f8fafc !important;
-}
 .jz-attendance-detail-box {
     padding: 12px 16px;
     overflow-x: auto;
@@ -333,9 +368,9 @@
     padding-bottom: 6px;
 }
 .jz-day-card {
-    min-width: 54px;
+    min-width: 52px;
     background: #ffffff;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #cbd5e1;
     border-radius: 4px;
     padding: 4px 6px;
     text-align: center;
@@ -393,34 +428,28 @@
     font-variant-numeric: tabular-nums;
 }
 
-/* 按钮规范 */
-.jz-btn-primary {
-    background: #ea580c;
-    color: #ffffff;
-    border: 1px solid #ea580c;
-    border-radius: 6px;
-    padding: 6px 14px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s;
-}
-.jz-btn-primary:hover {
-    background: #c2410c;
-    border-color: #c2410c;
-}
-.jz-btn-secondary {
-    background: #ffffff;
-    color: #334155;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    padding: 6px 14px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s;
-}
-.jz-btn-secondary:hover {
-    background: #f1f5f9;
-    border-color: #94a3b8;
-}
+/* 纯净工具类，消除行内样式 */
+.jz-text-right { text-align: right !important; }
+.jz-text-center { text-align: center !important; }
+.jz-text-muted { color: #94a3b8 !important; }
+.jz-text-primary { color: #ea580c !important; }
+.jz-text-success { color: #16a34a !important; }
+.jz-text-info { color: #0284c7 !important; }
+.jz-text-warn { color: #d97706 !important; }
+.jz-month-input { width: 140px !important; display: inline-block !important; font-weight: 600 !important; }
+.jz-label-month { font-size: 13px !important; font-weight: 600 !important; color: #475569 !important; margin: 0 !important; }
+.jz-btn-orange { background: #ea580c !important; border-color: #ea580c !important; }
+.jz-btn-green { background: #16a34a !important; border-color: #16a34a !important; }
+.jz-btn-blue { background: #0284c7 !important; border-color: #0284c7 !important; }
+.jz-btn-red { color: #dc2626 !important; border-color: #dc2626 !important; }
+.jz-empty-cell { text-align: center !important; padding: 30px !important; color: #94a3b8 !important; }
+.jz-detail-td { padding: 0 !important; background: #f8fafc !important; }
+.jz-sign-cell { color: #94a3b8 !important; text-align: center !important; font-style: italic !important; }
+.jz-filter-select { width: 140px !important; display: inline-block !important; }
+.jz-filter-label { font-size: 13px !important; font-weight: 600 !important; margin: 0 !important; }
+.jz-tip-text { font-size: 12px !important; color: #64748b !important; }
+.jz-hidden { display: none !important; }
+.jz-config-box { background: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #cbd5e1; max-width: 800px; }
+.jz-config-title { margin-top: 0; font-weight: 700; color: #0f172a; }
+.jz-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+

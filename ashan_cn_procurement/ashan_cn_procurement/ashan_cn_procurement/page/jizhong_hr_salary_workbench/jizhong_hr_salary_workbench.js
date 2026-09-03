@@ -1,6 +1,6 @@
 // Copyright (c) 2026, Ashan CN Procurement
 // 天津吉众科技有限公司 · 人事薪酬综合工作台
-// 严格对齐《202606吉众人事综合.xlsm》与《员工考勤表-*.xlsx》规范，贯彻 Ashan UI Kit 标准与零Emoji铁律
+// 严格对齐《202606吉众人事综合.xlsm》与《员工考勤表-*.xlsx》规范，单层纯净表头与精确三列冻结体系
 
 frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
     var page = frappe.ui.make_app_page({
@@ -12,7 +12,8 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
     const COMPANY = "天津吉众科技有限公司";
     let current_month = "2026-06";
     let current_tab = "payroll";
-    let payroll_view_mode = "all"; // all | accounting | non_accounting
+    let payroll_filter_mode = "all"; // all | accounting | non_accounting
+    let payroll_col_view = "summary"; // summary (20列精简财务) | detail (32列全要素工时分项)
 
     const html = `
     <div class="jz-wb-wrapper">
@@ -21,15 +22,15 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
             <div>
                 <div class="jz-title">
                     <span>天津吉众科技有限公司 · 人事薪酬综合中枢</span>
-                    <span class="jz-title-badge">动态双工时 · 个税反推 · 现金五档配钞</span>
+                    <span class="jz-title-badge">双基准工时 · 倒休冲抵 · 现金五档配钞</span>
                 </div>
                 <div class="jz-subtitle">
-                    结构化考勤工时 (正班+1.5x/2.0x/3.0x+倒休抵扣) · 历史税前累计预扣 · 原始凭证受控归档
+                    结构化打卡工时 (正班+1.5x/2.0x/3.0x+倒休抵扣) · 历史税前累计预扣 · 原始凭证受控归档
                 </div>
             </div>
             <div class="jz-header-actions">
-                <label style="font-size: 13px; font-weight: 600; color: #475569; margin: 0;">核算月份：</label>
-                <input type="month" id="jz-month-select" class="form-control" style="width: 140px; display: inline-block; font-weight: 600;" value="2026-06">
+                <label class="jz-label-month">核算月份：</label>
+                <input type="month" id="jz-month-select" class="form-control jz-month-input" value="2026-06">
                 <button class="btn btn-default btn-sm" id="btn-jz-refresh-all">刷新数据</button>
             </div>
         </div>
@@ -50,36 +51,42 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
             <div class="jz-kpi-grid">
                 <div class="jz-kpi-card">
                     <div class="jz-kpi-title">核定状态 / 人数</div>
-                    <div class="jz-kpi-val" id="jz-kpi-status"><span class="jz-status-badge jz-status-draft">草稿 / 未核定</span></div>
+                    <div class="jz-kpi-val" id="jz-kpi-status"><span class="jz-status-badge jz-status-draft">草稿 / 可测算</span></div>
                     <div class="jz-kpi-sub">在职计薪人员: <strong id="jz-kpi-count">0</strong> 人</div>
                 </div>
                 <div class="jz-kpi-card">
                     <div class="jz-kpi-title">实发工资总额</div>
-                    <div class="jz-kpi-val" style="color:#ea580c;" id="jz-kpi-net">¥ 0.00</div>
+                    <div class="jz-kpi-val jz-text-primary" id="jz-kpi-net">¥ 0.00</div>
                     <div class="jz-kpi-sub">应发总额: <span id="jz-kpi-gross">¥ 0.00</span></div>
                 </div>
                 <div class="jz-kpi-card">
                     <div class="jz-kpi-title">代扣税费 (个人部分)</div>
-                    <div class="jz-kpi-val" style="color:#d97706;" id="jz-kpi-person-ded">¥ 0.00</div>
+                    <div class="jz-kpi-val jz-text-warn" id="jz-kpi-person-ded">¥ 0.00</div>
                     <div class="jz-kpi-sub">社保个人: <span id="jz-kpi-ss-pers">¥ 0.00</span> | 公积金: <span id="jz-kpi-hf-pers">¥ 0.00</span> | 个税: <span id="jz-kpi-tax">¥ 0.00</span></div>
                 </div>
                 <div class="jz-kpi-card">
                     <div class="jz-kpi-title">单位统筹成本</div>
-                    <div class="jz-kpi-val" style="color:#059669;" id="jz-kpi-comp-cost">¥ 0.00</div>
+                    <div class="jz-kpi-val jz-text-success" id="jz-kpi-comp-cost">¥ 0.00</div>
                     <div class="jz-kpi-sub">单位社保: <span id="jz-kpi-ss-comp">¥ 0.00</span> | 单位公积金: <span id="jz-kpi-hf-comp">¥ 0.00</span></div>
                 </div>
             </div>
 
             <div class="jz-toolbar">
                 <div class="jz-toolbar-left">
-                    <div class="jz-segmented-control" id="jz-payroll-filter">
+                    <div class="jz-segmented-control" id="jz-payroll-person-filter">
                         <button class="jz-segment-btn active" data-mode="all">全部人员</button>
                         <button class="jz-segment-btn" data-mode="accounting">入账核定 (正式工/返聘/管理)</button>
                         <button class="jz-segment-btn" data-mode="non_accounting">不入账核定 (临时工/兼职)</button>
                     </div>
-                    <button class="btn btn-primary btn-sm" id="btn-jz-calc-payroll" style="background:#ea580c; border-color:#ea580c;">执行月度薪酬核算</button>
-                    <button class="btn btn-success btn-sm" id="btn-jz-lock-payroll" style="background:#16a34a; border-color:#16a34a;">核定锁定 (只读封账)</button>
-                    <button class="btn btn-default btn-sm" id="btn-jz-unlock-payroll" style="display:none; color:#dc2626; border-color:#dc2626;">申请反审核解锁</button>
+
+                    <div class="jz-segmented-control" id="jz-payroll-col-toggle">
+                        <button class="jz-segment-btn active" data-view="summary">精简财务视图</button>
+                        <button class="jz-segment-btn" data-view="detail">全要素工时分项</button>
+                    </div>
+
+                    <button class="btn btn-primary btn-sm jz-btn-orange" id="btn-jz-calc-payroll">执行月度薪酬核算</button>
+                    <button class="btn btn-success btn-sm jz-btn-green" id="btn-jz-lock-payroll">核定锁定 (只读封账)</button>
+                    <button class="btn btn-default btn-sm jz-btn-red jz-hidden" id="btn-jz-unlock-payroll">申请反审核解锁</button>
                 </div>
                 <div class="jz-toolbar-right">
                     <button class="btn btn-default btn-sm" id="btn-jz-export-payroll">导出本月工资表 (Excel)</button>
@@ -88,44 +95,9 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
 
             <div class="jz-table-box">
                 <table class="jz-table" id="table-jz-payroll">
-                    <thead>
-                        <tr>
-                            <th class="jz-freeze-1"><div class="jz-th-compound"><span class="jz-th-badge">固定</span><span class="jz-th-title">序号</span></div></th>
-                            <th class="jz-freeze-2"><div class="jz-th-compound"><span class="jz-th-badge">固定</span><span class="jz-th-title">工号</span></div></th>
-                            <th class="jz-freeze-3"><div class="jz-th-compound"><span class="jz-th-badge">固定</span><span class="jz-th-title">姓名</span></div></th>
-                            <th class="jz-freeze-4"><div class="jz-th-compound"><span class="jz-th-badge">身份</span><span class="jz-th-title">用工性质</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">模式</span><span class="jz-th-title">计薪方式</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">标准</span><span class="jz-th-title">基本工资</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">标准</span><span class="jz-th-title">岗位津贴</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">标准</span><span class="jz-th-title">绩效基数</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">工时</span><span class="jz-th-title">出勤工时</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">工时</span><span class="jz-th-title">1.5倍工时</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">工时</span><span class="jz-th-title">2倍工时</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">工时</span><span class="jz-th-title">3倍工时</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">工时</span><span class="jz-th-title">倒休工时</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">考勤</span><span class="jz-th-title">餐补次数</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">薪资</span><span class="jz-th-title">基本工时工资</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">薪资</span><span class="jz-th-title">1.5倍工资</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">薪资</span><span class="jz-th-title">2倍工资</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">薪资</span><span class="jz-th-title">3倍工资</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">薪资</span><span class="jz-th-title">基本补贴工资</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">薪资</span><span class="jz-th-title">绩效工资</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">薪资</span><span class="jz-th-title">餐补工资</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">薪资</span><span class="jz-th-title">工资调整</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">应发</span><span class="jz-th-title">应发薪资合计</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">代扣</span><span class="jz-th-title">社保代扣</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">代扣</span><span class="jz-th-title">公积金代扣</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">代扣</span><span class="jz-th-title">代扣个税</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">扣除</span><span class="jz-th-title">个人扣除合计</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">实发</span><span class="jz-th-title">实发薪资合计</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">现金</span><span class="jz-th-title">现金发放取整</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">单位</span><span class="jz-th-title">社保单位统筹</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">单位</span><span class="jz-th-title">公积金单位缴纳</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">成本</span><span class="jz-th-title">公司成本合计</span></div></th>
-                        </tr>
-                    </thead>
+                    <thead id="thead-jz-payroll"></thead>
                     <tbody id="tbody-jz-payroll">
-                        <tr><td colspan="32" style="text-align:center; padding:30px; color:#94a3b8;">正在加载吉众薪酬数据...</td></tr>
+                        <tr><td colspan="20" class="jz-empty-cell">正在加载吉众薪酬数据...</td></tr>
                     </tbody>
                     <tfoot id="tfoot-jz-payroll"></tfoot>
                 </table>
@@ -133,7 +105,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         </div>
 
         <!-- Tab 2: 考勤工时管理 -->
-        <div id="jz-tab-attendance" class="jz-tab-content" style="display:none;">
+        <div id="jz-tab-attendance" class="jz-tab-content jz-hidden">
             <div class="jz-kpi-grid">
                 <div class="jz-kpi-card">
                     <div class="jz-kpi-title">考勤总人次 / 状态</div>
@@ -142,29 +114,29 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                 </div>
                 <div class="jz-kpi-card">
                     <div class="jz-kpi-title">基本正班总工时</div>
-                    <div class="jz-kpi-val" style="color:#0284c7;" id="jz-att-kpi-reg">0.00 h</div>
+                    <div class="jz-kpi-val jz-text-info" id="jz-att-kpi-reg">0.00 h</div>
                     <div class="jz-kpi-sub">倒休抵扣工时: <span id="jz-att-kpi-comp">0.00 h</span></div>
                 </div>
                 <div class="jz-kpi-card">
                     <div class="jz-kpi-title">各倍率加班总工时</div>
-                    <div class="jz-kpi-val" style="color:#ea580c;" id="jz-att-kpi-ot">0.00 h</div>
+                    <div class="jz-kpi-val jz-text-primary" id="jz-att-kpi-ot">0.00 h</div>
                     <div class="jz-kpi-sub">1.5x平日: <span id="jz-att-kpi-ot15">0.0h</span> | 2.0x周末: <span id="jz-att-kpi-ot20">0.0h</span> | 3.0x节假日: <span id="jz-att-kpi-ot30">0.0h</span></div>
                 </div>
                 <div class="jz-kpi-card">
                     <div class="jz-kpi-title">订餐补贴总次数</div>
-                    <div class="jz-kpi-val" style="color:#16a34a;" id="jz-att-kpi-meals">0 次</div>
+                    <div class="jz-kpi-val jz-text-success" id="jz-att-kpi-meals">0 次</div>
                     <div class="jz-kpi-sub">单价: ¥ 15.00 / 份</div>
                 </div>
             </div>
 
             <div class="jz-toolbar">
                 <div class="jz-toolbar-left">
-                    <button class="btn btn-primary btn-sm" id="btn-jz-upload-attendance" style="background:#0284c7; border-color:#0284c7;">上传吉众月度考勤 (Excel)</button>
-                    <button class="btn btn-default btn-sm" id="btn-jz-download-attendance-file" style="display:none;">下载原始考勤凭证</button>
-                    <button class="btn btn-default btn-sm" id="btn-jz-sync-calc-payroll" style="color:#ea580c; border-color:#ea580c;">按考勤一键核算当月工资</button>
+                    <button class="btn btn-primary btn-sm jz-btn-blue" id="btn-jz-upload-attendance">上传吉众月度考勤 (Excel)</button>
+                    <button class="btn btn-default btn-sm jz-hidden" id="btn-jz-download-attendance-file">下载原始考勤凭证</button>
+                    <button class="btn btn-default btn-sm jz-text-primary" id="btn-jz-sync-calc-payroll">按考勤一键核算当月工资</button>
                 </div>
                 <div class="jz-toolbar-right">
-                    <span style="font-size:12px; color:#64748b;">支持标准5行格式: 班次、作业时间、加班时间、餐补、备注</span>
+                    <span class="jz-tip-text">支持标准5行格式: 班次、作业时间、加班时间、餐补、备注</span>
                 </div>
             </div>
 
@@ -172,23 +144,23 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                 <table class="jz-table" id="table-jz-attendance">
                     <thead>
                         <tr>
-                            <th class="jz-freeze-1"><div class="jz-th-compound"><span class="jz-th-badge">固定</span><span class="jz-th-title">序号</span></div></th>
-                            <th class="jz-freeze-2"><div class="jz-th-compound"><span class="jz-th-badge">固定</span><span class="jz-th-title">工号</span></div></th>
-                            <th class="jz-freeze-3"><div class="jz-th-compound"><span class="jz-th-badge">固定</span><span class="jz-th-title">姓名</span></div></th>
-                            <th class="jz-freeze-4"><div class="jz-th-compound"><span class="jz-th-badge">出勤</span><span class="jz-th-title">整天(天)</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">出勤</span><span class="jz-th-title">半天(天)</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">出勤</span><span class="jz-th-title">缺勤(天)</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">工时</span><span class="jz-th-title">基本正班工时</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">加班</span><span class="jz-th-title">1.5倍平日加班</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">加班</span><span class="jz-th-title">2.0倍周末加班</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">加班</span><span class="jz-th-title">3.0倍节假日加班</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">抵扣</span><span class="jz-th-title">倒休抵扣工时</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">餐饮</span><span class="jz-th-title">餐补次数</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">穿透</span><span class="jz-th-title">每日明细</span></div></th>
+                            <th class="jz-col-seq">序号</th>
+                            <th class="jz-col-no">工号</th>
+                            <th class="jz-col-name">姓名</th>
+                            <th class="jz-text-center">整天(天)</th>
+                            <th class="jz-text-center">半天(天)</th>
+                            <th class="jz-text-center">缺勤(天)</th>
+                            <th class="jz-text-right">基本正班工时</th>
+                            <th class="jz-text-right">1.5倍平日加班</th>
+                            <th class="jz-text-right">2.0倍周末加班</th>
+                            <th class="jz-text-right">3.0倍节假日加班</th>
+                            <th class="jz-text-right">倒休抵扣工时</th>
+                            <th class="jz-text-right">餐补次数</th>
+                            <th class="jz-text-center">每日打卡明细</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-jz-attendance">
-                        <tr><td colspan="13" style="text-align:center; padding:30px; color:#94a3b8;">正在加载吉众考勤工时...</td></tr>
+                        <tr><td colspan="13" class="jz-empty-cell">正在加载吉众考勤工时...</td></tr>
                     </tbody>
                     <tfoot id="tfoot-jz-attendance"></tfoot>
                 </table>
@@ -196,7 +168,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         </div>
 
         <!-- Tab 3: 现金发放与配钞点钞 -->
-        <div id="jz-tab-cash_bills" class="jz-tab-content" style="display:none;">
+        <div id="jz-tab-cash_bills" class="jz-tab-content jz-hidden">
             <div class="jz-cash-stat-bar" id="jz-cash-summary-bar">
                 <div class="jz-cash-stat-item"><span class="jz-cash-denom-label">现金总盘:</span> <span class="jz-cash-denom-count" id="stat-cash-total">¥ 0.00</span></div>
                 <div class="jz-cash-stat-item"><span class="jz-cash-denom-label">100元券:</span> <span class="jz-cash-denom-count" id="stat-b100">0 张</span></div>
@@ -211,7 +183,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                     <button class="btn btn-default btn-sm" id="btn-jz-print-a4-slips">打印 A4 签收工资条</button>
                 </div>
                 <div class="jz-toolbar-right">
-                    <span style="font-size:12px; color:#64748b;">现金取整算法：RoundUp(实发工资, 0)，严格五档贪心拆分平账</span>
+                    <span class="jz-tip-text">现金取整算法：RoundUp(实发工资, 0)，严格五档贪心拆分平账</span>
                 </div>
             </div>
 
@@ -219,18 +191,18 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                 <table class="jz-table" id="table-jz-cash">
                     <thead>
                         <tr>
-                            <th class="jz-freeze-1"><div class="jz-th-compound"><span class="jz-th-badge">固定</span><span class="jz-th-title">序号</span></div></th>
-                            <th class="jz-freeze-2"><div class="jz-th-compound"><span class="jz-th-badge">固定</span><span class="jz-th-title">工号</span></div></th>
-                            <th class="jz-freeze-3"><div class="jz-th-compound"><span class="jz-th-badge">固定</span><span class="jz-th-title">姓名</span></div></th>
-                            <th class="jz-freeze-4"><div class="jz-th-compound"><span class="jz-th-badge">实发</span><span class="jz-th-title">实发薪资</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">取整</span><span class="jz-th-title">现金发放工资</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">面额</span><span class="jz-th-title">百元 (¥100)</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">面额</span><span class="jz-th-title">五十元 (¥50)</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">面额</span><span class="jz-th-title">十元 (¥10)</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">面额</span><span class="jz-th-title">五元 (¥5)</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">面额</span><span class="jz-th-title">一元 (¥1)</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">平账</span><span class="jz-th-title">现金面额合计</span></div></th>
-                            <th><div class="jz-th-compound"><span class="jz-th-badge">签署</span><span class="jz-th-title">收款签字</span></div></th>
+                            <th class="jz-col-seq">序号</th>
+                            <th class="jz-col-no">工号</th>
+                            <th class="jz-col-name">姓名</th>
+                            <th class="jz-text-right">实发薪资</th>
+                            <th class="jz-text-right">现金发放工资</th>
+                            <th class="jz-text-right">百元 (¥100)</th>
+                            <th class="jz-text-right">五十元 (¥50)</th>
+                            <th class="jz-text-right">十元 (¥10)</th>
+                            <th class="jz-text-right">五元 (¥5)</th>
+                            <th class="jz-text-right">一元 (¥1)</th>
+                            <th class="jz-text-right">现金面额合计</th>
+                            <th class="jz-text-center">收款签字</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-jz-cash"></tbody>
@@ -240,28 +212,22 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         </div>
 
         <!-- Tab 4: 个人所得税台账 -->
-        <div id="jz-tab-tax" class="jz-tab-content" style="display:none;">
+        <div id="jz-tab-tax" class="jz-tab-content jz-hidden">
             <div class="jz-table-box">
                 <table class="jz-table" id="table-jz-tax">
                     <thead>
                         <tr>
-                            <th class="jz-freeze-1">序号</th>
-                            <th class="jz-freeze-2">工号</th>
-                            <th class="jz-freeze-3">姓名</th>
-                            <th class="jz-freeze-4">计薪方式</th>
-                            <th>应发薪资合计</th>
-                            <th>当月个税免征额</th>
-                            <th>社保合计p</th>
-                            <th>住房公积金p</th>
-                            <th>当月专项附加扣除</th>
-                            <th>以往税前累计</th>
-                            <th>以往免征额累计</th>
-                            <th>以往专项扣除累计</th>
-                            <th>以往附加扣除累计</th>
-                            <th>以往已纳税额累计</th>
-                            <th>周期应缴纳所得税</th>
-                            <th>当月应缴纳所得税</th>
-                            <th>实发薪资合计</th>
+                            <th class="jz-col-seq">序号</th>
+                            <th class="jz-col-no">工号</th>
+                            <th class="jz-col-name">姓名</th>
+                            <th>计薪方式</th>
+                            <th class="jz-text-right">应发薪资</th>
+                            <th class="jz-text-right">基本减除费用</th>
+                            <th class="jz-text-right">个人社保代扣</th>
+                            <th class="jz-text-right">个人公积金</th>
+                            <th class="jz-text-right">专项附加扣除</th>
+                            <th class="jz-text-right">代扣个税</th>
+                            <th class="jz-text-right">实发工资</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-jz-tax"></tbody>
@@ -270,30 +236,30 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         </div>
 
         <!-- Tab 5: 员工薪酬档案 -->
-        <div id="jz-tab-employees" class="jz-tab-content" style="display:none;">
+        <div id="jz-tab-employees" class="jz-tab-content jz-hidden">
             <div class="jz-toolbar">
                 <div class="jz-toolbar-left">
-                    <button class="btn btn-primary btn-sm" id="btn-jz-add-emp" style="background:#ea580c; border-color:#ea580c;">新建在职员工档案</button>
+                    <button class="btn btn-primary btn-sm jz-btn-orange" id="btn-jz-add-emp">新建在职员工档案</button>
                 </div>
             </div>
             <div class="jz-table-box">
                 <table class="jz-table" id="table-jz-employees">
                     <thead>
                         <tr>
-                            <th class="jz-freeze-1">序号</th>
-                            <th class="jz-freeze-2">工号</th>
-                            <th class="jz-freeze-3">姓名</th>
-                            <th class="jz-freeze-4">身份证号</th>
+                            <th class="jz-col-seq">序号</th>
+                            <th class="jz-col-no">工号</th>
+                            <th class="jz-col-name">姓名</th>
+                            <th>身份证号</th>
                             <th>用工性质</th>
                             <th>在职状态</th>
                             <th>计薪方式</th>
-                            <th>基本工资</th>
-                            <th>岗位津贴</th>
-                            <th>绩效基数</th>
-                            <th>餐补单价</th>
-                            <th>社保基数</th>
-                            <th>公积金基数</th>
-                            <th>专项附加扣除</th>
+                            <th class="jz-text-right">基本工资</th>
+                            <th class="jz-text-right">岗位津贴</th>
+                            <th class="jz-text-right">绩效基数</th>
+                            <th class="jz-text-right">餐补单价</th>
+                            <th class="jz-text-right">社保基数</th>
+                            <th class="jz-text-right">公积金基数</th>
+                            <th class="jz-text-right">专项附加扣除</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-jz-employees"></tbody>
@@ -302,10 +268,10 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         </div>
 
         <!-- Tab 6: 社保公积金配置 -->
-        <div id="jz-tab-insurance" class="jz-tab-content" style="display:none;">
-            <div style="background:#ffffff; padding:20px; border-radius:8px; border:1px solid #e2e8f0; max-width:800px;">
-                <h4 style="margin-top:0; font-weight:700; color:#0f172a;">吉众公司法定社保公积金基数与费率标准</h4>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">
+        <div id="jz-tab-insurance" class="jz-tab-content jz-hidden">
+            <div class="jz-config-box">
+                <h4 class="jz-config-title">吉众公司法定社保公积金基数与费率标准</h4>
+                <div class="jz-config-grid">
                     <div><strong>工伤保险单位费率:</strong> 0.55% (特定标准)</div>
                     <div><strong>养老保险比例:</strong> 个人 8.00% / 单位 16.00%</div>
                     <div><strong>医疗保险比例:</strong> 个人 2.00% / 单位 10.00%</div>
@@ -319,11 +285,11 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         </div>
 
         <!-- Tab 7: 历史薪资穿透 (421条) -->
-        <div id="jz-tab-history" class="jz-tab-content" style="display:none;">
+        <div id="jz-tab-history" class="jz-tab-content jz-hidden">
             <div class="jz-toolbar">
                 <div class="jz-toolbar-left">
-                    <label style="font-size:13px; font-weight:600; margin:0;">过滤历史账期：</label>
-                    <select id="jz-history-month-filter" class="form-control" style="width:140px; display:inline-block;">
+                    <label class="jz-filter-label">过滤历史账期：</label>
+                    <select id="jz-history-month-filter" class="form-control jz-filter-select">
                         <option value="ALL">全部历史 (421条)</option>
                     </select>
                 </div>
@@ -332,20 +298,20 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                 <table class="jz-table" id="table-jz-history">
                     <thead>
                         <tr>
-                            <th class="jz-freeze-1">序号</th>
-                            <th class="jz-freeze-2">账期</th>
-                            <th class="jz-freeze-3">工号</th>
-                            <th class="jz-freeze-4">姓名</th>
+                            <th class="jz-col-seq">序号</th>
+                            <th class="jz-col-no jz-text-center">账期</th>
+                            <th class="jz-col-no jz-text-center">工号</th>
+                            <th class="jz-col-name">姓名</th>
                             <th>计薪方式</th>
-                            <th>基本工资</th>
-                            <th>岗位津贴</th>
-                            <th>绩效奖金</th>
-                            <th>应发薪资合计</th>
-                            <th>免征额</th>
-                            <th>专项扣除</th>
-                            <th>附加扣除</th>
-                            <th>代扣个税</th>
-                            <th>实发薪资合计</th>
+                            <th class="jz-text-right">基本工资</th>
+                            <th class="jz-text-right">岗位津贴</th>
+                            <th class="jz-text-right">绩效奖金</th>
+                            <th class="jz-text-right">应发薪资</th>
+                            <th class="jz-text-right">免征额</th>
+                            <th class="jz-text-right">专项扣除</th>
+                            <th class="jz-text-right">附加扣除</th>
+                            <th class="jz-text-right">代扣个税</th>
+                            <th class="jz-text-right">实发薪资</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-jz-history"></tbody>
@@ -373,8 +339,8 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         const tab = $(this).data('tab');
         $('.jz-tab-btn').removeClass('active');
         $(this).addClass('active');
-        $('.jz-tab-content').hide();
-        $(`#jz-tab-${tab}`).show();
+        $('.jz-tab-content').addClass('jz-hidden');
+        $(`#jz-tab-${tab}`).removeClass('jz-hidden');
         current_tab = tab;
 
         if (tab === 'payroll') load_payroll_data();
@@ -419,12 +385,12 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                 // KPI 渲染
                 if (set.locked) {
                     $('#jz-kpi-status').html('<span class="jz-status-badge jz-status-locked">已核定锁定</span>');
-                    $('#btn-jz-lock-payroll').hide();
-                    $('#btn-jz-unlock-payroll').show();
+                    $('#btn-jz-lock-payroll').addClass('jz-hidden');
+                    $('#btn-jz-unlock-payroll').removeClass('jz-hidden');
                 } else {
                     $('#jz-kpi-status').html('<span class="jz-status-badge jz-status-draft">草稿 / 可测算</span>');
-                    $('#btn-jz-lock-payroll').show();
-                    $('#btn-jz-unlock-payroll').hide();
+                    $('#btn-jz-lock-payroll').removeClass('jz-hidden');
+                    $('#btn-jz-unlock-payroll').addClass('jz-hidden');
                 }
 
                 $('#jz-kpi-count').text(items.length);
@@ -443,143 +409,313 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         });
     }
 
-    // 过滤与渲染 Payroll Table
+    // 渲染 Payroll Table 表头与数据行
     function render_payroll_table() {
+        const thead = $('#thead-jz-payroll');
         const tbody = $('#tbody-jz-payroll');
+        const tfoot = $('#tfoot-jz-payroll');
+        thead.empty();
         tbody.empty();
+        tfoot.empty();
+
+        const isDetail = (payroll_col_view === 'detail');
+
+        // 1. 单层纯净表头 (严格一行文本，杜绝多层药丸卡片)
+        if (isDetail) {
+            thead.html(`
+                <tr>
+                    <th class="jz-col-seq">序号</th>
+                    <th class="jz-col-no">工号</th>
+                    <th class="jz-col-name">姓名</th>
+                    <th>用工性质</th>
+                    <th>计薪方式</th>
+                    <th class="jz-text-right">基本工资</th>
+                    <th class="jz-text-right">岗位津贴</th>
+                    <th class="jz-text-right">绩效基数</th>
+                    <th class="jz-text-right">出勤工时</th>
+                    <th class="jz-text-right">1.5倍工时</th>
+                    <th class="jz-text-right">2倍工时</th>
+                    <th class="jz-text-right">3倍工时</th>
+                    <th class="jz-text-right">倒休工时</th>
+                    <th class="jz-text-right">餐补次数</th>
+                    <th class="jz-text-right">基本工时工资</th>
+                    <th class="jz-text-right">1.5倍工资</th>
+                    <th class="jz-text-right">2倍工资</th>
+                    <th class="jz-text-right">3倍工资</th>
+                    <th class="jz-text-right">基本补贴</th>
+                    <th class="jz-text-right">绩效工资</th>
+                    <th class="jz-text-right">餐补工资</th>
+                    <th class="jz-text-right">工资调整</th>
+                    <th class="jz-text-right">应发薪资</th>
+                    <th class="jz-text-right">个人社保</th>
+                    <th class="jz-text-right">个人公积金</th>
+                    <th class="jz-text-right">代扣个税</th>
+                    <th class="jz-text-right">个人扣除合计</th>
+                    <th class="jz-text-right">实发薪资</th>
+                    <th class="jz-text-right">现金发放取整</th>
+                    <th class="jz-text-right">单位社保统筹</th>
+                    <th class="jz-text-right">单位公积金</th>
+                    <th class="jz-text-right">公司成本合计</th>
+                </tr>
+            `);
+        } else {
+            // 精简财务视图 (20 列，纯净清爽)
+            thead.html(`
+                <tr>
+                    <th class="jz-col-seq">序号</th>
+                    <th class="jz-col-no">工号</th>
+                    <th class="jz-col-name">姓名</th>
+                    <th>用工性质</th>
+                    <th>计薪方式</th>
+                    <th class="jz-text-right">基本工资</th>
+                    <th class="jz-text-right">出勤工时</th>
+                    <th class="jz-text-right">加班费合计</th>
+                    <th class="jz-text-right">津贴与绩效</th>
+                    <th class="jz-text-right">餐补工资</th>
+                    <th class="jz-text-right">工资调整</th>
+                    <th class="jz-text-right">应发薪资</th>
+                    <th class="jz-text-right">个人社保</th>
+                    <th class="jz-text-right">个人公积金</th>
+                    <th class="jz-text-right">代扣个税</th>
+                    <th class="jz-text-right">个人扣除合计</th>
+                    <th class="jz-text-right">实发薪资</th>
+                    <th class="jz-text-right">现金发放</th>
+                    <th class="jz-text-right">单位统筹</th>
+                    <th class="jz-text-right">公司总成本</th>
+                </tr>
+            `);
+        }
 
         let filtered = payroll_cache.filter(it => {
-            if (payroll_view_mode === 'accounting') {
+            if (payroll_filter_mode === 'accounting') {
                 return ['正式工', '其他-管理', '返聘工'].includes(it.employee_type);
-            } else if (payroll_view_mode === 'non_accounting') {
+            } else if (payroll_filter_mode === 'non_accounting') {
                 return ['临时工', '兼职'].includes(it.employee_type);
             }
             return true;
         });
 
+        const colSpanTotal = isDetail ? 32 : 20;
+
         if (filtered.length === 0) {
-            tbody.html('<tr><td colspan="32" style="text-align:center; padding:30px; color:#94a3b8;">该期间暂无薪酬结算记录，请点击上方“执行月度薪酬核算”。</td></tr>');
-            $('#tfoot-jz-payroll').empty();
+            tbody.html(`<tr><td colspan="${colSpanTotal}" class="jz-empty-cell">该期间暂无薪酬结算记录，请点击上方“执行月度薪酬核算”。</td></tr>`);
             return;
         }
 
-        let tot_basic_hrs = 0, tot_ot_15 = 0, tot_ot_20 = 0, tot_ot_30 = 0, tot_comp = 0, tot_meals = 0;
-        let tot_sal_basic = 0, tot_sal_ot15 = 0, tot_sal_ot20 = 0, tot_sal_ot30 = 0, tot_sal_sub = 0;
-        let tot_sal_perf = 0, tot_sal_meal = 0, tot_sal_adj = 0, tot_gross = 0;
+        let tot_basic_hrs = 0, tot_ot_hrs = 0, tot_ot_pay = 0, tot_allow_perf = 0;
+        let tot_sal_meal = 0, tot_sal_adj = 0, tot_gross = 0;
         let tot_ss_pers = 0, tot_hf_pers = 0, tot_tax = 0, tot_pers_ded = 0, tot_net = 0, tot_cash = 0;
-        let tot_ss_comp = 0, tot_hf_comp = 0, tot_comp_cost = 0;
+        let tot_comp_ins = 0, tot_comp_cost = 0;
+
+        // 全要素累加变量
+        let tot_ot15_hrs = 0, tot_ot20_hrs = 0, tot_ot30_hrs = 0, tot_comp_hrs = 0, tot_meals = 0;
+        let tot_sal_basic = 0, tot_sal_ot15 = 0, tot_sal_ot20 = 0, tot_sal_ot30 = 0;
+        let tot_sal_sub = 0, tot_sal_perf = 0, tot_ss_comp = 0, tot_hf_comp = 0;
 
         filtered.forEach((it, idx) => {
-            tot_basic_hrs += flt(it.work_hours);
-            tot_ot_15 += flt(it.overtime_regular_1_5);
-            tot_ot_20 += flt(it.overtime_weekend_2_0);
-            tot_ot_30 += flt(it.overtime_holiday_3_0);
-            tot_comp += flt(it.leave_compensatory_hours);
-            tot_meals += cint(it.meal_count);
+            const bHrs = flt(it.work_hours);
+            const ot15 = flt(it.overtime_regular_1_5);
+            const ot20 = flt(it.overtime_weekend_2_0);
+            const ot30 = flt(it.overtime_holiday_3_0);
+            const cLeave = flt(it.leave_compensatory_hours);
+            const mCount = cint(it.meal_count);
 
-            tot_sal_basic += flt(it.salary_basic_hours);
-            tot_sal_ot15 += flt(it.salary_overtime_1_5);
-            tot_sal_ot20 += flt(it.salary_overtime_2_0);
-            tot_sal_ot30 += flt(it.salary_overtime_3_0);
-            tot_sal_sub += flt(it.salary_basic_subsidy);
-            tot_sal_perf += flt(it.salary_performance);
-            tot_sal_meal += flt(it.salary_meal_subsidy);
-            tot_sal_adj += flt(it.salary_adjustment);
-            tot_gross += flt(it.gross_salary);
+            const sBasic = flt(it.salary_basic_hours);
+            const sOt15 = flt(it.salary_overtime_1_5);
+            const sOt20 = flt(it.salary_overtime_2_0);
+            const sOt30 = flt(it.salary_overtime_3_0);
+            const otPay = flt(sOt15 + sOt20 + sOt30, 2);
 
-            tot_ss_pers += flt(it.ss_person_total);
-            tot_hf_pers += flt(it.hf_person_total);
-            tot_tax += flt(it.tax_amount);
-            tot_pers_ded += flt(it.person_cost_total);
-            tot_net += flt(it.net_salary);
-            tot_cash += flt(it.cash_pay);
+            const sSub = flt(it.salary_basic_subsidy);
+            const sPerf = flt(it.salary_performance);
+            const allowPerf = flt(sSub + sPerf, 2);
 
-            tot_ss_comp += flt(it.ss_company_total);
-            tot_hf_comp += flt(it.hf_company_total);
-            tot_comp_cost += flt(it.company_cost_total);
+            const sMeal = flt(it.salary_meal_subsidy);
+            const sAdj = flt(it.salary_adjustment);
+            const gross = flt(it.gross_salary);
 
-            tbody.append(`
-                <tr>
-                    <td class="jz-freeze-1">${idx + 1}</td>
-                    <td class="jz-freeze-2"><strong>${it.employee_no}</strong></td>
-                    <td class="jz-freeze-3"><strong>${it.employee_name}</strong></td>
-                    <td class="jz-freeze-4">${it.employee_type || '正式工'}</td>
-                    <td>${it.salary_mode}</td>
-                    <td class="jz-money-cell">${fmtMoney(it.base_salary)}</td>
-                    <td class="jz-money-cell">${fmtMoney(it.post_allowance)}</td>
-                    <td class="jz-money-cell">${fmtMoney(it.performance_salary)}</td>
-                    <td class="jz-num-cell">${fmtHours(it.work_hours)}</td>
-                    <td class="jz-num-cell">${fmtHours(it.overtime_regular_1_5)}</td>
-                    <td class="jz-num-cell">${fmtHours(it.overtime_weekend_2_0)}</td>
-                    <td class="jz-num-cell">${fmtHours(it.overtime_holiday_3_0)}</td>
-                    <td class="jz-num-cell">${fmtHours(it.leave_compensatory_hours)}</td>
-                    <td class="jz-num-cell">${it.meal_count} 次</td>
-                    <td class="jz-money-cell">${fmtMoney(it.salary_basic_hours)}</td>
-                    <td class="jz-money-cell">${fmtMoney(it.salary_overtime_1_5)}</td>
-                    <td class="jz-money-cell">${fmtMoney(it.salary_overtime_2_0)}</td>
-                    <td class="jz-money-cell">${fmtMoney(it.salary_overtime_3_0)}</td>
-                    <td class="jz-money-cell">${fmtMoney(it.salary_basic_subsidy)}</td>
-                    <td class="jz-money-cell">${fmtMoney(it.salary_performance)}</td>
-                    <td class="jz-money-cell">${fmtMoney(it.salary_meal_subsidy)}</td>
-                    <td class="jz-money-cell">${fmtMoney(it.salary_adjustment)}</td>
-                    <td class="jz-money-cell" style="font-weight:700; color:#0f172a;">${fmtMoney(it.gross_salary)}</td>
-                    <td class="jz-money-cell">${fmtMoney(it.ss_person_total)}</td>
-                    <td class="jz-money-cell">${fmtMoney(it.hf_person_total)}</td>
-                    <td class="jz-money-cell">${fmtMoney(it.tax_amount)}</td>
-                    <td class="jz-money-cell">${fmtMoney(it.person_cost_total)}</td>
-                    <td class="jz-money-cell" style="font-weight:700; color:#ea580c;">${fmtMoney(it.net_salary)}</td>
-                    <td class="jz-money-cell" style="font-weight:700; color:#0284c7;">${fmtMoney(it.cash_pay)}</td>
-                    <td class="jz-money-cell">${fmtMoney(it.ss_company_total)}</td>
-                    <td class="jz-money-cell">${fmtMoney(it.hf_company_total)}</td>
-                    <td class="jz-money-cell" style="font-weight:700; color:#059669;">${fmtMoney(it.company_cost_total)}</td>
-                </tr>
-            `);
+            const ssP = flt(it.ss_person_total);
+            const hfP = flt(it.hf_person_total);
+            const tax = flt(it.tax_amount);
+            const pCost = flt(it.person_cost_total);
+            const net = flt(it.net_salary);
+            const cash = flt(it.cash_pay);
+
+            const ssC = flt(it.ss_company_total);
+            const hfC = flt(it.hf_company_total);
+            const cCost = flt(it.company_cost_total);
+
+            // 汇总
+            tot_basic_hrs += bHrs;
+            tot_ot_hrs += (ot15 + ot20 + ot30);
+            tot_ot_pay += otPay;
+            tot_allow_perf += allowPerf;
+            tot_sal_meal += sMeal;
+            tot_sal_adj += sAdj;
+            tot_gross += gross;
+
+            tot_ss_pers += ssP;
+            tot_hf_pers += hfP;
+            tot_tax += tax;
+            tot_pers_ded += pCost;
+            tot_net += net;
+            tot_cash += cash;
+            tot_comp_ins += (ssC + hfC);
+            tot_comp_cost += cCost;
+
+            if (isDetail) {
+                tot_ot15_hrs += ot15;
+                tot_ot20_hrs += ot20;
+                tot_ot30_hrs += ot30;
+                tot_comp_hrs += cLeave;
+                tot_meals += mCount;
+                tot_sal_basic += sBasic;
+                tot_sal_ot15 += sOt15;
+                tot_sal_ot20 += sOt20;
+                tot_sal_ot30 += sOt30;
+                tot_sal_sub += sSub;
+                tot_sal_perf += sPerf;
+                tot_ss_comp += ssC;
+                tot_hf_comp += hfC;
+
+                tbody.append(`
+                    <tr>
+                        <td class="jz-col-seq">${idx + 1}</td>
+                        <td class="jz-col-no"><strong>${it.employee_no}</strong></td>
+                        <td class="jz-col-name"><strong>${it.employee_name}</strong></td>
+                        <td>${it.employee_type || '正式工'}</td>
+                        <td>${it.salary_mode}</td>
+                        <td class="jz-money-cell">${fmtMoney(it.base_salary)}</td>
+                        <td class="jz-money-cell">${fmtMoney(it.post_allowance)}</td>
+                        <td class="jz-money-cell">${fmtMoney(it.performance_salary)}</td>
+                        <td class="jz-num-cell">${fmtHours(bHrs)}</td>
+                        <td class="jz-num-cell">${fmtHours(ot15)}</td>
+                        <td class="jz-num-cell">${fmtHours(ot20)}</td>
+                        <td class="jz-num-cell">${fmtHours(ot30)}</td>
+                        <td class="jz-num-cell">${fmtHours(cLeave)}</td>
+                        <td class="jz-num-cell">${mCount} 次</td>
+                        <td class="jz-money-cell">${fmtMoney(sBasic)}</td>
+                        <td class="jz-money-cell">${fmtMoney(sOt15)}</td>
+                        <td class="jz-money-cell">${fmtMoney(sOt20)}</td>
+                        <td class="jz-money-cell">${fmtMoney(sOt30)}</td>
+                        <td class="jz-money-cell">${fmtMoney(sSub)}</td>
+                        <td class="jz-money-cell">${fmtMoney(sPerf)}</td>
+                        <td class="jz-money-cell">${fmtMoney(sMeal)}</td>
+                        <td class="jz-money-cell">${fmtMoney(sAdj)}</td>
+                        <td class="jz-money-cell jz-money-bold">${fmtMoney(gross)}</td>
+                        <td class="jz-money-cell">${fmtMoney(ssP)}</td>
+                        <td class="jz-money-cell">${fmtMoney(hfP)}</td>
+                        <td class="jz-money-cell">${fmtMoney(tax)}</td>
+                        <td class="jz-money-cell">${fmtMoney(pCost)}</td>
+                        <td class="jz-money-cell jz-money-primary">${fmtMoney(net)}</td>
+                        <td class="jz-money-cell jz-money-cash">${fmtMoney(cash)}</td>
+                        <td class="jz-money-cell">${fmtMoney(ssC)}</td>
+                        <td class="jz-money-cell">${fmtMoney(hfC)}</td>
+                        <td class="jz-money-cell jz-money-cost">${fmtMoney(cCost)}</td>
+                    </tr>
+                `);
+            } else {
+                tbody.append(`
+                    <tr>
+                        <td class="jz-col-seq">${idx + 1}</td>
+                        <td class="jz-col-no"><strong>${it.employee_no}</strong></td>
+                        <td class="jz-col-name"><strong>${it.employee_name}</strong></td>
+                        <td>${it.employee_type || '正式工'}</td>
+                        <td>${it.salary_mode}</td>
+                        <td class="jz-money-cell">${fmtMoney(it.base_salary)}</td>
+                        <td class="jz-num-cell">${fmtHours(bHrs)}</td>
+                        <td class="jz-money-cell">${fmtMoney(otPay)}</td>
+                        <td class="jz-money-cell">${fmtMoney(allowPerf)}</td>
+                        <td class="jz-money-cell">${fmtMoney(sMeal)}</td>
+                        <td class="jz-money-cell">${fmtMoney(sAdj)}</td>
+                        <td class="jz-money-cell jz-money-bold">${fmtMoney(gross)}</td>
+                        <td class="jz-money-cell">${fmtMoney(ssP)}</td>
+                        <td class="jz-money-cell">${fmtMoney(hfP)}</td>
+                        <td class="jz-money-cell">${fmtMoney(tax)}</td>
+                        <td class="jz-money-cell">${fmtMoney(pCost)}</td>
+                        <td class="jz-money-cell jz-money-primary">${fmtMoney(net)}</td>
+                        <td class="jz-money-cell jz-money-cash">${fmtMoney(cash)}</td>
+                        <td class="jz-money-cell">${fmtMoney(ssC + hfC)}</td>
+                        <td class="jz-money-cell jz-money-cost">${fmtMoney(cCost)}</td>
+                    </tr>
+                `);
+            }
         });
 
-        // 底部合计
-        $('#tfoot-jz-payroll').html(`
-            <tr>
-                <td class="jz-freeze-1">合计</td>
-                <td class="jz-freeze-2">-</td>
-                <td class="jz-freeze-3">${filtered.length} 人</td>
-                <td class="jz-freeze-4">-</td>
-                <td>-</td>
-                <td class="jz-money-cell">-</td>
-                <td class="jz-money-cell">-</td>
-                <td class="jz-money-cell">-</td>
-                <td class="jz-num-cell">${fmtHours(tot_basic_hrs)}</td>
-                <td class="jz-num-cell">${fmtHours(tot_ot_15)}</td>
-                <td class="jz-num-cell">${fmtHours(tot_ot_20)}</td>
-                <td class="jz-num-cell">${fmtHours(tot_ot_30)}</td>
-                <td class="jz-num-cell">${fmtHours(tot_comp)}</td>
-                <td class="jz-num-cell">${tot_meals} 次</td>
-                <td class="jz-money-cell">${fmtMoney(tot_sal_basic)}</td>
-                <td class="jz-money-cell">${fmtMoney(tot_sal_ot15)}</td>
-                <td class="jz-money-cell">${fmtMoney(tot_sal_ot20)}</td>
-                <td class="jz-money-cell">${fmtMoney(tot_sal_ot30)}</td>
-                <td class="jz-money-cell">${fmtMoney(tot_sal_sub)}</td>
-                <td class="jz-money-cell">${fmtMoney(tot_sal_perf)}</td>
-                <td class="jz-money-cell">${fmtMoney(tot_sal_meal)}</td>
-                <td class="jz-money-cell">${fmtMoney(tot_sal_adj)}</td>
-                <td class="jz-money-cell">${fmtMoney(tot_gross)}</td>
-                <td class="jz-money-cell">${fmtMoney(tot_ss_pers)}</td>
-                <td class="jz-money-cell">${fmtMoney(tot_hf_pers)}</td>
-                <td class="jz-money-cell">${fmtMoney(tot_tax)}</td>
-                <td class="jz-money-cell">${fmtMoney(tot_pers_ded)}</td>
-                <td class="jz-money-cell" style="color:#ea580c;">${fmtMoney(tot_net)}</td>
-                <td class="jz-money-cell" style="color:#0284c7;">${fmtMoney(tot_cash)}</td>
-                <td class="jz-money-cell">${fmtMoney(tot_ss_comp)}</td>
-                <td class="jz-money-cell">${fmtMoney(tot_hf_comp)}</td>
-                <td class="jz-money-cell" style="color:#059669;">${fmtMoney(tot_comp_cost)}</td>
-            </tr>
-        `);
+        // 底部合计行
+        if (isDetail) {
+            tfoot.html(`
+                <tr>
+                    <td colspan="3" class="jz-col-foot-label">合计 · 本表 ${filtered.length} 人</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td class="jz-money-cell">-</td>
+                    <td class="jz-money-cell">-</td>
+                    <td class="jz-money-cell">-</td>
+                    <td class="jz-num-cell">${fmtHours(tot_basic_hrs)}</td>
+                    <td class="jz-num-cell">${fmtHours(tot_ot15_hrs)}</td>
+                    <td class="jz-num-cell">${fmtHours(tot_ot20_hrs)}</td>
+                    <td class="jz-num-cell">${fmtHours(tot_ot30_hrs)}</td>
+                    <td class="jz-num-cell">${fmtHours(tot_comp_hrs)}</td>
+                    <td class="jz-num-cell">${tot_meals} 次</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_sal_basic)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_sal_ot15)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_sal_ot20)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_sal_ot30)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_sal_sub)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_sal_perf)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_sal_meal)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_sal_adj)}</td>
+                    <td class="jz-money-cell jz-money-bold">${fmtMoney(tot_gross)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_ss_pers)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_hf_pers)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_tax)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_pers_ded)}</td>
+                    <td class="jz-money-cell jz-money-primary">${fmtMoney(tot_net)}</td>
+                    <td class="jz-money-cell jz-money-cash">${fmtMoney(tot_cash)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_ss_comp)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_hf_comp)}</td>
+                    <td class="jz-money-cell jz-money-cost">${fmtMoney(tot_comp_cost)}</td>
+                </tr>
+            `);
+        } else {
+            tfoot.html(`
+                <tr>
+                    <td colspan="3" class="jz-col-foot-label">合计 · 本表 ${filtered.length} 人</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td class="jz-money-cell">-</td>
+                    <td class="jz-num-cell">${fmtHours(tot_basic_hrs)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_ot_pay)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_allow_perf)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_sal_meal)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_sal_adj)}</td>
+                    <td class="jz-money-cell jz-money-bold">${fmtMoney(tot_gross)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_ss_pers)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_hf_pers)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_tax)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_pers_ded)}</td>
+                    <td class="jz-money-cell jz-money-primary">${fmtMoney(tot_net)}</td>
+                    <td class="jz-money-cell jz-money-cash">${fmtMoney(tot_cash)}</td>
+                    <td class="jz-money-cell">${fmtMoney(tot_comp_ins)}</td>
+                    <td class="jz-money-cell jz-money-cost">${fmtMoney(tot_comp_cost)}</td>
+                </tr>
+            `);
+        }
     }
 
-    // 分段控件事件
-    $('#jz-payroll-filter .jz-segment-btn').on('click', function() {
-        $('#jz-payroll-filter .jz-segment-btn').removeClass('active');
+    // 分段控件事件绑定
+    $('#jz-payroll-person-filter .jz-segment-btn').on('click', function() {
+        $('#jz-payroll-person-filter .jz-segment-btn').removeClass('active');
         $(this).addClass('active');
-        payroll_view_mode = $(this).data('mode');
+        payroll_filter_mode = $(this).data('mode');
+        render_payroll_table();
+    });
+
+    $('#jz-payroll-col-toggle .jz-segment-btn').on('click', function() {
+        $('#jz-payroll-col-toggle .jz-segment-btn').removeClass('active');
+        $(this).addClass('active');
+        payroll_col_view = $(this).data('view');
         render_payroll_table();
     });
 
@@ -622,11 +758,11 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                 $('#jz-att-kpi-meals').text((summary.total_meals || 0) + ' 次');
 
                 if (summary.attendance_file) {
-                    $('#jz-att-file-status').html(`凭证已归档: <a href="${summary.attendance_file}" target="_blank" style="color:#0284c7; text-decoration:underline;">查看文件</a>`);
-                    $('#btn-jz-download-attendance-file').show().attr('data-url', summary.attendance_file);
+                    $('#jz-att-file-status').html(`凭证已归档: <a href="${summary.attendance_file}" target="_blank" class="jz-text-info">查看文件</a>`);
+                    $('#btn-jz-download-attendance-file').removeClass('jz-hidden').attr('data-url', summary.attendance_file);
                 } else {
                     $('#jz-att-file-status').text('原始凭证: 未上传');
-                    $('#btn-jz-download-attendance-file').hide();
+                    $('#btn-jz-download-attendance-file').addClass('jz-hidden');
                 }
 
                 render_attendance_table();
@@ -639,37 +775,62 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         tbody.empty();
 
         if (attendance_cache.length === 0) {
-            tbody.html('<tr><td colspan="13" style="text-align:center; padding:30px; color:#94a3b8;">该月份尚未上传考勤表，请点击“上传吉众月度考勤 (Excel)”按钮。</td></tr>');
+            tbody.html('<tr><td colspan="13" class="jz-empty-cell">该月份尚未上传考勤表，请点击“上传吉众月度考勤 (Excel)”按钮。</td></tr>');
             $('#tfoot-jz-attendance').empty();
             return;
         }
 
+        let tot_reg = 0, tot_15 = 0, tot_20 = 0, tot_30 = 0, tot_comp = 0, tot_m = 0;
+
         attendance_cache.forEach((it, idx) => {
+            tot_reg += flt(it.work_hours_regular);
+            tot_15 += flt(it.overtime_regular_1_5);
+            tot_20 += flt(it.overtime_weekend_2_0);
+            tot_30 += flt(it.overtime_holiday_3_0);
+            tot_comp += flt(it.leave_compensatory_hours);
+            tot_m += cint(it.meal_count);
+
             tbody.append(`
                 <tr class="jz-att-row" data-no="${it.employee_no}">
-                    <td class="jz-freeze-1">${idx + 1}</td>
-                    <td class="jz-freeze-2"><strong>${it.employee_no}</strong></td>
-                    <td class="jz-freeze-3"><strong>${it.employee_name}</strong></td>
-                    <td class="jz-freeze-4 jz-num-cell">${it.attendance_days || 0}</td>
-                    <td class="jz-num-cell">${it.half_days || 0}</td>
-                    <td class="jz-num-cell">${it.absent_days || 0}</td>
-                    <td class="jz-num-cell" style="font-weight:700; color:#0284c7;">${fmtHours(it.work_hours_regular)}</td>
+                    <td class="jz-col-seq">${idx + 1}</td>
+                    <td class="jz-col-no"><strong>${it.employee_no}</strong></td>
+                    <td class="jz-col-name"><strong>${it.employee_name}</strong></td>
+                    <td class="jz-text-center">${it.attendance_days || 0}</td>
+                    <td class="jz-text-center">${it.half_days || 0}</td>
+                    <td class="jz-text-center">${it.absent_days || 0}</td>
+                    <td class="jz-num-cell jz-text-info">${fmtHours(it.work_hours_regular)}</td>
                     <td class="jz-num-cell">${fmtHours(it.overtime_regular_1_5)}</td>
                     <td class="jz-num-cell">${fmtHours(it.overtime_weekend_2_0)}</td>
                     <td class="jz-num-cell">${fmtHours(it.overtime_holiday_3_0)}</td>
-                    <td class="jz-num-cell" style="color:#64748b;">${fmtHours(it.leave_compensatory_hours)}</td>
-                    <td class="jz-num-cell" style="font-weight:700; color:#16a34a;">${it.meal_count || 0} 次</td>
-                    <td style="text-align:center;">
-                        <button class="btn btn-default btn-xs btn-toggle-daily" data-no="${it.employee_no}">展开日明细</button>
+                    <td class="jz-num-cell jz-text-muted">${fmtHours(it.leave_compensatory_hours)}</td>
+                    <td class="jz-num-cell jz-text-success">${it.meal_count || 0} 次</td>
+                    <td class="jz-text-center">
+                        <button class="btn btn-default btn-xs btn-toggle-daily" data-no="${it.employee_no}">展开明细</button>
                     </td>
                 </tr>
-                <tr class="jz-att-detail-tr" id="detail-${it.employee_no}" style="display:none;">
-                    <td colspan="13" style="padding:0; background:#f8fafc;">
+                <tr class="jz-att-detail-tr jz-hidden" id="detail-${it.employee_no}">
+                    <td colspan="13" class="jz-detail-td">
                         <div class="jz-attendance-detail-box" id="detail-box-${it.employee_no}"></div>
                     </td>
                 </tr>
             `);
         });
+
+        $('#tfoot-jz-attendance').html(`
+            <tr>
+                <td colspan="3" class="jz-col-foot-label">合计 (${attendance_cache.length}人)</td>
+                <td>-</td>
+                <td>-</td>
+                <td>-</td>
+                <td class="jz-num-cell jz-text-info">${fmtHours(tot_reg)}</td>
+                <td class="jz-num-cell">${fmtHours(tot_15)}</td>
+                <td class="jz-num-cell">${fmtHours(tot_20)}</td>
+                <td class="jz-num-cell">${fmtHours(tot_30)}</td>
+                <td class="jz-num-cell">${fmtHours(tot_comp)}</td>
+                <td class="jz-num-cell jz-text-success">${tot_m} 次</td>
+                <td>-</td>
+            </tr>
+        `);
 
         // 展开打卡明细事件
         $('.btn-toggle-daily').on('click', function() {
@@ -677,9 +838,9 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
             const tr = $(`#detail-${empNo}`);
             const btn = $(this);
 
-            if (tr.is(':visible')) {
-                tr.hide();
-                btn.text('展开日明细');
+            if (!tr.hasClass('jz-hidden')) {
+                tr.addClass('jz-hidden');
+                btn.text('展开明细');
             } else {
                 const emp = attendance_cache.find(e => e.employee_no === empNo);
                 if (emp && emp.daily_records_json) {
@@ -694,10 +855,10 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                             cardsHtml += `
                                 <div class="${cls}">
                                     <div class="jz-day-card-num">${d.day}日</div>
-                                    <div style="font-size:10px; color:#64748b;">${d.shift || '-'}</div>
+                                    <div class="jz-tip-text">${d.shift || '-'}</div>
                                     <div class="jz-day-card-hours">${d.work_hours > 0 ? d.work_hours + 'h' : '0'}</div>
                                     <div class="jz-day-card-ot">${d.overtime > 0 ? '+' + d.overtime + 'h' : ''}</div>
-                                    <div style="font-size:10px; color:#16a34a;">${d.meal > 0 ? d.meal + '餐' : ''}</div>
+                                    <div class="jz-text-success">${d.meal > 0 ? d.meal + '餐' : ''}</div>
                                 </div>
                             `;
                         });
@@ -705,7 +866,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                         $(`#detail-box-${empNo}`).html(cardsHtml);
                     } catch(e) {}
                 }
-                tr.show();
+                tr.removeClass('jz-hidden');
                 btn.text('收起明细');
             }
         });
@@ -807,35 +968,33 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
 
                     tbody.append(`
                         <tr>
-                            <td class="jz-freeze-1">${idx + 1}</td>
-                            <td class="jz-freeze-2"><strong>${it.employee_no}</strong></td>
-                            <td class="jz-freeze-3"><strong>${it.employee_name}</strong></td>
-                            <td class="jz-freeze-4 jz-money-cell">${fmtMoney(it.net_salary)}</td>
-                            <td class="jz-money-cell" style="font-weight:700; color:#0284c7;">${fmtMoney(it.cash_pay)}</td>
+                            <td class="jz-col-seq">${idx + 1}</td>
+                            <td class="jz-col-no"><strong>${it.employee_no}</strong></td>
+                            <td class="jz-col-name"><strong>${it.employee_name}</strong></td>
+                            <td class="jz-money-cell">${fmtMoney(it.net_salary)}</td>
+                            <td class="jz-money-cell jz-money-cash">${fmtMoney(it.cash_pay)}</td>
                             <td class="jz-num-cell">${it.bills_100 || 0}</td>
                             <td class="jz-num-cell">${it.bills_50 || 0}</td>
                             <td class="jz-num-cell">${it.bills_10 || 0}</td>
                             <td class="jz-num-cell">${it.bills_5 || 0}</td>
                             <td class="jz-num-cell">${it.bills_1 || 0}</td>
-                            <td class="jz-money-cell">${fmtMoney(it.cash_pay)}</td>
-                            <td style="color:#cbd5e1; font-style:italic;">[ 签字区 ]</td>
+                            <td class="jz-money-cell jz-money-bold">${fmtMoney(it.cash_pay)}</td>
+                            <td class="jz-sign-cell">[ 签字区 ]</td>
                         </tr>
                     `);
                 });
 
                 $('#tfoot-jz-cash').html(`
                     <tr>
-                        <td class="jz-freeze-1">合计</td>
-                        <td class="jz-freeze-2">-</td>
-                        <td class="jz-freeze-3">${items.length} 人</td>
-                        <td class="jz-freeze-4 jz-money-cell">${fmtMoney(tot_net)}</td>
-                        <td class="jz-money-cell" style="color:#0284c7;">${fmtMoney(tot_cash)}</td>
+                        <td colspan="3" class="jz-col-foot-label">合计 (${items.length}人)</td>
+                        <td class="jz-money-cell">${fmtMoney(tot_net)}</td>
+                        <td class="jz-money-cell jz-money-cash">${fmtMoney(tot_cash)}</td>
                         <td class="jz-num-cell">${t_100}</td>
                         <td class="jz-num-cell">${t_50}</td>
                         <td class="jz-num-cell">${t_10}</td>
                         <td class="jz-num-cell">${t_5}</td>
                         <td class="jz-num-cell">${t_1}</td>
-                        <td class="jz-money-cell">${fmtMoney(tot_cash)}</td>
+                        <td class="jz-money-cell jz-money-bold">${fmtMoney(tot_cash)}</td>
                         <td>-</td>
                     </tr>
                 `);
@@ -857,23 +1016,17 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                 items.forEach((it, idx) => {
                     tbody.append(`
                         <tr>
-                            <td class="jz-freeze-1">${idx + 1}</td>
-                            <td class="jz-freeze-2"><strong>${it.employee_no}</strong></td>
-                            <td class="jz-freeze-3"><strong>${it.employee_name}</strong></td>
-                            <td class="jz-freeze-4">${it.salary_mode}</td>
-                            <td class="jz-money-cell">${fmtMoney(it.gross_salary)}</td>
+                            <td class="jz-col-seq">${idx + 1}</td>
+                            <td class="jz-col-no"><strong>${it.employee_no}</strong></td>
+                            <td class="jz-col-name"><strong>${it.employee_name}</strong></td>
+                            <td>${it.salary_mode}</td>
+                            <td class="jz-money-cell jz-money-bold">${fmtMoney(it.gross_salary)}</td>
                             <td class="jz-money-cell">${fmtMoney(it.tax_threshold || 5000)}</td>
                             <td class="jz-money-cell">${fmtMoney(it.ss_person_total)}</td>
                             <td class="jz-money-cell">${fmtMoney(it.hf_person_total)}</td>
                             <td class="jz-money-cell">${fmtMoney(it.special_deductions_total)}</td>
-                            <td class="jz-money-cell">-</td>
-                            <td class="jz-money-cell">-</td>
-                            <td class="jz-money-cell">-</td>
-                            <td class="jz-money-cell">-</td>
-                            <td class="jz-money-cell">-</td>
-                            <td class="jz-money-cell">${fmtMoney(it.tax_amount)}</td>
-                            <td class="jz-money-cell" style="font-weight:700; color:#d97706;">${fmtMoney(it.tax_amount)}</td>
-                            <td class="jz-money-cell">${fmtMoney(it.net_salary)}</td>
+                            <td class="jz-money-cell jz-text-warn">${fmtMoney(it.tax_amount)}</td>
+                            <td class="jz-money-cell jz-money-primary">${fmtMoney(it.net_salary)}</td>
                         </tr>
                     `);
                 });
@@ -900,10 +1053,10 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                 list.forEach((it, idx) => {
                     tbody.append(`
                         <tr>
-                            <td class="jz-freeze-1">${idx + 1}</td>
-                            <td class="jz-freeze-2"><strong>${it.employee_no}</strong></td>
-                            <td class="jz-freeze-3"><strong>${it.employee_name}</strong></td>
-                            <td class="jz-freeze-4">${it.id_card || '-'}</td>
+                            <td class="jz-col-seq">${idx + 1}</td>
+                            <td class="jz-col-no"><strong>${it.employee_no}</strong></td>
+                            <td class="jz-col-name"><strong>${it.employee_name}</strong></td>
+                            <td>${it.id_card || '-'}</td>
                             <td>${it.employee_type || '正式工'}</td>
                             <td>${it.employment_status || '在职'}</td>
                             <td>${it.salary_mode}</td>
@@ -922,7 +1075,6 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
     }
 
     // 7. 加载历史薪资穿透 (421条)
-    let history_cache = [];
     function load_history_data() {
         frappe.call({
             method: 'frappe.client.get_list',
@@ -937,7 +1089,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                 const settlements = r.message || [];
                 const select = $('#jz-history-month-filter');
                 select.empty();
-                select.append('<option value="ALL">全部历史账期</option>');
+                select.append('<option value="ALL">全部历史 (421条)</option>');
                 settlements.forEach(s => {
                     select.append(`<option value="${s.period_month}">${s.period_month}</option>`);
                 });
@@ -967,20 +1119,20 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                     const pMonth = it.period_month || (it.parent ? it.parent.replace(`${COMPANY}-`, '') : '');
                     tbody.append(`
                         <tr>
-                            <td class="jz-freeze-1">${idx + 1}</td>
-                            <td class="jz-freeze-2">${pMonth}</td>
-                            <td class="jz-freeze-3"><strong>${it.employee_no}</strong></td>
-                            <td class="jz-freeze-4"><strong>${it.employee_name}</strong></td>
+                            <td class="jz-col-seq">${idx + 1}</td>
+                            <td class="jz-col-no jz-text-center">${pMonth}</td>
+                            <td class="jz-col-no jz-text-center" style="left:121px !important;"><strong>${it.employee_no}</strong></td>
+                            <td class="jz-col-name" style="left:196px !important;"><strong>${it.employee_name}</strong></td>
                             <td>${it.salary_mode}</td>
                             <td class="jz-money-cell">${fmtMoney(it.base_salary)}</td>
                             <td class="jz-money-cell">${fmtMoney(it.post_allowance)}</td>
                             <td class="jz-money-cell">${fmtMoney(it.performance_salary)}</td>
-                            <td class="jz-money-cell" style="font-weight:700;">${fmtMoney(it.gross_salary)}</td>
+                            <td class="jz-money-cell jz-money-bold">${fmtMoney(it.gross_salary)}</td>
                             <td class="jz-money-cell">${fmtMoney(it.tax_threshold || 5000)}</td>
                             <td class="jz-money-cell">${fmtMoney(flt(it.ss_person_total) + flt(it.hf_person_total))}</td>
                             <td class="jz-money-cell">${fmtMoney(it.special_deductions_total)}</td>
-                            <td class="jz-money-cell" style="color:#d97706;">${fmtMoney(it.tax_amount)}</td>
-                            <td class="jz-money-cell" style="color:#ea580c; font-weight:700;">${fmtMoney(it.net_salary)}</td>
+                            <td class="jz-money-cell jz-text-warn">${fmtMoney(it.tax_amount)}</td>
+                            <td class="jz-money-cell jz-money-primary">${fmtMoney(it.net_salary)}</td>
                         </tr>
                     `);
                 });
