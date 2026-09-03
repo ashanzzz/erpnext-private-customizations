@@ -10,7 +10,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
     });
 
     const COMPANY = "天津吉众科技有限公司";
-    let current_month = "2026-06";
+    let current_month = "2026-07";
     let current_tab = "payroll";
     let payroll_filter_mode = "all"; // all | accounting | non_accounting
     let payroll_col_view = "summary"; // summary (20列精简财务) | detail (32列全要素工时分项)
@@ -30,7 +30,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
             </div>
             <div class="jz-header-actions">
                 <label class="jz-label-month">核算月份：</label>
-                <input type="month" id="jz-month-select" class="form-control jz-month-input" value="2026-06">
+                <input type="month" id="jz-month-select" class="form-control jz-month-input" value="2026-07">
                 <button class="btn btn-default btn-sm" id="btn-jz-refresh-all">刷新数据</button>
             </div>
         </div>
@@ -2019,18 +2019,23 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         });
     }
 
-    // 6. 加载吉众专属社保公积金配置
+    // 6. 加载吉众专属社保公积金配置 (按月配置与继承机制)
     let jz_insurance_cache = null;
     function load_insurance_data() {
-        const year = current_month ? current_month.split('-')[0] : '2026';
         frappe.call({
             method: 'ashan_cn_procurement.services.jizhong_payroll_service.get_jizhong_insurance_setting',
-            args: { year: year },
+            args: { company: COMPANY, period_month: current_month },
             callback: function(r) {
                 if (!r.message) return;
                 jz_insurance_cache = r.message;
                 const d = r.message;
-                $('#jz-ins-docname-tip').text(`配置对象：${d.name || COMPANY + '-' + year}`);
+                let tip = `配置对象：${d.name || COMPANY + '-' + current_month}`;
+                if (d.is_inherited) {
+                    tip += ` (默认载入上月 ${d.inherited_from} 费率，保存后存为本月)`;
+                } else {
+                    tip += ` (本月已独立保存)`;
+                }
+                $('#jz-ins-docname-tip').text(tip);
                 $('#jz-ins-injury').text(flt(d.ss_company_injury, 2) + '%');
                 $('#jz-ins-pension-p').text(flt(d.ss_person_pension, 2) + '%');
                 $('#jz-ins-pension-c').text(flt(d.ss_company_pension, 2) + '%');
@@ -2055,7 +2060,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         if (!jz_insurance_cache) return;
         const d = jz_insurance_cache;
         const dlg = new frappe.ui.Dialog({
-            title: `修改吉众专属社保公积金费率 (${d.effective_year || 2026}年)`,
+            title: `修改吉众专属社保公积金费率 (${current_month} 月度)`,
             fields: [
                 { fieldname: 'ss_company_injury', fieldtype: 'Percent', label: '单位工伤保险比例 (%)', default: d.ss_company_injury },
                 { fieldname: 'ss_company_pension', fieldtype: 'Percent', label: '单位基本养老比例 (%)', default: d.ss_company_pension },
@@ -2065,19 +2070,21 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                 { fieldname: 'hf_company_rate', fieldtype: 'Percent', label: '单位公积金比例 (%)', default: d.hf_company_rate },
                 { fieldname: 'hf_person_rate', fieldtype: 'Percent', label: '个人公积金比例 (%)', default: d.hf_person_rate }
             ],
-            primary_action_label: '保存费率',
+            primary_action_label: `保存为 ${current_month} 费率`,
             primary_action: function(vals) {
                 dlg.hide();
                 frappe.call({
                     method: 'ashan_cn_procurement.services.jizhong_payroll_service.update_jizhong_insurance_setting',
                     args: {
-                        year: d.effective_year || 2026,
+                        company: COMPANY,
+                        period_month: current_month,
                         values: JSON.stringify(vals)
                     },
                     callback: function(res) {
                         if (res.message && res.message.success) {
-                            frappe.msgprint('吉众专属社保公积金费率已成功保存并立即生效！');
+                            frappe.show_alert({ message: res.message.message, indicator: 'green' });
                             load_insurance_data();
+                            load_workflow_status();
                         }
                     }
                 });
@@ -2086,8 +2093,17 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         dlg.show();
     });
 
-    // 默认首帧激活 Tab 1: 员工薪资信息表
-    current_tab = 'employees';
-    load_workflow_status();
-    load_employees_data();
+    // 页面初始化：查询最新已封账账期，自动进入即将开始的活跃月份
+    frappe.call({
+        method: 'ashan_cn_procurement.services.jizhong_payroll_service.get_jizhong_workbench_init',
+        args: { company: COMPANY },
+        callback: function(r) {
+            if (r.message && r.message.default_period) {
+                current_month = r.message.default_period;
+                $('#jz-month-select').val(current_month);
+            }
+            load_workflow_status();
+            load_employees_data();
+        }
+    });
 };

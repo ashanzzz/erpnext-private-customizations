@@ -4,7 +4,27 @@ from frappe.model.document import Document
 
 
 class AshanInsuranceSetting(Document):
+    def autoname(self):
+        if getattr(self, "period_month", None) and str(self.period_month).strip():
+            self.name = f"{self.company}-{str(self.period_month).strip()}"
+        elif getattr(self, "effective_year", None):
+            self.name = f"{self.company}-{self.effective_year}"
+        else:
+            self.name = f"{self.company}-default"
+
+    def before_insert(self):
+        if getattr(self, "period_month", None) and str(self.period_month).strip():
+            self.name = f"{self.company}-{str(self.period_month).strip()}"
+
     def validate(self):
+        if getattr(self, "period_month", None) and str(self.period_month).strip():
+            pm = str(self.period_month).strip()
+            if "-" in pm:
+                try:
+                    self.effective_year = int(pm.split("-")[0])
+                except Exception:
+                    pass
+
         from ashan_cn_procurement.services.housing_fund_policy_service import parse_contribution_months
 
         months = parse_contribution_months(self.hf_contribution_months or "1,4,7,10")

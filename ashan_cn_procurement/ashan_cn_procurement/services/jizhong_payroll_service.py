@@ -141,13 +141,24 @@ def calculate_jizhong_monthly_payroll(company="天津吉众科技有限公司", 
 	dynamic_workdays = get_month_workdays(year, month) or 21
 	dynamic_work_hours = dynamic_workdays * FULL_DAY_HOURS # 如 21天 -> 168.0h, 23天 -> 184.0h
 
-	# 2. 获取社保公积金配置
-	ins_setting = frappe.db.get_value(
-		"Ashan Insurance Setting",
-		{"company": ["like", "%吉众%"], "effective_year": year},
-		["*"],
-		as_dict=True
-	) or {}
+	# 2. 获取社保公积金配置 (按月优先，默认承袭上月，并核定保存为本月)
+	ins_setting = get_jizhong_insurance_setting(company=company, period_month=period_month)
+	# 确保本月专属配置实体已保存固化
+	exact_ins_name = f"{company}-{period_month}"
+	if not frappe.db.exists("Ashan Insurance Setting", exact_ins_name):
+		doc_ins = frappe.new_doc("Ashan Insurance Setting")
+		doc_ins.name = exact_ins_name
+		doc_ins.company = company
+		doc_ins.period_month = period_month
+		doc_ins.effective_year = year
+		for fld in ["ss_company_pension", "ss_company_unemployment", "ss_company_medical", "ss_company_other_medical",
+		            "ss_company_injury", "ss_person_pension", "ss_person_unemployment", "ss_person_medical",
+		            "hf_company_rate", "hf_person_rate", "big_medical_amount_default", "big_medical_amount_special",
+		            "big_medical_special_months", "hf_contribution_months", "hf_off_month_action"]:
+			if fld in ins_setting:
+				setattr(doc_ins, fld, ins_setting[fld])
+		doc_ins.insert(ignore_permissions=True)
+		frappe.db.commit()
 
 	ss_person_rate = flt(ins_setting.get("ss_person_pension") or 8.0) + flt(ins_setting.get("ss_person_medical") or 2.0) + flt(ins_setting.get("ss_person_unemployment") or 0.5)
 	injury_rate = flt(ins_setting.get("ss_company_injury") or 0.55)
@@ -534,22 +545,26 @@ def get_jizhong_workflow_status(company="天津吉众科技有限公司", period
 		"tab": "attendance"
 	}
 
-	# 3. 社保公积金配置
-	ins_setting = frappe.db.get_value(
-		"Ashan Insurance Setting",
-		{"company": ["like", "%吉众%"], "effective_year": year},
-		["name", "ss_company_injury", "ss_person_pension", "ss_person_medical", "hf_person_rate"],
-		as_dict=True
-	)
+	# 3. 社保公积金配置 (按月动态核验与继承提示)
+	ins_setting = get_jizhong_insurance_setting(company=company, period_month=period_month)
 	step3_done = bool(ins_setting)
+	if ins_setting.get("is_inherited"):
+		step3_main = f"{period_month} 费率就绪 (承袭上月)"
+		step3_sub = f"个人社保 10.5%+21元 ｜ 继承自 {ins_setting.get('inherited_from')}"
+		step3_badge = "已就绪"
+	else:
+		step3_main = f"{period_month} 专属费率生效"
+		step3_sub = "个人社保 10.5%+21元 ｜ 公积金 5%"
+		step3_badge = "已生效"
+
 	step3 = {
 		"step": 3,
 		"title": "社保公积金配置",
 		"tag": "费率基数",
 		"status": "done" if step3_done else "pending",
-		"badge": "已生效" if step3_done else "待配置",
-		"main": f"{year} 年度费率生效" if step3_done else f"未找到 {year} 年费率配置",
-		"sub": "个人社保 10.5%+21元 ｜ 公积金 5%" if step3_done else "请在配置页设定社保公积金费率",
+		"badge": step3_badge if step3_done else "待配置",
+		"main": step3_main if step3_done else f"未找到 {period_month} 费率配置",
+		"sub": step3_sub if step3_done else "请在配置页设定社保公积金费率",
 		"tab": "insurance"
 	}
 
@@ -727,45 +742,162 @@ def get_jizhong_history_records(company="天津吉众科技有限公司", period
 	return items
 
 
-@frappe.whitelist()
-def get_jizhong_insurance_setting(year=2026):
-	"""获取吉众专属社保公积金设置"""
-	year = cint(year) or 2026
-	doc_name = f"天津吉众科技有限公司-{year}"
-	if not frappe.db.exists("Ashan Insurance Setting", doc_name):
-		doc = frappe.new_doc("Ashan Insurance Setting")
-		doc.company = "天津吉众科技有限公司"
-		doc.effective_year = year
-		doc.ss_company_injury = 0.55
-		doc.ss_company_pension = 16.0
-		doc.ss_company_medical = 10.0
-		doc.ss_company_unemployment = 0.5
-		doc.ss_company_other_medical = 0.5
-		doc.ss_person_pension = 8.0
-		doc.ss_person_medical = 2.0
-		doc.ss_person_unemployment = 0.5
-		doc.hf_person_rate = 5.0
-		doc.hf_company_rate = 5.0
-		doc.insert(ignore_permissions=True)
-		return doc.as_dict()
+def _compute_prev_period(period_month):
+	if not period_month or "-" not in period_month:
+		return None
+	y, m = [int(x) for x in period_month.split("-")]
+	if m == 1:
+		return f"{y - 1}-12"
+	return f"{y}-{m - 1:02d}"
 
-	return frappe.get_doc("Ashan Insurance Setting", doc_name).as_dict()
+
+@frappe.whitelist()
+def get_jizhong_workbench_init(company="天津吉众科技有限公司"):
+	"""
+	获取吉众工作台初始化上下文与默认核算账期。
+	业务铁律：若最新月份已核定封账，进入默认显示即将开始的下一个月（如 6 月已封账，默认显示 7 月）。
+	"""
+	latest_locked = frappe.db.sql("""
+		SELECT period_month FROM `tabAshan Monthly Payroll Settlement`
+		WHERE company = %s AND (locked = 1 OR status IN ('已核定锁定', '已归档发放'))
+		ORDER BY period_month DESC
+		LIMIT 1
+	""", (company,), as_dict=True)
+
+	if latest_locked and latest_locked[0].get("period_month"):
+		last_m = latest_locked[0]["period_month"]
+		y, m = [int(x) for x in last_m.split("-")]
+		if m == 12:
+			default_period = f"{y + 1}-01"
+		else:
+			default_period = f"{y}-{m + 1:02d}"
+		latest_locked_month = last_m
+	else:
+		today_str = today()
+		y, m = [int(x) for x in today_str[:7].split("-")]
+		if m == 1:
+			default_period = f"{y - 1}-12"
+		else:
+			default_period = f"{y}-{m - 1:02d}"
+		latest_locked_month = None
+
+	return {
+		"company": company,
+		"default_period": default_period,
+		"latest_locked": latest_locked_month
+	}
+
+
+@frappe.whitelist()
+def get_jizhong_insurance_setting(company="天津吉众科技有限公司", period_month=None, year=None):
+	"""
+	获取吉众专属社保公积金设置。
+	业务铁律：公积金、社保可能每个月比例不同。
+	1. 优先获取当前月份 period_month 的配置（如 天津吉众科技有限公司-2026-07）；
+	2. 若当前月份未单独配置，则默认载入上个月的配置（如 2026-06），并标记为继承自上月；
+	3. 若上月亦不存在，则载入年度基准配置（如 2026）；
+	4. 本月核定保存后，存为本月专属记录。
+	"""
+	if not period_month and year:
+		period_month = f"{cint(year)}-01"
+	elif not period_month:
+		period_month = today()[:7]
+
+	exact_doc_name = f"{company}-{period_month}"
+
+	# 1. 优先查本月精确配置
+	if frappe.db.exists("Ashan Insurance Setting", exact_doc_name):
+		doc = frappe.get_doc("Ashan Insurance Setting", exact_doc_name)
+		d = doc.as_dict()
+		d["is_inherited"] = False
+		d["period_month"] = period_month
+		return d
+
+	# 2. 默认载入上个月的配置
+	prev_month = _compute_prev_period(period_month)
+	source_doc = None
+	inherited_from = None
+
+	if prev_month:
+		prev_doc_name = f"{company}-{prev_month}"
+		if frappe.db.exists("Ashan Insurance Setting", prev_doc_name):
+			source_doc = frappe.get_doc("Ashan Insurance Setting", prev_doc_name)
+			inherited_from = prev_month
+
+	# 3. 若上月无记录，查找年度通用配置或最新已有配置
+	if not source_doc:
+		year_doc_name = f"{company}-{period_month[:4]}"
+		if frappe.db.exists("Ashan Insurance Setting", year_doc_name):
+			source_doc = frappe.get_doc("Ashan Insurance Setting", year_doc_name)
+			inherited_from = f"{period_month[:4]}年度基准"
+		else:
+			latest_name = frappe.db.get_value(
+				"Ashan Insurance Setting",
+				{"company": ["like", f"%{company[:4]}%"]},
+				"name",
+				order_by="creation desc"
+			)
+			if latest_name:
+				source_doc = frappe.get_doc("Ashan Insurance Setting", latest_name)
+				inherited_from = source_doc.name
+
+	# 如果找到了源配置，克隆其费率作为本月默认待定配置
+	if source_doc:
+		d = source_doc.as_dict()
+		d["name"] = exact_doc_name
+		d["period_month"] = period_month
+		d["effective_year"] = cint(period_month[:4])
+		d["is_inherited"] = True
+		d["inherited_from"] = inherited_from
+		return d
+
+	# 4. 全局兜底创建
+	doc = frappe.new_doc("Ashan Insurance Setting")
+	doc.name = exact_doc_name
+	doc.company = company
+	doc.period_month = period_month
+	doc.effective_year = cint(period_month[:4])
+	doc.ss_company_injury = 0.55
+	doc.ss_company_pension = 16.0
+	doc.ss_company_medical = 10.0
+	doc.ss_company_unemployment = 0.5
+	doc.ss_company_other_medical = 0.5
+	doc.ss_person_pension = 8.0
+	doc.ss_person_medical = 2.0
+	doc.ss_person_unemployment = 0.5
+	doc.hf_person_rate = 5.0
+	doc.hf_company_rate = 5.0
+	doc.insert(ignore_permissions=True)
+	frappe.db.commit()
+	d = doc.as_dict()
+	d["is_inherited"] = False
+	return d
 
 
 @frappe.whitelist(methods=["POST"])
-def update_jizhong_insurance_setting(year=2026, values=None):
-	"""保存吉众专属社保公积金设置"""
+def update_jizhong_insurance_setting(company="天津吉众科技有限公司", period_month=None, values=None, year=None):
+	"""
+	保存吉众专属社保公积金设置。
+	业务铁律：本月核定完保存为本月的配置（如 天津吉众科技有限公司-2026-07）。
+	"""
 	import json
 	if isinstance(values, str):
 		values = json.loads(values)
-	year = cint(year) or 2026
-	doc_name = f"天津吉众科技有限公司-{year}"
+	if not period_month and year:
+		period_month = f"{cint(year)}-01"
+	elif not period_month:
+		period_month = today()[:7]
+
+	doc_name = f"{company}-{period_month}"
+
 	if frappe.db.exists("Ashan Insurance Setting", doc_name):
 		doc = frappe.get_doc("Ashan Insurance Setting", doc_name)
 	else:
 		doc = frappe.new_doc("Ashan Insurance Setting")
-		doc.company = "天津吉众科技有限公司"
-		doc.effective_year = year
+		doc.name = doc_name
+		doc.company = company
+		doc.period_month = period_month
+		doc.effective_year = cint(period_month[:4])
 
 	if values and isinstance(values, dict):
 		for k, v in values.items():
@@ -773,7 +905,8 @@ def update_jizhong_insurance_setting(year=2026, values=None):
 				setattr(doc, k, flt(v))
 
 	doc.save(ignore_permissions=True)
-	return {"success": True, "setting": doc.as_dict()}
+	frappe.db.commit()
+	return {"success": True, "message": f"【{company}】{period_month} 社保公积金费率已成功保存并生效！", "setting": doc.as_dict()}
 
 
 @frappe.whitelist()
