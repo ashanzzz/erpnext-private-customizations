@@ -428,7 +428,7 @@
       "doctype": "Workspace Sidebar Item"
     },
     {
-      "label": "员工薪酬档案",
+      "label": "祺富员工薪酬档案",
       "link_type": "DocType",
       "type": "Link",
       "link_to": "Ashan Employee Salary Profile",
@@ -527,7 +527,7 @@
       "label": "吉众员工薪资档案",
       "link_type": "DocType",
       "type": "Link",
-      "link_to": "Ashan Employee Salary Profile",
+      "link_to": "Jizhong Employee Salary Profile",
       "child": 1,
       "collapsible": 0,
       "indent": 0,

@@ -8,6 +8,7 @@ import frappe
 from frappe.utils import flt, cint, getdate
 
 from ashan_cn_procurement.services.ashan_holiday_service import get_month_workdays
+from ashan_cn_procurement.services.authorization_service import assert_company_access
 
 # 常量定义
 FULL_DAY_HOURS = 8.0
@@ -159,15 +160,15 @@ def calculate_jizhong_monthly_payroll(company="天津吉众科技有限公司", 
 	# 大额医疗特殊月 (1, 4, 7, 10月为21元，其余22元)
 	big_med = 21.0 if cur_month_num in (1, 4, 7, 10) else 22.0
 
-	# 3. 获取全员薪酬档案
+	# 3. 获取全员薪酬档案 (优先使用专属 Jizhong Employee Salary Profile)
+	profile_doctype = "Jizhong Employee Salary Profile" if frappe.db.table_exists("Jizhong Employee Salary Profile") and frappe.db.count("Jizhong Employee Salary Profile", {"company": company}) > 0 else "Ashan Employee Salary Profile"
 	employees = frappe.get_all(
-		"Ashan Employee Salary Profile",
+		profile_doctype,
 		filters={"company": company},
 		fields=[
 			"name", "employee_no", "employee_name", "employee_type", "employment_status",
 			"salary_mode", "fixed_salary", "base_salary", "post_allowance", "performance_base",
-			"meal_allowance", "traffic_allowance", "communication_allowance", "other_allowance",
-			"social_security_base", "housing_fund_base", "id_card", "mobile", "department", "job_title",
+			"meal_allowance", "social_security_base", "housing_fund_base", "id_card", "mobile", "department", "job_title",
 			"deduction_child_education", "deduction_continuing_education", "deduction_housing_loan",
 			"deduction_housing_rent", "deduction_elderly_care", "deduction_infant_care", "deduction_serious_illness"
 		],
@@ -588,4 +589,107 @@ def update_jizhong_insurance_setting(year=2026, values=None):
 
 	doc.save(ignore_permissions=True)
 	return {"success": True, "setting": doc.as_dict()}
+
+
+@frappe.whitelist()
+def get_jizhong_employee_profiles(company="天津吉众科技有限公司"):
+	"""获取吉众员工薪酬档案全量数据"""
+	assert_company_access(company)
+	fields = [
+		"name", "employee_no", "employee_name", "company", "employee_type", "employment_status",
+		"salary_mode", "fixed_salary", "base_salary", "house_rent_allowance", "post_allowance", "performance_base",
+		"meal_allowance", "social_security_base", "housing_fund_base", "id_card", "mobile", "gender", "birth_date",
+		"department", "job_title", "deduction_child_education", "deduction_continuing_education",
+		"deduction_serious_illness", "deduction_housing_loan", "deduction_housing_rent",
+		"deduction_elderly_care", "deduction_infant_care", "special_additional_deductions_total",
+		"bank_name", "bank_account", "notes"
+	]
+	# 优先从独立 DocType Jizhong Employee Salary Profile 获取
+	if frappe.db.table_exists("Jizhong Employee Salary Profile"):
+		docs = frappe.get_all("Jizhong Employee Salary Profile", filters={"company": company}, fields=fields, order_by="employee_no asc")
+		if docs:
+			return docs
+	# 容错降级从 Ashan Employee Salary Profile 获取
+	if frappe.db.table_exists("Ashan Employee Salary Profile"):
+		return frappe.get_all("Ashan Employee Salary Profile", filters={"company": company}, fields=fields, order_by="employee_no asc")
+	return []
+
+
+@frappe.whitelist(methods=["POST"])
+def save_jizhong_employee_profile(data=None):
+	"""保存或更新吉众员工薪酬档案"""
+	import json
+	if isinstance(data, str):
+		data = json.loads(data)
+	if not data or not isinstance(data, dict):
+		frappe.throw("无效的员工档案数据")
+
+	company = data.get("company") or "天津吉众科技有限公司"
+	assert_company_access(company)
+
+	emp_no = (data.get("employee_no") or "").strip()
+	emp_name = (data.get("employee_name") or "").strip()
+	if not emp_no or not emp_name:
+		frappe.throw("工号和姓名不能为空")
+
+	doc_name = data.get("name")
+	if not doc_name:
+		doc_name = f"{company}-{emp_no}-{emp_name}"
+
+	if frappe.db.exists("Jizhong Employee Salary Profile", doc_name):
+		doc = frappe.get_doc("Jizhong Employee Salary Profile", doc_name)
+	elif frappe.db.exists("Jizhong Employee Salary Profile", {"company": company, "employee_no": emp_no}):
+		exist_name = frappe.db.get_value("Jizhong Employee Salary Profile", {"company": company, "employee_no": emp_no}, "name")
+		doc = frappe.get_doc("Jizhong Employee Salary Profile", exist_name)
+	else:
+		doc = frappe.new_doc("Jizhong Employee Salary Profile")
+		doc.company = company
+		doc.employee_no = emp_no
+		doc.employee_name = emp_name
+
+	# 更新基础字段
+	doc.employee_name = emp_name
+	doc.id_card = (data.get("id_card") or "").strip()
+	doc.mobile = (data.get("mobile") or "").strip()
+	doc.gender = data.get("gender") or ""
+	doc.birth_date = data.get("birth_date") or None
+	doc.department = data.get("department") or "生产车间"
+	doc.job_title = data.get("job_title") or "操作工"
+	doc.employee_type = data.get("employee_type") or "正式工"
+	doc.employment_status = data.get("employment_status") or "在职"
+	doc.salary_mode = data.get("salary_mode") or "税前动态工资"
+
+	# 金额与基数
+	doc.fixed_salary = flt(data.get("fixed_salary"))
+	doc.base_salary = flt(data.get("base_salary"))
+	doc.house_rent_allowance = flt(data.get("house_rent_allowance"))
+	doc.performance_base = flt(data.get("performance_base"))
+	doc.post_allowance = flt(data.get("post_allowance"))
+	doc.meal_allowance = flt(data.get("meal_allowance") or 15.0)
+	doc.social_security_base = flt(data.get("social_security_base") or 5124.0)
+	doc.housing_fund_base = flt(data.get("housing_fund_base") or 2520.0)
+
+	# 7 项专项附加扣除
+	doc.deduction_child_education = flt(data.get("deduction_child_education"))
+	doc.deduction_continuing_education = flt(data.get("deduction_continuing_education"))
+	doc.deduction_serious_illness = flt(data.get("deduction_serious_illness"))
+	doc.deduction_housing_loan = flt(data.get("deduction_housing_loan"))
+	doc.deduction_housing_rent = flt(data.get("deduction_housing_rent"))
+	doc.deduction_elderly_care = flt(data.get("deduction_elderly_care"))
+	doc.deduction_infant_care = flt(data.get("deduction_infant_care"))
+	doc.special_additional_deductions_total = (
+		doc.deduction_child_education + doc.deduction_continuing_education +
+		doc.deduction_serious_illness + doc.deduction_housing_loan +
+		doc.deduction_housing_rent + doc.deduction_elderly_care + doc.deduction_infant_care
+	)
+
+	# 银行卡与备注
+	doc.bank_name = data.get("bank_name") or ""
+	doc.bank_account = data.get("bank_account") or ""
+	doc.notes = data.get("notes") or ""
+
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+
+	return {"success": True, "message": f"员工 {emp_name} ({emp_no}) 档案已成功保存", "profile": doc.as_dict()}
 

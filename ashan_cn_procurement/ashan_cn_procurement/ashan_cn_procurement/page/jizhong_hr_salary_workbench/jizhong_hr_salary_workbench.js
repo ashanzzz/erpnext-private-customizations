@@ -107,10 +107,11 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                             <th class="jz-text-right">公积金基数</th>
                             <th class="jz-text-right">专项附加扣除</th>
                             <th class="jz-text-center">在职状态</th>
+                            <th class="jz-col-action">操作</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-jz-employees">
-                        <tr><td colspan="16" class="jz-empty-cell">正在加载员工薪资信息档案...</td></tr>
+                        <tr><td colspan="17" class="jz-empty-cell">正在加载员工薪资信息档案...</td></tr>
                     </tbody>
                     <tfoot id="tfoot-jz-employees"></tfoot>
                 </table>
@@ -1496,23 +1497,8 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
 
     function load_employees_data() {
         frappe.call({
-            method: 'frappe.client.get_list',
-            args: {
-                doctype: 'Ashan Employee Salary Profile',
-                filters: { company: COMPANY },
-                fields: [
-                    'name', 'employee_no', 'employee_name', 'id_card', 'mobile',
-                    'employee_type', 'employment_status', 'salary_mode', 'fixed_salary',
-                    'base_salary', 'post_allowance', 'performance_base', 'meal_allowance',
-                    'house_rent_allowance', 'traffic_allowance', 'other_allowance',
-                    'social_security_base', 'housing_fund_base',
-                    'deduction_child_education', 'deduction_continuing_education',
-                    'deduction_housing_loan', 'deduction_housing_rent',
-                    'deduction_elderly_care', 'deduction_infant_care', 'deduction_serious_illness'
-                ],
-                limit: 100,
-                order_by: 'employee_no asc'
-            },
+            method: 'ashan_cn_procurement.services.jizhong_payroll_service.get_jizhong_employee_profiles',
+            args: { company: COMPANY },
             callback: function(r) {
                 employees_cache = r.message || [];
                 render_employees_table();
@@ -1542,7 +1528,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         });
 
         if (filtered.length === 0) {
-            tbody.html('<tr><td colspan="16" class="jz-empty-cell">暂无符合条件的员工薪资档案</td></tr>');
+            tbody.html('<tr><td colspan="17" class="jz-empty-cell">暂无符合条件的员工薪资档案</td></tr>');
             $('#tfoot-jz-employees').empty();
             return;
         }
@@ -1573,7 +1559,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
             const netAgreed = isMgmt ? fmtMoney(it.fixed_salary) : '-';
 
             tbody.append(`
-                <tr class="jz-emp-row" data-name="${it.name}">
+                <tr class="jz-emp-row jz-row-clickable" data-name="${it.name}" data-empno="${it.employee_no}">
                     <td class="jz-col-seq jz-col-sticky-1">${idx + 1}</td>
                     <td class="jz-col-no jz-col-sticky-2"><strong>${it.employee_no}</strong></td>
                     <td class="jz-col-name jz-col-sticky-3"><strong>${it.employee_name}</strong></td>
@@ -1590,8 +1576,23 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                     <td class="jz-money-cell">${fmtMoney(hfBase)}</td>
                     <td class="jz-money-cell jz-text-warn">${dedTotal > 0 ? fmtMoney(dedTotal) : '-'}</td>
                     <td class="jz-text-center"><span class="jz-status-badge jz-status-submitted">${it.employment_status || '在职'}</span></td>
+                    <td class="jz-col-action"><a href="javascript:void(0)" class="jz-btn-action jz-btn-edit-emp" data-empno="${it.employee_no}">编辑</a></td>
                 </tr>
             `);
+        });
+
+        // 绑定行点击与编辑按钮事件
+        tbody.find('.jz-btn-edit-emp').on('click', function(e) {
+            e.stopPropagation();
+            const empNo = $(this).data('empno');
+            const emp = employees_cache.find(it => it.employee_no === empNo);
+            if (emp) open_jizhong_employee_edit_dialog(emp, false);
+        });
+
+        tbody.find('.jz-emp-row').on('click', function() {
+            const empNo = $(this).data('empno');
+            const emp = employees_cache.find(it => it.employee_no === empNo);
+            if (emp) open_jizhong_employee_edit_dialog(emp, false);
         });
 
         // 汇总卡片更新
@@ -1621,9 +1622,89 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                 <td class="jz-money-cell">${fmtMoney(tot_hf)}</td>
                 <td class="jz-money-cell jz-text-warn">${fmtMoney(tot_ded)}</td>
                 <td class="jz-text-center">-</td>
+                <td class="jz-col-action">-</td>
             </tr>
         `);
     }
+
+    // 员工档案编辑与明细修改弹窗 (对标祺富工作台高质量交互)
+    function open_jizhong_employee_edit_dialog(emp_data, is_new) {
+        emp_data = emp_data || {};
+        const isEdit = !is_new && emp_data.employee_no;
+
+        const d = new frappe.ui.Dialog({
+            title: isEdit ? `修改员工薪资档案 · ${emp_data.employee_name} (${emp_data.employee_no})` : `新增吉众员工薪酬档案`,
+            size: 'large',
+            fields: [
+                { fieldtype: 'Section Break', label: '基本身份与用工' },
+                { fieldtype: 'Data', fieldname: 'employee_no', label: '工号', reqd: 1, default: emp_data.employee_no || '', read_only: isEdit ? 1 : 0 },
+                { fieldtype: 'Data', fieldname: 'employee_name', label: '员工姓名', reqd: 1, default: emp_data.employee_name || '' },
+                { fieldtype: 'Data', fieldname: 'id_card', label: '身份证号码', default: emp_data.id_card || '' },
+                { fieldtype: 'Column Break' },
+                { fieldtype: 'Data', fieldname: 'mobile', label: '手机号', default: emp_data.mobile || '' },
+                { fieldtype: 'Select', fieldname: 'gender', label: '性别', options: ['','男','女'], default: emp_data.gender || '' },
+                { fieldtype: 'Date', fieldname: 'birth_date', label: '出生日期', default: emp_data.birth_date || '' },
+                { fieldtype: 'Select', fieldname: 'employee_type', label: '用工性质', options: ['正式工','其他-管理','其他-返聘工','临时工','本月离职'], default: emp_data.employee_type || '正式工' },
+                { fieldtype: 'Select', fieldname: 'employment_status', label: '在职状态', options: ['在职','离职'], default: emp_data.employment_status || '在职' },
+
+                { fieldtype: 'Section Break', label: '薪酬长期要素' },
+                { fieldtype: 'Select', fieldname: 'salary_mode', label: '计薪方式', options: ['税前动态工资','税后管理工资'], default: emp_data.salary_mode || '税前动态工资' },
+                { fieldtype: 'Currency', fieldname: 'fixed_salary', label: '实发约定净薪 (元)', default: emp_data.fixed_salary || 0, description: '税后管理岗如陈亮、苏锡成约定实发金额' },
+                { fieldtype: 'Currency', fieldname: 'base_salary', label: '基本工资 (元)', default: emp_data.base_salary || 0, reqd: 1 },
+                { fieldtype: 'Column Break' },
+                { fieldtype: 'Currency', fieldname: 'house_rent_allowance', label: '基本补贴 (元)', default: emp_data.house_rent_allowance || 0 },
+                { fieldtype: 'Currency', fieldname: 'performance_base', label: '绩效奖金 (元)', default: emp_data.performance_base || 0 },
+                { fieldtype: 'Currency', fieldname: 'post_allowance', label: '职位津贴 (元)', default: emp_data.post_allowance || 0 },
+                { fieldtype: 'Currency', fieldname: 'meal_allowance', label: '餐补单价 (元/餐)', default: emp_data.meal_allowance || 15.0 },
+
+                { fieldtype: 'Section Break', label: '社保与公积金申报基数' },
+                { fieldtype: 'Currency', fieldname: 'social_security_base', label: '社险申报基数 (元)', default: emp_data.social_security_base || 5124.0 },
+                { fieldtype: 'Column Break' },
+                { fieldtype: 'Currency', fieldname: 'housing_fund_base', label: '公积金申报基数 (元)', default: emp_data.housing_fund_base || 2520.0 },
+
+                { fieldtype: 'Section Break', label: '7项个税专项附加扣除详情 (元/月)' },
+                { fieldtype: 'Currency', fieldname: 'deduction_child_education', label: '子女教育', default: emp_data.deduction_child_education || 0 },
+                { fieldtype: 'Currency', fieldname: 'deduction_continuing_education', label: '继续教育', default: emp_data.deduction_continuing_education || 0 },
+                { fieldtype: 'Currency', fieldname: 'deduction_serious_illness', label: '大病医疗', default: emp_data.deduction_serious_illness || 0 },
+                { fieldtype: 'Currency', fieldname: 'deduction_housing_loan', label: '住房贷款利息', default: emp_data.deduction_housing_loan || 0 },
+                { fieldtype: 'Column Break' },
+                { fieldtype: 'Currency', fieldname: 'deduction_housing_rent', label: '住房租金', default: emp_data.deduction_housing_rent || 0 },
+                { fieldtype: 'Currency', fieldname: 'deduction_elderly_care', label: '赡养老人', default: emp_data.deduction_elderly_care || 0 },
+                { fieldtype: 'Currency', fieldname: 'deduction_infant_care', label: '3岁以下婴幼儿照护', default: emp_data.deduction_infant_care || 0 },
+
+                { fieldtype: 'Section Break', label: '银行卡与备注' },
+                { fieldtype: 'Data', fieldname: 'bank_name', label: '开户银行', default: emp_data.bank_name || '' },
+                { fieldtype: 'Data', fieldname: 'bank_account', label: '银行卡号', default: emp_data.bank_account || '' },
+                { fieldtype: 'Column Break' },
+                { fieldtype: 'Small Text', fieldname: 'notes', label: '备注说明', default: emp_data.notes || '' }
+            ],
+            primary_action_label: isEdit ? '保存修改' : '立即创建',
+            primary_action(vals) {
+                vals.company = COMPANY;
+                if (isEdit) {
+                    vals.name = emp_data.name;
+                }
+                frappe.call({
+                    method: 'ashan_cn_procurement.services.jizhong_payroll_service.save_jizhong_employee_profile',
+                    type: 'POST',
+                    args: { data: JSON.stringify(vals) },
+                    callback: function(r) {
+                        if (r.message && r.message.success) {
+                            frappe.show_alert({ message: r.message.message, indicator: 'green' });
+                            d.hide();
+                            load_employees_data();
+                        }
+                    }
+                });
+            }
+        });
+        d.show();
+    }
+
+    // 新建员工薪资档案按钮事件绑定
+    $('#btn-jz-add-emp').on('click', function() {
+        open_jizhong_employee_edit_dialog(null, true);
+    });
 
     // 搜索与过滤事件绑定
     $('#jz-emp-search').on('input', function() {
