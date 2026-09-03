@@ -17,7 +17,7 @@ app_include_css = [
 app_include_js = [
     "/assets/ashan_cn_procurement/js/ashan_ui_kit.js?v=20260828.66",
     "/assets/ashan_cn_procurement/js/ashan_cn_translations.js?v=20260828.66",
-    "/assets/ashan_cn_procurement/js/ashan_cn_sidebar_v2.js?v=20260828.66",
+    "/assets/ashan_cn_procurement/js/ashan_cn_sidebar_v2.js?v=20260903.88",
     "/assets/ashan_cn_procurement/js/ashan_work_context.js?v=20260828.66",
     "/assets/ashan_cn_procurement/js/doc_details_list.js?v=20260828.66",
 ]

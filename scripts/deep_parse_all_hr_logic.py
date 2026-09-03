@@ -5,8 +5,25 @@ import json
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-xlsm_path = r"d:\SynologyDrive团队\antigravity\erpnext16\temp_screenshots\202606吉众人事综合.xlsm"
+script_dir = os.path.dirname(os.path.abspath(__file__))
+temp_dir = os.path.join(script_dir, "..", "temp_screenshots")
+xlsm_path = None
+for fname in os.listdir(temp_dir):
+    if "吉众" in fname and fname.endswith(".xlsm"):
+        xlsm_path = os.path.join(temp_dir, fname)
+        break
 
+if not xlsm_path:
+    # fallback to any xlsm containing 202606
+    for fname in os.listdir(temp_dir):
+        if "202606" in fname and fname.endswith(".xlsm"):
+            xlsm_path = os.path.join(temp_dir, fname)
+            break
+
+output_file = os.path.join(script_dir, "jizhong_excel_analysis.txt")
+sys.stdout = open(output_file, 'w', encoding='utf-8')
+
+print(f"Target XLSM path: {xlsm_path}")
 wb = openpyxl.load_workbook(xlsm_path, data_only=False, keep_vba=True)
 wb_val = openpyxl.load_workbook(xlsm_path, data_only=True, keep_vba=True)
 

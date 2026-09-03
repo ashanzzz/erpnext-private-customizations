@@ -142,6 +142,30 @@
         return true;
     }
 
+    function patchNativeSidebarMethods() {
+        if (!window.frappe || !frappe.ui || !frappe.ui.Sidebar) return false;
+        const Sidebar = frappe.ui.Sidebar;
+        if (Sidebar._ashan_native_methods_patched) return true;
+
+        // 接管原生 set_active_workspace_item 与 expand_parent_section，杜绝原生 naive 匹配导致的跨企业跳动
+        Sidebar.prototype.set_active_workspace_item = function () {
+            const sidebar = document.querySelector(".body-sidebar");
+            if (sidebar) {
+                scheduleAccordionHydration(sidebar);
+            }
+        };
+
+        Sidebar.prototype.expand_parent_section = function () {
+            const sidebar = document.querySelector(".body-sidebar");
+            if (sidebar) {
+                scheduleAccordionHydration(sidebar);
+            }
+        };
+
+        Sidebar._ashan_native_methods_patched = true;
+        return true;
+    }
+
     let lastFetchedKpis = null;
     let kpiFetchPending = false;
 
@@ -311,6 +335,35 @@
                 trigger.setAttribute("tabindex", "0");
                 trigger.setAttribute("aria-expanded", String(isOpen));
             }
+
+            // 同步 Frappe 原生嵌套容器的 class 与状态，彻底避免与原生 Desk 冲突
+            const childContainer = section.querySelector(":scope > .sidebar-child-item");
+            if (childContainer) {
+                if (isOpen) {
+                    childContainer.classList.remove("hidden");
+                } else {
+                    childContainer.classList.add("hidden");
+                }
+            }
+
+            const dropIcon = section.querySelector(".drop-icon");
+            if (dropIcon) {
+                dropIcon.setAttribute("data-state", isOpen ? "opened" : "closed");
+                const iconUse = dropIcon.querySelector("use");
+                if (iconUse) {
+                    iconUse.setAttribute("href", isOpen ? "#icon-chevron-down" : "#icon-chevron-right");
+                }
+            }
+
+            if (window.frappe?.app?.sidebar?.items) {
+                const sId = getSectionId(section);
+                const nativeItem = window.frappe.app.sidebar.items.find(
+                    (it) => it.item && (it.item.label === sId || it.item.title === sId)
+                );
+                if (nativeItem) {
+                    nativeItem.collapsed = !isOpen;
+                }
+            }
         });
 
         if (persist) {
@@ -350,6 +403,67 @@
         });
     }
 
+    function detectCompanyContext() {
+        // 1. URL 查询参数优先：例如 ?company=天津吉众科技有限公司
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const compInUrl = urlParams.get("company");
+            if (compInUrl) {
+                if (compInUrl.includes("吉众")) return "吉众";
+                if (compInUrl.includes("祺富")) return "祺富";
+            }
+        } catch (e) {}
+
+        // 2. Frappe route_options 参数：例如 frappe.route_options = { company: '天津吉众科技有限公司' }
+        try {
+            const roComp = window.frappe?.route_options?.company;
+            if (roComp && typeof roComp === "string") {
+                if (roComp.includes("吉众")) return "吉众";
+                if (roComp.includes("祺富")) return "祺富";
+            }
+        } catch (e) {}
+
+        // 3. 当前路由/页面标识：例如 jizhong-hr-salary-workbench 或 qifu-hr-salary-workbench
+        const route = window.frappe?.get_route?.() || [];
+        const joined = route.join("/").toLowerCase();
+        if (joined.includes("jizhong") || joined.includes("吉众")) return "吉众";
+        if (joined.includes("qifu") || joined.includes("祺富")) return "祺富";
+
+        // 4. 当前列表筛选器 (cur_list)：
+        try {
+            if (window.cur_list && window.cur_list.filter_area) {
+                const filters = window.cur_list.filter_area.get() || [];
+                for (const f of filters) {
+                    if (f[1] === "company" && typeof f[3] === "string") {
+                        if (f[3].includes("吉众")) return "吉众";
+                        if (f[3].includes("祺富")) return "祺富";
+                    }
+                }
+            }
+        } catch (e) {}
+
+        // 5. 当前表单 (cur_frm)：
+        try {
+            if (window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.company) {
+                const docComp = window.cur_frm.doc.company;
+                if (docComp.includes("吉众")) return "吉众";
+                if (docComp.includes("祺富")) return "祺富";
+            }
+        } catch (e) {}
+
+        // 6. 用户最近显式选定或点击的分组缓存 (sessionStorage)
+        try {
+            const cachedCompany = window.sessionStorage.getItem("ashan.sidebar.v3.active_company_context") || "";
+            if (cachedCompany.includes("吉众")) return "吉众";
+            if (cachedCompany.includes("祺富")) return "祺富";
+            const lastClicked = window.sessionStorage.getItem("ashan.sidebar.v3.last_clicked_section") || "";
+            if (lastClicked.includes("吉众")) return "吉众";
+            if (lastClicked.includes("祺富")) return "祺富";
+        } catch (e) {}
+
+        return "";
+    }
+
     function getActiveSectionId(sidebar) {
         const sections = getSidebarSections(sidebar);
         if (!sections.length) return "";
@@ -357,9 +471,22 @@
         const routeTokens = getRouteTokens();
         if (!routeTokens.length) return "";
 
-        // 1. 优先坚守用户当前已展开 / 最近显式点击的分组
-        // 例如用户在【吉众人事薪酬与用工】中点击“吉众月度考勤工时”，由于吉众分组本身即包含该路由，
-        // 则绝对坚守吉众，严禁被 DOM 排序在前的同路由分组（如祺富）劫持！
+        const companyContext = detectCompanyContext();
+
+        // 1. 如果检测到明确的企业上下文（吉众 或 祺富），优先精准命中该企业的专属分组
+        if (companyContext === "吉众") {
+            const jzSection = sections.find((s) => getSectionId(s).includes("吉众"));
+            if (jzSection && sectionMatchesRoute(jzSection, routeTokens)) {
+                return getSectionId(jzSection);
+            }
+        } else if (companyContext === "祺富") {
+            const qfSection = sections.find((s) => getSectionId(s).includes("祺富"));
+            if (qfSection && sectionMatchesRoute(qfSection, routeTokens)) {
+                return getSectionId(qfSection);
+            }
+        }
+
+        // 2. 坚守用户最近显式点击的分组（只要该分组能够匹配当前路由）
         let savedId = "";
         try {
             savedId = window.sessionStorage.getItem("ashan.sidebar.v3.last_clicked_section") ||
@@ -373,32 +500,28 @@
             }
         }
 
-        // 2. 检查多企业业务上下文（根据当前用户所选公司/工作上下文动态收敛归属）
-        const currentCompany = window.frappe?.defaults?.get_user_default?.("company") ||
-                              window.frappe?.boot?.ashan_work_context?.company || "";
-        if (currentCompany.includes("吉众")) {
-            const jzSection = sections.find((s) => getSectionId(s).includes("吉众"));
-            if (jzSection && sectionMatchesRoute(jzSection, routeTokens)) {
-                return getSectionId(jzSection);
-            }
-        } else if (currentCompany.includes("祺富")) {
-            const qfSection = sections.find((s) => getSectionId(s).includes("祺富"));
-            if (qfSection && sectionMatchesRoute(qfSection, routeTokens)) {
-                return getSectionId(qfSection);
-            }
-        }
-
         // 3. 检查原生选中的元素所在分组（必须确实包含该路由）
         const activeSection = sections.find((section) => section.querySelector(
-            ".sidebar-child-item.active, .sidebar-child-item.selected, " +
-            ".sidebar-child-item .active, .sidebar-child-item .selected"
+            ".sidebar-child-item.active, .sidebar-child-item.selected, .sidebar-child-item.active-sidebar, " +
+            ".sidebar-child-item .active, .sidebar-child-item .selected, .sidebar-child-item .active-sidebar"
         ));
         if (activeSection && sectionMatchesRoute(activeSection, routeTokens)) {
-            return getSectionId(activeSection);
+            if (companyContext === "吉众" && getSectionId(activeSection).includes("祺富")) {
+                // 严禁吉众上下文跳去祺富
+            } else if (companyContext === "祺富" && getSectionId(activeSection).includes("吉众")) {
+                // 严禁祺富上下文跳去吉众
+            } else {
+                return getSectionId(activeSection);
+            }
         }
 
-        // 4. 通用兜底：从所有分组中找到包含该路由的第一个分组
-        const routeSection = sections.find((section) => sectionMatchesRoute(section, routeTokens));
+        // 4. 通用兜底：从所有分组中找到包含该路由的分组（严格遵守企业物理隔离，绝不跳去对手企业）
+        const routeSection = sections.find((section) => {
+            const sId = getSectionId(section);
+            if (companyContext === "吉众" && sId.includes("祺富")) return false;
+            if (companyContext === "祺富" && sId.includes("吉众")) return false;
+            return sectionMatchesRoute(section, routeTokens);
+        });
         return routeSection ? getSectionId(routeSection) : "";
     }
 
@@ -433,9 +556,9 @@
         const route = window.frappe?.get_route?.() || [];
         const primary = String(route[0] || "").toLowerCase().replace(/[\s_]+/g, "-");
 
-        // 1. 先清除整个侧边栏中所有子项的 active / selected 状态，防止多企业或跨分组产生多重幽灵高亮
+        // 1. 先清除整个侧边栏中所有子项的 active / selected / active-sidebar 状态，防止多企业或跨分组产生多重幽灵高亮
         sidebar.querySelectorAll(".sidebar-child-item, .standard-sidebar-item").forEach((el) => {
-            el.classList.remove("active", "selected");
+            el.classList.remove("active", "selected", "active-sidebar");
         });
 
         // 2. 如果指定了 targetSectionId，则仅在其限定的作用域内进行高亮匹配
@@ -455,8 +578,8 @@
             const cleanHref = rawHref.replace(/^\/desk\//, "").replace(/^\/app\//, "").replace(/^\//, "");
             const isMatch = cleanHref === joined || cleanHref === primary || (joined.startsWith(cleanHref) && cleanHref.length > 3);
             if (isMatch) {
-                child.classList.add("active", "selected");
-                child.querySelector(".standard-sidebar-item")?.classList.add("active", "selected");
+                child.classList.add("active", "selected", "active-sidebar");
+                child.querySelector(".standard-sidebar-item")?.classList.add("active", "selected", "active-sidebar");
             }
         });
     }
@@ -513,6 +636,11 @@
             if (willOpen && sectionId) {
                 try {
                     window.sessionStorage.setItem("ashan.sidebar.v3.last_clicked_section", sectionId);
+                    if (sectionId.includes("吉众")) {
+                        window.sessionStorage.setItem("ashan.sidebar.v3.active_company_context", "吉众");
+                    } else if (sectionId.includes("祺富")) {
+                        window.sessionStorage.setItem("ashan.sidebar.v3.active_company_context", "祺富");
+                    }
                 } catch (e) {}
             }
             return true;
@@ -540,6 +668,11 @@
                 setAccordionState(sidebar, sectionId, true);
                 try {
                     window.sessionStorage.setItem("ashan.sidebar.v3.last_clicked_section", sectionId);
+                    if (sectionId.includes("吉众")) {
+                        window.sessionStorage.setItem("ashan.sidebar.v3.active_company_context", "吉众");
+                    } else if (sectionId.includes("祺富")) {
+                        window.sessionStorage.setItem("ashan.sidebar.v3.active_company_context", "祺富");
+                    }
                 } catch (e) {}
 
                 // 核心隔离：若点击吉众或祺富的考勤/核定/档案/社保，自动注入目标公司上下文
@@ -575,6 +708,7 @@
             refreshFrame = null;
             refreshNeedsHydration = false;
             patchSidebarResolver();
+            patchNativeSidebarMethods();
             bindAccordionInteractions();
             markWorkbenchItems();
             applyOilOperatorView();
@@ -613,6 +747,8 @@
             window.setTimeout(init, 100);
             return;
         }
+        patchSidebarResolver();
+        patchNativeSidebarMethods();
         refreshSidebarEnhancements(true);
         handleRootRoute();
         observeSidebar();
