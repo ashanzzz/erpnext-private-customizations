@@ -78,8 +78,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                     <div class="jz-segmented-control" id="jz-emp-type-filter">
                         <button class="jz-segment-btn active" data-type="all">全部人员</button>
                         <button class="jz-segment-btn" data-type="regular">正式工</button>
-                        <button class="jz-segment-btn" data-type="mgmt">管理岗</button>
-                        <button class="jz-segment-btn" data-type="rehire">返聘/其他</button>
+                        <button class="jz-segment-btn" data-type="other">其他</button>
                     </div>
                 </div>
                 <div class="jz-toolbar-right">
@@ -1522,8 +1521,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                 if (!matchKw) return false;
             }
             if (typeFilter === 'regular') return it.employee_type === '正式工';
-            if (typeFilter === 'mgmt') return (it.salary_mode && it.salary_mode.includes('税后管理')) || (it.employee_type && it.employee_type.includes('管理'));
-            if (typeFilter === 'rehire') return it.employee_type && (it.employee_type.includes('返聘') || it.employee_type.includes('其他') || it.employee_type.includes('临时'));
+            if (typeFilter === 'other') return it.employee_type !== '正式工' || (it.employee_type && it.employee_type.includes('其他'));
             return true;
         });
 
@@ -1646,7 +1644,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                 { fieldtype: 'Select', fieldname: 'gender', label: '性别', options: ['','男','女'], default: emp_data.gender || '' },
                 { fieldtype: 'Date', fieldname: 'birth_date', label: '出生日期', default: emp_data.birth_date || '' },
                 { fieldtype: 'Data', fieldname: 'mobile', label: '手机号', default: emp_data.mobile || '' },
-                { fieldtype: 'Select', fieldname: 'employee_type', label: '用工性质', options: ['正式工','其他-管理','其他-返聘工','临时工','本月离职'], default: emp_data.employee_type || '正式工' },
+                { fieldtype: 'Select', fieldname: 'employee_type', label: '用工性质', options: ['正式工','其他'], default: (emp_data.employee_type === '正式工' ? '正式工' : (emp_data.employee_type ? '其他' : '正式工')) },
                 { fieldtype: 'Select', fieldname: 'employment_status', label: '在职状态', options: ['在职','离职'], default: emp_data.employment_status || '在职' },
 
                 { fieldtype: 'Section Break', label: '薪酬长期要素' },
