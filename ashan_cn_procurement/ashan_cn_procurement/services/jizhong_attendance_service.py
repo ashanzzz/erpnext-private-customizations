@@ -9,6 +9,7 @@ import calendar
 import datetime
 import openpyxl
 import frappe
+from frappe import _
 from frappe.utils import flt, cint, getdate
 
 from ashan_cn_procurement.services.ashan_holiday_service import (
@@ -343,3 +344,43 @@ def get_jizhong_attendance_table(company="天津吉众科技有限公司", perio
 		"summary": summary,
 		"records": records,
 	}
+
+
+@frappe.whitelist(methods=["POST"])
+def clear_jizhong_attendance_month(company="天津吉众科技有限公司", period_month=None):
+	"""
+	一键清空指定月份的吉众考勤工时记录，方便重新上传考勤 Excel
+	"""
+	if not period_month:
+		frappe.throw(_("请指定考勤月份"))
+
+	from ashan_cn_procurement.services.authorization_service import assert_payroll_access
+	assert_payroll_access("write", company=company)
+
+	# 检查月度薪酬核定是否已锁定
+	settlement_name = f"{company}-{period_month}"
+	if frappe.db.exists("Ashan Monthly Payroll Settlement", settlement_name):
+		is_locked = frappe.db.get_value("Ashan Monthly Payroll Settlement", settlement_name, "locked")
+		if is_locked:
+			frappe.throw(_("当前账期 {0} 已核定锁定，严禁清空考勤记录！如需重新上传请先在薪酬核定表解锁账期。").format(period_month))
+
+	# 获取当前月份吉众考勤记录列表
+	records = frappe.get_all(
+		"Jizhong Monthly Attendance",
+		filters={"company": company, "period_month": period_month},
+		pluck="name"
+	)
+	deleted_count = len(records)
+
+	for name in records:
+		frappe.delete_doc("Jizhong Monthly Attendance", name, ignore_permissions=True, force=True)
+
+	frappe.db.commit()
+
+	return {
+		"success": True,
+		"deleted_count": deleted_count,
+		"period_month": period_month,
+		"company": company,
+	}
+

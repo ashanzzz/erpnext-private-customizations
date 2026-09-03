@@ -133,6 +133,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
             <div class="jz-toolbar">
                 <div class="jz-toolbar-left">
                     <button class="btn btn-primary btn-sm jz-btn-blue" id="btn-jz-upload-attendance">上传吉众月度考勤 (Excel)</button>
+                    <button class="btn btn-default btn-sm jz-btn-danger-outline" id="btn-jz-clear-attendance">一键清空本月考勤</button>
                     <button class="btn btn-default btn-sm jz-hidden" id="btn-jz-download-attendance-file">下载原始考勤凭证</button>
                     <button class="btn btn-default btn-sm jz-text-primary" id="btn-jz-sync-calc-payroll">按考勤一键核算当月工资</button>
                 </div>
@@ -783,6 +784,12 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                     $('#btn-jz-download-attendance-file').addClass('jz-hidden');
                 }
 
+                if (records.length === 0) {
+                    $('#btn-jz-clear-attendance').prop('disabled', true).addClass('disabled');
+                } else {
+                    $('#btn-jz-clear-attendance').prop('disabled', false).removeClass('disabled');
+                }
+
                 render_attendance_table();
             }
         });
@@ -944,6 +951,42 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
     $('#btn-jz-download-attendance-file').on('click', function() {
         const url = $(this).attr('data-url');
         if (url) window.open(url);
+    });
+
+    // 一键清空当月考勤记录
+    $('#btn-jz-clear-attendance').on('click', function() {
+        if (!current_month) {
+            frappe.msgprint('请先选择考勤月份！');
+            return;
+        }
+        if (!attendance_cache || attendance_cache.length === 0) {
+            frappe.msgprint(`当前月份（${current_month}）暂无考勤记录，无需清空。`);
+            return;
+        }
+
+        frappe.confirm(
+            `确定要一键清空【${current_month}】的全部考勤工时记录吗？<br><br><span class="text-danger">注意：此操作将清空该月份所有员工（共 ${attendance_cache.length} 人）的正班工时、加班工时、倒休抵扣、餐补及每日打卡明细，清空后可重新上传新的考勤 Excel。</span>`,
+            function() {
+                frappe.call({
+                    method: 'ashan_cn_procurement.services.jizhong_attendance_service.clear_jizhong_attendance_month',
+                    args: {
+                        company: COMPANY,
+                        period_month: current_month
+                    },
+                    freeze: true,
+                    freeze_message: '正在清空本月考勤工时记录...',
+                    callback: function(r) {
+                        if (r.message && r.message.success) {
+                            frappe.show_alert({
+                                message: `已成功清空 ${current_month} 月考勤记录（共删除 ${r.message.deleted_count} 条）！现在可以重新上传考勤 Excel。`,
+                                indicator: 'green'
+                            }, 5);
+                            load_attendance_data();
+                        }
+                    }
+                });
+            }
+        );
     });
 
     // 联动算薪
