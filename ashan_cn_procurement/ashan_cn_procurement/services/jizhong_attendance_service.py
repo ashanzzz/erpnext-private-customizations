@@ -175,8 +175,8 @@ def parse_jizhong_attendance_file(file_path, period_month=None, company="天津�
 
 			for col_idx, day_num in days_list:
 				shift_val = ws.cell(shifts_row, col_idx).value
-				cur_work = flt(ws.cell(work_row, col_idx).value or 0)
-				cur_ot = flt(ws.cell(ot_row, col_idx).value or 0)
+				cur_work = round(flt(ws.cell(work_row, col_idx).value or 0), 1)
+				cur_ot = round(flt(ws.cell(ot_row, col_idx).value or 0), 1)
 				cur_meal = cint(flt(ws.cell(meal_row, col_idx).value or 0))
 				cur_remark = str(ws.cell(remark_row, col_idx).value or "").strip()
 
@@ -221,11 +221,11 @@ def parse_jizhong_attendance_file(file_path, period_month=None, company="天津�
 			# 执行 VBA 倒休二倍工时对冲抵扣
 			# 实际倒休 = min(周末2倍工时池, 倒休需求)
 			actual_compensatory = min(weekend_ot_pool, comp_leave_demand)
-			net_weekend_ot_2_0 = round(weekend_ot_pool - actual_compensatory, 2)
-			final_regular_hours = round(work_hours_sum + actual_compensatory, 2)
-			ot_1_5_sum = round(ot_1_5_sum, 2)
-			holiday_ot_pool = round(holiday_ot_pool, 2)
-			actual_compensatory = round(actual_compensatory, 2)
+			net_weekend_ot_2_0 = round(weekend_ot_pool - actual_compensatory, 1)
+			final_regular_hours = round(work_hours_sum + actual_compensatory, 1)
+			ot_1_5_sum = round(ot_1_5_sum, 1)
+			holiday_ot_pool = round(holiday_ot_pool, 1)
+			actual_compensatory = round(actual_compensatory, 1)
 
 			# 累加全局统计
 			total_regular_hours += final_regular_hours
@@ -286,11 +286,11 @@ def parse_jizhong_attendance_file(file_path, period_month=None, company="天津�
 		"period_month": period_month,
 		"company": company,
 		"employee_count": len(parsed_results),
-		"total_regular_hours": round(total_regular_hours, 2),
-		"total_ot_1_5": round(total_ot_1_5, 2),
-		"total_ot_2_0": round(total_ot_2_0, 2),
-		"total_ot_3_0": round(total_ot_3_0, 2),
-		"total_compensatory": round(total_compensatory, 2),
+		"total_regular_hours": round(total_regular_hours, 1),
+		"total_ot_1_5": round(total_ot_1_5, 1),
+		"total_ot_2_0": round(total_ot_2_0, 1),
+		"total_ot_3_0": round(total_ot_3_0, 1),
+		"total_compensatory": round(total_compensatory, 1),
 		"total_meals": total_meals,
 		"unmatched_names": unmatched_names,
 		"items": parsed_results,
@@ -331,11 +331,11 @@ def get_jizhong_attendance_table(company="天津吉众科技有限公司", perio
 		"period_month": period_month,
 		"company": company,
 		"employee_count": len(records),
-		"total_work_hours": sum(flt(r.work_hours_regular) for r in records),
-		"total_ot_1_5": sum(flt(r.overtime_regular_1_5) for r in records),
-		"total_ot_2_0": sum(flt(r.overtime_weekend_2_0) for r in records),
-		"total_ot_3_0": sum(flt(r.overtime_holiday_3_0) for r in records),
-		"total_compensatory": sum(flt(r.leave_compensatory_hours) for r in records),
+		"total_work_hours": round(sum(flt(r.work_hours_regular) for r in records), 1),
+		"total_ot_1_5": round(sum(flt(r.overtime_regular_1_5) for r in records), 1),
+		"total_ot_2_0": round(sum(flt(r.overtime_weekend_2_0) for r in records), 1),
+		"total_ot_3_0": round(sum(flt(r.overtime_holiday_3_0) for r in records), 1),
+		"total_compensatory": round(sum(flt(r.leave_compensatory_hours) for r in records), 1),
 		"total_meals": sum(cint(r.meal_count) for r in records),
 		"attendance_file": records[0].attendance_file if records and records[0].attendance_file else None,
 	}

@@ -224,11 +224,11 @@ def calculate_jizhong_monthly_payroll(company="天津吉众科技有限公司", 
 		full_days = flt(att.attendance_days) if att else 21.75
 		half_days = flt(att.half_days) if att else 0.0
 		absent_days = flt(att.absent_days) if att else 0.0
-		work_hrs = flt(att.work_hours_regular) if att else dynamic_work_hours
-		ot_1_5 = flt(att.overtime_regular_1_5) if att else 0.0
-		ot_2_0 = flt(att.overtime_weekend_2_0) if att else 0.0
-		ot_3_0 = flt(att.overtime_holiday_3_0) if att else 0.0
-		leave_comp = flt(att.leave_compensatory_hours) if att else 0.0
+		work_hrs = round(flt(att.work_hours_regular), 1) if att else dynamic_work_hours
+		ot_1_5 = round(flt(att.overtime_regular_1_5), 1) if att else 0.0
+		ot_2_0 = round(flt(att.overtime_weekend_2_0), 1) if att else 0.0
+		ot_3_0 = round(flt(att.overtime_holiday_3_0), 1) if att else 0.0
+		leave_comp = round(flt(att.leave_compensatory_hours), 1) if att else 0.0
 		meal_cnt = cint(att.meal_count) if att else 0
 
 		# 薪资标准项
@@ -308,7 +308,7 @@ def calculate_jizhong_monthly_payroll(company="天津吉众科技有限公司", 
 			# 税前动态工资正算
 			dyn_hourly = round(base_sal / dynamic_work_hours, 6) if dynamic_work_hours > 0 else 0.0
 			fix_hourly = round(base_sal / FIXED_MONTHLY_HOURS, 6) # 基本工资 / 172.0
-			absence_hrs = max(0.0, dynamic_work_hours - work_hrs)
+			absence_hrs = round(max(0.0, dynamic_work_hours - work_hrs), 1)
 
 			sal_basic_hrs = round(work_hrs * dyn_hourly, 2)
 			sal_ot_1_5 = round(fix_hourly * ot_1_5 * 1.5, 2)
@@ -365,12 +365,12 @@ def calculate_jizhong_monthly_payroll(company="天津吉众科技有限公司", 
 			"attendance_days": full_days,
 			"half_days": half_days,
 			"absent_days": absent_days,
-			"work_hours": work_hrs,
-			"basic_hours": work_hrs,
-			"overtime_regular_1_5": ot_1_5,
-			"overtime_weekend_2_0": ot_2_0,
-			"overtime_holiday_3_0": ot_3_0,
-			"leave_compensatory_hours": leave_comp,
+			"work_hours": round(work_hrs, 1),
+			"basic_hours": round(work_hrs, 1),
+			"overtime_regular_1_5": round(ot_1_5, 1),
+			"overtime_weekend_2_0": round(ot_2_0, 1),
+			"overtime_holiday_3_0": round(ot_3_0, 1),
+			"leave_compensatory_hours": round(leave_comp, 1),
 			"meal_count": meal_cnt,
 			"meal_unit_price": meal_unit_price,
 			"base_salary": base_sal,

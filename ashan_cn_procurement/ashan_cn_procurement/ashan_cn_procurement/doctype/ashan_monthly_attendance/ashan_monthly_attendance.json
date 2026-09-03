@@ -47,24 +47,28 @@
     {
       "fieldname": "work_hours_regular",
       "fieldtype": "Float",
+      "precision": "1",
       "label": "基本出勤工时 (h)",
       "in_list_view": 1
     },
     {
       "fieldname": "overtime_regular_1_5",
       "fieldtype": "Float",
+      "precision": "1",
       "label": "平日加班工时 1.5x (h)",
       "in_list_view": 1
     },
     {
       "fieldname": "overtime_weekend_2_0",
       "fieldtype": "Float",
+      "precision": "1",
       "label": "周末加班工时 2.0x (h)",
       "in_list_view": 1
     },
     {
       "fieldname": "overtime_holiday_3_0",
       "fieldtype": "Float",
+      "precision": "1",
       "label": "法定节假日加班工时 3.0x (h)",
       "in_list_view": 1
     },
@@ -89,6 +93,7 @@
     {
       "fieldname": "leave_compensatory_hours",
       "fieldtype": "Float",
+      "precision": "1",
       "label": "倒休抵扣工时 (h)",
       "in_list_view": 1
     },

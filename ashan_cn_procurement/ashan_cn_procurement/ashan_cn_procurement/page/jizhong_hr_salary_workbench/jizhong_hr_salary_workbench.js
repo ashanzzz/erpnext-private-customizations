@@ -115,13 +115,13 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                 </div>
                 <div class="jz-kpi-card">
                     <div class="jz-kpi-title">基本正班总工时</div>
-                    <div class="jz-kpi-val jz-text-info" id="jz-att-kpi-reg">0.00 h</div>
-                    <div class="jz-kpi-sub">倒休抵扣工时: <span id="jz-att-kpi-comp">0.00 h</span></div>
+                    <div class="jz-kpi-val jz-text-info" id="jz-att-kpi-reg">0.0 h</div>
+                    <div class="jz-kpi-sub">倒休抵扣工时: <span id="jz-att-kpi-comp">0.0 h</span></div>
                 </div>
                 <div class="jz-kpi-card">
                     <div class="jz-kpi-title">各倍率加班总工时</div>
-                    <div class="jz-kpi-val jz-text-primary" id="jz-att-kpi-ot">0.00 h</div>
-                    <div class="jz-kpi-sub">1.5x平日: <span id="jz-att-kpi-ot15">0.0h</span> | 2.0x周末: <span id="jz-att-kpi-ot20">0.0h</span> | 3.0x节假日: <span id="jz-att-kpi-ot30">0.0h</span></div>
+                    <div class="jz-kpi-val jz-text-primary" id="jz-att-kpi-ot">0.0 h</div>
+                    <div class="jz-kpi-sub">1.5x平日: <span id="jz-att-kpi-ot15">0.0 h</span> | 2.0x周末: <span id="jz-att-kpi-ot20">0.0 h</span> | 3.0x节假日: <span id="jz-att-kpi-ot30">0.0 h</span></div>
                 </div>
                 <div class="jz-kpi-card">
                     <div class="jz-kpi-title">订餐补贴总次数</div>
@@ -342,7 +342,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
 
     function fmtHours(val) {
         let n = flt(val);
-        return n.toFixed(2) + ' h';
+        return n.toFixed(1) + ' h';
     }
 
     // Tab 切换逻辑
@@ -881,8 +881,8 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                                 <div class="${cls}">
                                     <div class="jz-day-card-num">${d.day}日</div>
                                     <div class="jz-tip-text">${d.shift || '-'}</div>
-                                    <div class="jz-day-card-hours">${d.work_hours > 0 ? d.work_hours + 'h' : '0'}</div>
-                                    <div class="jz-day-card-ot">${d.overtime > 0 ? '+' + d.overtime + 'h' : ''}</div>
+                                    <div class="jz-day-card-hours">${d.work_hours > 0 ? flt(d.work_hours).toFixed(1) + 'h' : '0'}</div>
+                                    <div class="jz-day-card-ot">${d.overtime > 0 ? '+' + flt(d.overtime).toFixed(1) + 'h' : ''}</div>
                                     <div class="jz-text-success">${d.meal > 0 ? d.meal + '餐' : ''}</div>
                                 </div>
                             `;
