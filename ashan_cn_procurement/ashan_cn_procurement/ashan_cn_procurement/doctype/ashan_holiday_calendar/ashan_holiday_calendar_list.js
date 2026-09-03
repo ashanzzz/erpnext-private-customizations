@@ -227,29 +227,6 @@ function render_holiday_workbench(listview) {
                     justify-content: center;
                     border-radius: 50%;
                 }
-                .holiday-quick-picker {
-                    display: inline-flex;
-                    background: #f1f5f9;
-                    border-radius: 5px;
-                    padding: 2px;
-                    gap: 2px;
-                }
-                .holiday-quick-picker .btn-quick-hname {
-                    font-size: 11px;
-                    font-weight: 600;
-                    padding: 2px 7px;
-                    border: none;
-                    background: transparent;
-                    color: #475569;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    transition: all 0.1s ease;
-                }
-                .holiday-quick-picker .btn-quick-hname:hover {
-                    background: #ffffff;
-                    color: #1d4ed8;
-                    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-                }
                 .holiday-summary-badge {
                     font-size: 11.5px;
                     font-weight: 600;
@@ -914,18 +891,10 @@ function render_holiday_workbench(listview) {
                                 ${idx + 1}
                             </span>
                             
-                            <!-- 节假日名称输入与快速预设胶囊组 -->
+                            <!-- 节假日名称输入 -->
                             <div style="display:flex; align-items:center; gap:6px;">
-                                <input type="text" class="form-control input-sm card-holiday-name" value="${cfg.holiday_name || ''}" placeholder="节假日名称" style="width:115px; font-weight:700; color:#0f172a; height:30px; font-size:12px;">
-                                <div class="holiday-quick-picker">
-                                    <button type="button" class="btn-quick-hname" data-val="元旦">元旦</button>
-                                    <button type="button" class="btn-quick-hname" data-val="春节">春节</button>
-                                    <button type="button" class="btn-quick-hname" data-val="清明节">清明</button>
-                                    <button type="button" class="btn-quick-hname" data-val="劳动节">五一</button>
-                                    <button type="button" class="btn-quick-hname" data-val="端午节">端午</button>
-                                    <button type="button" class="btn-quick-hname" data-val="中秋节">中秋</button>
-                                    <button type="button" class="btn-quick-hname" data-val="国庆节">国庆</button>
-                                </div>
+                                <span style="font-size:12px; font-weight:700; color:#334155;">节日名称:</span>
+                                <input type="text" class="form-control input-sm card-holiday-name" value="${cfg.holiday_name || ''}" placeholder="如：元旦 / 春节" style="width:140px; font-weight:700; color:#0f172a; height:30px; font-size:12px;">
                             </div>
                         </div>
 
@@ -1227,12 +1196,6 @@ function render_holiday_workbench(listview) {
         update_card_ui($card);
     });
 
-    // 11. 节假日名称快速选择器
-    $wb.on('click', '.btn-quick-hname', function() {
-        let val = $(this).attr('data-val');
-        let $card = $(this).closest('.holiday-config-card');
-        $card.find('.card-holiday-name').val(val);
-    });
 
     // 12. 修改放假起止日期：自动重新切片
     $wb.on('change', '.card-start-date, .card-end-date', function() {
