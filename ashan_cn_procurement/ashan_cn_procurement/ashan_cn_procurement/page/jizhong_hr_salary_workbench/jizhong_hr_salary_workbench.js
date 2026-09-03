@@ -35,77 +35,89 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
             </div>
         </div>
 
-        <!-- 7大业务 Tab 切换 -->
+        <!-- 7大业务 Tab 切换 (档案前置 -> 考勤打卡 -> 税费基数 -> 综合核算 -> 现金配钞 -> 历史归档) -->
         <div class="jz-nav-tabs">
-            <button class="jz-tab-btn active" data-tab="payroll">1. 月度薪酬核定表</button>
+            <button class="jz-tab-btn active" data-tab="employees">1. 员工薪资信息表</button>
             <button class="jz-tab-btn" data-tab="attendance">2. 考勤工时与打卡底册</button>
-            <button class="jz-tab-btn" data-tab="cash_bills">3. 现金发放与配钞点钞</button>
+            <button class="jz-tab-btn" data-tab="insurance">3. 社保公积金配置</button>
             <button class="jz-tab-btn" data-tab="tax">4. 个人所得税台账</button>
-            <button class="jz-tab-btn" data-tab="employees">5. 员工薪酬档案</button>
-            <button class="jz-tab-btn" data-tab="insurance">6. 社保公积金配置</button>
+            <button class="jz-tab-btn" data-tab="payroll">5. 月度工资核定表</button>
+            <button class="jz-tab-btn" data-tab="cash_bills">6. 现金发放与配钞点钞</button>
             <button class="jz-tab-btn" data-tab="history">7. 历史薪资穿透 (421条)</button>
         </div>
 
-        <!-- Tab 1: 月度薪酬核定表 -->
-        <div id="jz-tab-payroll" class="jz-tab-content">
+        <!-- Tab 1: 员工薪资信息表 (对应 Excel [人员薪资信息] sheets) -->
+        <div id="jz-tab-employees" class="jz-tab-content">
             <div class="jz-kpi-grid">
                 <div class="jz-kpi-card">
-                    <div class="jz-kpi-title">核定状态 / 人数</div>
-                    <div class="jz-kpi-val" id="jz-kpi-status"><span class="jz-status-badge jz-status-draft">草稿 / 可测算</span></div>
-                    <div class="jz-kpi-sub">在职计薪人员: <strong id="jz-kpi-count">0</strong> 人</div>
+                    <div class="jz-kpi-title">在册员工总数 / 状态</div>
+                    <div class="jz-kpi-val" id="jz-emp-kpi-count">0 人</div>
+                    <div class="jz-kpi-sub">基准底册: <span class="jz-text-success">已建立</span></div>
                 </div>
                 <div class="jz-kpi-card">
-                    <div class="jz-kpi-title">实发工资总额</div>
-                    <div class="jz-kpi-val jz-text-primary" id="jz-kpi-net">¥ 0.00</div>
-                    <div class="jz-kpi-sub">应发总额: <span id="jz-kpi-gross">¥ 0.00</span></div>
+                    <div class="jz-kpi-title">基本工资总基数</div>
+                    <div class="jz-kpi-val jz-text-info" id="jz-emp-kpi-base">¥ 0.00</div>
+                    <div class="jz-kpi-sub">动态基本工资底册合计</div>
                 </div>
                 <div class="jz-kpi-card">
-                    <div class="jz-kpi-title">代扣税费 (个人部分)</div>
-                    <div class="jz-kpi-val jz-text-warn" id="jz-kpi-person-ded">¥ 0.00</div>
-                    <div class="jz-kpi-sub">社保个人: <span id="jz-kpi-ss-pers">¥ 0.00</span> | 公积金: <span id="jz-kpi-hf-pers">¥ 0.00</span> | 个税: <span id="jz-kpi-tax">¥ 0.00</span></div>
+                    <div class="jz-kpi-title">岗位津贴与绩效总盘</div>
+                    <div class="jz-kpi-val jz-text-primary" id="jz-emp-kpi-allowance">¥ 0.00</div>
+                    <div class="jz-kpi-sub">津贴: <span id="jz-emp-kpi-post">¥ 0.00</span> | 绩效: <span id="jz-emp-kpi-perf">¥ 0.00</span></div>
                 </div>
                 <div class="jz-kpi-card">
-                    <div class="jz-kpi-title">单位统筹成本</div>
-                    <div class="jz-kpi-val jz-text-success" id="jz-kpi-comp-cost">¥ 0.00</div>
-                    <div class="jz-kpi-sub">单位社保: <span id="jz-kpi-ss-comp">¥ 0.00</span> | 单位公积金: <span id="jz-kpi-hf-comp">¥ 0.00</span></div>
+                    <div class="jz-kpi-title">社保与公积金申报基数</div>
+                    <div class="jz-kpi-val jz-text-success" id="jz-emp-kpi-ins">¥ 0.00</div>
+                    <div class="jz-kpi-sub">社险基数: <span id="jz-emp-kpi-ss">¥ 0.00</span> | 公积金: <span id="jz-emp-kpi-hf">¥ 0.00</span></div>
                 </div>
             </div>
 
             <div class="jz-toolbar">
                 <div class="jz-toolbar-left">
-                    <div class="jz-segmented-control" id="jz-payroll-person-filter">
-                        <button class="jz-segment-btn active" data-mode="all">全部人员</button>
-                        <button class="jz-segment-btn" data-mode="regular">正式员工</button>
-                        <button class="jz-segment-btn" data-mode="other">其他员工</button>
-                        <button class="jz-segment-btn" data-mode="temporary">临时工</button>
+                    <button class="btn btn-primary btn-sm jz-btn-blue" id="btn-jz-add-emp">新建员工薪酬档案</button>
+                    <button class="btn btn-default btn-sm" id="btn-jz-export-employees">导出薪资信息表 (Excel)</button>
+                    <div class="jz-segmented-control" id="jz-emp-type-filter">
+                        <button class="jz-segment-btn active" data-type="all">全部人员</button>
+                        <button class="jz-segment-btn" data-type="regular">正式工</button>
+                        <button class="jz-segment-btn" data-type="mgmt">管理岗</button>
+                        <button class="jz-segment-btn" data-type="rehire">返聘/其他</button>
                     </div>
-
-                    <div class="jz-segmented-control" id="jz-payroll-col-toggle">
-                        <button class="jz-segment-btn active" data-view="summary">精简财务视图</button>
-                        <button class="jz-segment-btn" data-view="detail">全要素工时分项</button>
-                    </div>
-
-                    <button class="btn btn-primary btn-sm jz-btn-orange" id="btn-jz-calc-payroll">执行月度薪酬核算</button>
-                    <button class="btn btn-success btn-sm jz-btn-green" id="btn-jz-lock-payroll">核定锁定 (只读封账)</button>
-                    <button class="btn btn-default btn-sm jz-btn-red jz-hidden" id="btn-jz-unlock-payroll">申请反审核解锁</button>
                 </div>
                 <div class="jz-toolbar-right">
-                    <button class="btn btn-default btn-sm" id="btn-jz-export-payroll">导出本月工资表 (Excel)</button>
+                    <input type="text" class="form-control input-sm jz-search-input" id="jz-emp-search" placeholder="快速筛选工号、姓名或计薪方式...">
                 </div>
             </div>
 
             <div class="jz-table-box">
-                <table class="jz-table" id="table-jz-payroll">
-                    <thead id="thead-jz-payroll"></thead>
-                    <tbody id="tbody-jz-payroll">
-                        <tr><td colspan="20" class="jz-empty-cell">正在加载吉众薪酬数据...</td></tr>
+                <table class="jz-table" id="table-jz-employees">
+                    <thead>
+                        <tr>
+                            <th class="jz-col-seq jz-col-sticky-1">序号</th>
+                            <th class="jz-col-no jz-col-sticky-2">工号</th>
+                            <th class="jz-col-name jz-col-sticky-3">姓名</th>
+                            <th>身份证号</th>
+                            <th>用工性质</th>
+                            <th>计薪方式</th>
+                            <th class="jz-text-right">实发约定净薪</th>
+                            <th class="jz-text-right">基本工资</th>
+                            <th class="jz-text-right">基本补贴</th>
+                            <th class="jz-text-right">绩效奖金</th>
+                            <th class="jz-text-right">职位津贴</th>
+                            <th class="jz-text-right">餐补单价</th>
+                            <th class="jz-text-right">社险基数</th>
+                            <th class="jz-text-right">公积金基数</th>
+                            <th class="jz-text-right">专项附加扣除</th>
+                            <th class="jz-text-center">在职状态</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-jz-employees">
+                        <tr><td colspan="16" class="jz-empty-cell">正在加载员工薪资信息档案...</td></tr>
                     </tbody>
-                    <tfoot id="tfoot-jz-payroll"></tfoot>
+                    <tfoot id="tfoot-jz-employees"></tfoot>
                 </table>
             </div>
         </div>
 
-        <!-- Tab 2: 考勤工时管理 -->
+        <!-- Tab 2: 考勤工时与打卡底册 (对应 Excel [考勤表] sheets) -->
         <div id="jz-tab-attendance" class="jz-tab-content jz-hidden">
             <div class="jz-kpi-grid">
                 <div class="jz-kpi-card">
@@ -197,107 +209,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
             </div>
         </div>
 
-        <!-- Tab 3: 现金发放与配钞点钞 -->
-        <div id="jz-tab-cash_bills" class="jz-tab-content jz-hidden">
-            <div class="jz-cash-stat-bar" id="jz-cash-summary-bar">
-                <div class="jz-cash-stat-item"><span class="jz-cash-denom-label">现金总盘:</span> <span class="jz-cash-denom-count" id="stat-cash-total">¥ 0.00</span></div>
-                <div class="jz-cash-stat-item"><span class="jz-cash-denom-label">100元券:</span> <span class="jz-cash-denom-count" id="stat-b100">0 张</span></div>
-                <div class="jz-cash-stat-item"><span class="jz-cash-denom-label">50元券:</span> <span class="jz-cash-denom-count" id="stat-b50">0 张</span></div>
-                <div class="jz-cash-stat-item"><span class="jz-cash-denom-label">10元券:</span> <span class="jz-cash-denom-count" id="stat-b10">0 张</span></div>
-                <div class="jz-cash-stat-item"><span class="jz-cash-denom-label">5元券:</span> <span class="jz-cash-denom-count" id="stat-b5">0 张</span></div>
-                <div class="jz-cash-stat-item"><span class="jz-cash-denom-label">1元券:</span> <span class="jz-cash-denom-count" id="stat-b1">0 张</span></div>
-            </div>
-
-            <div class="jz-toolbar">
-                <div class="jz-toolbar-left">
-                    <button class="btn btn-default btn-sm" id="btn-jz-print-a4-slips">打印 A4 签收工资条</button>
-                </div>
-                <div class="jz-toolbar-right">
-                    <span class="jz-tip-text">现金取整算法：RoundUp(实发工资, 0)，严格五档贪心拆分平账</span>
-                </div>
-            </div>
-
-            <div class="jz-table-box">
-                <table class="jz-table" id="table-jz-cash">
-                    <thead>
-                        <tr>
-                            <th class="jz-col-seq">序号</th>
-                            <th class="jz-col-no">工号</th>
-                            <th class="jz-col-name">姓名</th>
-                            <th class="jz-text-right">实发薪资</th>
-                            <th class="jz-text-right">现金发放工资</th>
-                            <th class="jz-text-right">百元 (¥100)</th>
-                            <th class="jz-text-right">五十元 (¥50)</th>
-                            <th class="jz-text-right">十元 (¥10)</th>
-                            <th class="jz-text-right">五元 (¥5)</th>
-                            <th class="jz-text-right">一元 (¥1)</th>
-                            <th class="jz-text-right">现金面额合计</th>
-                            <th class="jz-text-center">收款签字</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-jz-cash"></tbody>
-                    <tfoot id="tfoot-jz-cash"></tfoot>
-                </table>
-            </div>
-        </div>
-
-        <!-- Tab 4: 个人所得税台账 -->
-        <div id="jz-tab-tax" class="jz-tab-content jz-hidden">
-            <div class="jz-table-box">
-                <table class="jz-table" id="table-jz-tax">
-                    <thead>
-                        <tr>
-                            <th class="jz-col-seq">序号</th>
-                            <th class="jz-col-no">工号</th>
-                            <th class="jz-col-name">姓名</th>
-                            <th>计薪方式</th>
-                            <th class="jz-text-right">应发薪资</th>
-                            <th class="jz-text-right">基本减除费用</th>
-                            <th class="jz-text-right">个人社保代扣</th>
-                            <th class="jz-text-right">个人公积金</th>
-                            <th class="jz-text-right">专项附加扣除</th>
-                            <th class="jz-text-right">代扣个税</th>
-                            <th class="jz-text-right">实发工资</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-jz-tax"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Tab 5: 员工薪酬档案 -->
-        <div id="jz-tab-employees" class="jz-tab-content jz-hidden">
-            <div class="jz-toolbar">
-                <div class="jz-toolbar-left">
-                    <button class="btn btn-primary btn-sm jz-btn-orange" id="btn-jz-add-emp">新建在职员工档案</button>
-                </div>
-            </div>
-            <div class="jz-table-box">
-                <table class="jz-table" id="table-jz-employees">
-                    <thead>
-                        <tr>
-                            <th class="jz-col-seq">序号</th>
-                            <th class="jz-col-no">工号</th>
-                            <th class="jz-col-name">姓名</th>
-                            <th>身份证号</th>
-                            <th>用工性质</th>
-                            <th>在职状态</th>
-                            <th>计薪方式</th>
-                            <th class="jz-text-right">基本工资</th>
-                            <th class="jz-text-right">岗位津贴</th>
-                            <th class="jz-text-right">绩效基数</th>
-                            <th class="jz-text-right">餐补单价</th>
-                            <th class="jz-text-right">社保基数</th>
-                            <th class="jz-text-right">公积金基数</th>
-                            <th class="jz-text-right">专项附加扣除</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-jz-employees"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Tab 6: 社保公积金配置 -->
+        <!-- Tab 3: 社保公积金配置 (对应 Excel [本月社会保险] / [本月住房公积金] sheets) -->
         <div id="jz-tab-insurance" class="jz-tab-content jz-hidden">
             <div class="jz-toolbar">
                 <div class="jz-toolbar-left">
@@ -323,7 +235,143 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
             </div>
         </div>
 
-        <!-- Tab 7: 历史薪资穿透 (421条) -->
+        <!-- Tab 4: 个人所得税台账 (对应 Excel [本月个人所得税] sheets) -->
+        <div id="jz-tab-tax" class="jz-tab-content jz-hidden">
+            <div class="jz-toolbar">
+                <div class="jz-toolbar-left">
+                    <span class="jz-tip-text">累计预扣法：5000元/月基本减除费用 + 专项附加扣除 + 7级累计超额累进税率</span>
+                </div>
+                <div class="jz-toolbar-right">
+                    <button class="btn btn-default btn-sm" id="btn-jz-export-tax">导出个税台账 (Excel)</button>
+                </div>
+            </div>
+            <div class="jz-table-box">
+                <table class="jz-table" id="table-jz-tax">
+                    <thead>
+                        <tr>
+                            <th class="jz-col-seq">序号</th>
+                            <th class="jz-col-no">工号</th>
+                            <th class="jz-col-name">姓名</th>
+                            <th>计薪方式</th>
+                            <th class="jz-text-right">应发薪资</th>
+                            <th class="jz-text-right">免征额</th>
+                            <th class="jz-text-right">社保个人合计</th>
+                            <th class="jz-text-right">公积金个人</th>
+                            <th class="jz-text-right">专项附加扣除</th>
+                            <th class="jz-text-right">当月预扣个税</th>
+                            <th class="jz-text-right">实发工资</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-jz-tax"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tab 5: 月度工资核定表 (最后工资表 / 对应 Excel [本月工资核定表] sheets) -->
+        <div id="jz-tab-payroll" class="jz-tab-content jz-hidden">
+            <div class="jz-kpi-grid">
+                <div class="jz-kpi-card">
+                    <div class="jz-kpi-title">核定状态 / 人数</div>
+                    <div class="jz-kpi-val" id="jz-kpi-status"><span class="jz-status-badge jz-status-draft">草稿 / 可测算</span></div>
+                    <div class="jz-kpi-sub">在职计薪人员: <strong id="jz-kpi-count">0</strong> 人</div>
+                </div>
+                <div class="jz-kpi-card">
+                    <div class="jz-kpi-title">实发工资总额</div>
+                    <div class="jz-kpi-val jz-text-primary" id="jz-kpi-net">¥ 0.00</div>
+                    <div class="jz-kpi-sub">应发总额: <span id="jz-kpi-gross">¥ 0.00</span></div>
+                </div>
+                <div class="jz-kpi-card">
+                    <div class="jz-kpi-title">代扣税费 (个人部分)</div>
+                    <div class="jz-kpi-val jz-text-warn" id="jz-kpi-person-ded">¥ 0.00</div>
+                    <div class="jz-kpi-sub">社保个人: <span id="jz-kpi-ss-pers">¥ 0.00</span> | 公积金: <span id="jz-kpi-hf-pers">¥ 0.00</span> | 个税: <span id="jz-kpi-tax">¥ 0.00</span></div>
+                </div>
+                <div class="jz-kpi-card">
+                    <div class="jz-kpi-title">单位统筹成本</div>
+                    <div class="jz-kpi-val jz-text-success" id="jz-kpi-comp-cost">¥ 0.00</div>
+                    <div class="jz-kpi-sub">单位社保: <span id="jz-kpi-ss-comp">¥ 0.00</span> | 单位公积金: <span id="jz-kpi-hf-comp">¥ 0.00</span></div>
+                </div>
+            </div>
+
+            <div class="jz-toolbar">
+                <div class="jz-toolbar-left">
+                    <div class="jz-segmented-control" id="jz-payroll-person-filter">
+                        <button class="jz-segment-btn active" data-mode="all">全部人员</button>
+                        <button class="jz-segment-btn" data-mode="regular">正式员工</button>
+                        <button class="jz-segment-btn" data-mode="other">其他员工</button>
+                        <button class="jz-segment-btn" data-mode="temporary">临时工</button>
+                    </div>
+
+                    <div class="jz-segmented-control" id="jz-payroll-col-toggle">
+                        <button class="jz-segment-btn active" data-view="summary">精简财务视图</button>
+                        <button class="jz-segment-btn" data-view="detail">全要素工时分项</button>
+                    </div>
+
+                    <button class="btn btn-primary btn-sm jz-btn-orange" id="btn-jz-calc-payroll">一键重新计算全员薪酬</button>
+                    <button class="btn btn-success btn-sm jz-btn-green" id="btn-jz-lock-payroll">核定锁定 (只读封账)</button>
+                    <button class="btn btn-default btn-sm jz-btn-red jz-hidden" id="btn-jz-unlock-payroll">申请反审核解锁</button>
+                </div>
+                <div class="jz-toolbar-right">
+                    <button class="btn btn-default btn-sm" id="btn-jz-export-payroll">导出最后工资表 (Excel)</button>
+                </div>
+            </div>
+
+            <div class="jz-table-box">
+                <table class="jz-table" id="table-jz-payroll">
+                    <thead id="thead-jz-payroll"></thead>
+                    <tbody id="tbody-jz-payroll">
+                        <tr><td colspan="20" class="jz-empty-cell">正在加载吉众薪酬数据...</td></tr>
+                    </tbody>
+                    <tfoot id="tfoot-jz-payroll"></tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tab 6: 现金发放与配钞点钞 (对应 Excel [工资条-A4] / [工资条-信封] sheets) -->
+        <div id="jz-tab-cash_bills" class="jz-tab-content jz-hidden">
+            <div class="jz-cash-stat-bar" id="jz-cash-summary-bar">
+                <div class="jz-cash-stat-item"><span class="jz-cash-denom-label">现金总盘:</span> <span class="jz-cash-denom-count" id="stat-cash-total">¥ 0.00</span></div>
+                <div class="jz-cash-stat-item"><span class="jz-cash-denom-label">100元券:</span> <span class="jz-cash-denom-count" id="stat-b100">0 张</span></div>
+                <div class="jz-cash-stat-item"><span class="jz-cash-denom-label">50元券:</span> <span class="jz-cash-denom-count" id="stat-b50">0 张</span></div>
+                <div class="jz-cash-stat-item"><span class="jz-cash-denom-label">10元券:</span> <span class="jz-cash-denom-count" id="stat-b10">0 张</span></div>
+                <div class="jz-cash-stat-item"><span class="jz-cash-denom-label">5元券:</span> <span class="jz-cash-denom-count" id="stat-b5">0 张</span></div>
+                <div class="jz-cash-stat-item"><span class="jz-cash-denom-label">1元券:</span> <span class="jz-cash-denom-count" id="stat-b1">0 张</span></div>
+            </div>
+
+            <div class="jz-toolbar">
+                <div class="jz-toolbar-left">
+                    <button class="btn btn-default btn-sm" id="btn-jz-print-a4-slips">打印 A4 签收工资条</button>
+                    <button class="btn btn-default btn-sm" id="btn-jz-export-cash">导出配钞明细 (Excel)</button>
+                </div>
+                <div class="jz-toolbar-right">
+                    <span class="jz-tip-text">现金五档配钞点钞：贪心算法自适应最优张数 (RoundUp 到元)</span>
+                </div>
+            </div>
+
+            <div class="jz-table-box">
+                <table class="jz-table" id="table-jz-cash">
+                    <thead>
+                        <tr>
+                            <th class="jz-col-seq">序号</th>
+                            <th class="jz-col-no">工号</th>
+                            <th class="jz-col-name">姓名</th>
+                            <th class="jz-text-right">实发总额</th>
+                            <th class="jz-text-right">现金实发</th>
+                            <th class="jz-text-center">100元</th>
+                            <th class="jz-text-center">50元</th>
+                            <th class="jz-text-center">10元</th>
+                            <th class="jz-text-center">5元</th>
+                            <th class="jz-text-center">1元</th>
+                            <th class="jz-text-right">合计金额</th>
+                            <th class="jz-text-center">签收</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-jz-cash"></tbody>
+                    <tfoot id="tfoot-jz-cash"></tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tab 7: 历史薪资穿透 (421条 / 对应 Excel [历史数据] sheets) -->
         <div id="jz-tab-history" class="jz-tab-content jz-hidden">
             <div class="jz-toolbar">
                 <div class="jz-toolbar-left">
@@ -1443,45 +1491,188 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         });
     }
 
-    // 5. 加载员工薪酬档案
+    // 1. 加载员工薪资信息表 (对应 Excel [人员薪资信息] sheets)
+    let employees_cache = [];
+
     function load_employees_data() {
         frappe.call({
             method: 'frappe.client.get_list',
             args: {
                 doctype: 'Ashan Employee Salary Profile',
                 filters: { company: COMPANY },
-                fields: ['*'],
+                fields: [
+                    'name', 'employee_no', 'employee_name', 'id_card', 'mobile',
+                    'employee_type', 'employment_status', 'salary_mode', 'fixed_salary',
+                    'base_salary', 'post_allowance', 'performance_base', 'meal_allowance',
+                    'house_rent_allowance', 'traffic_allowance', 'other_allowance',
+                    'social_security_base', 'housing_fund_base',
+                    'deduction_child_education', 'deduction_continuing_education',
+                    'deduction_housing_loan', 'deduction_housing_rent',
+                    'deduction_elderly_care', 'deduction_infant_care', 'deduction_serious_illness'
+                ],
                 limit: 100,
                 order_by: 'employee_no asc'
             },
             callback: function(r) {
-                const list = r.message || [];
-                const tbody = $('#tbody-jz-employees');
-                tbody.empty();
-
-                list.forEach((it, idx) => {
-                    tbody.append(`
-                        <tr>
-                            <td class="jz-col-seq">${idx + 1}</td>
-                            <td class="jz-col-no"><strong>${it.employee_no}</strong></td>
-                            <td class="jz-col-name"><strong>${it.employee_name}</strong></td>
-                            <td>${it.id_card || '-'}</td>
-                            <td>${it.employee_type || '正式工'}</td>
-                            <td>${it.employment_status || '在职'}</td>
-                            <td>${it.salary_mode}</td>
-                            <td class="jz-money-cell">${fmtMoney(it.base_salary)}</td>
-                            <td class="jz-money-cell">${fmtMoney(it.post_allowance)}</td>
-                            <td class="jz-money-cell">${fmtMoney(it.performance_base)}</td>
-                            <td class="jz-money-cell">${fmtMoney(it.meal_allowance || 15)}</td>
-                            <td class="jz-money-cell">${fmtMoney(it.social_security_base)}</td>
-                            <td class="jz-money-cell">${fmtMoney(it.housing_fund_base)}</td>
-                            <td class="jz-money-cell">${fmtMoney(flt(it.deduction_child_education) + flt(it.deduction_continuing_education) + flt(it.deduction_housing_loan) + flt(it.deduction_housing_rent) + flt(it.deduction_elderly_care) + flt(it.deduction_infant_care))}</td>
-                        </tr>
-                    `);
-                });
+                employees_cache = r.message || [];
+                render_employees_table();
             }
         });
     }
+
+    function render_employees_table() {
+        const tbody = $('#tbody-jz-employees');
+        tbody.empty();
+
+        const searchKw = ($('#jz-emp-search').val() || '').trim().toLowerCase();
+        const typeFilter = $('#jz-emp-type-filter .jz-segment-btn.active').data('type') || 'all';
+
+        let filtered = employees_cache.filter(it => {
+            if (searchKw) {
+                const matchKw = (it.employee_no || '').toLowerCase().includes(searchKw) ||
+                                (it.employee_name || '').toLowerCase().includes(searchKw) ||
+                                (it.id_card || '').toLowerCase().includes(searchKw) ||
+                                (it.salary_mode || '').toLowerCase().includes(searchKw);
+                if (!matchKw) return false;
+            }
+            if (typeFilter === 'regular') return it.employee_type === '正式工';
+            if (typeFilter === 'mgmt') return (it.salary_mode && it.salary_mode.includes('税后管理')) || (it.employee_type && it.employee_type.includes('管理'));
+            if (typeFilter === 'rehire') return it.employee_type && (it.employee_type.includes('返聘') || it.employee_type.includes('其他') || it.employee_type.includes('临时'));
+            return true;
+        });
+
+        if (filtered.length === 0) {
+            tbody.html('<tr><td colspan="16" class="jz-empty-cell">暂无符合条件的员工薪资档案</td></tr>');
+            $('#tfoot-jz-employees').empty();
+            return;
+        }
+
+        let tot_base = 0, tot_sub = 0, tot_perf = 0, tot_post = 0, tot_ss = 0, tot_hf = 0, tot_ded = 0;
+
+        filtered.forEach((it, idx) => {
+            const bSal = flt(it.base_salary);
+            const bSub = flt(it.house_rent_allowance) || flt(it.other_allowance) || 0;
+            const perf = flt(it.performance_base);
+            const post = flt(it.post_allowance);
+            const meal = flt(it.meal_allowance);
+            const ssBase = flt(it.social_security_base);
+            const hfBase = flt(it.housing_fund_base);
+            const dedTotal = flt(it.deduction_child_education) + flt(it.deduction_continuing_education) +
+                             flt(it.deduction_housing_loan) + flt(it.deduction_housing_rent) +
+                             flt(it.deduction_elderly_care) + flt(it.deduction_infant_care) + flt(it.deduction_serious_illness);
+
+            tot_base += bSal;
+            tot_sub += bSub;
+            tot_perf += perf;
+            tot_post += post;
+            tot_ss += ssBase;
+            tot_hf += hfBase;
+            tot_ded += dedTotal;
+
+            const isMgmt = it.salary_mode && it.salary_mode.includes('税后管理');
+            const netAgreed = isMgmt ? fmtMoney(it.fixed_salary) : '-';
+
+            tbody.append(`
+                <tr class="jz-emp-row" data-name="${it.name}">
+                    <td class="jz-col-seq jz-col-sticky-1">${idx + 1}</td>
+                    <td class="jz-col-no jz-col-sticky-2"><strong>${it.employee_no}</strong></td>
+                    <td class="jz-col-name jz-col-sticky-3"><strong>${it.employee_name}</strong></td>
+                    <td class="jz-font-mono">${it.id_card || '-'}</td>
+                    <td><span class="jz-tag">${it.employee_type || '正式工'}</span></td>
+                    <td>${it.salary_mode || '税前动态工资'}</td>
+                    <td class="jz-money-cell ${isMgmt ? 'jz-money-bold jz-text-primary' : ''}">${netAgreed}</td>
+                    <td class="jz-money-cell jz-text-info">${fmtMoney(bSal)}</td>
+                    <td class="jz-money-cell">${fmtMoney(bSub)}</td>
+                    <td class="jz-money-cell">${fmtMoney(perf)}</td>
+                    <td class="jz-money-cell">${fmtMoney(post)}</td>
+                    <td class="jz-money-cell">${meal > 0 ? fmtMoney(meal) + ' / 份' : '-'}</td>
+                    <td class="jz-money-cell">${fmtMoney(ssBase)}</td>
+                    <td class="jz-money-cell">${fmtMoney(hfBase)}</td>
+                    <td class="jz-money-cell jz-text-warn">${dedTotal > 0 ? fmtMoney(dedTotal) : '-'}</td>
+                    <td class="jz-text-center"><span class="jz-status-badge jz-status-submitted">${it.employment_status || '在职'}</span></td>
+                </tr>
+            `);
+        });
+
+        // 汇总卡片更新
+        $('#jz-emp-kpi-count').text(`${filtered.length} 人`);
+        $('#jz-emp-kpi-base').text(fmtMoney(tot_base));
+        $('#jz-emp-kpi-allowance').text(fmtMoney(tot_sub + tot_perf + tot_post));
+        $('#jz-emp-kpi-post').text(fmtMoney(tot_post));
+        $('#jz-emp-kpi-perf').text(fmtMoney(tot_perf));
+        $('#jz-emp-kpi-ins').text(fmtMoney(tot_ss + tot_hf));
+        $('#jz-emp-kpi-ss').text(fmtMoney(tot_ss));
+        $('#jz-emp-kpi-hf').text(fmtMoney(tot_hf));
+
+        // 底部合计行
+        $('#tfoot-jz-employees').html(`
+            <tr>
+                <td colspan="3" class="jz-col-foot-label">合计 (${filtered.length}人)</td>
+                <td>-</td>
+                <td>-</td>
+                <td>-</td>
+                <td>-</td>
+                <td class="jz-money-cell jz-text-info">${fmtMoney(tot_base)}</td>
+                <td class="jz-money-cell">${fmtMoney(tot_sub)}</td>
+                <td class="jz-money-cell">${fmtMoney(tot_perf)}</td>
+                <td class="jz-money-cell">${fmtMoney(tot_post)}</td>
+                <td>-</td>
+                <td class="jz-money-cell">${fmtMoney(tot_ss)}</td>
+                <td class="jz-money-cell">${fmtMoney(tot_hf)}</td>
+                <td class="jz-money-cell jz-text-warn">${fmtMoney(tot_ded)}</td>
+                <td class="jz-text-center">-</td>
+            </tr>
+        `);
+    }
+
+    // 搜索与过滤事件绑定
+    $('#jz-emp-search').on('input', function() {
+        render_employees_table();
+    });
+
+    $('#jz-emp-type-filter .jz-segment-btn').on('click', function() {
+        $('#jz-emp-type-filter .jz-segment-btn').removeClass('active');
+        $(this).addClass('active');
+        render_employees_table();
+    });
+
+    // 导出员工薪资信息表 (Excel CSV 带 UTF-8 BOM)
+    $('#btn-jz-export-employees').on('click', function() {
+        if (!employees_cache || employees_cache.length === 0) {
+            frappe.msgprint('暂无员工薪资信息可导出');
+            return;
+        }
+        let csv = '\uFEFF序号,工号,姓名,身份证号,用工性质,计薪方式,实发约定净薪,基本工资,基本补贴,绩效奖金,职位津贴,餐补单价,社险基数,公积金基数,专项附加扣除,在职状态\n';
+        employees_cache.forEach((it, idx) => {
+            const bSal = flt(it.base_salary);
+            const bSub = flt(it.house_rent_allowance) || flt(it.other_allowance) || 0;
+            const perf = flt(it.performance_base);
+            const post = flt(it.post_allowance);
+            const meal = flt(it.meal_allowance);
+            const ssBase = flt(it.social_security_base);
+            const hfBase = flt(it.housing_fund_base);
+            const dedTotal = flt(it.deduction_child_education) + flt(it.deduction_continuing_education) +
+                             flt(it.deduction_housing_loan) + flt(it.deduction_housing_rent) +
+                             flt(it.deduction_elderly_care) + flt(it.deduction_infant_care) + flt(it.deduction_serious_illness);
+            const isMgmt = it.salary_mode && it.salary_mode.includes('税后管理');
+            const netAgreed = isMgmt ? flt(it.fixed_salary).toFixed(2) : '-';
+
+            csv += `${idx + 1},${it.employee_no},"${it.employee_name}","${it.id_card || ''}",${it.employee_type || '正式工'},${it.salary_mode || '税前动态工资'},${netAgreed},${bSal.toFixed(2)},${bSub.toFixed(2)},${perf.toFixed(2)},${post.toFixed(2)},${meal > 0 ? meal.toFixed(2) : '-'},${ssBase.toFixed(2)},${hfBase.toFixed(2)},${dedTotal.toFixed(2)},${it.employment_status || '在职'}\n`;
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute('download', `吉众员工薪资信息底册_${frappe.datetime.now_date()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    });
+
+    // 新建员工薪酬档案
+    $('#btn-jz-add-emp').on('click', function() {
+        frappe.new_doc('Ashan Employee Salary Profile', { company: COMPANY });
+    });
 
     // 7. 加载历史薪资穿透 (421条)
     function load_history_data() {
@@ -1616,6 +1807,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         dlg.show();
     });
 
-    // 默认首帧加载
-    load_payroll_data();
+    // 默认首帧激活 Tab 1: 员工薪资信息表
+    current_tab = 'employees';
+    load_employees_data();
 };
