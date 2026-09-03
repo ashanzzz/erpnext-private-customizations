@@ -2061,4 +2061,10 @@
 
 
 
-
+/* Locked financial periods must be functionally and visibly non-interactive. */
+.ashan-action-locked,
+.ashan-action-locked:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+	pointer-events: none;
+}

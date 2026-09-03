@@ -1,11 +1,11 @@
 frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     var page = frappe.ui.make_app_page({
         parent: wrapper,
-        title: '祺富人事薪酬工作台',
+        title: '人事薪酬工作台',
         single_column: true
     });
 
-    const COMPANY = "天津祺富机械加工有限公司";
+    let COMPANY = "";
     const initial_today = (frappe.datetime && frappe.datetime.get_today) ? frappe.datetime.get_today() : new Date().toISOString().slice(0, 10);
     // 薪资工作台核定账期默认取【上一个自然月】：8月打开应默认处理7月账单
     // 当月账期尚未到期，不应作为默认核定月份
@@ -533,16 +533,18 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         <div class="qifu-header">
             <div>
                 <div class="qifu-title">
-                    <span>🏢 天津祺富机械加工有限公司 · 人事薪酬综合中枢</span>
+                    <span id="qifu-company-title">人事薪酬综合中枢</span>
                 </div>
                 <div class="qifu-subtitle">
                     权威员工档案库 · 外部实发表智能解析与发放 · 社保/公积金独立台账 · 个人所得税依法预扣 · 综合税后倒推税前一体化
                 </div>
             </div>
             <div class="qifu-header-controls">
+                <label>核算公司：</label>
+                <select id="qifu-company-select" class="form-control qifu-month-input"></select>
                 <label>核算月份：</label>
                 <input type="month" id="qifu-month-select" class="form-control qifu-month-input" value="${current_month}">
-                <button class="btn btn-sm qifu-btn-refresh-header" id="btn-qifu-refresh-all">🔄 刷新数据</button>
+                <button class="btn btn-sm qifu-btn-refresh-header" id="btn-qifu-refresh-all">刷新数据</button>
             </div>
         </div>
 
@@ -802,7 +804,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         </div>
 
         <!-- ========================================== -->
-        <!-- Tab 3: 🛡️ 3. 祺富社会保险台账与配置 -->
+        <!-- Tab 3: 社会保险台账与配置 -->
         <!-- ========================================== -->
         <div id="qifu-tab-social_insurance" class="qifu-tab-content" style="display:none;">
             <!-- 比例卡片 -->
@@ -885,7 +887,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         </div>
 
         <!-- ========================================== -->
-        <!-- Tab 4: 🏛️ 4. 祺富住房公积金台账与自动规则 -->
+        <!-- Tab 4: 住房公积金台账与自动规则 -->
         <!-- ========================================== -->
         <div id="qifu-tab-housing_fund" class="qifu-tab-content" style="display:none;">
             <div class="qifu-kpi-grid">
@@ -1276,6 +1278,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     }
 
     function load_calculation_center() {
+        if (!COMPANY) return;
         const cur_m = $("#qifu-month-select").val() || current_month;
         frappe.call({
             method: 'ashan_cn_procurement.services.payroll_recalculation_service.get_payroll_recalculation_status',
@@ -1382,6 +1385,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
 
     // 1. 加载 Tab 1: 员工档案母表 (精简11列标准结构)
     function load_qifu_employees() {
+        if (!COMPANY) return;
         frappe.call({
             method: 'ashan_cn_procurement.services.employee_salary_service.get_qifu_employees',
             args: { company: COMPANY, period_month: current_month },
@@ -2459,7 +2463,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         { fieldname: 'tax_threshold', fieldtype: 'Currency', label: '基本减除费用（元/月）', default: cfg.tax_threshold || 5000, reqd: 1,
                           description: '用于累计预扣预缴反推。修改后仅对未冻结月份生效，并自动进入服务器重算队列。' },
                         { fieldname: 'tax_cycle_start_month', fieldtype: 'Int', label: '申报累计周期起始月', default: cfg.tax_cycle_start_month || 12, reqd: 1,
-                          description: '现行祺富工资所属期口径默认 12：即上年12月至本年11月。' },
+                          description: '工资所属期口径默认 12：即上年12月至本年11月。' },
                         { fieldtype: 'Section Break', label: '7级累计预扣税率表（法定只读）' },
                         { fieldname: 'tax_bracket_preview', fieldtype: 'HTML' }
                     ],
@@ -2623,7 +2627,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 `;
 
                 const ins_dialog = new frappe.ui.Dialog({
-                    title: `🛡️ 祺富 · ${ins_data.report_title || '社会保险缴费明细表'}`,
+                    title: `${COMPANY || '当前公司'} · ${ins_data.report_title || '社会保险缴费明细表'}`,
                     size: 'extra-large',
                     fields: [{ fieldtype: 'HTML', fieldname: 'ins_content', options: modal_html }],
                     primary_action_label: '关闭',
@@ -2718,7 +2722,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 `;
 
                 const hf_dialog = new frappe.ui.Dialog({
-                    title: `🏛️ 祺富 · ${hf_data.report_title || '住房公积金缴存明细表'}`,
+                    title: `${COMPANY || '当前公司'} · ${hf_data.report_title || '住房公积金缴存明细表'}`,
                     size: 'extra-large',
                     fields: [{ fieldtype: 'HTML', fieldname: 'hf_content', options: modal_html }],
                     primary_action_label: '关闭',
@@ -2816,7 +2820,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 `;
 
                 const tax_dialog = new frappe.ui.Dialog({
-                    title: `⚖️ 祺富 · ${tax_data.report_title || '个人所得税核定明细表'}`,
+                    title: `${COMPANY || '当前公司'} · ${tax_data.report_title || '个人所得税核定明细表'}`,
                     size: 'extra-large',
                     fields: [{ fieldtype: 'HTML', fieldname: 'tax_content', options: modal_html }],
                     primary_action_label: '关闭',
@@ -2938,7 +2942,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         };
 
         d = new frappe.ui.Dialog({
-            title: isEdit ? `✏️ 修改员工薪酬档案 · ${emp_data.employee_name}` : '➕ 新增祺富员工档案',
+            title: isEdit ? `修改员工薪酬档案 · ${emp_data.employee_name}` : `新增${COMPANY || '当前公司'}员工档案`,
             size: 'extra-large',
             fields: [
                 { fieldtype: 'Section Break', label: '基本身份' },
@@ -3309,7 +3313,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 `;
 
                 const dist_dialog = new frappe.ui.Dialog({
-                    title: `📋 祺富 · ${current_month} 薪资发放表 (24列整合版)`,
+                    title: `${COMPANY || '当前公司'} · ${current_month} 薪资发放表 (24列整合版)`,
                     size: 'extra-large',
                     fields: [{ fieldtype: 'HTML', fieldname: 'dist_content', options: modal_html }],
                     primary_action_label: '关闭',
@@ -3400,7 +3404,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                 `;
 
                 const acc_dialog = new frappe.ui.Dialog({
-                    title: `📑 祺富 · ${current_month} 记账工资表 (11列财务版)`,
+                    title: `${COMPANY || '当前公司'} · ${current_month} 记账工资表 (11列财务版)`,
                     size: 'extra-large',
                     fields: [{ fieldtype: 'HTML', fieldname: 'acc_content', options: modal_html }],
                     primary_action_label: '关闭',
@@ -3997,6 +4001,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
     let cached_workflow_status = null;
 
     function load_monthly_workflow_hub() {
+        if (!COMPANY) return;
         const cur_m = $("#qifu-month-select").val() || current_month;
         $("#workflow-period-text").text(cur_m);
 
@@ -4876,6 +4881,19 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         if (current_tab === 'history') load_history_tab();
     });
 
+    $container.on("change", "#qifu-company-select", function() {
+        COMPANY = $(this).val() || "";
+        if (!COMPANY) return;
+        $("#qifu-company-title").text(`${COMPANY} · 人事薪酬综合中枢`);
+        init_workbench_with_billing_period();
+        if (current_tab === 'import') load_salary_distribution_tab();
+        if (current_tab === 'social_insurance') load_social_insurance_tab();
+        if (current_tab === 'housing_fund') load_housing_fund_tab();
+        if (current_tab === 'tax') load_tax_settlement_tab();
+        if (current_tab === 'settlement') load_payroll_settlement();
+        if (current_tab === 'history') load_history_tab();
+    });
+
     // 3. 刷新按钮
     $container.on("click", "#btn-qifu-refresh-all", function() {
         load_calculation_center();
@@ -5504,7 +5522,35 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         });
     }
 
-    init_workbench_with_billing_period();
+    function init_company_context() {
+        frappe.call({
+            method: "ashan_cn_procurement.services.authorization_service.get_module_company_options",
+            args: { module: "payroll" },
+            callback: function(r) {
+                const companies = r.message || [];
+                if (!companies.length) {
+                    frappe.msgprint("当前账号未获授任何公司范围，无法加载薪酬数据。");
+                    return;
+                }
+                const $companySelect = $("#qifu-company-select");
+                $companySelect.empty();
+                companies.forEach(function(company) {
+                    $companySelect.append(
+                        `<option value="${frappe.utils.escape_html(company)}">${frappe.utils.escape_html(company)}</option>`
+                    );
+                });
+                COMPANY = companies[0];
+                $companySelect.val(COMPANY);
+                $("#qifu-company-title").text(`${COMPANY} · 人事薪酬综合中枢`);
+                init_workbench_with_billing_period();
+            },
+            error: function() {
+                frappe.msgprint("无法读取当前账号的公司权限范围，请刷新后重试。");
+            }
+        });
+    }
+
+    init_company_context();
 
     // 后台计算完成后仅刷新当前可见业务区，避免整页刷新打断操作。
     if (frappe.realtime && frappe.realtime.on) {
@@ -5515,10 +5561,11 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         });
     }
     recalculation_poll_timer = setInterval(function() {
-        if (document.visibilityState === 'visible') load_calculation_center();
+        if (COMPANY && document.visibilityState === 'visible') load_calculation_center();
     }, 10000);
 
     wrapper.refresh_workbench = function() {
+        if (!COMPANY) return;
         load_qifu_employees();
         load_monthly_workflow_hub();
         load_calculation_center();

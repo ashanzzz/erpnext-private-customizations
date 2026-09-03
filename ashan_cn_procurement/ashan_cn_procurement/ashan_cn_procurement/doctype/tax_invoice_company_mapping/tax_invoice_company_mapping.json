@@ -23,7 +23,8 @@
    "fieldname": "buyer_name",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "购买方名称关键字"
+   "label": "购买方名称",
+   "reqd": 1
   },
   {
    "fieldname": "buyer_tax_id",

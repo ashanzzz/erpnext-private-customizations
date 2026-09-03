@@ -106,7 +106,8 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "所属公司",
-   "options": "Company"
+   "options": "Company",
+   "reqd": 1
   },
   {
    "fieldname": "col_basic_2",

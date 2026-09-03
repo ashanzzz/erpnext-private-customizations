@@ -32,6 +32,13 @@ class PropertySettlementWorkbench {
         this.load_month_settlement();
     }
 
+    build_year_options() {
+        const currentYear = new Date().getFullYear();
+        return Array.from({ length: 11 }, (_, index) => currentYear - 5 + index)
+            .map((year) => `<option value="${year}"${year === this.currentYear ? " selected" : ""}>${year}年</option>`)
+            .join("");
+    }
+
     init_dom() {
         this.$container.empty();
         const html = `
@@ -40,7 +47,7 @@ class PropertySettlementWorkbench {
             <div class="prop-unified-header-bar">
                 <!-- 左侧：标题与状态标签 (带实时保存时间) -->
                 <div class="header-left-cluster">
-                    <h1 class="prop-page-title">⚡ 💧 水电费月结</h1>
+                    <h1 class="prop-page-title">水电费月结</h1>
                     <div class="save-status-capsule status-draft" id="settle-status-badge">
                         <span class="status-dot">🟡</span>
                         <span class="status-text">草稿录入中</span>
@@ -54,9 +61,7 @@ class PropertySettlementWorkbench {
                         <button class="nav-arrow-btn" id="btn-prev-month" title="上一月">‹</button>
                         <div class="period-picker-box">
                             <select class="period-select" id="sel-year">
-                                <option value="2025">2025年</option>
-                                <option value="2026" selected>2026年</option>
-                                <option value="2027">2027年</option>
+                                ${this.build_year_options()}
                             </select>
                             <select class="period-select" id="sel-month">
                                 <option value="1">01月</option>
@@ -78,8 +83,8 @@ class PropertySettlementWorkbench {
                     </div>
 
                     <div class="prop-mgmt-inline-box">
-                        <span class="prop-mgmt-icon">🏢</span>
-                        <input type="text" class="prop-mgmt-inline-input" id="inp-prop-mgmt" value="天津金利达物业管理有限公司" placeholder="物业管理公司" title="物业管理公司" />
+                        <span class="prop-mgmt-icon">物业主体</span>
+                        <input type="text" class="prop-mgmt-inline-input" id="inp-prop-mgmt" placeholder="物业管理公司" title="物业管理公司" />
                     </div>
                 </div>
 
@@ -124,7 +129,7 @@ class PropertySettlementWorkbench {
                 <div class="prop-section-header">
                     <div class="sec-title-with-rate">
                         <span class="sec-title">⚡ 电表抄表与核算明细</span>
-                        <span class="tax-pill">含税单价 × 13% 增值税</span>
+                        <span class="tax-pill">含税单价与当前税率</span>
                     </div>
                     <span class="sec-tip">💡 快捷操作：请在标注【*】的列录入本月读数（输入后按 Enter 自动跳到下一行）</span>
                 </div>
@@ -143,7 +148,7 @@ class PropertySettlementWorkbench {
                                 <th style="width: 100px; text-align: right; background: #eff6ff; color: #1e40af;">核定度数(kWh)</th>
                                 <th style="width: 95px; text-align: right;">单价(含税)</th>
                                 <th style="width: 105px; text-align: right; background: #fef2f2; color: #991b1b;">含税电费</th>
-                                <th style="width: 90px; text-align: right; color: #c2410c;">增值税额(13%)</th>
+                                <th style="width: 90px; text-align: right; color: #c2410c;">增值税额</th>
                                 <th style="width: 95px; text-align: right; color: #475569;">不含税金额</th>
                                 <th style="min-width: 110px;">抄表备注</th>
                             </tr>
@@ -158,7 +163,7 @@ class PropertySettlementWorkbench {
                 <div class="prop-section-header">
                     <div class="sec-title-with-rate">
                         <span class="sec-title">💧 水表抄表与核算明细</span>
-                        <span class="tax-pill">含税单价 × 9% 增值税</span>
+                        <span class="tax-pill">含税单价与当前税率</span>
                     </div>
                     <span class="sec-tip">💡 快捷操作：请在标注【*】的列录入本月读数（输入后按 Enter 自动跳到下一行）</span>
                 </div>
@@ -177,7 +182,7 @@ class PropertySettlementWorkbench {
                                 <th style="width: 100px; text-align: right; background: #eff6ff; color: #1e40af;">核定水量(m³)</th>
                                 <th style="width: 95px; text-align: right;">单价(含税)</th>
                                 <th style="width: 105px; text-align: right; background: #fef2f2; color: #991b1b;">含税水费</th>
-                                <th style="width: 90px; text-align: right; color: #c2410c;">增值税额(9%)</th>
+                                <th style="width: 90px; text-align: right; color: #c2410c;">增值税额</th>
                                 <th style="width: 95px; text-align: right; color: #475569;">不含税金额</th>
                                 <th style="min-width: 110px;">抄表备注</th>
                             </tr>
@@ -191,7 +196,7 @@ class PropertySettlementWorkbench {
             <div class="prop-card-section">
                 <div class="prop-section-header">
                     <span class="sec-title">💰 本月水电费用调配与特殊调整</span>
-                    <span class="sec-tip">💡 适用于各公司间水电调配划拨（如吉众转出 ➜ 祺富转入）或单公司用量/金额调整</span>
+                    <span class="sec-tip">适用于公司间水电调配划拨或单公司用量、金额调整</span>
                 </div>
                 <div class="prop-table-responsive">
                     <table class="prop-excel-table" id="table-adjustments">
@@ -219,17 +224,17 @@ class PropertySettlementWorkbench {
             <div class="prop-rate-inspector-card">
                 <div class="rate-inspector-header">
                     <span class="rate-inspector-title">💡 房东单据单价与税率反推参数</span>
-                    <span class="rate-inspector-sub">以房东含税综合单价为基准自动推导税金 ｜ 电费综合有效税率 12.60% (含代收基金) ｜ 水费 9%</span>
+                    <span class="rate-inspector-sub">以当期生效费率为基准自动推导税金</span>
                 </div>
                 <div class="rate-inspector-grid">
                     <!-- 电费反推卡片 -->
                     <div class="rate-card rate-card-elec">
                         <div class="rate-card-header">
-                            <div class="rate-card-title">⚡ 供电核算 (综合有效税率 12.60%)</div>
+                            <div class="rate-card-title">供电核算</div>
                             <div class="rate-input-wrap">
                                 <label><span style="color: #dc2626; font-weight: 800;">*</span>房东含税单价:</label>
                                 <div class="rate-input-inner">
-                                    <input type="number" step="0.0001" id="inp-elec-price" class="rate-input" value="1.1957" />
+                                    <input type="number" step="0.0001" id="inp-elec-price" class="rate-input" />
                                     <span class="rate-unit">元/kWh</span>
                                 </div>
                             </div>
@@ -237,11 +242,11 @@ class PropertySettlementWorkbench {
                         <div class="rate-card-body">
                             <div class="rate-metric">
                                 <span class="metric-lbl">反推不含税单价:</span>
-                                <span class="metric-val" id="disp-elec-excl">¥ 1.061915</span>
+                                <span class="metric-val" id="disp-elec-excl">--</span>
                             </div>
                             <div class="rate-metric">
-                                <span class="metric-lbl">每度含税额 (12.60%):</span>
-                                <span class="metric-val" id="disp-elec-tax" style="color:#d97706;">¥ 0.133785</span>
+                                <span class="metric-lbl" id="disp-elec-tax-label">每度税额:</span>
+                                <span class="metric-val" id="disp-elec-tax" style="color:#d97706;">--</span>
                             </div>
                         </div>
                     </div>
@@ -249,11 +254,11 @@ class PropertySettlementWorkbench {
                     <!-- 水费反推卡片 -->
                     <div class="rate-card rate-card-water">
                         <div class="rate-card-header">
-                            <div class="rate-card-title">💧 自来水核算 (主体税率 9%)</div>
+                            <div class="rate-card-title">自来水核算</div>
                             <div class="rate-input-wrap">
                                 <label><span style="color: #dc2626; font-weight: 800;">*</span>房东含税水价:</label>
                                 <div class="rate-input-inner">
-                                    <input type="number" step="0.01" id="inp-water-price" class="rate-input" value="5.5" />
+                                    <input type="number" step="0.01" id="inp-water-price" class="rate-input" />
                                     <span class="rate-unit">元/m³</span>
                                 </div>
                             </div>
@@ -261,11 +266,11 @@ class PropertySettlementWorkbench {
                         <div class="rate-card-body">
                             <div class="rate-metric">
                                 <span class="metric-lbl">反推不含税水价:</span>
-                                <span class="metric-val" id="disp-water-excl">¥ 5.045872</span>
+                                <span class="metric-val" id="disp-water-excl">--</span>
                             </div>
                             <div class="rate-metric">
-                                <span class="metric-lbl">每吨含税额 (9%):</span>
-                                <span class="metric-val" id="disp-water-tax" style="color:#0284c7;">¥ 0.454128</span>
+                                <span class="metric-lbl" id="disp-water-tax-label">每吨税额:</span>
+                                <span class="metric-val" id="disp-water-tax" style="color:#0284c7;">--</span>
                             </div>
                         </div>
                     </div>
@@ -275,8 +280,8 @@ class PropertySettlementWorkbench {
             <!-- ❻ 📊 全公司水电总开支汇总与分公司看板 (靠下方 · 自动核算展示) -->
             <div class="prop-card-section" style="background:transparent; border:none; box-shadow:none; padding:0;">
                 <div class="prop-section-header" style="margin-bottom:12px; padding:0 4px;">
-                    <span class="sec-title">📊 本月公司水电费财务汇总看板（分公司分组 · 电费/免税基金/水费专列）</span>
-                    <span class="sec-tip">💡 依据上方录入的水电实际读数与调配分摊自动核算（含税应付、13%/9%专票税额、免税基金与不含税成本）</span>
+                    <span class="sec-title">本月公司水电费财务汇总看板（按公司、费用类型与当期税率分组）</span>
+                    <span class="sec-tip">依据当期生效费率、实际读数与调配分摊自动核算含税金额、税额与不含税成本</span>
                 </div>
                 <div id="comp-summary-groups-container"></div>
             </div>
@@ -461,21 +466,26 @@ class PropertySettlementWorkbench {
         }
 
         // 物业公司
-        this.$container.find('#inp-prop-mgmt').val(d.property_management_company || '天津金利达物业管理有限公司').prop('disabled', isLocked);
+        this.$container.find('#inp-prop-mgmt').val(d.property_management_company || '').prop('disabled', isLocked);
 
         // 房东含税单价输入与反推卡片更新
-        const elecPrice = parseFloat(d.electricity_price) || 1.1957;
-        const waterPrice = parseFloat(d.water_price) || 5.5;
+        const elecPrice = parseFloat(d.electricity_price);
+        const waterPrice = parseFloat(d.water_price);
         this.$container.find('#inp-elec-price').val(elecPrice).prop('disabled', isLocked);
         this.$container.find('#inp-water-price').val(waterPrice).prop('disabled', isLocked);
 
-        this.update_rate_inspector_display(elecPrice, waterPrice);
+        this.update_rate_inspector_display(
+            elecPrice,
+            waterPrice,
+            parseFloat(d.electricity_tax_rate),
+            parseFloat(d.water_tax_rate)
+        );
 
         // 更新 Excel 导出菜单中的各公司项
         const $compMenu = this.$container.find('#comp-export-items');
         $compMenu.empty();
         (d.company_summaries || []).forEach(s => {
-            const shortName = s.company.includes('祺富') ? '祺富水电费' : (s.company.includes('吉众') ? '吉众水电费' : `${s.company}水电费`);
+            const shortName = `${s.company}水电费`;
             const $item = $(`<a class="dropdown-item" href="#">📄 导出【${shortName}】Excel</a>`);
             $item.on('click', (e) => {
                 e.preventDefault();
@@ -490,12 +500,18 @@ class PropertySettlementWorkbench {
         this.render_adjustments_table();
     }
 
-    update_rate_inspector_display(elecPrice, waterPrice, elecTaxRate = 12.5985) {
+    update_rate_inspector_display(elecPrice, waterPrice, elecTaxRate, waterTaxRate) {
+        if (!(elecPrice > 0) || !(waterPrice > 0) || isNaN(elecTaxRate) || isNaN(waterTaxRate)) {
+            this.$container.find('#disp-elec-excl, #disp-elec-tax, #disp-water-excl, #disp-water-tax').text('--');
+            return;
+        }
         const elecExcl = elecPrice / (1.0 + (elecTaxRate / 100.0));
         const elecTax = elecPrice - elecExcl;
-        const waterExcl = waterPrice / 1.09;
+        const waterExcl = waterPrice / (1.0 + (waterTaxRate / 100.0));
         const waterTax = waterPrice - waterExcl;
 
+        this.$container.find('#disp-elec-tax-label').text(`每度税额 (${format_number(elecTaxRate, 2)}%):`);
+        this.$container.find('#disp-water-tax-label').text(`每吨税额 (${format_number(waterTaxRate, 2)}%):`);
         this.$container.find('#disp-elec-excl').text(`¥ ${format_number(elecExcl, 6)}`);
         this.$container.find('#disp-elec-tax').text(`¥ ${format_number(elecTax, 6)}`);
         this.$container.find('#disp-water-excl').text(`¥ ${format_number(waterExcl, 6)}`);
@@ -515,11 +531,10 @@ class PropertySettlementWorkbench {
 
         let totElecU = 0, totElecA = 0, totWaterU = 0, totWaterA = 0, totGrand = 0, totTax = 0, totExcl = 0;
 
-        // 3大基金费率
-        const RATE_WATER_RES = 0.002304757;
-        const RATE_RESERVOIR = 0.007258429;
-        const RATE_RENEWABLE = 0.022244024;
-        const TOTAL_FUNDS_RATE = RATE_WATER_RES + RATE_RESERVOIR + RATE_RENEWABLE;
+        const elecTaxRate = Math.max(0, flt(self.data?.electricity_tax_rate));
+        const waterTaxRate = Math.max(0, flt(self.data?.water_tax_rate));
+        const elecTaxDivider = 1 + (elecTaxRate / 100);
+        const waterTaxDivider = 1 + (waterTaxRate / 100);
 
         summaries.forEach(s => {
             const elecU = flt(s.electricity_usage);
@@ -528,15 +543,13 @@ class PropertySettlementWorkbench {
             const waterA = flt(s.water_amount);
             const adjA = flt(s.adjustment_amount);
 
-            // 电费发票拆解
-            const fundsAmt = Math.round(elecU * TOTAL_FUNDS_RATE * 100) / 100;
-            const elecMainAmt = Math.max(0.0, Math.round((elecA - fundsAmt) * 100) / 100);
-            const elecMainExcl = Math.round((elecMainAmt / 1.13) * 100) / 100;
+            // 只按当期配置的税率拆分，避免界面虚构未配置的附加收费。
+            const elecMainAmt = Math.round(elecA * 100) / 100;
+            const elecMainExcl = Math.round((elecMainAmt / elecTaxDivider) * 100) / 100;
             const elecMainTax = Math.round((elecMainAmt - elecMainExcl) * 100) / 100;
-            const elecExclTot = Math.round((elecMainExcl + fundsAmt) * 100) / 100;
+            const elecExclTot = elecMainExcl;
 
-            // 水费发票拆解 (9% 专票)
-            const waterExcl = Math.round((waterA / 1.09) * 100) / 100;
+            const waterExcl = Math.round((waterA / waterTaxDivider) * 100) / 100;
             const waterTax = Math.round((waterA - waterExcl) * 100) / 100;
 
             // 公司小计
@@ -552,8 +565,8 @@ class PropertySettlementWorkbench {
             totTax += compTax;
             totExcl += compExcl;
 
-            const unitElecPrice = elecU > 0 ? (elecA / elecU).toFixed(4) : (self.data.electricity_price || 1.1957);
-            const unitWaterPrice = waterU > 0 ? (waterA / waterU).toFixed(4) : (self.data.water_price || 5.5);
+            const unitElecPrice = elecU > 0 ? (elecA / elecU).toFixed(4) : (self.data.electricity_price || 0);
+            const unitWaterPrice = waterU > 0 ? (waterA / waterU).toFixed(4) : (self.data.water_price || 0);
 
             // 该公司的电费调整与水费调整列表
             const allAdjs = self.data?.adjustments || [];
@@ -599,7 +612,7 @@ class PropertySettlementWorkbench {
             // 生成电费调整行 HTML
             let elecAdjRowsHtml = '';
             compElecAdjs.forEach(adj => {
-                const adjExcl = Math.round((adj.amount / 1.13) * 100) / 100;
+                const adjExcl = Math.round((adj.amount / elecTaxDivider) * 100) / 100;
                 const adjTax = Math.round((adj.amount - adjExcl) * 100) / 100;
                 elecAdjRowsHtml += `
                     <tr style="background:#fffbeb; font-size:12px; color:#92400e;">
@@ -619,7 +632,7 @@ class PropertySettlementWorkbench {
             // 生成水费调整行 HTML
             let waterAdjRowsHtml = '';
             compWaterAdjs.forEach(adj => {
-                const adjExcl = Math.round((adj.amount / 1.09) * 100) / 100;
+                const adjExcl = Math.round((adj.amount / waterTaxDivider) * 100) / 100;
                 const adjTax = Math.round((adj.amount - adjExcl) * 100) / 100;
                 waterAdjRowsHtml += `
                     <tr style="background:#f0fdfa; font-size:12px; color:#0f766e;">
@@ -659,8 +672,8 @@ class PropertySettlementWorkbench {
                                     <th style="width: 130px;">费用类别</th>
                                     <th style="width: 110px; text-align: right;">核定用量</th>
                                     <th style="width: 125px; text-align: right;">综合单价</th>
-                                    <th style="min-width: 220px;">税率与发票分项 (13%/9%专票)</th>
-                                    <th style="min-width: 220px;">代收免税基金及附加 (0%免税)</th>
+                                    <th style="min-width: 220px;">税率与发票分项（按当期配置）</th>
+                                    <th style="min-width: 220px;">附加收费说明</th>
                                     <th style="width: 105px; text-align: right; color:#c2410c;">增值税额</th>
                                     <th style="width: 110px; text-align: right; color:#475569;">不含税金额</th>
                                     <th style="width: 125px; text-align: right; background: #ecfdf5; color: #065f46;">价税合计(含税)</th>
@@ -673,15 +686,12 @@ class PropertySettlementWorkbench {
                                     <td style="text-align: right;">¥ ${unitElecPrice}/度</td>
                                     <td>
                                         <div style="font-size:11.5px; line-height:1.4;">
-                                            <div><b>*电力*电费:</b> ¥ ${format_currency(elecMainAmt)} <span style="color:#059669;">(13%专票)</span></div>
+                                            <div><b>*电力*电费:</b> ¥ ${format_currency(elecMainAmt)} <span style="color:#059669;">(${format_number(elecTaxRate, 2)}% 税率)</span></div>
                                             <div style="color:#64748b;">不含税: ¥ ${format_currency(elecMainExcl)} ｜ 税额: ¥ ${format_currency(elecMainTax)}</div>
                                         </div>
                                     </td>
                                     <td>
-                                        <div style="font-size:11.5px; line-height:1.4;">
-                                            <div><b>代收3大基金:</b> ¥ ${format_currency(fundsAmt)} <span style="color:#0284c7;">(0%免税)</span></div>
-                                            <div style="color:#64748b;">水利 ¥${format_currency(elecU * RATE_WATER_RES)} + 移民 ¥${format_currency(elecU * RATE_RESERVOIR)} + 可再生 ¥${format_currency(elecU * RATE_RENEWABLE)}</div>
-                                        </div>
+                                        <span style="color:#94a3b8; font-size:11.5px;">未配置的附加收费不在本台账中推算</span>
                                     </td>
                                     <td style="text-align: right; color: #c2410c; font-weight:600;">¥ ${format_currency(elecMainTax)}</td>
                                     <td style="text-align: right; color: #475569;">¥ ${format_currency(elecExclTot)}</td>
@@ -694,11 +704,11 @@ class PropertySettlementWorkbench {
                                     <td style="text-align: right;">¥ ${unitWaterPrice}/m³</td>
                                     <td>
                                         <div style="font-size:11.5px; line-height:1.4;">
-                                            <div><b>*水费*自来水:</b> ¥ ${format_currency(waterA)} <span style="color:#059669;">(9%专票)</span></div>
+                                            <div><b>*水费*自来水:</b> ¥ ${format_currency(waterA)} <span style="color:#059669;">(${format_number(waterTaxRate, 2)}% 税率)</span></div>
                                             <div style="color:#64748b;">不含税: ¥ ${format_currency(waterExcl)} ｜ 税额: ¥ ${format_currency(waterTax)}</div>
                                         </div>
                                     </td>
-                                    <td><span style="color:#94a3b8; font-size:11.5px;">— (水费不计代收基金)</span></td>
+                                    <td><span style="color:#94a3b8; font-size:11.5px;">未配置的附加收费不在本台账中推算</span></td>
                                     <td style="text-align: right; color: #c2410c; font-weight:600;">¥ ${format_currency(waterTax)}</td>
                                     <td style="text-align: right; color: #475569;">¥ ${format_currency(waterExcl)}</td>
                                     <td style="text-align: right; font-weight: 700; background: #ecfdf5; color: #065f46; font-size:13px;">¥ ${format_currency(waterA)}</td>
@@ -819,7 +829,7 @@ class PropertySettlementWorkbench {
         readings.forEach((r, idx) => {
             const isElec = (r.utility_type === '电');
             const $tbody = isElec ? $tbodyE : $tbodyW;
-            const unitPrice = isElec ? (self.data.electricity_price || 1.1957) : (self.data.water_price || 5.5);
+            const unitPrice = isElec ? (self.data.electricity_price || 0) : (self.data.water_price || 0);
 
             const row = `
                 <tr data-idx="${idx}">
@@ -935,14 +945,23 @@ class PropertySettlementWorkbench {
     recalculate() {
         if (!this.data) return;
 
-        const elecPrice = parseFloat(this.$container.find('#inp-elec-price').val()) || 1.1957;
-        const waterPrice = parseFloat(this.$container.find('#inp-water-price').val()) || 5.5;
+        const elecPrice = parseFloat(this.$container.find('#inp-elec-price').val());
+        const waterPrice = parseFloat(this.$container.find('#inp-water-price').val());
+        if (!(elecPrice > 0) || !(waterPrice > 0)) {
+            frappe.msgprint('电费和水费单价必须来自当期生效费率，且均大于零。');
+            return;
+        }
 
         this.data.electricity_price = elecPrice;
         this.data.water_price = waterPrice;
-        this.data.property_management_company = this.$container.find('#inp-prop-mgmt').val() || '天津金利达物业管理有限公司';
+        this.data.property_management_company = this.$container.find('#inp-prop-mgmt').val().trim();
 
-        this.update_rate_inspector_display(elecPrice, waterPrice);
+        this.update_rate_inspector_display(
+            elecPrice,
+            waterPrice,
+            parseFloat(this.data.electricity_tax_rate),
+            parseFloat(this.data.water_tax_rate)
+        );
 
         calculate_local_matrix(this.data);
         this.render_summary_table();
@@ -957,7 +976,7 @@ class PropertySettlementWorkbench {
             const $r = self.$container.find(`tr[data-idx="${idx}"]`);
             if ($r.length) {
                 const isElec = (r.utility_type === '电');
-                const unitPrice = isElec ? (self.data.electricity_price || 1.1957) : (self.data.water_price || 5.5);
+                const unitPrice = isElec ? (self.data.electricity_price || 0) : (self.data.water_price || 0);
                 $r.find('.cell-price').text(`¥ ${format_number(unitPrice, 4)}`);
                 $r.find('.cell-raw').text(format_number(r.raw_usage));
                 $r.find('.cell-calc b').text(format_number(r.calculated_usage));
@@ -983,9 +1002,13 @@ class PropertySettlementWorkbench {
             $badge.find('.status-text').text(isManual ? '正在保存...' : '正在自动保存...');
             $badge.find('.status-time').text('');
 
-            self.data.property_management_company = self.$container.find('#inp-prop-mgmt').val() || '天津金利达物业管理有限公司';
-            self.data.electricity_price = parseFloat(self.$container.find('#inp-elec-price').val()) || 1.1957;
-            self.data.water_price = parseFloat(self.$container.find('#inp-water-price').val()) || 5.5;
+            self.data.property_management_company = self.$container.find('#inp-prop-mgmt').val().trim();
+            self.data.electricity_price = parseFloat(self.$container.find('#inp-elec-price').val());
+            self.data.water_price = parseFloat(self.$container.find('#inp-water-price').val());
+            if (!(self.data.electricity_price > 0) || !(self.data.water_price > 0)) {
+                frappe.msgprint('电费和水费单价未配置，无法保存月结草稿。');
+                return;
+            }
 
             frappe.call({
                 method: 'ashan_cn_procurement.ashan_cn_procurement.page.property_settlement_workbench.property_settlement_workbench.save_settlement',
@@ -1027,7 +1050,11 @@ class PropertySettlementWorkbench {
     download_excel(mode, company) {
         const self = this;
         const month = self.data?.settlement_month || `${self.currentYear}-${self.currentMonth < 10 ? '0' + self.currentMonth : self.currentMonth}-01`;
-        const propMgmt = self.$container.find('#inp-prop-mgmt').val() || self.data?.property_management_company || '天津金利达物业管理有限公司';
+        const propMgmt = self.$container.find('#inp-prop-mgmt').val().trim() || self.data?.property_management_company || '';
+        if (!propMgmt) {
+            frappe.msgprint('请先在当期费率中配置物业结算主体后再导出。');
+            return;
+        }
 
         let url = `/api/method/ashan_cn_procurement.services.property_settlement.export_utility_settlement_excel?settlement_month=${encodeURIComponent(month)}&mode=${encodeURIComponent(mode)}&property_management_company=${encodeURIComponent(propMgmt)}`;
         if (company) {
@@ -1041,8 +1068,8 @@ class PropertySettlementWorkbench {
     open_add_adjustment_dialog() {
         const self = this;
         const companies = (self.data?.company_summaries || []).map(s => s.company);
-        const fromDefault = companies[0] || '天津吉众科技有限公司';
-        const toDefault = companies[1] || (companies[0] || '天津祺富机械加工有限公司');
+        const fromDefault = companies[0] || '';
+        const toDefault = companies[1] || companies[0] || '';
 
         let currentAdjType = '按金额';
         let currentUtilType = '电费';
@@ -1327,6 +1354,10 @@ class PropertySettlementWorkbench {
         const self = this;
         const monthStr = bill.settlement_month ? bill.settlement_month.substring(0, 7) : `${self.currentYear}-${self.currentMonth < 10 ? '0' + self.currentMonth : self.currentMonth}`;
         const allCompanies = (self.data?.company_summaries || []).map(s => s.company);
+        const elecTaxRate = Math.max(0, flt(bill.electricity_tax_rate ?? self.data?.electricity_tax_rate));
+        const waterTaxRate = Math.max(0, flt(bill.water_tax_rate ?? self.data?.water_tax_rate));
+        const elecTaxDivider = 1 + (elecTaxRate / 100);
+        const waterTaxDivider = 1 + (waterTaxRate / 100);
 
         // 电表行
         let sumElecRaw = 0, sumElecCalc = 0, sumElecAmount = 0;
@@ -1424,10 +1455,10 @@ class PropertySettlementWorkbench {
         const waterRoundTot = Math.round(sumWaterAmount);
         const grandRoundTot = elecRoundTot + waterRoundTot;
 
-        const elecTax = Math.round((sumElecAmount - Math.round((sumElecAmount / 1.13) * 100) / 100) * 100) / 100;
+        const elecTax = Math.round((sumElecAmount - Math.round((sumElecAmount / elecTaxDivider) * 100) / 100) * 100) / 100;
         const elecExcl = Math.round((sumElecAmount - elecTax) * 100) / 100;
 
-        const waterTax = Math.round((sumWaterAmount - Math.round((sumWaterAmount / 1.09) * 100) / 100) * 100) / 100;
+        const waterTax = Math.round((sumWaterAmount - Math.round((sumWaterAmount / waterTaxDivider) * 100) / 100) * 100) / 100;
         const waterExcl = Math.round((sumWaterAmount - waterTax) * 100) / 100;
 
         const elecAvg = sumElecCalc > 0 ? (sumElecAmount / sumElecCalc).toFixed(4) : '0.0000';
@@ -1437,7 +1468,7 @@ class PropertySettlementWorkbench {
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #e2e8f0; padding-bottom:8px;">
                 <div class="btn-group" role="group">
                     ${allCompanies.map(c => {
-                        const short = c.includes('祺富') ? '祺富单证' : (c.includes('吉众') ? '吉众单证' : c);
+                        const short = c;
                         const active = (c === bill.company) ? 'btn-primary' : 'btn-default';
                         return `<button type="button" class="btn btn-xs ${active} tab-switch-comp" data-comp="${frappe.utils.escape_html(c)}">${short}</button>`;
                     }).join('')}
@@ -1526,7 +1557,7 @@ class PropertySettlementWorkbench {
                                 </tbody>
                             </table>
 
-                            <div class="bill-sec-title" style="margin-top: 14px;">${bill.company.includes('祺富') ? '祺富' : (bill.company.includes('吉众') ? '吉众' : bill.company)}合计水电费（依据数电发票清单分项拆解 · 13%/9%专票与代收免税基金）</div>
+                            <div class="bill-sec-title" style="margin-top: 14px;">${frappe.utils.escape_html(bill.company)}水电费合计（按当期结算单保存的费率拆解）</div>
                             <table class="bill-table-1to1">
                                 <thead>
                                     <tr>
@@ -1542,52 +1573,25 @@ class PropertySettlementWorkbench {
                                 </thead>
                                 <tbody>
                                     <tr>
-                                        <td style="text-align:left; padding-left:8px;">*电力*电费 (13% 专票)</td>
-                                        <td>¥ ${format_currency((sumElecAmount - (sumElecCalc * 0.031807)) / 1.13)}</td>
-                                        <td>13%</td>
-                                        <td>¥ ${format_currency((sumElecAmount - (sumElecCalc * 0.031807)) - ((sumElecAmount - (sumElecCalc * 0.031807)) / 1.13))}</td>
-                                        <td>¥ ${format_currency(sumElecAmount - (sumElecCalc * 0.031807))}</td>
+                                        <td style="text-align:left; padding-left:8px;">*电力*电费（${format_number(elecTaxRate, 2)}% 税率）</td>
+                                        <td>¥ ${format_currency(elecExcl)}</td>
+                                        <td>${format_number(elecTaxRate, 2)}%</td>
+                                        <td>¥ ${format_currency(elecTax)}</td>
+                                        <td>¥ ${format_currency(sumElecAmount)}</td>
                                         <td>${format_number(sumElecCalc)} 度</td>
-                                        <td>${sumElecCalc > 0 ? ((sumElecAmount - (sumElecCalc * 0.031807)) / sumElecCalc).toFixed(4) : '0.0000'}</td>
-                                        <td rowspan="5" class="grand-total-large-cell" style="font-size:20px; font-weight:bold; color:#065f46; vertical-align:middle;">
+                                        <td>${elecAvg}</td>
+                                        <td rowspan="2" class="grand-total-large-cell" style="font-size:20px; font-weight:bold; color:#065f46; vertical-align:middle;">
                                             ¥ ${format_currency(sumElecAmount + sumWaterAmount)}
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td style="text-align:left; padding-left:8px;">*代收国家重大水利工程建设基金*</td>
-                                        <td>¥ ${format_currency(sumElecCalc * 0.002305)}</td>
-                                        <td>免税(0%)</td>
-                                        <td>¥ 0.00</td>
-                                        <td>¥ ${format_currency(sumElecCalc * 0.002305)}</td>
-                                        <td>${format_number(sumElecCalc)} 度</td>
-                                        <td>0.0023</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="text-align:left; padding-left:8px;">*代收水库移民后期扶持基金*</td>
-                                        <td>¥ ${format_currency(sumElecCalc * 0.007258)}</td>
-                                        <td>免税(0%)</td>
-                                        <td>¥ 0.00</td>
-                                        <td>¥ ${format_currency(sumElecCalc * 0.007258)}</td>
-                                        <td>${format_number(sumElecCalc)} 度</td>
-                                        <td>0.0073</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="text-align:left; padding-left:8px;">*代收可再生能源发展基金*</td>
-                                        <td>¥ ${format_currency(sumElecCalc * 0.022244)}</td>
-                                        <td>免税(0%)</td>
-                                        <td>¥ 0.00</td>
-                                        <td>¥ ${format_currency(sumElecCalc * 0.022244)}</td>
-                                        <td>${format_number(sumElecCalc)} 度</td>
-                                        <td>0.0222</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="text-align:left; padding-left:8px;">*水费*自来水 (9% 专票)</td>
-                                        <td>¥ ${format_currency(sumWaterAmount / 1.09)}</td>
-                                        <td>9%</td>
-                                        <td>¥ ${format_currency(sumWaterAmount - (sumWaterAmount / 1.09))}</td>
+                                        <td style="text-align:left; padding-left:8px;">*水费*自来水（${format_number(waterTaxRate, 2)}% 税率）</td>
+                                        <td>¥ ${format_currency(waterExcl)}</td>
+                                        <td>${format_number(waterTaxRate, 2)}%</td>
+                                        <td>¥ ${format_currency(waterTax)}</td>
                                         <td>¥ ${format_currency(sumWaterAmount)}</td>
                                         <td>${format_number(sumWaterCalc)} m³</td>
-                                        <td>${sumWaterCalc > 0 ? (sumWaterAmount / sumWaterCalc).toFixed(4) : '0.0000'}</td>
+                                        <td>${waterAvg}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1662,10 +1666,13 @@ function format_number(v, decimals) {
 }
 
 function calculate_local_matrix(data) {
-    const elec_price = parseFloat(data.electricity_price) || 1.1957;
-    const elec_tax_rate = (data.electricity_tax_rate !== undefined && data.electricity_tax_rate !== null && !isNaN(parseFloat(data.electricity_tax_rate))) ? parseFloat(data.electricity_tax_rate) : 12.5985;
-    const water_price = parseFloat(data.water_price) || 5.5;
-    const water_tax_rate = (data.water_tax_rate !== undefined && data.water_tax_rate !== null && !isNaN(parseFloat(data.water_tax_rate))) ? parseFloat(data.water_tax_rate) : 9.0;
+    const elec_price = parseFloat(data.electricity_price);
+    const elec_tax_rate = parseFloat(data.electricity_tax_rate);
+    const water_price = parseFloat(data.water_price);
+    const water_tax_rate = parseFloat(data.water_tax_rate);
+    if (!(elec_price > 0) || !(water_price > 0)) {
+        return;
+    }
 
     // 1. 抄表 (依据房东综合含税单价反推税额与不含税金额)
     (data.meter_readings || []).forEach(r => {

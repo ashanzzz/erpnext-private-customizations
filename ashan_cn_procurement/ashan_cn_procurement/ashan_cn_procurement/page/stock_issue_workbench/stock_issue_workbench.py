@@ -645,6 +645,7 @@ def create_stock_issue(
     if not company:
         company = get_current_user_company()
     assert_company_access(company)
+    frappe.has_permission("Stock Entry", "create", throw=True)
 
     if not warehouse or warehouse in ("全部仓库", "All Warehouses", ""):
         frappe.throw("请选择具体的出库发货仓库")
@@ -706,7 +707,7 @@ def create_stock_issue(
         frappe.throw("出库单物料清单中无有效物料")
 
     doc.set_stock_entry_type()
-    doc.insert(ignore_permissions=True)
+    doc.insert()
 
     is_submitted = False
     if str(submit_direct).strip() in ("1", "true", "True"):
@@ -733,10 +734,12 @@ def cancel_stock_issue(voucher_no: str, reason: str | None = None) -> dict:
     if doc.docstatus == 2:
         frappe.throw(f"出库单 {voucher_no} 已经是作废状态")
     if doc.docstatus == 0:
-        doc.delete(ignore_permissions=True)
+        doc.check_permission("delete")
+        doc.delete()
         return {"message": f"出库单草稿 {voucher_no} 已成功删除！"}
 
     # docstatus == 1, 取消过账
+    doc.check_permission("cancel")
     doc.cancel()
     if reason:
         doc.add_comment("Comment", text=f"出库工作台作废原因: {reason}")
@@ -752,6 +755,7 @@ def get_stock_issue_detail(voucher_no: str) -> dict:
 
     doc = frappe.get_doc("Stock Entry", voucher_no)
     assert_company_access(doc.company)
+    doc.check_permission("read")
 
     items = []
     for it in doc.items:

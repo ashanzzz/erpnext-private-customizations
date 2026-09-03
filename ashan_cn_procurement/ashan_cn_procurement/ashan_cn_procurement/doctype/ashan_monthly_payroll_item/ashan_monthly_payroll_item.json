@@ -480,6 +480,131 @@
    "fieldtype": "Small Text",
    "label": "计算错误",
    "read_only": 1
+  },
+  {
+   "fieldname": "basic_hours",
+   "fieldtype": "Float",
+   "label": "基本工时"
+  },
+  {
+   "fieldname": "overtime_regular_1_5",
+   "fieldtype": "Float",
+   "label": "1.5倍工时"
+  },
+  {
+   "fieldname": "overtime_weekend_2_0",
+   "fieldtype": "Float",
+   "label": "2倍工时"
+  },
+  {
+   "fieldname": "overtime_holiday_3_0",
+   "fieldtype": "Float",
+   "label": "3倍工时"
+  },
+  {
+   "fieldname": "leave_compensatory_hours",
+   "fieldtype": "Float",
+   "label": "包括调休工时"
+  },
+  {
+   "fieldname": "half_days",
+   "fieldtype": "Float",
+   "label": "半天天数"
+  },
+  {
+   "fieldname": "absent_days",
+   "fieldtype": "Float",
+   "label": "缺勤天数"
+  },
+  {
+   "fieldname": "meal_unit_price",
+   "fieldtype": "Currency",
+   "label": "餐补单价"
+  },
+  {
+   "fieldname": "salary_basic_hours",
+   "fieldtype": "Currency",
+   "label": "基本工时工资"
+  },
+  {
+   "fieldname": "salary_overtime_1_5",
+   "fieldtype": "Currency",
+   "label": "1.5倍工资"
+  },
+  {
+   "fieldname": "salary_overtime_2_0",
+   "fieldtype": "Currency",
+   "label": "2倍工资"
+  },
+  {
+   "fieldname": "salary_overtime_3_0",
+   "fieldtype": "Currency",
+   "label": "3倍工资"
+  },
+  {
+   "fieldname": "salary_basic_subsidy",
+   "fieldtype": "Currency",
+   "label": "基本补贴工资"
+  },
+  {
+   "fieldname": "salary_performance",
+   "fieldtype": "Currency",
+   "label": "绩效奖金工资"
+  },
+  {
+   "fieldname": "salary_post_allowance",
+   "fieldtype": "Currency",
+   "label": "职位津贴工资"
+  },
+  {
+   "fieldname": "salary_meal_subsidy",
+   "fieldtype": "Currency",
+   "label": "餐补工资"
+  },
+  {
+   "fieldname": "salary_adjustment",
+   "fieldtype": "Currency",
+   "label": "工资调整"
+  },
+  {
+   "fieldname": "company_cost_total",
+   "fieldtype": "Currency",
+   "label": "公司成本合计"
+  },
+  {
+   "fieldname": "person_cost_total",
+   "fieldtype": "Currency",
+   "label": "个人扣除合计"
+  },
+  {
+   "fieldname": "cash_pay",
+   "fieldtype": "Currency",
+   "label": "现金发放工资"
+  },
+  {
+   "fieldname": "bills_100",
+   "fieldtype": "Int",
+   "label": "现金百元"
+  },
+  {
+   "fieldname": "bills_50",
+   "fieldtype": "Int",
+   "label": "现金五十元"
+  },
+  {
+   "fieldname": "bills_10",
+   "fieldtype": "Int",
+   "label": "现金十元"
+  },
+  {
+   "fieldname": "bills_5",
+   "fieldtype": "Int",
+   "label": "现金五元"
+  },
+  {
+   "fieldname": "bills_1",
+   "fieldtype": "Int",
+   "label": "现金一元"
   }
  ],
  "permissions": []

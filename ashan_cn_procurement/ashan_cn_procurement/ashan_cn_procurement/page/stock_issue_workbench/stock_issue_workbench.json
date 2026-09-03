@@ -18,18 +18,6 @@
     },
     {
       "role": "Stock User"
-    },
-    {
-      "role": "Purchase Manager"
-    },
-    {
-      "role": "Purchase User"
-    },
-    {
-      "role": "Accounts Manager"
-    },
-    {
-      "role": "Accounts User"
     }
   ],
   "standard": "Yes",

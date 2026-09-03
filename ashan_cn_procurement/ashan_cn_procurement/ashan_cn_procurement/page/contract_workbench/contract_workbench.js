@@ -10,6 +10,12 @@ frappe.pages["contract-workbench"].on_page_load = function (wrapper) {
     wrapper.contract_workbench = new ProcurementContractWorkbench(page, wrapper);
 };
 
+frappe.pages["contract-workbench"].on_page_show = function (wrapper) {
+    if (wrapper.contract_workbench) {
+        wrapper.contract_workbench.refresh();
+    }
+};
+
 class ProcurementContractWorkbench {
     constructor(page, wrapper) {
         this.page = page;
@@ -19,6 +25,7 @@ class ProcurementContractWorkbench {
         this.current_status = "active";
         this.current_company = "";
         this.search_query = "";
+        this.allowed_companies = [];
 
         this.init();
     }
@@ -37,7 +44,7 @@ class ProcurementContractWorkbench {
         this.page.clear_actions();
 
         this.page.set_primary_action(
-            __("➕ 新建采购合同"),
+            __("新建采购合同"),
             function () {
                 self.open_contract_form_modal();
             },
@@ -215,6 +222,7 @@ class ProcurementContractWorkbench {
                 method: "ashan_cn_procurement.services.contract_service.get_contract_workbench_context",
             });
             if (r.message && r.message.allowed_companies) {
+                this.allowed_companies = r.message.allowed_companies;
                 const $sel = $("#contract-company-select");
                 $sel.empty().append('<option value="">全部签约公司</option>');
                 r.message.allowed_companies.forEach((comp) => {
@@ -224,6 +232,11 @@ class ProcurementContractWorkbench {
         } catch (e) {
             console.error("Failed to load contract workbench context:", e);
         }
+    }
+
+    async refresh() {
+        await this.load_context();
+        await this.load_contracts();
     }
 
     async load_contracts() {
@@ -330,11 +343,14 @@ class ProcurementContractWorkbench {
     // Modal 1: Create / Edit Procurement Contract
     open_contract_form_modal(contractNo = null) {
         const self = this;
-        let terms = [
-            { stage_name: "首期定金 / 预付款", payment_ratio: 20, term_amount: 0, planned_date: "", remarks: "" },
-            { stage_name: "中期进度款", payment_ratio: 30, term_amount: 0, planned_date: "", remarks: "" },
-            { stage_name: "到货验收款", payment_ratio: 50, term_amount: 0, planned_date: "", remarks: "" }
-        ];
+        const draftKey = "ashan.contract-workbench.new-contract-draft";
+        const savedDraft = this.load_local_draft(draftKey);
+        let terms = savedDraft.terms || [];
+        const selectedCompany = savedDraft.company || this.current_company;
+        const companyOptions = this.allowed_companies.map((company) => {
+            const selected = company === selectedCompany ? " selected" : "";
+            return `<option value="${frappe.utils.escape_html(company)}"${selected}>${frappe.utils.escape_html(company)}</option>`;
+        }).join("");
 
         const d = new frappe.ui.Dialog({
             title: __("新建采购合同 · 分期规划"),
@@ -400,6 +416,11 @@ class ProcurementContractWorkbench {
                     });
                 });
 
+                if (!termRows.length) {
+                    frappe.msgprint(__("请至少添加一个付款分期。"));
+                    return;
+                }
+
                 if (Math.abs(ratioSum - 100.0) > 0.05) {
                     frappe.msgprint(__("各分期付款比例合计必须为 100%（当前合计为 {0}%）！", [ratioSum.toFixed(1)]));
                     return;
@@ -433,6 +454,7 @@ class ProcurementContractWorkbench {
                         $("body").removeClass("modal-open");
                     }, 300);
                     if (r.message && r.message.success) {
+                        localStorage.removeItem(draftKey);
                         frappe.show_alert({ message: r.message.message, indicator: "green" }, 5);
                         self.load_contracts();
                     }
@@ -495,13 +517,13 @@ class ProcurementContractWorkbench {
                         <div class="reim-v2-field-group">
                             <label>签约主体公司<span class="req">*</span></label>
                             <select class="reim-v2-input-control" id="modal-contract-company">
-                                <option value="天津吉众科技有限公司">天津吉众科技有限公司</option>
-                                <option value="天津祈富机械加工有限公司">天津祈富机械加工有限公司</option>
+                                <option value="">请选择签约主体公司</option>
+                                ${companyOptions}
                             </select>
                         </div>
                         <div class="reim-v2-field-group">
                             <label>合作供应商 / 乙方<span class="req">*</span></label>
-                            <input type="text" class="reim-v2-input-control" id="modal-contract-supplier" placeholder="输入供应商名称..." />
+                            <input type="text" class="reim-v2-input-control" id="modal-contract-supplier" value="${frappe.utils.escape_html(savedDraft.supplier || "")}" placeholder="输入供应商名称..." />
                         </div>
                         <div class="reim-v2-field-group">
                             <label>合同类别<span class="req">*</span></label>
@@ -518,11 +540,11 @@ class ProcurementContractWorkbench {
                     <div class="ashan-smart-grid-3 contract-grid-gap">
                         <div class="reim-v2-field-group contract-col-span-2">
                             <label>合同名称 / 采购标的<span class="req">*</span></label>
-                            <input type="text" class="reim-v2-input-control" id="modal-contract-title" placeholder="例如：2026年度高精密轴承及耗材采购框架协议" />
+                            <input type="text" class="reim-v2-input-control" id="modal-contract-title" value="${frappe.utils.escape_html(savedDraft.title || "")}" placeholder="输入合同名称或采购标的" />
                         </div>
                         <div class="reim-v2-field-group">
                             <label>合同标的总额 (¥)<span class="req">*</span></label>
-                            <input type="number" class="reim-v2-input-control font-mono font-bold text-primary" id="modal-contract-total-amt" value="100000" placeholder="0.00" />
+                            <input type="number" class="reim-v2-input-control font-mono font-bold text-primary" id="modal-contract-total-amt" value="${frappe.utils.escape_html(savedDraft.total_amount || "")}" placeholder="0.00" />
                         </div>
                     </div>
 
@@ -551,12 +573,7 @@ class ProcurementContractWorkbench {
                             <span>分期付款里程碑规划 (各项比例合计需为 100%)</span>
                         </div>
                         <div class="contract-flex-gap">
-                            <div class="ashan-percent-pill-group">
-                                <button type="button" class="ashan-percent-pill modal-preset-btn" data-preset="20-30-50">20% + 30% + 50%</button>
-                                <button type="button" class="ashan-percent-pill modal-preset-btn" data-preset="30-40-30">30% + 40% + 30%</button>
-                                <button type="button" class="ashan-percent-pill modal-preset-btn" data-preset="10-80-10">10% + 80% + 10%</button>
-                            </div>
-                            <button type="button" class="btn btn-primary btn-xs" id="modal-add-term-btn">➕ 添加分期</button>
+                            <button type="button" class="btn btn-primary btn-xs" id="modal-add-term-btn">添加分期</button>
                         </div>
                     </div>
 
@@ -583,47 +600,57 @@ class ProcurementContractWorkbench {
         d.show();
         render_term_rows();
 
+        const saveDraft = () => {
+            self.save_local_draft(draftKey, {
+                company: d.$wrapper.find("#modal-contract-company").val(),
+                supplier: d.$wrapper.find("#modal-contract-supplier").val(),
+                title: d.$wrapper.find("#modal-contract-title").val(),
+                total_amount: d.$wrapper.find("#modal-contract-total-amt").val(),
+                terms: terms,
+            });
+        };
+
         // Bind dialog inner events
-        d.$wrapper.on("input change", "#modal-contract-total-amt, .modal-term-ratio", function () {
+        d.$wrapper.on("input change", "#modal-contract-total-amt, #modal-contract-company, #modal-contract-supplier, #modal-contract-title, .modal-term-row input", function () {
+            d.$wrapper.find(".contract-term-row").each(function () {
+                const index = $(this).data("idx");
+                terms[index] = {
+                    stage_name: $(this).find(".modal-term-stage").val()?.trim() || "",
+                    payment_ratio: flt($(this).find(".modal-term-ratio").val()),
+                    term_amount: flt($(this).find(".modal-term-amount").val()),
+                    planned_date: $(this).find(".modal-term-date").val() || "",
+                    remarks: $(this).find(".modal-term-remarks").val() || "",
+                };
+            });
             update_term_calcs();
+            saveDraft();
         });
 
         d.$wrapper.on("click", "#modal-add-term-btn", function () {
             terms.push({ stage_name: `第${terms.length + 1}期款`, payment_ratio: 0, term_amount: 0, planned_date: "", remarks: "" });
             render_term_rows();
+            saveDraft();
         });
 
         d.$wrapper.on("click", ".modal-term-del-btn", function () {
             const idx = $(this).closest(".contract-term-row").data("idx");
             terms.splice(idx, 1);
             render_term_rows();
+            saveDraft();
         });
+    }
 
-        d.$wrapper.on("click", ".modal-preset-btn", function () {
-            d.$wrapper.find(".modal-preset-btn").removeClass("active");
-            $(this).addClass("active");
-            const p = $(this).data("preset");
-            if (p === "20-30-50") {
-                terms = [
-                    { stage_name: "首期定金 / 预付款", payment_ratio: 20, term_amount: 0, planned_date: "", remarks: "" },
-                    { stage_name: "中期进度款", payment_ratio: 30, term_amount: 0, planned_date: "", remarks: "" },
-                    { stage_name: "到货验收款", payment_ratio: 50, term_amount: 0, planned_date: "", remarks: "" }
-                ];
-            } else if (p === "30-40-30") {
-                terms = [
-                    { stage_name: "首期合同定金", payment_ratio: 30, term_amount: 0, planned_date: "", remarks: "" },
-                    { stage_name: "发货阶段款", payment_ratio: 40, term_amount: 0, planned_date: "", remarks: "" },
-                    { stage_name: "终验尾款", payment_ratio: 30, term_amount: 0, planned_date: "", remarks: "" }
-                ];
-            } else if (p === "10-80-10") {
-                terms = [
-                    { stage_name: "订金 / 备料款", payment_ratio: 10, term_amount: 0, planned_date: "", remarks: "" },
-                    { stage_name: "交货主款", payment_ratio: 80, term_amount: 0, planned_date: "", remarks: "" },
-                    { stage_name: "质保金 (1年)", payment_ratio: 10, term_amount: 0, planned_date: "", remarks: "" }
-                ];
-            }
-            render_term_rows();
-        });
+    load_local_draft(key) {
+        try {
+            return JSON.parse(localStorage.getItem(key) || "{}") || {};
+        } catch (error) {
+            console.warn("Ignoring invalid contract draft cache:", error);
+            return {};
+        }
+    }
+
+    save_local_draft(key, draft) {
+        localStorage.setItem(key, JSON.stringify(draft));
     }
 
     // Modal 2: Generate Reimbursement Request from Contract Milestone (Dynamic Custom Ratio Engine)

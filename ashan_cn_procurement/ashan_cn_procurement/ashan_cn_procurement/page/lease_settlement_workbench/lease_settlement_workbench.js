@@ -626,6 +626,7 @@ class AnnualLeaseSettlementWorkbench {
         });
 
         const compName = isTotal ? '全公司合计' : targetComp;
+        const propertyManagementCompany = this.data?.property_management_company || '未配置物业结算主体';
 
         const dlg = new frappe.ui.Dialog({
             title: `🖨️ ${compName} - 房租与物业费年度对账单 (${yearStr})`,
@@ -642,7 +643,7 @@ class AnnualLeaseSettlementWorkbench {
                                     <div style="font-size:12px; color:#6b7280;">表单编号: ANNUAL-LEASE-BILL</div>
                                     <div style="font-size:12px; color:#6b7280;">结算年度: ${yearStr}</div>
                                 </div>
-                                <h2 class="bill-title" style="margin:8px 0 2px; text-align:center; font-size:19px; font-weight:bold;">天津金利达物业管理有限公司</h2>
+                                <h2 class="bill-title" style="margin:8px 0 2px; text-align:center; font-size:19px; font-weight:bold;">${frappe.utils.escape_html(propertyManagementCompany)}</h2>
                                 <h3 class="bill-subtitle" style="margin:0 0 12px; text-align:center; font-size:15px;">${frappe.utils.escape_html(compName)} 房租与物业费年度对账单</h3>
 
                                 <div class="bill-meta-row" style="display:flex; justify-content:space-between; border-top:1px solid #000; border-bottom:1px solid #000; padding:6px 4px; font-size:12px; margin-bottom:12px;">

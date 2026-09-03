@@ -238,7 +238,7 @@ def update_lease_invoice_link(lease_name, rent_invoice_no=None, rent_invoice_dat
 	if annual_discount_amount is not None:
 		doc.annual_discount_amount = flt(annual_discount_amount)
 
-	doc.save(ignore_permissions=True)
+	doc.save()
 	return {"status": "success", "message": "发票与对账信息已成功更新！"}
 
 
@@ -319,15 +319,132 @@ def get_previous_meter_reading(meter_name, current_month_start):
 	return 0.0
 
 
+def _latest_saved_meter_rate(meter_name, current_month_start):
+	"""Return the latest approved rate snapshot for one meter before a new month."""
+	rows = frappe.db.sql(
+		"""
+		SELECT r.unit_price, r.tax_rate, s.property_management_company
+		FROM `tabProperty Meter Reading` r
+		JOIN `tabProperty Monthly Settlement` s ON r.parent = s.name
+		WHERE r.utility_meter = %s
+		  AND s.settlement_month < %s
+		  AND s.status != '已作废'
+		ORDER BY s.settlement_month DESC
+		LIMIT 1
+		""",
+		(meter_name, current_month_start),
+		as_dict=True,
+	)
+	return rows[0] if rows else None
+
+
+def resolve_meter_utility_rate(meter, target_date):
+	"""Resolve a meter rate from effective configuration, then historical snapshots.
+
+	A fresh meter must have an enabled Property Charge Rate.  Historical monthly
+	snapshots are used only to carry forward a rate already applied to that meter,
+	so a new monthly draft never relies on a source-code price or legal entity.
+	"""
+	meter_name = str(meter.get("name") or meter.get("utility_meter") or "").strip()
+	lease_name = str(meter.get("property_lease") or "").strip()
+	utility_type = str(meter.get("utility_type") or "").strip()
+	if lease_name:
+		rate_rows = frappe.get_all(
+			"Property Charge Rate",
+			filters={
+				"property_lease": lease_name,
+				"enabled": 1,
+				"effective_from": ["<=", target_date],
+			},
+			fields=[
+				"property_management_company",
+				"electricity_unit_price",
+				"electricity_tax_rate",
+				"water_unit_price",
+				"water_tax_rate",
+			],
+			order_by="effective_from desc, modified desc",
+			limit_page_length=1,
+		)
+		if rate_rows:
+			rate = rate_rows[0]
+			price_field = "electricity_unit_price" if utility_type == "电" else "water_unit_price"
+			tax_field = "electricity_tax_rate" if utility_type == "电" else "water_tax_rate"
+			if flt(rate.get(price_field)) > 0 and rate.get(tax_field) is not None:
+				return {
+					"unit_price": flt(rate.get(price_field)),
+					"tax_rate": flt(rate.get(tax_field)),
+					"property_management_company": rate.get("property_management_company") or "",
+					"source": "effective_charge_rate",
+				}
+
+	previous_rate = _latest_saved_meter_rate(meter_name, target_date)
+	if previous_rate and flt(previous_rate.get("unit_price")) > 0:
+		return {
+			"unit_price": flt(previous_rate.get("unit_price")),
+			"tax_rate": flt(previous_rate.get("tax_rate")),
+			"property_management_company": previous_rate.get("property_management_company") or "",
+			"source": "previous_settlement_snapshot",
+		}
+
+	frappe.throw(
+		f"表具 {meter_name or '（未命名）'} 未配置 {target_date} 生效的水电费率。"
+		"请由物业管理员在物业费用费率中维护关联场地的含税单价和税率后重试。"
+	)
+
+
+def resolve_monthly_utility_configuration(meters, target_date):
+	"""Build the monthly rate snapshot and reject inconsistent global rate inputs."""
+	resolved = []
+	for meter in meters:
+		config = resolve_meter_utility_rate(meter, target_date)
+		resolved.append((meter, config))
+
+	by_type = {"电": [], "水": []}
+	for meter, config in resolved:
+		utility_type = str(meter.get("utility_type") or "").strip()
+		if utility_type in by_type:
+			by_type[utility_type].append(config)
+
+	result = {"meters": {}, "property_management_company": ""}
+	for utility_type, configs in by_type.items():
+		if not configs:
+			continue
+		prices = {(flt(row["unit_price"]), flt(row["tax_rate"])) for row in configs}
+		if len(prices) != 1:
+			frappe.throw(
+				f"{target_date} 的{utility_type}费率存在多个值，当前月结汇总无法安全合并。"
+				"请按公司或场地拆分结算，或统一当期生效费率后重试。"
+			)
+		unit_price, tax_rate = prices.pop()
+		key_prefix = "electricity" if utility_type == "电" else "water"
+		result[f"{key_prefix}_price"] = unit_price
+		result[f"{key_prefix}_tax_rate"] = tax_rate
+		for meter, config in resolved:
+			if meter.get("utility_type") == utility_type:
+				result["meters"][meter.get("name")] = config
+				if config.get("property_management_company"):
+					result["property_management_company"] = config["property_management_company"]
+	return result
+
+
+def _require_positive_rate(value, label):
+	"""Reject a calculation that has no configured rate snapshot."""
+	rate = flt(value)
+	if rate <= 0:
+		frappe.throw(f"{label}未配置有效费率，无法计算物业月结。")
+	return rate
+
+
 def calculate_settlement_matrix(data):
 	"""
 	核心集中计算引擎：重算电表、水表、调整项、租赁费（房租+单独物业费多周期）及各公司汇总
 	依据房东含税综合单价反推增值税与不含税成本
 	"""
-	elec_price = flt(data.get("electricity_price") or 1.1957)
-	elec_tax_rate = flt(data.get("electricity_tax_rate") if data.get("electricity_tax_rate") is not None else 12.5985)
-	water_price = flt(data.get("water_price") or 5.5)
-	water_tax_rate = flt(data.get("water_tax_rate") if data.get("water_tax_rate") is not None else 9.0)
+	elec_price = _require_positive_rate(data.get("electricity_price"), "电费")
+	elec_tax_rate = flt(data.get("electricity_tax_rate"))
+	water_price = _require_positive_rate(data.get("water_price"), "水费")
+	water_tax_rate = flt(data.get("water_tax_rate"))
 
 	# 根级反推单价与税额参数 (供 UI 与财务快速核对)
 	elec_price_excl = round(elec_price / (1.0 + (elec_tax_rate / 100.0)), 6)
@@ -598,11 +715,6 @@ def calculate_settlement_matrix(data):
 		if a.get("to_company"):
 			all_companies.add(a.get("to_company"))
 
-	existing_companies = frappe.get_all("Company", fields=["name"], order_by="name ASC")
-	for ec in existing_companies:
-		if "吉众" in ec.name or "祺富" in ec.name:
-			all_companies.add(ec.name)
-
 	comp_summary_map = {}
 	for comp in sorted(all_companies):
 		comp_summary_map[comp] = {
@@ -769,7 +881,7 @@ def calculate_settlement_matrix(data):
 	data["total_amount"] = round(grand_total, 2)
 	data["total_tax_amount"] = round(grand_tax_total, 2)
 	data["total_amount_tax_excl"] = round(grand_excl_total, 2)
-	data["property_management_company"] = data.get("property_management_company") or "天津金利达物业管理有限公司"
+	data["property_management_company"] = str(data.get("property_management_company") or "").strip()
 
 	return data
 
@@ -792,21 +904,19 @@ def get_month_settlement_data(year, month):
 		assert_property_settlement_access(d, "read")
 		return d
 
-	# 数据库中尚无此月份记录，构建新月份草稿数据
-	elec_price = 1.1957
-	water_price = 5.5
-
 	# 1. 水电表列表及上期表数
 	meters = frappe.get_all(
 		"Utility Meter",
 		filters=_apply_property_company_scope({"enabled": 1}),
-		fields=["name", "meter_no", "meter_name", "utility_type", "company", "multiplier", "unit", "initial_reading"],
+		fields=["name", "meter_no", "meter_name", "utility_type", "company", "property_lease", "multiplier", "unit", "initial_reading"],
 		order_by="utility_type ASC, meter_no ASC"
 	)
 
+	utility_config = resolve_monthly_utility_configuration(meters, start_date)
 	meter_readings = []
 	for m in meters:
 		prev_reading = get_previous_meter_reading(m.name, start_date)
+		meter_config = utility_config["meters"].get(m.name) or {}
 		meter_readings.append({
 			"utility_meter": m.name,
 			"meter_no": m.meter_no,
@@ -817,8 +927,8 @@ def get_month_settlement_data(year, month):
 			"raw_usage": 0.0,
 			"multiplier": flt(m.multiplier or 1.0),
 			"calculated_usage": 0.0,
-			"unit_price": elec_price if m.utility_type == "电" else water_price,
-			"tax_rate": 13.0 if m.utility_type == "电" else 9.0,
+			"unit_price": meter_config.get("unit_price"),
+			"tax_rate": meter_config.get("tax_rate"),
 			"amount_tax_incl": 0.0,
 			"amount_tax_excl": 0.0,
 			"tax_amount": 0.0,
@@ -933,11 +1043,11 @@ def get_month_settlement_data(year, month):
 		"settlement_month": start_date,
 		"status": "草稿",
 		"is_new": True,
-		"property_management_company": "天津金利达物业管理有限公司",
-		"electricity_price": elec_price,
-		"electricity_tax_rate": 12.5985,
-		"water_price": water_price,
-		"water_tax_rate": 9.0,
+		"property_management_company": utility_config.get("property_management_company") or "",
+		"electricity_price": utility_config.get("electricity_price"),
+		"electricity_tax_rate": utility_config.get("electricity_tax_rate"),
+		"water_price": utility_config.get("water_price"),
+		"water_tax_rate": utility_config.get("water_tax_rate"),
 		"meter_readings": meter_readings,
 		"adjustments": [],
 		"lease_charges": lease_charges,
@@ -976,7 +1086,7 @@ def save_draft_settlement(data):
 		doc.settlement_month = settlement_month
 
 	doc.status = "草稿"
-	doc.property_management_company = calc_data.get("property_management_company") or "天津金利达物业管理有限公司"
+	doc.property_management_company = calc_data.get("property_management_company") or ""
 	doc.electricity_price = flt(calc_data.get("electricity_price"))
 	doc.electricity_tax_rate = flt(calc_data.get("electricity_tax_rate"))
 	doc.water_price = flt(calc_data.get("water_price"))
@@ -989,7 +1099,6 @@ def save_draft_settlement(data):
 	doc.set("lease_charges", calc_data.get("lease_charges") or [])
 	doc.set("company_summaries", calc_data.get("company_summaries") or [])
 
-	doc.flags.ignore_permissions = True
 	doc.save()
 
 	return {
@@ -1029,7 +1138,6 @@ def finalize_monthly_settlement(data):
 	doc.status = "已结算"
 	doc.settled_by = frappe.session.user
 	doc.settled_at = now_datetime()
-	doc.flags.ignore_permissions = True
 	doc.save()
 
 	return {
@@ -1053,7 +1161,6 @@ def revert_settlement_to_draft(name, reason=None):
 	doc.status = "草稿"
 	doc.settled_by = None
 	doc.settled_at = None
-	doc.flags.ignore_permissions = True
 	doc.save()
 	doc.add_comment("Comment", text=f"物业月结解锁原因：{str(reason).strip()}")
 
@@ -1070,15 +1177,10 @@ def revert_settlement_to_draft(name, reason=None):
 # ─────────────────────────────────────────────────────────────
 
 def get_sheet_title(company_name):
-	"""根据公司名称匹配原版 Excel Sheet 命名方式"""
-	if "祺富" in company_name:
-		return "祺富"
-	elif "吉众" in company_name:
-		return "吉众"
-	elif "合计" in company_name or "全公司" in company_name:
+	"""Build a neutral, stable Excel sheet prefix from the current company name."""
+	if "合计" in company_name or "全公司" in company_name:
 		return "合计"
-	else:
-		return company_name[:4] if len(company_name) > 4 else company_name
+	return company_name[:4] if len(company_name) > 4 else company_name
 
 
 def _setup_ws_styles():
@@ -1221,7 +1323,10 @@ def render_water_elec_sheet(ws, sheet_name, company_name, settlement_month, prop
 
 		for m in sec_meters:
 			ws.row_dimensions[curr_row].height = 27.0
-			u_price = float(m.get("unit_price") or (summary.get("electricity_price") if "电" in util_type_list else summary.get("water_price")) or (1.009321 if "电" in util_type_list else 5.5))
+			u_price = _require_positive_rate(
+				m.get("unit_price"),
+				f"表具 {m.get('meter_no') or m.get('utility_meter') or ''} 的单价",
+			)
 			prev = float(m.get("previous_reading") or 0.0)
 			curr = float(m.get("current_reading") or 0.0)
 			mult = float(m.get("multiplier") or 1.0)
@@ -1350,35 +1455,23 @@ def render_water_elec_sheet(ws, sheet_name, company_name, settlement_month, prop
 
 	sum_start_row = curr_row
 
-	# 依据数电专票精准标准拆解:
-	# 电网代收3大政府性基金固定标准(元/kWh):
-	RATE_WATER_RES = 0.002304757  # 国家重大水利工程建设基金 (免税)
-	RATE_RESERVOIR = 0.007258429  # 水库移民后期扶持基金 (免税)
-	RATE_RENEWABLE = 0.022244024  # 可再生能源发展基金 (免税)
-	TOTAL_FUNDS_RATE = RATE_WATER_RES + RATE_RESERVOIR + RATE_RENEWABLE  # ~0.031807 元/度
-
-	# 各项金额推算:
-	amt_water_res = round(tot_elec_kwh * RATE_WATER_RES, 2)
-	amt_reservoir = round(tot_elec_kwh * RATE_RESERVOIR, 2)
-	amt_renewable = round(tot_elec_kwh * RATE_RENEWABLE, 2)
-	amt_funds_tot = round(amt_water_res + amt_reservoir + amt_renewable, 2)
-
-	amt_elec_main = max(0.0, round(tot_elec_amt - amt_funds_tot, 2))
-	excl_elec_main = round(amt_elec_main / 1.13, 2)
+	# 按当前月结已保存的费率拆分。未单独配置的附加收费不能在导出中被臆造。
+	elec_tax_rate = flt((summary or {}).get("electricity_tax_rate"))
+	water_tax_rate = flt((summary or {}).get("water_tax_rate"))
+	elec_tax_divider = 1 + (elec_tax_rate / 100)
+	water_tax_divider = 1 + (water_tax_rate / 100)
+	amt_elec_main = round(tot_elec_amt, 2)
+	excl_elec_main = round(amt_elec_main / elec_tax_divider, 2)
 	tax_elec_main = round(amt_elec_main - excl_elec_main, 2)
 	price_elec_main = round(amt_elec_main / tot_elec_kwh, 6) if tot_elec_kwh > 0 else 0.0
 
-	# 水费 (9% 专票)
-	excl_water = round(tot_water_amt / 1.09, 2)
+	excl_water = round(tot_water_amt / water_tax_divider, 2)
 	tax_water = round(tot_water_amt - excl_water, 2)
 	price_water = round(tot_water_amt / tot_water_m3, 4) if tot_water_m3 > 0 else 0.0
 
 	summary_rows = [
-		("*电力*电费 (13% 专票)", excl_elec_main, "13%", tax_elec_main, amt_elec_main, tot_elec_kwh, price_elec_main),
-		("*代收国家重大水利工程建设基金* (免税)", amt_water_res, "免税(0%)", 0.00, amt_water_res, tot_elec_kwh, RATE_WATER_RES),
-		("*代收水库移民后期扶持基金* (免税)", amt_reservoir, "免税(0%)", 0.00, amt_reservoir, tot_elec_kwh, RATE_RESERVOIR),
-		("*代收可再生能源发展基金* (免税)", amt_renewable, "免税(0%)", 0.00, amt_renewable, tot_elec_kwh, RATE_RENEWABLE),
-		("*水费*自来水 (9% 专票)", excl_water, "9%", tax_water, tot_water_amt, tot_water_m3, price_water)
+		(f"*电力*电费 ({elec_tax_rate:.2f}% 税率)", excl_elec_main, f"{elec_tax_rate:.2f}%", tax_elec_main, amt_elec_main, tot_elec_kwh, price_elec_main),
+		(f"*水费*自来水 ({water_tax_rate:.2f}% 税率)", excl_water, f"{water_tax_rate:.2f}%", tax_water, tot_water_amt, tot_water_m3, price_water)
 	]
 
 	for item in summary_rows:
@@ -1405,7 +1498,7 @@ def render_water_elec_sheet(ws, sheet_name, company_name, settlement_month, prop
 
 	sum_end_row = curr_row - 1
 
-	# H 列大字合计 (跨 5 行，完整修复右侧边框与封底边框)
+	# H 列大字合计（跨当前配置产生的汇总行）
 	ws.merge_cells(start_row=sum_start_row, start_column=8, end_row=sum_end_row, end_column=8)
 	grand_total_amt = round(tot_elec_amt + tot_water_amt, 2)
 	c_grand = ws.cell(sum_start_row, 8, grand_total_amt)
@@ -1732,12 +1825,18 @@ def generate_settlement_excel_workbook(data, company=None, property_management_c
 	default_ws = wb.active
 
 	settlement_month = data.get("settlement_month") or nowdate()
-	prop_mgmt = property_management_company or data.get("property_management_company") or "天津金利达物业管理有限公司"
+	prop_mgmt = str(property_management_company or data.get("property_management_company") or "").strip()
+	if not prop_mgmt:
+		frappe.throw("未配置物业结算主体，无法导出月结明细。")
 
 	def get_company_data(comp):
 		comp_meters = [m for m in (data.get("meter_readings") or []) if m.get("company") == comp]
 		comp_leases = [l for l in (data.get("lease_charges") or []) if l.get("company") == comp]
-		comp_summary = next((s for s in (data.get("company_summaries") or []) if s.get("company") == comp), {})
+		comp_summary = dict(next((s for s in (data.get("company_summaries") or []) if s.get("company") == comp), {}))
+		comp_summary.update({
+			"electricity_tax_rate": flt(data.get("electricity_tax_rate")),
+			"water_tax_rate": flt(data.get("water_tax_rate")),
+		})
 		comp_adjs = []
 		for a in (data.get("adjustments") or []):
 			if a.get("adjustment_scope") == "单公司" and a.get("company") == comp:
@@ -1790,7 +1889,7 @@ def generate_settlement_excel_workbook(data, company=None, property_management_c
 	elif mode == "total":
 		all_meters = data.get("meter_readings") or []
 		all_leases = data.get("lease_charges") or []
-		render_water_elec_sheet(default_ws, "合计水电费", "全公司合计", settlement_month, prop_mgmt, all_meters, build_total_adjs(), {}, is_total=True)
+		render_water_elec_sheet(default_ws, "合计水电费", "全公司合计", settlement_month, prop_mgmt, all_meters, build_total_adjs(), data, is_total=True)
 		ws2 = wb.create_sheet("合计房租物业")
 		render_lease_sheet(ws2, "合计房租物业", "全公司合计", settlement_month, prop_mgmt, all_leases, is_total=True)
 
@@ -1810,7 +1909,7 @@ def generate_settlement_excel_workbook(data, company=None, property_management_c
 		all_meters = data.get("meter_readings") or []
 		all_leases = data.get("lease_charges") or []
 		ws_tot_e = default_ws if first_sheet else wb.create_sheet()
-		render_water_elec_sheet(ws_tot_e, "合计水电费", "全公司合计", settlement_month, prop_mgmt, all_meters, build_total_adjs(), {}, is_total=True)
+		render_water_elec_sheet(ws_tot_e, "合计水电费", "全公司合计", settlement_month, prop_mgmt, all_meters, build_total_adjs(), data, is_total=True)
 		ws_tot_l = wb.create_sheet("合计房租物业")
 		render_lease_sheet(ws_tot_l, "合计房租物业", "全公司合计", settlement_month, prop_mgmt, all_leases, is_total=True)
 
@@ -1863,7 +1962,9 @@ def export_utility_settlement_excel(settlement_month, company=None, property_man
 	if company:
 		assert_company_access(company)
 
-	prop_mgmt = property_management_company or data.get("property_management_company") or "天津金利达物业管理有限公司"
+	prop_mgmt = str(property_management_company or data.get("property_management_company") or "").strip()
+	if not prop_mgmt:
+		frappe.throw("未配置物业结算主体，无法导出水电费明细。")
 	wb = openpyxl.Workbook()
 	wb.calculation.fullCalcOnLoad = True
 	default_ws = wb.active
@@ -1871,7 +1972,11 @@ def export_utility_settlement_excel(settlement_month, company=None, property_man
 	def get_company_data(comp):
 		comp_meters = [m for m in (data.get("meter_readings") or []) if m.get("company") == comp]
 		comp_leases = [l for l in (data.get("lease_charges") or []) if l.get("company") == comp]
-		comp_summary = next((s for s in (data.get("company_summaries") or []) if s.get("company") == comp), {})
+		comp_summary = dict(next((s for s in (data.get("company_summaries") or []) if s.get("company") == comp), {}))
+		comp_summary.update({
+			"electricity_tax_rate": flt(data.get("electricity_tax_rate")),
+			"water_tax_rate": flt(data.get("water_tax_rate")),
+		})
 		comp_adjs = []
 		for a in (data.get("adjustments") or []):
 			if a.get("utility_type") not in ["电费", "电", "水费", "水"]:
@@ -1918,20 +2023,13 @@ def export_utility_settlement_excel(settlement_month, company=None, property_man
 				})
 		return total_adjs
 
-	def get_sheet_title(comp_name):
-		if "祺富" in comp_name:
-			return "祺富"
-		if "吉众" in comp_name:
-			return "吉众"
-		return comp_name[:4]
-
 	if mode == "company" and company:
 		comp_meters, _, comp_adjs, comp_summary = get_company_data(company)
 		short = get_sheet_title(company)
 		render_water_elec_sheet(default_ws, f"{short}水电费", company, settlement_month, prop_mgmt, comp_meters, comp_adjs, comp_summary, is_total=False)
 	elif mode == "total":
 		all_meters = data.get("meter_readings") or []
-		render_water_elec_sheet(default_ws, "合计水电费", "全公司合计", settlement_month, prop_mgmt, all_meters, build_total_adjs(), {}, is_total=True)
+		render_water_elec_sheet(default_ws, "合计水电费", "全公司合计", settlement_month, prop_mgmt, all_meters, build_total_adjs(), data, is_total=True)
 	else:  # mode == "all"
 		companies = [s.get("company") for s in (data.get("company_summaries") or []) if s.get("company")]
 		first_sheet = True
@@ -1944,7 +2042,7 @@ def export_utility_settlement_excel(settlement_month, company=None, property_man
 
 		all_meters = data.get("meter_readings") or []
 		ws_tot_e = wb.create_sheet("合计水电费")
-		render_water_elec_sheet(ws_tot_e, "合计水电费", "全公司合计", settlement_month, prop_mgmt, all_meters, build_total_adjs(), {}, is_total=True)
+		render_water_elec_sheet(ws_tot_e, "合计水电费", "全公司合计", settlement_month, prop_mgmt, all_meters, build_total_adjs(), data, is_total=True)
 
 	bio = io.BytesIO()
 	wb.save(bio)
@@ -1975,20 +2073,15 @@ def export_lease_settlement_excel(settlement_month, company=None, property_manag
 	if company:
 		assert_company_access(company)
 
-	prop_mgmt = property_management_company or data.get("property_management_company") or "天津金利达物业管理有限公司"
+	prop_mgmt = str(property_management_company or data.get("property_management_company") or "").strip()
+	if not prop_mgmt:
+		frappe.throw("未配置物业结算主体，无法导出房租与物业费明细。")
 	wb = openpyxl.Workbook()
 	wb.calculation.fullCalcOnLoad = True
 	default_ws = wb.active
 
 	def get_company_leases(comp):
 		return [l for l in (data.get("lease_charges") or []) if l.get("company") == comp]
-
-	def get_sheet_title(comp_name):
-		if "祺富" in comp_name:
-			return "祺富"
-		if "吉众" in comp_name:
-			return "吉众"
-		return comp_name[:4]
 
 	if mode == "company" and company:
 		comp_leases = get_company_leases(company)

@@ -75,6 +75,29 @@
       "in_list_view": 1
     },
     {
+      "fieldname": "half_days",
+      "fieldtype": "Float",
+      "label": "半天出勤天数",
+      "in_list_view": 0
+    },
+    {
+      "fieldname": "absent_days",
+      "fieldtype": "Float",
+      "label": "缺勤天数",
+      "in_list_view": 0
+    },
+    {
+      "fieldname": "leave_compensatory_hours",
+      "fieldtype": "Float",
+      "label": "倒休抵扣工时 (h)",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "attendance_file",
+      "fieldtype": "Attach",
+      "label": "原始考勤凭证附件"
+    },
+    {
       "fieldname": "daily_records_json",
       "fieldtype": "Code",
       "options": "JSON",

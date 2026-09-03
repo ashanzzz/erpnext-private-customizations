@@ -36,7 +36,7 @@
     },
     {
       "fieldtype": "Section Break",
-      "label": "🏢 房租单价与计费 (支持日/月/年多周期自选与自动互算)",
+      "label": "房租单价与计费（支持日/月/年多周期自选与自动互算）",
       "fieldname": "sb_rent"
     },
     {
@@ -87,7 +87,7 @@
     },
     {
       "fieldtype": "Section Break",
-      "label": "🛠️ 物业费计收与单价 (按每平米)",
+      "label": "物业费计收与单价（按每平米）",
       "fieldname": "sb_prop_fee"
     },
     {
@@ -138,6 +138,41 @@
     },
     {
       "fieldtype": "Section Break",
+      "label": "水电费率与结算主体",
+      "fieldname": "sb_utility_rate"
+    },
+    {
+      "label": "物业结算主体",
+      "fieldname": "property_management_company",
+      "fieldtype": "Link",
+      "options": "Supplier"
+    },
+    {
+      "label": "电费含税单价（元/kWh）",
+      "fieldname": "electricity_unit_price",
+      "fieldtype": "Currency"
+    },
+    {
+      "label": "电费税率（%）",
+      "fieldname": "electricity_tax_rate",
+      "fieldtype": "Percent"
+    },
+    {
+      "fieldtype": "Column Break",
+      "fieldname": "cb_utility_rate"
+    },
+    {
+      "label": "水费含税单价（元/m³）",
+      "fieldname": "water_unit_price",
+      "fieldtype": "Currency"
+    },
+    {
+      "label": "水费税率（%）",
+      "fieldname": "water_tax_rate",
+      "fieldtype": "Percent"
+    },
+    {
+      "fieldtype": "Section Break",
       "label": "综合汇总与备注",
       "fieldname": "sb_summary"
     },
@@ -163,6 +198,13 @@
   "permissions": [
     {
       "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "Property Manager",
       "read": 1,
       "write": 1,
       "create": 1,

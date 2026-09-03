@@ -183,6 +183,17 @@ def get_allowed_companies(user: str | None = None) -> set[str] | None:
     return companies
 
 
+@frappe.whitelist()
+def get_module_company_options(module: str) -> list[str]:
+    """Return the current user's selectable companies for one custom module."""
+    assert_module_access(module, "read")
+    allowed_companies = get_allowed_companies()
+    filters = {}
+    if allowed_companies is not None:
+        filters["name"] = ["in", sorted(allowed_companies)]
+    return frappe.get_all("Company", filters=filters, pluck="name", order_by="name asc")
+
+
 def assert_company_access(company: str, user: str | None = None) -> None:
     """Raise when a user attempts to cross a company data boundary."""
     user = _current_user(user)

@@ -416,22 +416,10 @@
       "doctype": "Workspace Sidebar Item"
     },
     {
-      "label": "祺富人事薪酬工作台",
+      "label": "人事薪酬工作台",
       "link_type": "Page",
       "type": "Link",
       "link_to": "qifu-hr-salary-workbench",
-      "child": 1,
-      "collapsible": 0,
-      "indent": 0,
-      "keep_closed": 0,
-      "show_arrow": 0,
-      "doctype": "Workspace Sidebar Item"
-    },
-    {
-      "label": "吉众人事薪酬工作台",
-      "link_type": "Page",
-      "type": "Link",
-      "link_to": "jizhong-hr-salary-workbench",
       "child": 1,
       "collapsible": 0,
       "indent": 0,

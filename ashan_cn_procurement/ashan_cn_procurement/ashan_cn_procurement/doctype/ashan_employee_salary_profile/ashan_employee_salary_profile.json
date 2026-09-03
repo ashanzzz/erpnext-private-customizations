@@ -391,19 +391,18 @@
    "delete": 1
   },
   {
-   "role": "HR Manager",
+   "role": "Payroll Manager",
    "read": 1,
    "write": 1,
    "create": 1,
    "delete": 1
   },
   {
-   "role": "HR User",
-   "read": 1
-  },
-  {
-   "role": "Accounts Manager",
-   "read": 1
+   "role": "Payroll Operator",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0
   }
  ]
 }

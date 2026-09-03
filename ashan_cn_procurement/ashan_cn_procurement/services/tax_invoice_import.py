@@ -66,10 +66,10 @@ def extract_invoice_key_from_filename(filename):
 
 def identify_company(buyer_name, buyer_tax_id):
 	"""
-	按精确购买方白名单及设置中的精确规则识别 ERP 公司。
+	按税局发票设置中的精确规则识别 ERP 公司。
 
-	税局发票仅可归属天津祺富机械加工有限公司或天津吉众科技有限公司；
-	不允许通过商号、词根或公司档案进行模糊兜底匹配。
+	不允许通过商号、词根或公司档案进行模糊兜底匹配；仅允许使用
+	Tax Invoice Settings 中由管理员维护的购买方与公司映射。
 	"""
 	if get_buyer_validation_error(buyer_name):
 		return None
@@ -86,15 +86,6 @@ def identify_company(buyer_name, buyer_tax_id):
 			continue
 		if mapping.company:
 			return mapping.company
-
-	company_name = frappe.db.get_value(
-		"Company", {"company_name": clean_buyer_name}, "name"
-	)
-	if company_name:
-		return company_name
-
-	return frappe.db.get_value("Company", clean_buyer_name, "name")
-
 	return None
 
 def save_private_pdf_file(pdf_bytes, filename, docname):
@@ -287,7 +278,8 @@ def process_import_batch(batch_name):
 
 				batch.parsed_count += 1
 
-				# 购买方必须属于两家法定主体；错误记录仅归档待复核，绝不参与匹配。
+				# 购买方必须匹配管理员维护的法定主体映射；未映射的来源文件
+				# 仅计入批次待复核，不生成 company 为空的 Tax Invoice。
 				buyer_error = get_buyer_validation_error(parsed_data.get("buyer_name"))
 				comp = identify_company(parsed_data.get("buyer_name"), parsed_data.get("buyer_tax_id"))
 				if buyer_error:
@@ -301,6 +293,13 @@ def process_import_batch(batch_name):
 					parsed_data["parse_warning"] = append_unique_warning(
 						parsed_data.get("parse_warning"), "购买方已校验，但未配置所属 ERP 公司映射"
 					)
+
+				if not comp:
+					batch.review_count += 1
+					error_logs.append(
+						f"发票 {inv_no} 未创建：{parsed_data.get('parse_warning') or buyer_error or '购买方未配置公司映射'}"
+					)
+					continue
 
 				# 4. 去重与更新检查
 				if frappe.db.exists("Tax Invoice", inv_no):
@@ -333,8 +332,7 @@ def process_import_batch(batch_name):
 					continue
 
 				# 5. 创建新 Tax Invoice 记录
-				if comp:
-					assert_company_access(comp, user=batch.uploaded_by)
+				assert_company_access(comp, user=batch.uploaded_by)
 				doc = frappe.new_doc("Tax Invoice")
 				doc.invoice_no = inv_no
 				doc.issue_date = parsed_data.get("issue_date")

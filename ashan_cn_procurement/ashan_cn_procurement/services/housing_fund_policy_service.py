@@ -25,11 +25,6 @@ VALID_OVERRIDES = {OVERRIDE_ON, OVERRIDE_OFF}
 DEFAULT_MONTHS = [1, 4, 7, 10]
 EXCLUDED_EMPLOYEE_TYPES = {"返聘工", "退休返聘", "其他-返聘工", "临时工", "零工", "外籍工", "实习生"}
 
-# 祺富当前已确认的长期基线：孟祥山全年固定缴纳，其余员工都由公司规则决定。
-QIFU_COMPANY = "天津祺富机械加工有限公司"
-QIFU_FIXED_ON_EMPLOYEE_NO = "A0006"
-
-
 def normalize_period_month(period_month=None):
     text = str(period_month or "").strip()
     if len(text) == 6 and text.isdigit():
@@ -77,20 +72,28 @@ def normalize_policy_setting(setting=None):
     }
 
 
-def repair_qifu_housing_fund_baseline(period_month=None):
-    """Restore the confirmed Qifu long-term housing-fund policy baseline.
+@frappe.whitelist(methods=["POST"])
+def repair_housing_fund_baseline(company, period_month=None, fixed_on_employee_nos=None):
+    """Repair a company's housing-fund baseline using explicit administrator input.
 
-    Legacy imports left all policies as ``跟随公司规则`` and many eligible employees
-    with a zero long-term base.  The zeroes are data-loss artefacts, not a voluntary
-    opt-out: the approved opt-out mechanism is the explicit ``固定停缴`` policy.
-    This repair therefore assigns the annual minimum base only to eligible profiles,
-    makes Meng Xiangshan fixed-on, and keeps every other profile following company
-    rules.  It is idempotent and never overwrites a non-zero individual base.
+    The operation never embeds a company, employee, or contribution base.  It is
+    deliberately manager-only and uses the annual insurance configuration as the
+    source for a missing eligible employee's base.
     """
     from ashan_cn_procurement.services.employee_salary_service import (
         _queue_salary_recalculation,
         get_insurance_setting,
     )
+    from ashan_cn_procurement.services.payroll_settlement_service import check_payroll_workbench_permission
+
+    check_payroll_workbench_permission("lock", company)
+    if isinstance(fixed_on_employee_nos, str):
+        fixed_on_employee_nos = [
+            employee_no.strip()
+            for employee_no in fixed_on_employee_nos.split(",")
+            if employee_no.strip()
+        ]
+    fixed_on_employee_nos = {str(employee_no).strip() for employee_no in (fixed_on_employee_nos or [])}
 
     # Recalculate the newest open settlement instead of coupling this one-time repair
     # to the server date.  This keeps the migration correct when the payroll book is
@@ -99,7 +102,7 @@ def repair_qifu_housing_fund_baseline(period_month=None):
     if not selected_period:
         open_settlements = frappe.get_all(
             "Ashan Monthly Payroll Settlement",
-            filters={"company": QIFU_COMPANY, "locked": 0},
+            filters={"company": company, "locked": 0},
             fields=["period_month"],
             order_by="period_month desc",
             limit_page_length=1,
@@ -107,11 +110,13 @@ def repair_qifu_housing_fund_baseline(period_month=None):
         selected_period = (open_settlements[0].get("period_month") if open_settlements else None)
 
     target_period, year, _month = normalize_period_month(selected_period)
-    setting = get_insurance_setting(QIFU_COMPANY, year) or {}
-    minimum_base = flt(setting.get("hf_min_base")) or 2320.0
+    setting = get_insurance_setting(company, year) or {}
+    minimum_base = flt(setting.get("hf_min_base"))
+    if minimum_base <= 0:
+        frappe.throw(f"{company} 尚未维护 {year} 年公积金最低基数，无法执行基线修复。")
     profiles = frappe.get_all(
         "Ashan Employee Salary Profile",
-        filters={"company": QIFU_COMPANY},
+        filters={"company": company},
         fields=["name", "employee_no", "employee_type", "housing_fund_base", "housing_fund_policy"],
         order_by="employee_no asc",
     )
@@ -121,7 +126,11 @@ def repair_qifu_housing_fund_baseline(period_month=None):
     changed_employee_nos = []
     for profile in profiles:
         doc = frappe.get_doc("Ashan Employee Salary Profile", profile.name)
-        expected_policy = POLICY_FIXED_ON if str(doc.employee_no or "") == QIFU_FIXED_ON_EMPLOYEE_NO else POLICY_FOLLOW
+        expected_policy = (
+            POLICY_FIXED_ON
+            if str(doc.employee_no or "") in fixed_on_employee_nos
+            else POLICY_FOLLOW
+        )
         changed = False
         if (doc.housing_fund_policy or POLICY_FOLLOW) != expected_policy:
             doc.housing_fund_policy = expected_policy
@@ -140,11 +149,11 @@ def repair_qifu_housing_fund_baseline(period_month=None):
 
     if changed_employee_nos:
         _queue_salary_recalculation(
-            QIFU_COMPANY,
+            company,
             target_period,
             None,
             "住房公积金台账与配置",
-            trigger_detail="恢复孟祥山全年固定缴纳，其余员工跟随公司规则，并补齐遗失的最低公积金基数",
+            trigger_detail="按管理员指定的固定缴纳名单恢复长期策略，并补齐符合条件员工的最低公积金基数",
         )
         frappe.db.commit()
 
@@ -312,7 +321,7 @@ def _assert_period_open(company, period_month):
 
 
 @frappe.whitelist()
-def get_housing_fund_policy_summary(company="天津祺富机械加工有限公司", period_month=None):
+def get_housing_fund_policy_summary(company=None, period_month=None):
     from ashan_cn_procurement.services.employee_salary_service import get_insurance_setting
     from ashan_cn_procurement.services.payroll_settlement_service import check_payroll_workbench_permission
 

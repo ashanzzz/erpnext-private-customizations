@@ -369,9 +369,9 @@ class UnifiedOilCardLedgerConsole {
 			if (!self.activeCard) return;
 			if (self.isLocked) {
 				if (self.isManager) {
-					frappe.msgprint("⚠️ <b>当前月份已核定锁定！</b><br><br>您拥有管理员权限，若确需补录充值，请先点击右上角的【🔓 解除锁定】。");
+					frappe.msgprint("<b>当前月份已核定锁定。</b><br><br>如确需补录充值，请先使用右上角的【解除锁定】操作。");
 				} else {
-					frappe.msgprint("🔒 <b>当前月份已核定锁定！</b><br><br>单据处于只读保护状态。若需修改或补录，请点击右上角的【📨 申请取消核定】。");
+					frappe.msgprint("<b>当前月份已核定锁定。</b><br><br>单据处于只读保护状态。如需修改或补录，请使用右上角的【申请取消核定】。");
 				}
 				return;
 			}
@@ -1659,7 +1659,9 @@ class UnifiedOilCardLedgerConsole {
 
 			// 锁定状态下全部禁用快捷录入按钮，并提示
 			this.wrapper.find("#btn-quick-refuel, #btn-quick-recharge")
-				.css({ "opacity": "0.45", "cursor": "not-allowed" })
+				.prop("disabled", true)
+				.attr("aria-disabled", "true")
+				.addClass("ashan-action-locked")
 				.attr("title", "当前月份已核定锁定，若需录入请先点击【解除锁定】");
 			$("#row-inline-entry").remove();
 		} else {
@@ -1671,7 +1673,9 @@ class UnifiedOilCardLedgerConsole {
 			// 操作员和管理员均可点击【本月核定】
 			lockBtnContainer.html(`<button class="btn-cmd-lock" id="btn-lock-month-action"><span>🔒</span> 本月核定</button>`);
 			this.wrapper.find("#btn-quick-refuel, #btn-quick-recharge")
-				.css({ "opacity": "1", "cursor": "pointer" })
+				.prop("disabled", false)
+				.removeAttr("aria-disabled")
+				.removeClass("ashan-action-locked")
 				.removeAttr("title");
 		}
 

@@ -542,7 +542,6 @@ def get_unified_ledger_data(oil_card, year=None, month=None):
 			"name": card.name,
 			"card_code": card.card_code,
 			"card_name": card.card_name,
-			"card_no": card.card_no,
 			"card_no_masked": card.card_no_masked,
 			"card_type": card.card_type,
 			"supplier": card.supplier,

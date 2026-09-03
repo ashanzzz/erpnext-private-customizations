@@ -92,6 +92,13 @@
       "delete": 1
     },
     {
+      "role": "Property Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
       "role": "Property Operator",
       "read": 1
     }

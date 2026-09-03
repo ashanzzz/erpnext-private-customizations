@@ -46,7 +46,6 @@
       "label": "物业管理公司",
       "fieldname": "property_management_company",
       "fieldtype": "Data",
-      "default": "天津金利达物业管理有限公司",
       "in_list_view": 1
     },
     {
@@ -71,15 +70,13 @@
       "label": "本月含税电价(元/kWh)",
       "fieldname": "electricity_price",
       "fieldtype": "Currency",
-      "default": "1.1957",
       "reqd": 1,
       "in_list_view": 1
     },
     {
       "label": "电费税率(%)",
       "fieldname": "electricity_tax_rate",
-      "fieldtype": "Percent",
-      "default": "13.0"
+      "fieldtype": "Percent"
     },
     {
       "fieldtype": "Column Break",
@@ -89,15 +86,13 @@
       "label": "本月含税水价(元/m³)",
       "fieldname": "water_price",
       "fieldtype": "Currency",
-      "default": "5.5",
       "reqd": 1,
       "in_list_view": 1
     },
     {
       "label": "水费税率(%)",
       "fieldname": "water_tax_rate",
-      "fieldtype": "Percent",
-      "default": "9.0"
+      "fieldtype": "Percent"
     },
     {
       "fieldtype": "Section Break",

@@ -2,11 +2,9 @@
 
 import re
 
+import frappe
 
-ALLOWED_TAX_INVOICE_BUYERS = (
-	"天津祺富机械加工有限公司",
-	"天津吉众科技有限公司",
-)
+
 BUYER_VALIDATION_ERROR_MARKER = "【购买方错误】"
 STALE_COMPANY_MAPPING_WARNING_PHRASES = (
 	"购买方公司未能自动匹配",
@@ -19,19 +17,37 @@ def normalize_buyer_name(buyer_name):
 	return re.sub(r"\s+", "", str(buyer_name or "")).strip()
 
 
+def get_configured_tax_invoice_buyers():
+	"""Return the exact buyer names configured in Tax Invoice Settings.
+
+	The mapping table is the sole source of truth.  It makes supported legal
+	entities configurable per deployment and avoids source-code company lists.
+	"""
+	settings = frappe.get_single("Tax Invoice Settings")
+	return sorted({
+		normalize_buyer_name(row.buyer_name)
+		for row in (settings.get("company_mappings") or [])
+		if normalize_buyer_name(row.buyer_name) and row.company
+	})
+
+
 def get_buyer_validation_error(buyer_name):
-	"""Return a user-facing error when the buyer is outside the approved entities."""
+	"""Return a user-facing error when the buyer is outside configured entities."""
 	normalized_name = normalize_buyer_name(buyer_name)
 	if not normalized_name:
-		return f"{BUYER_VALIDATION_ERROR_MARKER} 购买方名称为空，无法确认是否属于天津祺富或天津吉众。"
-	if normalized_name not in ALLOWED_TAX_INVOICE_BUYERS:
-		allowed_names = "、".join(ALLOWED_TAX_INVOICE_BUYERS)
-		return f"{BUYER_VALIDATION_ERROR_MARKER} 购买方“{normalized_name}”不属于允许范围（仅限：{allowed_names}）。"
+		return f"{BUYER_VALIDATION_ERROR_MARKER} 购买方名称为空，无法匹配所属公司。"
+	allowed_names = get_configured_tax_invoice_buyers()
+	if not allowed_names:
+		return f"{BUYER_VALIDATION_ERROR_MARKER} 尚未在税局发票设置中配置购买方与公司映射。"
+	if normalized_name not in allowed_names:
+		return (
+			f"{BUYER_VALIDATION_ERROR_MARKER} 购买方“{normalized_name}”未配置所属 ERP 公司映射。"
+		)
 	return ""
 
 
 def is_allowed_tax_invoice_buyer(buyer_name):
-	"""Return whether a buyer is one of the two approved legal entities."""
+	"""Return whether a buyer is one of the configured legal entities."""
 	return not get_buyer_validation_error(buyer_name)
 
 

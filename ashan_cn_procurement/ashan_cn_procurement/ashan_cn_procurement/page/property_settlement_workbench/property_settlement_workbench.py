@@ -110,7 +110,7 @@ def get_company_bill_data(settlement_name, company):
 	return {
 		"settlement_name": doc.name,
 		"settlement_month": doc.settlement_month,
-		"property_management_company": doc.property_management_company or "天津金利达物业管理有限公司",
+		"property_management_company": doc.property_management_company or "",
 		"status": doc.status,
 		"company": company,
 		"electricity_price": doc.electricity_price,
@@ -148,7 +148,7 @@ def get_total_bill_data(settlement_name):
 	return {
 		"settlement_name": doc.name,
 		"settlement_month": doc.settlement_month,
-		"property_management_company": doc.property_management_company or "天津金利达物业管理有限公司",
+		"property_management_company": doc.property_management_company or "",
 		"status": doc.status,
 		"company": "全公司合计",
 		"is_total": True,
