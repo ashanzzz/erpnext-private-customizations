@@ -539,3 +539,53 @@ def get_jizhong_history_records(company="天津吉众科技有限公司", period
 		as_dict=True
 	)
 	return items
+
+
+@frappe.whitelist()
+def get_jizhong_insurance_setting(year=2026):
+	"""获取吉众专属社保公积金设置"""
+	year = cint(year) or 2026
+	doc_name = f"天津吉众科技有限公司-{year}"
+	if not frappe.db.exists("Ashan Insurance Setting", doc_name):
+		doc = frappe.new_doc("Ashan Insurance Setting")
+		doc.company = "天津吉众科技有限公司"
+		doc.effective_year = year
+		doc.ss_company_injury = 0.55
+		doc.ss_company_pension = 16.0
+		doc.ss_company_medical = 10.0
+		doc.ss_company_unemployment = 0.5
+		doc.ss_company_other_medical = 0.5
+		doc.ss_person_pension = 8.0
+		doc.ss_person_medical = 2.0
+		doc.ss_person_unemployment = 0.5
+		doc.hf_person_rate = 5.0
+		doc.hf_company_rate = 5.0
+		doc.insert(ignore_permissions=True)
+		return doc.as_dict()
+
+	return frappe.get_doc("Ashan Insurance Setting", doc_name).as_dict()
+
+
+@frappe.whitelist(methods=["POST"])
+def update_jizhong_insurance_setting(year=2026, values=None):
+	"""保存吉众专属社保公积金设置"""
+	import json
+	if isinstance(values, str):
+		values = json.loads(values)
+	year = cint(year) or 2026
+	doc_name = f"天津吉众科技有限公司-{year}"
+	if frappe.db.exists("Ashan Insurance Setting", doc_name):
+		doc = frappe.get_doc("Ashan Insurance Setting", doc_name)
+	else:
+		doc = frappe.new_doc("Ashan Insurance Setting")
+		doc.company = "天津吉众科技有限公司"
+		doc.effective_year = year
+
+	if values and isinstance(values, dict):
+		for k, v in values.items():
+			if hasattr(doc, k):
+				setattr(doc, k, flt(v))
+
+	doc.save(ignore_permissions=True)
+	return {"success": True, "setting": doc.as_dict()}
+

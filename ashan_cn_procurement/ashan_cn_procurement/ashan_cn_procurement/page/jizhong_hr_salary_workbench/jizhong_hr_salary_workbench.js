@@ -270,15 +270,24 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
 
         <!-- Tab 6: 社保公积金配置 -->
         <div id="jz-tab-insurance" class="jz-tab-content jz-hidden">
+            <div class="jz-toolbar">
+                <div class="jz-toolbar-left">
+                    <button class="btn btn-primary btn-sm jz-btn-orange" id="btn-jz-edit-insurance">修改吉众社保公积金费率</button>
+                    <button class="btn btn-default btn-sm" id="btn-jz-open-insurance-form">在原生表单中查看</button>
+                </div>
+                <div class="jz-toolbar-right">
+                    <span class="jz-tip-text" id="jz-ins-docname-tip">配置对象：天津吉众科技有限公司-2026</span>
+                </div>
+            </div>
             <div class="jz-config-box">
-                <h4 class="jz-config-title">吉众公司法定社保公积金基数与费率标准</h4>
-                <div class="jz-config-grid">
-                    <div><strong>工伤保险单位费率:</strong> 0.55% (特定标准)</div>
-                    <div><strong>养老保险比例:</strong> 个人 8.00% / 单位 16.00%</div>
-                    <div><strong>医疗保险比例:</strong> 个人 2.00% / 单位 10.00%</div>
-                    <div><strong>失业保险比例:</strong> 个人 0.50% / 单位 0.50%</div>
-                    <div><strong>生育保险比例:</strong> 单位 0.50%</div>
-                    <div><strong>住房公积金比例:</strong> 个人 5.00% / 单位 5.00%</div>
+                <h4 class="jz-config-title">天津吉众科技有限公司 · 专属社保公积金标准</h4>
+                <div class="jz-config-grid" id="jz-ins-grid">
+                    <div><strong>工伤保险单位费率:</strong> <span id="jz-ins-injury">0.35%</span></div>
+                    <div><strong>养老保险比例:</strong> 个人 <span id="jz-ins-pension-p">8.00%</span> / 单位 <span id="jz-ins-pension-c">16.00%</span></div>
+                    <div><strong>医疗保险比例:</strong> 个人 <span id="jz-ins-medical-p">2.00%</span> / 单位 <span id="jz-ins-medical-c">10.00%</span></div>
+                    <div><strong>失业保险比例:</strong> 个人 <span id="jz-ins-unemp-p">0.50%</span> / 单位 <span id="jz-ins-unemp-c">0.50%</span></div>
+                    <div><strong>生育保险比例:</strong> 单位 <span id="jz-ins-maternity">0.50%</span></div>
+                    <div><strong>住房公积金比例:</strong> 个人 <span id="jz-ins-hf-p">5.00%</span> / 单位 <span id="jz-ins-hf-c">5.00%</span></div>
                     <div><strong>大额医疗救助:</strong> 1/4/7/10月为 21.00元，其余月份 22.00元</div>
                     <div><strong>个税基本减除费用:</strong> ¥ 5,000.00 / 月</div>
                 </div>
@@ -349,6 +358,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         else if (tab === 'cash_bills') load_cash_data();
         else if (tab === 'tax') load_tax_data();
         else if (tab === 'employees') load_employees_data();
+        else if (tab === 'insurance') load_insurance_data();
         else if (tab === 'history') load_history_data();
     });
 
@@ -368,6 +378,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         else if (current_tab === 'cash_bills') load_cash_data();
         else if (current_tab === 'tax') load_tax_data();
         else if (current_tab === 'employees') load_employees_data();
+        else if (current_tab === 'insurance') load_insurance_data();
         else if (current_tab === 'history') load_history_data();
     }
 
@@ -1128,8 +1139,8 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                         <tr>
                             <td class="jz-col-seq">${idx + 1}</td>
                             <td class="jz-col-no jz-text-center">${pMonth}</td>
-                            <td class="jz-col-no jz-text-center" style="left:121px !important;"><strong>${it.employee_no}</strong></td>
-                            <td class="jz-col-name" style="left:196px !important;"><strong>${it.employee_name}</strong></td>
+                            <td class="jz-col-no jz-text-center jz-hist-col-empno"><strong>${it.employee_no}</strong></td>
+                            <td class="jz-col-name jz-hist-col-empname"><strong>${it.employee_name}</strong></td>
                             <td>${it.salary_mode}</td>
                             <td class="jz-money-cell">${fmtMoney(it.base_salary)}</td>
                             <td class="jz-money-cell">${fmtMoney(it.post_allowance)}</td>
@@ -1146,6 +1157,73 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
             }
         });
     }
+
+    // 6. 加载吉众专属社保公积金配置
+    let jz_insurance_cache = null;
+    function load_insurance_data() {
+        const year = current_month ? current_month.split('-')[0] : '2026';
+        frappe.call({
+            method: 'ashan_cn_procurement.services.jizhong_payroll_service.get_jizhong_insurance_setting',
+            args: { year: year },
+            callback: function(r) {
+                if (!r.message) return;
+                jz_insurance_cache = r.message;
+                const d = r.message;
+                $('#jz-ins-docname-tip').text(`配置对象：${d.name || COMPANY + '-' + year}`);
+                $('#jz-ins-injury').text(flt(d.ss_company_injury, 2) + '%');
+                $('#jz-ins-pension-p').text(flt(d.ss_person_pension, 2) + '%');
+                $('#jz-ins-pension-c').text(flt(d.ss_company_pension, 2) + '%');
+                $('#jz-ins-medical-p').text(flt(d.ss_person_medical, 2) + '%');
+                $('#jz-ins-medical-c').text(flt(d.ss_company_medical, 2) + '%');
+                $('#jz-ins-unemp-p').text(flt(d.ss_person_unemployment, 2) + '%');
+                $('#jz-ins-unemp-c').text(flt(d.ss_company_unemployment, 2) + '%');
+                $('#jz-ins-maternity').text(flt(d.ss_company_other_medical, 2) + '%');
+                $('#jz-ins-hf-p').text(flt(d.hf_person_rate, 2) + '%');
+                $('#jz-ins-hf-c').text(flt(d.hf_company_rate, 2) + '%');
+            }
+        });
+    }
+
+    $('#btn-jz-open-insurance-form').on('click', function() {
+        if (jz_insurance_cache && jz_insurance_cache.name) {
+            frappe.set_route('Form', 'Ashan Insurance Setting', jz_insurance_cache.name);
+        }
+    });
+
+    $('#btn-jz-edit-insurance').on('click', function() {
+        if (!jz_insurance_cache) return;
+        const d = jz_insurance_cache;
+        const dlg = new frappe.ui.Dialog({
+            title: `修改吉众专属社保公积金费率 (${d.effective_year || 2026}年)`,
+            fields: [
+                { fieldname: 'ss_company_injury', fieldtype: 'Percent', label: '单位工伤保险比例 (%)', default: d.ss_company_injury },
+                { fieldname: 'ss_company_pension', fieldtype: 'Percent', label: '单位基本养老比例 (%)', default: d.ss_company_pension },
+                { fieldname: 'ss_person_pension', fieldtype: 'Percent', label: '个人基本养老比例 (%)', default: d.ss_person_pension },
+                { fieldname: 'ss_company_medical', fieldtype: 'Percent', label: '单位基本医疗比例 (%)', default: d.ss_company_medical },
+                { fieldname: 'ss_person_medical', fieldtype: 'Percent', label: '个人基本医疗比例 (%)', default: d.ss_person_medical },
+                { fieldname: 'hf_company_rate', fieldtype: 'Percent', label: '单位公积金比例 (%)', default: d.hf_company_rate },
+                { fieldname: 'hf_person_rate', fieldtype: 'Percent', label: '个人公积金比例 (%)', default: d.hf_person_rate }
+            ],
+            primary_action_label: '保存费率',
+            primary_action: function(vals) {
+                dlg.hide();
+                frappe.call({
+                    method: 'ashan_cn_procurement.services.jizhong_payroll_service.update_jizhong_insurance_setting',
+                    args: {
+                        year: d.effective_year || 2026,
+                        values: JSON.stringify(vals)
+                    },
+                    callback: function(res) {
+                        if (res.message && res.message.success) {
+                            frappe.msgprint('吉众专属社保公积金费率已成功保存并立即生效！');
+                            load_insurance_data();
+                        }
+                    }
+                });
+            }
+        });
+        dlg.show();
+    });
 
     // 默认首帧加载
     load_payroll_data();

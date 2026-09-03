@@ -476,18 +476,6 @@
       "doctype": "Workspace Sidebar Item"
     },
     {
-      "label": "法定日历与节假日",
-      "link_type": "DocType",
-      "type": "Link",
-      "link_to": "Ashan Holiday Calendar",
-      "child": 1,
-      "collapsible": 0,
-      "indent": 0,
-      "keep_closed": 0,
-      "show_arrow": 0,
-      "doctype": "Workspace Sidebar Item"
-    },
-    {
       "label": "吉众人事薪酬与用工",
       "link_type": "DocType",
       "icon": "user-check",
@@ -540,6 +528,30 @@
       "link_type": "DocType",
       "type": "Link",
       "link_to": "Ashan Employee Salary Profile",
+      "child": 1,
+      "collapsible": 0,
+      "indent": 0,
+      "keep_closed": 0,
+      "show_arrow": 0,
+      "doctype": "Workspace Sidebar Item"
+    },
+    {
+      "label": "吉众社保公积金设置",
+      "link_type": "DocType",
+      "type": "Link",
+      "link_to": "Ashan Insurance Setting",
+      "child": 1,
+      "collapsible": 0,
+      "indent": 0,
+      "keep_closed": 0,
+      "show_arrow": 0,
+      "doctype": "Workspace Sidebar Item"
+    },
+    {
+      "label": "法定日历与节假日",
+      "link_type": "DocType",
+      "type": "Link",
+      "link_to": "Ashan Holiday Calendar",
       "child": 1,
       "collapsible": 0,
       "indent": 0,

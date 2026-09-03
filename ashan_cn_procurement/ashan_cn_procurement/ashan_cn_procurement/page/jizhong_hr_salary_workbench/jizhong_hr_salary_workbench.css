@@ -452,4 +452,6 @@
 .jz-config-box { background: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #cbd5e1; max-width: 800px; }
 .jz-config-title { margin-top: 0; font-weight: 700; color: #0f172a; }
 .jz-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+.jz-hist-col-empno { left: 121px !important; }
+.jz-hist-col-empname { left: 196px !important; }
 
