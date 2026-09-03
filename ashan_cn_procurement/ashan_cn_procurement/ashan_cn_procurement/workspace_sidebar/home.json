@@ -503,7 +503,7 @@
       "label": "吉众月度考勤工时",
       "link_type": "DocType",
       "type": "Link",
-      "link_to": "Ashan Monthly Attendance",
+      "link_to": "Jizhong Monthly Attendance",
       "child": 1,
       "collapsible": 0,
       "indent": 0,

@@ -234,12 +234,12 @@ def parse_jizhong_attendance_file(file_path, period_month=None, company="天津�
 			total_compensatory += actual_compensatory
 			total_meals += meals_sum
 
-			# 写入或更新 Ashan Monthly Attendance
+			# 写入或更新 Jizhong Monthly Attendance
 			doc_name = f"{company}-{period_month}-{emp_no}"
-			if frappe.db.exists("Ashan Monthly Attendance", doc_name):
-				att_doc = frappe.get_doc("Ashan Monthly Attendance", doc_name)
+			if frappe.db.exists("Jizhong Monthly Attendance", doc_name):
+				att_doc = frappe.get_doc("Jizhong Monthly Attendance", doc_name)
 			else:
-				att_doc = frappe.new_doc("Ashan Monthly Attendance")
+				att_doc = frappe.new_doc("Jizhong Monthly Attendance")
 				att_doc.company = company
 				att_doc.period_month = period_month
 				att_doc.employee_no = emp_no
@@ -305,7 +305,7 @@ def get_jizhong_attendance_table(company="天津吉众科技有限公司", perio
 	if not period_month:
 		# 默认获取最近一个有考勤的月份，若无取当前月
 		latest = frappe.db.get_value(
-			"Ashan Monthly Attendance",
+			"Jizhong Monthly Attendance",
 			{"company": company},
 			"period_month",
 			order_by="period_month desc"
@@ -313,7 +313,7 @@ def get_jizhong_attendance_table(company="天津吉众科技有限公司", perio
 		period_month = latest or getdate().strftime("%Y-%m")
 
 	records = frappe.get_all(
-		"Ashan Monthly Attendance",
+		"Jizhong Monthly Attendance",
 		filters={"company": company, "period_month": period_month},
 		fields=[
 			"name", "period_month", "company", "employee_no", "employee_name",

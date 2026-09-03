@@ -766,7 +766,7 @@ def setup_doctype_and_page_permissions():
 		{
 			"Ashan Employee Salary Profile", "Ashan Payroll Settlement", "Ashan Payroll Item",
 			"Ashan Monthly Payroll Settlement", "Ashan Monthly Payroll Item", "Ashan Monthly Attendance",
-			"Ashan Housing Fund Monthly Override", "Ashan Insurance Setting",
+			"Jizhong Monthly Attendance", "Ashan Housing Fund Monthly Override", "Ashan Insurance Setting",
 			"Ashan Social Insurance Adjustment", "Ashan Payroll Recalculation Task",
 		},
 		"payroll",

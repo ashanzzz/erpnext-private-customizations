@@ -177,7 +177,7 @@ def calculate_jizhong_monthly_payroll(company="天津吉众科技有限公司", 
 	# 4. 获取当月考勤底册
 	attendances = {}
 	att_records = frappe.get_all(
-		"Ashan Monthly Attendance",
+		"Jizhong Monthly Attendance",
 		filters={"company": company, "period_month": period_month},
 		fields=["*"]
 	)
