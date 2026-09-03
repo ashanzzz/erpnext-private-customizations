@@ -296,9 +296,8 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
                 <div class="jz-toolbar-left">
                     <div class="jz-segmented-control" id="jz-payroll-person-filter">
                         <button class="jz-segment-btn active" data-mode="all">全部人员</button>
-                        <button class="jz-segment-btn" data-mode="regular">正式员工</button>
-                        <button class="jz-segment-btn" data-mode="other">其他员工</button>
-                        <button class="jz-segment-btn" data-mode="temporary">临时工</button>
+                        <button class="jz-segment-btn" data-mode="regular">正式工</button>
+                        <button class="jz-segment-btn" data-mode="other">其他</button>
                     </div>
 
                     <div class="jz-segmented-control" id="jz-payroll-col-toggle">
@@ -578,14 +577,9 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         let filtered = payroll_cache.filter(it => {
             const type = String(it.employee_type || '正式工').trim();
             if (payroll_filter_mode === 'regular') {
-                // 正式员工：正式工、返聘工（不含带“其他”的工种）
-                return (type.includes('正式工') || type.includes('返聘')) && !type.includes('其他');
+                return type === '正式工';
             } else if (payroll_filter_mode === 'other') {
-                // 其他员工：工种带“其他”的 (如 其他-正式工、其他-返聘工、其他-管理 等)
-                return type.includes('其他');
-            } else if (payroll_filter_mode === 'temporary') {
-                // 临时工：临时工、兼职等
-                return type.includes('临时') || type.includes('兼职');
+                return type === '其他' || type.includes('其他');
             }
             return true; // 全部人员
         });

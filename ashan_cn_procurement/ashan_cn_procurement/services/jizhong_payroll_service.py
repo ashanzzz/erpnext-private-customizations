@@ -82,7 +82,7 @@ def derive_jizhong_gross_from_net(
 		cum_taxable = (prev_gross + candidate_gross) - (prev_threshold + tax_threshold) - (prev_special_ded + special_deductions_cur) - (prev_additional_ded + cur_additional_ded)
 		verify_tax = _get_annual_tax(cum_taxable)
 
-		if abs(verify_tax - cum_tax_calc) <= 0.02:
+		if abs(verify_tax - cum_tax_calc) <= 0.05:
 			target_gross = candidate_gross
 			cur_tax = max(0.0, tax_this_month)
 			matched_tax = verify_tax
@@ -126,6 +126,12 @@ def calculate_jizhong_monthly_payroll(company="天津吉众科技有限公司", 
 	5. 现金发放 RoundUp 与五档点钞
 	6. 生成或更新 Ashan Monthly Payroll Settlement
 	"""
+	# 参数防御：容错实参与形参顺序颠倒 (例如 (period_month, company) 或仅传 period_month)
+	if company and ("-" in str(company) or (len(str(company)) == 7 and str(company)[:4].isdigit())) and ("公司" in str(period_month or "")):
+		company, period_month = period_month, company
+	elif not period_month and company and ("-" in str(company) or len(str(company)) == 7):
+		period_month, company = company, "天津吉众科技有限公司"
+
 	if not period_month:
 		frappe.throw("必须指定核算月份，如 '2026-06' 或 '2026-07'")
 
@@ -156,9 +162,8 @@ def calculate_jizhong_monthly_payroll(company="天津吉众科技有限公司", 
 	hf_company_rate = flt(ins_setting.get("hf_company_rate") or 5.0)
 	tax_threshold = 5000.0
 
-	cur_month_num = cint(period_month.split("-")[1])
-	# 大额医疗特殊月 (1, 4, 7, 10月为21元，其余22元)
-	big_med = 21.0 if cur_month_num in (1, 4, 7, 10) else 22.0
+	# 吉众大额医疗保险个人固定 21.00 元 (与吉众社保台账 1:1 精确对齐)
+	big_med = 21.0
 
 	# 3. 获取全员薪酬档案 (优先使用专属 Jizhong Employee Salary Profile)
 	profile_doctype = "Jizhong Employee Salary Profile" if frappe.db.table_exists("Jizhong Employee Salary Profile") and frappe.db.count("Jizhong Employee Salary Profile", {"company": company}) > 0 else "Ashan Employee Salary Profile"
@@ -167,7 +172,7 @@ def calculate_jizhong_monthly_payroll(company="天津吉众科技有限公司", 
 		filters={"company": company},
 		fields=[
 			"name", "employee_no", "employee_name", "employee_type", "employment_status",
-			"salary_mode", "fixed_salary", "base_salary", "post_allowance", "performance_base",
+			"salary_mode", "fixed_salary", "base_salary", "house_rent_allowance", "post_allowance", "performance_base",
 			"meal_allowance", "social_security_base", "housing_fund_base", "id_card", "mobile", "department", "job_title",
 			"deduction_child_education", "deduction_continuing_education", "deduction_housing_loan",
 			"deduction_housing_rent", "deduction_elderly_care", "deduction_infant_care", "deduction_serious_illness"
@@ -234,6 +239,7 @@ def calculate_jizhong_monthly_payroll(company="天津吉众科技有限公司", 
 
 		# 薪资标准项
 		base_sal = flt(emp.base_salary)
+		base_sub = flt(emp.house_rent_allowance)
 		post_allow = flt(emp.post_allowance)
 		perf_base = flt(emp.performance_base)
 		fixed_sal = flt(emp.fixed_salary)
@@ -316,13 +322,13 @@ def calculate_jizhong_monthly_payroll(company="天津吉众科技有限公司", 
 			sal_ot_2_0 = round(fix_hourly * ot_2_0 * 2.0, 2)
 			sal_ot_3_0 = round(fix_hourly * ot_3_0 * 3.0, 2)
 
-			sal_basic_sub = round(post_allow - (post_allow / dynamic_work_hours * absence_hrs), 2) if post_allow else 0.0
+			sal_basic_sub = round(base_sub - (base_sub / dynamic_work_hours * absence_hrs), 2) if base_sub else 0.0
 			sal_perf = round(perf_base - (perf_base / FIXED_MONTHLY_HOURS * absence_hrs), 2) if perf_base else 0.0
-			sal_post = 0.0
+			sal_post = round(post_allow - (post_allow / dynamic_work_hours * absence_hrs), 2) if post_allow else 0.0
 			sal_meal = round(meal_unit_price * meal_cnt, 2)
 			sal_adj = 0.0
 
-			gross_sal = round(sal_basic_hrs + sal_ot_1_5 + sal_ot_2_0 + sal_ot_3_0 + sal_basic_sub + sal_perf + sal_meal + sal_adj, 2)
+			gross_sal = round(sal_basic_hrs + sal_ot_1_5 + sal_ot_2_0 + sal_ot_3_0 + sal_basic_sub + sal_perf + sal_post + sal_meal + sal_adj, 2)
 
 			# 累计预扣个税计算
 			cum_taxable = round(

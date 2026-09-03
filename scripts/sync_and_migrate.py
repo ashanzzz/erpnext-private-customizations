@@ -87,20 +87,23 @@ def clear_confirmed_orphan_migrate_lock(client):
 
 
 def ensure_socketio_origin_header(client):
-    """Keep Socket.IO Origin aligned with the request Host after container restarts."""
+    """Keep Socket.IO's forwarded origin and host aligned with the browser URL."""
     remote_script = """set -eu
 config=/etc/nginx/conf.d/frappe.conf
 backup=/etc/nginx/conf.d/frappe.conf.bak-20260828-socket-origin
-if grep -Fq 'proxy_set_header Origin $proxy_x_forwarded_proto://$host;' "$config"; then
+origin_header='proxy_set_header Origin $scheme://$http_host;'
+host_header='proxy_set_header Host $http_host;'
+if grep -Fq "$origin_header" "$config" && grep -Fq "$host_header" "$config"; then
     nginx -t
     exit 0
 fi
-if ! grep -Fq 'proxy_set_header Origin $proxy_x_forwarded_proto://site1.local;' "$config"; then
-    echo "Expected Socket.IO Origin header was not found."
+if ! grep -Fq 'location /socket.io' "$config"; then
+    echo "Socket.IO proxy block was not found."
     exit 1
 fi
 cp "$config" "$backup"
-sed -i 's#proxy_set_header Origin $proxy_x_forwarded_proto://site1.local;#proxy_set_header Origin $proxy_x_forwarded_proto://$host;#' "$config"
+sed -i -E 's#^[[:space:]]*proxy_set_header Origin .*;#        proxy_set_header Origin $scheme://$http_host;#' "$config"
+sed -i -E 's#^[[:space:]]*proxy_set_header Host .*;#        proxy_set_header Host $http_host;#' "$config"
 if nginx -t; then
     for i in 1 2 3 4 5; do
         if [ -s /run/nginx.pid ] && kill -0 "$(cat /run/nginx.pid 2>/dev/null)" 2>/dev/null; then
