@@ -476,6 +476,147 @@ def unlock_jizhong_monthly_payroll(company="天津吉众科技有限公司", per
 	return {"success": True, "message": f"【{company}】{period_month} 薪酬已成功解锁，可重新测算！"}
 
 
+@frappe.whitelist()
+def get_jizhong_workflow_status(company="天津吉众科技有限公司", period_month=None):
+	"""
+	获取吉众月度 5 步全流程任务中枢与核验状态 (与祺富工作台任务哲学完全一致)
+	1. 员工薪资信息表 (权威底册核实)
+	2. 考勤工时与打卡底册 (工时、加班、倒休抵扣核实)
+	3. 社保公积金配置 (年度费率生效核实)
+	4. 个人所得税台账 (累计预扣与专项附加核实)
+	5. 月度工资核定表 (全员薪资测算与封账锁定)
+	"""
+	if not period_month:
+		period_month = today()[:7]
+
+	year = cint(period_month.split("-")[0])
+	month = cint(period_month.split("-")[1])
+	period_label = f"{year}年{month:02d}月"
+
+	# 1. 员工薪资信息表
+	profile_dt = "Jizhong Employee Salary Profile" if frappe.db.table_exists("Jizhong Employee Salary Profile") and frappe.db.count("Jizhong Employee Salary Profile", {"company": company}) > 0 else "Ashan Employee Salary Profile"
+	total_emps = frappe.db.count(profile_dt, {"company": company})
+	regular_emps = frappe.db.count(profile_dt, {"company": company, "employee_type": "正式工"})
+	other_emps = frappe.db.count(profile_dt, {"company": company, "employee_type": "其他"})
+	step1_done = total_emps > 0
+	step1 = {
+		"step": 1,
+		"title": "员工薪资信息表",
+		"tag": "权威底册",
+		"status": "done" if step1_done else "pending",
+		"badge": "已就绪" if step1_done else "待完善",
+		"main": f"{total_emps} 人在册 · 档案完整" if step1_done else "暂无员工档案",
+		"sub": f"正式工 {regular_emps}人 ｜ 其他 {other_emps}人",
+		"tab": "employees"
+	}
+
+	# 2. 考勤工时与打卡底册
+	att_records = frappe.db.sql("""
+		SELECT COUNT(*) as cnt,
+		       SUM(work_hours_regular) as reg_hrs,
+		       SUM(overtime_regular_1_5 + overtime_weekend_2_0 + overtime_holiday_3_0) as ot_hrs,
+		       MAX(attendance_file) as att_file
+		FROM `tabJizhong Monthly Attendance`
+		WHERE company = %s AND period_month = %s
+	""", (company, period_month), as_dict=True)[0]
+	att_cnt = cint(att_records.get("cnt") or 0)
+	reg_hrs = flt(att_records.get("reg_hrs") or 0)
+	ot_hrs = flt(att_records.get("ot_hrs") or 0)
+	step2_done = att_cnt > 0
+	step2 = {
+		"step": 2,
+		"title": "考勤工时与打卡底册",
+		"tag": "打卡底册",
+		"status": "done" if step2_done else "pending",
+		"badge": "已就绪" if step2_done else "待导入",
+		"main": f"{att_cnt} 人打卡 · {round(reg_hrs + ot_hrs, 1)}h" if step2_done else "当月打卡记录尚未导入",
+		"sub": f"正班 {round(reg_hrs, 1)}h ｜ 加班 {round(ot_hrs, 1)}h" if step2_done else "请上传考勤 Excel 或打卡底册",
+		"tab": "attendance"
+	}
+
+	# 3. 社保公积金配置
+	ins_setting = frappe.db.get_value(
+		"Ashan Insurance Setting",
+		{"company": ["like", "%吉众%"], "effective_year": year},
+		["name", "ss_company_injury", "ss_person_pension", "ss_person_medical", "hf_person_rate"],
+		as_dict=True
+	)
+	step3_done = bool(ins_setting)
+	step3 = {
+		"step": 3,
+		"title": "社保公积金配置",
+		"tag": "费率基数",
+		"status": "done" if step3_done else "pending",
+		"badge": "已生效" if step3_done else "待配置",
+		"main": f"{year} 年度费率生效" if step3_done else f"未找到 {year} 年费率配置",
+		"sub": "个人社保 10.5%+21元 ｜ 公积金 5%" if step3_done else "请在配置页设定社保公积金费率",
+		"tab": "insurance"
+	}
+
+	# 4. 个人所得税台账
+	step4_done = total_emps > 0
+	step4 = {
+		"step": 4,
+		"title": "个人所得税台账",
+		"tag": "累计预扣",
+		"status": "done" if step4_done else "pending",
+		"badge": "已就绪" if step4_done else "待同步",
+		"main": "周期累计正常 · 覆盖全员" if step4_done else "个税历史待同步",
+		"sub": "7级累计预扣算法 ｜ 专项附加扣除平账",
+		"tab": "tax"
+	}
+
+	# 5. 月度工资核定表
+	settle_name = f"{company}-{period_month}"
+	settlement = frappe.db.get_value(
+		"Ashan Monthly Payroll Settlement",
+		{"name": settle_name},
+		["name", "total_employees", "total_gross_salary", "total_net_salary", "locked", "status"],
+		as_dict=True
+	)
+	is_locked = bool(settlement and settlement.get("locked"))
+	has_calc = bool(settlement and cint(settlement.get("total_employees") or 0) > 0)
+	if is_locked:
+		step5_badge = "已封账"
+		step5_main = f"已核定封账 · {settlement.get('total_employees')}人"
+		step5_sub = f"实发 ¥{flt(settlement.get('total_net_salary')):,.2f} ｜ 只读受控"
+		overall_status_text = "已核定锁定 (只读封账)"
+		overall_status_class = "jz-status-locked"
+	elif has_calc:
+		step5_badge = "已测算"
+		step5_main = "已完成测算 · 待封账"
+		step5_sub = f"应发 ¥{flt(settlement.get('total_gross_salary')):,.2f} ｜ 实发 ¥{flt(settlement.get('total_net_salary')):,.2f}"
+		overall_status_text = "草稿状态 (已测算 / 待封账)"
+		overall_status_class = "jz-status-draft"
+	else:
+		step5_badge = "待测算"
+		step5_main = "尚未测算薪酬"
+		step5_sub = "前置任务就绪后一键重新计算"
+		overall_status_text = "草稿状态 (待测算)"
+		overall_status_class = "jz-status-draft"
+
+	step5 = {
+		"step": 5,
+		"title": "月度工资核定表",
+		"tag": "薪酬终审",
+		"status": "locked" if is_locked else ("done" if has_calc else "pending"),
+		"badge": step5_badge,
+		"main": step5_main,
+		"sub": step5_sub,
+		"tab": "payroll"
+	}
+
+	return {
+		"success": True,
+		"period_month": period_month,
+		"period_label": period_label,
+		"overall_status_text": overall_status_text,
+		"overall_status_class": overall_status_class,
+		"is_locked": is_locked,
+		"steps": [step1, step2, step3, step4, step5]
+	}
+
+
 def _get_jizhong_tax_history(company, current_period, tax_cycle_start_month=12):
 	"""
 	从以往已归档/核定的结算单或历史数据中，提取该税收周期内的累计发生数

@@ -47,6 +47,168 @@
     align-items: center;
 }
 
+/* 月度全流程任务中枢 (Workflow Hub) */
+.jz-workflow-hub {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+.jz-workflow-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 10px;
+}
+.jz-workflow-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.jz-workflow-title {
+    font-size: 13.5px;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.2px;
+}
+.jz-workflow-period-badge {
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-weight: 700;
+    font-size: 11.5px;
+    padding: 2px 10px;
+    border-radius: 12px;
+    border: 1px solid #bfdbfe;
+}
+.jz-workflow-status-badge {
+    font-size: 12px;
+    font-weight: 700;
+}
+.jz-status-locked {
+    color: #059669;
+    background: #dcfce7;
+    border: 1px solid #bbf7d0;
+    padding: 3px 10px;
+    border-radius: 12px;
+}
+.jz-status-draft {
+    color: #d97706;
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    padding: 3px 10px;
+    border-radius: 12px;
+}
+
+/* 5 大核心步骤卡片栅格 */
+.jz-workflow-steps {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+}
+@media (max-width: 1200px) {
+    .jz-workflow-steps {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+}
+.jz-step-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 140px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+    transition: all 0.15s ease;
+}
+.jz-step-card:hover {
+    border-color: #cbd5e1;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+.jz-step-card.active-step {
+    border-color: #ea580c;
+    background: #fffbf7;
+}
+.jz-step-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.jz-step-index {
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+}
+.jz-step-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 6px;
+}
+.jz-badge-done {
+    color: #059669;
+    background: #dcfce7;
+    border: 1px solid #bbf7d0;
+}
+.jz-badge-locked {
+    color: #047857;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+}
+.jz-badge-pending {
+    color: #d97706;
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+}
+.jz-step-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+.jz-step-main {
+    font-size: 12px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-top: 2px;
+}
+.jz-step-sub {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 2px;
+    line-height: 1.35;
+}
+.jz-step-footer {
+    margin-top: 10px;
+}
+.jz-btn-step-goto {
+    width: 100%;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 8px;
+    color: #334155;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.12s;
+}
+.jz-btn-step-goto:hover {
+    background: #ea580c;
+    color: #ffffff;
+    border-color: #ea580c;
+}
+
 /* 业务 Tab 切换 */
 .jz-nav-tabs {
     display: flex;
@@ -77,6 +239,35 @@
     color: #ffffff;
     border-color: #ea580c;
     box-shadow: 0 2px 4px rgba(234, 88, 12, 0.2);
+}
+
+/* Tab 按钮完成状态小药丸 */
+.jz-tab-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: 1px;
+    line-height: 1.2;
+}
+.jz-tab-btn:not(.active) .jz-tab-badge.jz-badge-done {
+    background: #dcfce7;
+    color: #15803d;
+}
+.jz-tab-btn:not(.active) .jz-tab-badge.jz-badge-locked {
+    background: #ecfdf5;
+    color: #047857;
+}
+.jz-tab-btn:not(.active) .jz-tab-badge.jz-badge-pending {
+    background: #fef3c7;
+    color: #b45309;
+}
+.jz-tab-btn.active .jz-tab-badge {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
 /* KPI 指标卡片 */

@@ -35,13 +35,32 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
             </div>
         </div>
 
+        <!-- 月度人事薪酬核定全流程任务中枢 (与祺富工作台任务哲学完全一致) -->
+        <div class="jz-workflow-hub">
+            <div class="jz-workflow-header">
+                <div class="jz-workflow-title-group">
+                    <span class="jz-workflow-title">月度人事薪酬核定全流程任务中枢</span>
+                    <span class="jz-workflow-period-badge">
+                        核定账期: <span id="jz-workflow-period-text">2026年06月</span>
+                    </span>
+                </div>
+                <div class="jz-workflow-status-badge" id="jz-workflow-status-container">
+                    <span class="jz-status-locked" id="jz-workflow-overall-status">已核定锁定 (只读封账)</span>
+                </div>
+            </div>
+            <!-- 5 大核心步骤卡片 -->
+            <div class="jz-workflow-steps" id="jz-workflow-steps-container">
+                <!-- 动态由 load_workflow_status() 渲染 -->
+            </div>
+        </div>
+
         <!-- 7大业务 Tab 切换 (档案前置 -> 考勤打卡 -> 税费基数 -> 综合核算 -> 现金配钞 -> 历史归档) -->
         <div class="jz-nav-tabs">
-            <button class="jz-tab-btn active" data-tab="employees">1. 员工薪资信息表</button>
-            <button class="jz-tab-btn" data-tab="attendance">2. 考勤工时与打卡底册</button>
-            <button class="jz-tab-btn" data-tab="insurance">3. 社保公积金配置</button>
-            <button class="jz-tab-btn" data-tab="tax">4. 个人所得税台账</button>
-            <button class="jz-tab-btn" data-tab="payroll">5. 月度工资核定表</button>
+            <button class="jz-tab-btn active" data-tab="employees">1. 员工薪资信息表<span class="jz-tab-badge jz-badge-done" id="jz-tab-badge-1">已就绪</span></button>
+            <button class="jz-tab-btn" data-tab="attendance">2. 考勤工时与打卡底册<span class="jz-tab-badge jz-badge-done" id="jz-tab-badge-2">已就绪</span></button>
+            <button class="jz-tab-btn" data-tab="insurance">3. 社保公积金配置<span class="jz-tab-badge jz-badge-done" id="jz-tab-badge-3">已生效</span></button>
+            <button class="jz-tab-btn" data-tab="tax">4. 个人所得税台账<span class="jz-tab-badge jz-badge-done" id="jz-tab-badge-4">已就绪</span></button>
+            <button class="jz-tab-btn" data-tab="payroll">5. 月度工资核定表<span class="jz-tab-badge jz-badge-locked" id="jz-tab-badge-5">已封账</span></button>
             <button class="jz-tab-btn" data-tab="cash_bills">6. 现金发放与配钞点钞</button>
             <button class="jz-tab-btn" data-tab="history">7. 历史薪资穿透 (421条)</button>
         </div>
@@ -427,6 +446,8 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         $(this).addClass('active');
         $('.jz-tab-content').addClass('jz-hidden');
         $(`#jz-tab-${tab}`).removeClass('jz-hidden');
+        $('.jz-step-card').removeClass('active-step');
+        $(`.jz-step-card[data-tab="${tab}"]`).addClass('active-step');
         current_tab = tab;
 
         if (tab === 'payroll') load_payroll_data();
@@ -449,6 +470,7 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
     });
 
     function refresh_current_view() {
+        load_workflow_status();
         if (current_tab === 'payroll') load_payroll_data();
         else if (current_tab === 'attendance') load_attendance_data();
         else if (current_tab === 'cash_bills') load_cash_data();
@@ -456,6 +478,67 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         else if (current_tab === 'employees') load_employees_data();
         else if (current_tab === 'insurance') load_insurance_data();
         else if (current_tab === 'history') load_history_data();
+    }
+
+    // 0. 加载月度 5 步全流程任务中枢与核验状态 (与祺富工作台任务哲学完全一致)
+    function load_workflow_status() {
+        frappe.call({
+            method: 'ashan_cn_procurement.services.jizhong_payroll_service.get_jizhong_workflow_status',
+            args: { company: COMPANY, period_month: current_month },
+            callback: function(r) {
+                if (!r.message || !r.message.success) return;
+                const d = r.message;
+                $('#jz-workflow-period-text').text(d.period_label || current_month);
+                $('#jz-workflow-status-container').html(`<span class="${d.overall_status_class}" id="jz-workflow-overall-status">${d.overall_status_text}</span>`);
+
+                const container = $('#jz-workflow-steps-container');
+                container.empty();
+
+                (d.steps || []).forEach(st => {
+                    let badgeClass = 'jz-badge-pending';
+                    if (st.status === 'done') badgeClass = 'jz-badge-done';
+                    else if (st.status === 'locked') badgeClass = 'jz-badge-locked';
+
+                    // 更新 Tab 按钮对应的小徽标
+                    const tabBadge = $(`#jz-tab-badge-${st.step}`);
+                    if (tabBadge.length) {
+                        tabBadge.removeClass('jz-badge-done jz-badge-locked jz-badge-pending')
+                                .addClass(badgeClass)
+                                .text(st.badge);
+                    }
+
+                    container.append(`
+                        <div class="jz-step-card" id="jz-step-card-${st.step}" data-tab="${st.tab}">
+                            <div>
+                                <div class="jz-step-card-header">
+                                    <span class="jz-step-index">第 ${st.step} 步 · ${st.tag}</span>
+                                    <span class="jz-step-badge ${badgeClass}">${st.badge}</span>
+                                </div>
+                                <div class="jz-step-title">
+                                    <span>${st.title}</span>
+                                </div>
+                                <div class="jz-step-main">${st.main}</div>
+                                <div class="jz-step-sub">${st.sub}</div>
+                            </div>
+                            <div class="jz-step-footer">
+                                <button class="jz-btn-step-goto" data-tab="${st.tab}">进入查看</button>
+                            </div>
+                        </div>
+                    `);
+                });
+
+                // 绑定步骤卡片点击快捷切换对应 Tab
+                container.find('.jz-btn-step-goto').on('click', function(e) {
+                    e.stopPropagation();
+                    const targetTab = $(this).data('tab');
+                    $(`.jz-tab-btn[data-tab="${targetTab}"]`).click();
+                });
+                container.find('.jz-step-card').on('click', function() {
+                    const targetTab = $(this).data('tab');
+                    $(`.jz-tab-btn[data-tab="${targetTab}"]`).click();
+                });
+            }
+        });
     }
 
     // 1. 加载月度薪酬核定表
@@ -2005,5 +2088,6 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
 
     // 默认首帧激活 Tab 1: 员工薪资信息表
     current_tab = 'employees';
+    load_workflow_status();
     load_employees_data();
 };
