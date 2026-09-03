@@ -382,7 +382,7 @@ def save_holiday_configs_and_rebuild_calendar(year, configs_json):
 	frappe.db.commit()
 	return {
 		"success": True,
-		"message": f"🎉 成功保存【{y}年度】法定节假日与调休安排，并已全自动构建 365 天日历底册与加班倍率表！",
+		"message": f"成功保存【{y}年度】法定节假日与调休安排，并已全自动构建 365 天日历底册与加班倍率表！",
 		"year": y,
 		"total_days": total_days
 	}

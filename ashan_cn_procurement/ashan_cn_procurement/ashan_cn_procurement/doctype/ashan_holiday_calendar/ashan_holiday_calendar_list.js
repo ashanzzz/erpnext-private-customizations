@@ -1,8 +1,9 @@
 // Copyright (c) 2026, Ashan CN Procurement
 // 法定日历与节假日综合中枢 (Ashan Holiday Calendar Workbench)
 // 依据国务院最新《全国年节及纪念日放假办法》与《劳动法》：
-// 🔴 法定 3 倍工资日：法律强制支付 300% 加班工资，绝对不可倒休/补休替代！
-// 🔵 普通公休日/调休放假：支付 200% 加班工资，企业可优先安排倒休/补休。
+// 法定 3 倍工资日：法律强制支付 300% 加班工资，绝对不可倒休/补休替代！
+// 普通公休日/调休放假：支付 200% 加班工资，企业可优先安排倒休/补休。
+// 铁律：严格遵守 Zero-Emoji 标准，保持严肃企业级财税与用工界面规范。
 
 frappe.listview_settings['Ashan Holiday Calendar'] = {
     hide_name_column: true,
@@ -22,71 +23,418 @@ function render_holiday_workbench(listview) {
     let $page = listview.page.main;
     $page.find('.holiday-workbench-wrapper').remove();
 
+    // 注入页面专属企业级样式表（避免内联样式杂乱）
+    if (!$('#ashan-holiday-calendar-styles').length) {
+        $('head').append(`
+            <style id="ashan-holiday-calendar-styles">
+                .holiday-workbench-wrapper {
+                    background: #f8fafc;
+                    border-bottom: 1px solid #e2e8f0;
+                    padding: 16px 20px;
+                    margin: -15px -15px 15px -15px;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                }
+                .holiday-header-bar {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 12px;
+                    margin-bottom: 16px;
+                }
+                .holiday-header-title {
+                    font-size: 16px;
+                    font-weight: 800;
+                    color: #0f172a;
+                    letter-spacing: -0.02em;
+                }
+                .holiday-header-badge {
+                    font-size: 10.5px;
+                    font-weight: 700;
+                    color: #b91c1c;
+                    background: #fee2e2;
+                    border: 1px solid #fca5a5;
+                    padding: 2px 8px;
+                    border-radius: 6px;
+                }
+                .holiday-header-sub {
+                    font-size: 11.5px;
+                    color: #64748b;
+                    margin-top: 2px;
+                }
+                .holiday-nav-tabs {
+                    display: flex;
+                    gap: 8px;
+                    border-bottom: 1px solid #e2e8f0;
+                    margin-bottom: 16px;
+                }
+                .holiday-nav-btn {
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: #475569;
+                    background: transparent;
+                    border: none;
+                    border-bottom: 3px solid transparent;
+                    padding: 8px 18px;
+                    cursor: pointer;
+                    border-radius: 4px 4px 0 0;
+                    transition: all 0.15s ease;
+                }
+                .holiday-nav-btn.active {
+                    color: #1d4ed8;
+                    background: #eff6ff;
+                    border-bottom: 3px solid #2563eb;
+                    font-weight: 700;
+                }
+                .holiday-kpi-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 12px;
+                    margin-bottom: 16px;
+                }
+                .holiday-kpi-card {
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                    padding: 12px 16px;
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+                }
+                .holiday-kpi-card.kpi-blue { border-left: 4px solid #3b82f6; }
+                .holiday-kpi-card.kpi-green { border-left: 4px solid #10b981; }
+                .holiday-kpi-card.kpi-red { border-left: 4px solid #ef4444; }
+                .holiday-kpi-card.kpi-purple { border-left: 4px solid #8b5cf6; }
+                .holiday-kpi-label {
+                    font-size: 11.5px;
+                    font-weight: 600;
+                    color: #64748b;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                .holiday-kpi-val {
+                    font-size: 22px;
+                    font-weight: 800;
+                    color: #0f172a;
+                    margin-top: 2px;
+                }
+                .holiday-kpi-unit {
+                    font-size: 12px;
+                    font-weight: 500;
+                    color: #64748b;
+                }
+                .holiday-kpi-sub {
+                    font-size: 11px;
+                    color: #94a3b8;
+                    margin-top: 2px;
+                }
+                .holiday-toolbar {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                    margin-bottom: 12px;
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 6px;
+                    padding: 8px 14px;
+                }
+                .holiday-legend-item {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                    font-size: 11.5px;
+                    color: #475569;
+                }
+                .holiday-dot {
+                    width: 10px;
+                    height: 10px;
+                    border-radius: 2px;
+                    display: inline-block;
+                }
+                .holiday-dot.dot-legal { background: #fee2e2; border: 1px solid #fca5a5; }
+                .holiday-dot.dot-shift-off { background: #eff6ff; border: 1px solid #bfdbfe; }
+                .holiday-dot.dot-shift-work { background: #ffedd5; border: 1px solid #fdba74; }
+                .holiday-dot.dot-normal { background: #ffffff; border: 1px solid #cbd5e1; }
+                .holiday-config-panel {
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                    padding: 18px 20px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+                }
+                .holiday-guide-banner {
+                    background: #f8fafc;
+                    border: 1px solid #e2e8f0;
+                    border-left: 4px solid #2563eb;
+                    border-radius: 6px;
+                    padding: 12px 16px;
+                    margin-bottom: 16px;
+                }
+                .holiday-guide-title {
+                    font-size: 13.5px;
+                    font-weight: 700;
+                    color: #0f172a;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                .holiday-guide-tag {
+                    font-size: 10.5px;
+                    font-weight: 700;
+                    color: #059669;
+                    background: #dcfce7;
+                    border: 1px solid #86efac;
+                    padding: 1px 6px;
+                    border-radius: 4px;
+                }
+                .holiday-guide-text {
+                    font-size: 12px;
+                    color: #475569;
+                    margin-top: 5px;
+                    line-height: 1.6;
+                }
+                .holiday-config-card {
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                    padding: 14px 16px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+                    transition: all 0.15s ease;
+                }
+                .holiday-config-card:hover {
+                    border-color: #cbd5e1;
+                    box-shadow: 0 3px 6px rgba(0,0,0,0.04);
+                }
+                .holiday-card-row-top {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 12px;
+                    border-bottom: 1px solid #f1f5f9;
+                    padding-bottom: 10px;
+                }
+                .holiday-card-seq {
+                    font-size: 12px;
+                    font-weight: 800;
+                    color: #1d4ed8;
+                    background: #eff6ff;
+                    width: 26px;
+                    height: 26px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 50%;
+                }
+                .holiday-quick-picker {
+                    display: inline-flex;
+                    background: #f1f5f9;
+                    border-radius: 5px;
+                    padding: 2px;
+                    gap: 2px;
+                }
+                .holiday-quick-picker .btn-quick-hname {
+                    font-size: 11px;
+                    font-weight: 600;
+                    padding: 2px 7px;
+                    border: none;
+                    background: transparent;
+                    color: #475569;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    transition: all 0.1s ease;
+                }
+                .holiday-quick-picker .btn-quick-hname:hover {
+                    background: #ffffff;
+                    color: #1d4ed8;
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                }
+                .holiday-summary-badge {
+                    font-size: 11.5px;
+                    font-weight: 600;
+                    padding: 4px 10px;
+                    border-radius: 6px;
+                    background: #f8fafc;
+                    border: 1px solid #cbd5e1;
+                    color: #334155;
+                }
+                .holiday-card-row-mid {
+                    margin-top: 10px;
+                    padding: 10px 12px;
+                    background: #f8fafc;
+                    border-radius: 6px;
+                    border: 1px solid #f1f5f9;
+                }
+                .holiday-chips-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 8px;
+                }
+                .holiday-chips-label {
+                    font-size: 11.5px;
+                    font-weight: 700;
+                    color: #475569;
+                }
+                .holiday-day-chip {
+                    cursor: pointer;
+                    user-select: none;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 4px 10px;
+                    border-radius: 6px;
+                    font-size: 11.5px;
+                    font-weight: 600;
+                    transition: all 0.15s ease;
+                }
+                .holiday-day-chip.is-3x {
+                    background: #fef2f2;
+                    border: 1.5px solid #f87171;
+                    color: #991b1b;
+                }
+                .holiday-day-chip.is-3x:hover {
+                    background: #fee2e2;
+                    transform: translateY(-1px);
+                }
+                .holiday-day-chip.is-2x {
+                    background: #eff6ff;
+                    border: 1.5px solid #93c5fd;
+                    color: #1e40af;
+                }
+                .holiday-day-chip.is-2x:hover {
+                    background: #dbeafe;
+                    transform: translateY(-1px);
+                }
+                .chip-dot {
+                    width: 6px;
+                    height: 6px;
+                    border-radius: 50%;
+                    display: inline-block;
+                }
+                .is-3x .chip-dot { background: #dc2626; }
+                .is-2x .chip-dot { background: #2563eb; }
+                .chip-tag {
+                    font-size: 10px;
+                    padding: 1px 5px;
+                    border-radius: 4px;
+                    font-weight: 700;
+                }
+                .is-3x .chip-tag { background: #fee2e2; color: #b91c1c; }
+                .is-2x .chip-tag { background: #dbeafe; color: #1d4ed8; }
+                .holiday-card-row-bottom {
+                    margin-top: 10px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                }
+                .holiday-shift-label {
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: #c2410c;
+                    background: #fff7ed;
+                    border: 1px solid #fed7aa;
+                    padding: 2px 7px;
+                    border-radius: 4px;
+                }
+                .holiday-shift-pill {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    padding: 2px 8px;
+                    background: #fff7ed;
+                    border: 1px solid #fed7aa;
+                    color: #9a3412;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                .holiday-shift-pill .btn-remove-shift-pill {
+                    cursor: pointer;
+                    color: #ea580c;
+                    font-weight: 700;
+                    margin-left: 2px;
+                }
+                .holiday-shift-pill .btn-remove-shift-pill:hover {
+                    color: #c2410c;
+                }
+                .holiday-save-footer {
+                    margin-top: 20px;
+                    padding-top: 14px;
+                    border-top: 1px solid #e2e8f0;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+            </style>
+        `);
+    }
+
     let $wb = $(`
-        <div class="holiday-workbench-wrapper" style="background:#f8fafc; border-bottom:1px solid #e2e8f0; padding:16px 20px; margin:-15px -15px 15px -15px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        <div class="holiday-workbench-wrapper">
             
-            <!-- 1. 顶部 Header 36px 统一高度控制栏 -->
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <div style="font-size:22px;">📅</div>
-                    <div>
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <span style="font-size:16px; font-weight:800; color:#0f172a; letter-spacing:-0.02em;">法定日历与节假日综合中枢</span>
-                            <span style="font-size:10px; font-weight:700; color:#b91c1c; background:#fee2e2; border:1px solid #fca5a5; padding:1px 8px; border-radius:10px;">国务院最新放假办法 · 3倍/2倍加班与倒休合规</span>
-                        </div>
-                        <div style="font-size:11px; color:#64748b; margin-top:2px;">法定3倍工资日强制不可倒休 · 调休/公休2倍工资可倒休 · 年/月/列表三视图全景联动</div>
+            <!-- 1. 顶部 Header 统一控制栏 -->
+            <div class="holiday-header-bar">
+                <div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="holiday-header-title">法定日历与节假日综合中枢</span>
+                        <span class="holiday-header-badge">国务院放假办法 · 3倍/2倍加班与倒休合规</span>
                     </div>
+                    <div class="holiday-header-sub">法定3倍工资日强制不可倒休 · 调休/公休2倍工资可倒休 · 年/月/列表三视图全景联动</div>
                 </div>
 
                 <div style="display:flex; align-items:center; gap:8px;">
                     <!-- 年份切换器 -->
                     <div class="btn-group btn-group-sm" role="group" style="height:34px;">
-                        <button type="button" class="btn btn-default" id="btn-prev-year" style="font-weight:600; padding:4px 10px; font-size:12px;">◀ 上一年</button>
+                        <button type="button" class="btn btn-default" id="btn-prev-year" style="font-weight:600; padding:4px 10px; font-size:12px;">上一年</button>
                         <button type="button" class="btn btn-default" id="btn-curr-year-display" style="font-weight:800; color:#1d4ed8; background:#eff6ff; font-size:13px; min-width:85px;">${current_year} 年</button>
-                        <button type="button" class="btn btn-default" id="btn-next-year" style="font-weight:600; padding:4px 10px; font-size:12px;">下一年 ▶</button>
+                        <button type="button" class="btn btn-default" id="btn-next-year" style="font-weight:600; padding:4px 10px; font-size:12px;">下一年</button>
                     </div>
 
                     <button class="btn btn-default btn-sm" id="btn-load-template" style="height:34px; font-size:12px; font-weight:600; background:#f0fdf4; color:#15803d; border-color:#bbf7d0;">
-                        ⚡ 载入国务院官方模板 (13天法定)
+                        载入国务院官方模板 (13天法定)
                     </button>
                     <button class="btn btn-default btn-sm" id="btn-refresh-calendar" style="height:34px; font-size:12px; font-weight:600;">
-                        🔄 刷新日历
+                        刷新日历
                     </button>
                 </div>
             </div>
 
             <!-- 2. 防抖零位移 Tab 导航栏 -->
-            <div class="qifu-tabs-nav" style="display:flex; gap:8px; border-bottom:1px solid #e2e8f0; margin-bottom:16px;">
-                <button class="qifu-tab-btn active" data-tab="calendar" style="font-size:12.5px; font-weight:600; color:#1d4ed8; background:#eff6ff; border:none; border-bottom:3px solid #2563eb; padding:8px 16px; cursor:pointer; border-radius:4px 4px 0 0; transition:all 0.15s ease;">
-                    🗓️ 1. 全年智能日历中枢 (年视图 / 月视图 / 列表版)
+            <div class="holiday-nav-tabs">
+                <button class="holiday-nav-btn active" data-tab="calendar">
+                    1. 全年智能日历中枢 (年视图 / 月视图 / 列表版)
                 </button>
-                <button class="qifu-tab-btn" data-tab="settings" style="font-size:12.5px; font-weight:600; color:#475569; background:transparent; border:none; border-bottom:3px solid transparent; padding:8px 16px; cursor:pointer; border-radius:4px 4px 0 0; transition:all 0.15s ease;">
-                    ✨ 2. 本年法定节假日与调休补班排程 (可视化丝滑配置)
+                <button class="holiday-nav-btn" data-tab="settings">
+                    2. 本年法定节假日与调休补班排程 (可视化配置)
                 </button>
             </div>
 
             <!-- 3. Tab 1 内容：日历与列表视图 -->
             <div id="tab-content-calendar" class="holiday-tab-pane">
                 <!-- 4 大核心 KPI 统计卡片 -->
-                <div id="holiday-kpi-container" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; margin-bottom:16px;"></div>
+                <div id="holiday-kpi-container" class="holiday-kpi-grid"></div>
 
                 <!-- 视图切换与控制工具栏 -->
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px; background:#ffffff; border:1px solid #e2e8f0; border-radius:6px; padding:8px 14px;">
+                <div class="holiday-toolbar">
                     <div style="display:flex; align-items:center; gap:10px;">
                         <span style="font-size:12px; font-weight:700; color:#334155;">日历视图模式：</span>
                         <div class="btn-group btn-group-xs" role="group">
-                            <button type="button" class="btn btn-default btn-view-mode active" data-mode="year" style="font-weight:700; font-size:11.5px; background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe;">📑 全年 12 个月矩阵</button>
-                            <button type="button" class="btn btn-default btn-view-mode" data-mode="month" style="font-weight:600; font-size:11.5px;">🔍 单月放大聚焦视图</button>
-                            <button type="button" class="btn btn-default btn-view-mode" data-mode="list" style="font-weight:600; font-size:11.5px;">📋 列表明细版 (365天与加班倍率)</button>
+                            <button type="button" class="btn btn-default btn-view-mode active" data-mode="year" style="font-weight:700; font-size:11.5px; background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe;">全年 12 个月矩阵</button>
+                            <button type="button" class="btn btn-default btn-view-mode" data-mode="month" style="font-weight:600; font-size:11.5px;">单月放大聚焦视图</button>
+                            <button type="button" class="btn btn-default btn-view-mode" data-mode="list" style="font-weight:600; font-size:11.5px;">列表明细版 (365天与加班倍率)</button>
                         </div>
                     </div>
 
                     <!-- 法律与图例说明 -->
-                    <div style="display:flex; align-items:center; gap:12px; font-size:11px;">
-                        <span style="display:inline-flex; align-items:center; gap:4px;"><span style="width:12px; height:12px; border-radius:2px; background:#fee2e2; border:1px solid #fca5a5; display:inline-block;"></span> <b style="color:#b91c1c;">🔴 法定节日(3倍工资·不可倒休)</b></span>
-                        <span style="display:inline-flex; align-items:center; gap:4px;"><span style="width:12px; height:12px; border-radius:2px; background:#eff6ff; border:1px solid #bfdbfe; display:inline-block;"></span> <span style="color:#1d4ed8;">🔵 调休/公休(2倍工资·可倒休)</span></span>
-                        <span style="display:inline-flex; align-items:center; gap:4px;"><span style="width:12px; height:12px; border-radius:2px; background:#ffedd5; border:1px solid #fdba74; display:inline-block;"></span> <span style="color:#ea580c;">🟠 调班补班(100%工作日)</span></span>
-                        <span style="display:inline-flex; align-items:center; gap:4px;"><span style="width:12px; height:12px; border-radius:2px; background:#ffffff; border:1px solid #e2e8f0; display:inline-block;"></span> ⚪ 正常工作日</span>
+                    <div style="display:flex; align-items:center; gap:14px;">
+                        <span class="holiday-legend-item"><span class="holiday-dot dot-legal"></span> <b style="color:#b91c1c;">法定节日 (3倍工资·不可倒休)</b></span>
+                        <span class="holiday-legend-item"><span class="holiday-dot dot-shift-off"></span> <span style="color:#1d4ed8;">调休/公休 (2倍工资·可倒休)</span></span>
+                        <span class="holiday-legend-item"><span class="holiday-dot dot-shift-work"></span> <span style="color:#ea580c;">调班补班 (100%工作日)</span></span>
+                        <span class="holiday-legend-item"><span class="holiday-dot dot-normal"></span> 正常工作日</span>
                     </div>
                 </div>
 
@@ -105,24 +453,26 @@ function render_holiday_workbench(listview) {
 
             <!-- Tab 2 内容：可视化丝滑排程配置 -->
             <div id="tab-content-settings" class="holiday-tab-pane" style="display:none;">
-                <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,0.02);">
+                <div class="holiday-config-panel">
                     
                     <!-- 顶部提示与操作栏 -->
-                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; border-bottom:1px solid #f1f5f9; padding-bottom:12px;">
-                        <div>
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                <span style="font-size:14px; font-weight:800; color:#0f172a;">✨ ${current_year} 年度节假日与补班可视化排程器</span>
-                                <span style="font-size:10px; font-weight:700; color:#059669; background:#dcfce7; border:1px solid #86efac; padding:1px 6px; border-radius:4px;">无需手动输入日期串 · 单击胶囊秒切换3倍/2倍</span>
+                    <div class="holiday-guide-banner">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                            <div>
+                                <div class="holiday-guide-title">
+                                    <span>${current_year} 年度节假日与补班排程器</span>
+                                    <span class="holiday-guide-tag">无需手动输入日期串 · 单击标签快速切换3倍/2倍</span>
+                                </div>
+                                <div class="holiday-guide-text">
+                                    <b>操作指引</b>：选定放假起止日期后，系统自动按日切片生成每日标签。<b>直接单击日期标签</b>即可在 <span style="color:#dc2626; font-weight:700;">3倍法定 (不可倒休)</span> 与 <span style="color:#2563eb; font-weight:700;">2倍调休 (可倒休)</span> 间自由切换。
+                                </div>
                             </div>
-                            <div style="font-size:11.5px; color:#64748b; margin-top:3px;">
-                                💡 <b>操作指南</b>：选定放假起止日期后，系统自动切片生成每日胶囊。<b>直接单击日期胶囊</b>即可在 <span style="color:#dc2626; font-weight:700;">🔴 3倍法定(不可倒休)</span> 与 <span style="color:#2563eb; font-weight:700;">🔵 2倍调休(可倒休)</span> 间无缝切换！
-                            </div>
-                        </div>
 
-                        <div style="display:flex; gap:8px;">
-                            <button class="btn btn-default btn-xs" id="btn-add-holiday-card" style="font-weight:700; background:#f0fdf4; color:#166534; border-color:#bbf7d0; padding:5px 12px;">
-                                ➕ 新增节假日排程
-                            </button>
+                            <div>
+                                <button class="btn btn-default btn-xs" id="btn-add-holiday-card" style="font-weight:700; background:#f0fdf4; color:#166534; border-color:#bbf7d0; padding:5px 12px;">
+                                    + 新增节假日排程
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -130,12 +480,12 @@ function render_holiday_workbench(listview) {
                     <div id="holiday-cards-container" style="display:flex; flex-direction:column; gap:14px;"></div>
 
                     <!-- 底部保存主按钮 -->
-                    <div style="margin-top:20px; padding-top:14px; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+                    <div class="holiday-save-footer">
                         <div style="font-size:11.5px; color:#64748b;">
-                            ⚡ 保存后系统将毫秒级全自动构建 365 天日历底册、打标 300%/200% 加班倍率并同步更新全系统考勤薪酬 API
+                            保存后系统将自动构建 365 天日历底册、打标 300%/200% 加班倍率并同步更新全系统考勤薪酬 API。
                         </div>
                         <button class="btn btn-primary btn-sm" id="btn-save-configs-and-rebuild" style="font-size:12.5px; font-weight:800; background:#059669; border-color:#059669; padding:7px 24px; box-shadow:0 2px 4px rgba(5,150,105,0.2);">
-                            🚀 保存配置并全自动生成全年日历底册
+                            保存配置并生成全年日历底册
                         </button>
                     </div>
 
@@ -184,31 +534,31 @@ function render_holiday_workbench(listview) {
     function render_kpi_cards(kpis) {
         if (!kpis) return;
         let html = `
-            <div style="background:#ffffff; border:1px solid #e2e8f0; border-left:3.5px solid #3b82f6; border-radius:8px; padding:10px 14px; box-shadow:0 1px 2px rgba(0,0,0,0.02);">
-                <div style="font-size:11px; font-weight:600; color:#64748b;">📅 全年总天数</div>
-                <div style="font-size:20px; font-weight:800; color:#0f172a; margin-top:2px;">${kpis.total_days} <span style="font-size:12px; font-weight:500; color:#64748b;">天</span></div>
-                <div style="font-size:10.5px; color:#94a3b8; margin-top:1px;">自然日历基准</div>
+            <div class="holiday-kpi-card kpi-blue">
+                <div class="holiday-kpi-label">全年总天数</div>
+                <div class="holiday-kpi-val">${kpis.total_days} <span class="holiday-kpi-unit">天</span></div>
+                <div class="holiday-kpi-sub">自然日历基准</div>
             </div>
-            <div style="background:#ffffff; border:1px solid #e2e8f0; border-left:3.5px solid #10b981; border-radius:8px; padding:10px 14px; box-shadow:0 1px 2px rgba(0,0,0,0.02);">
-                <div style="font-size:11px; font-weight:600; color:#059669;">💼 应出勤工作日</div>
-                <div style="font-size:20px; font-weight:800; color:#059669; margin-top:2px;">${kpis.total_workdays} <span style="font-size:12px; font-weight:500; color:#059669;">天</span></div>
-                <div style="font-size:10.5px; color:#94a3b8; margin-top:1px;">含 ${kpis.total_shift_workdays} 天周末调休上班</div>
+            <div class="holiday-kpi-card kpi-green">
+                <div class="holiday-kpi-label" style="color:#059669;">应出勤工作日</div>
+                <div class="holiday-kpi-val" style="color:#059669;">${kpis.total_workdays} <span class="holiday-kpi-unit" style="color:#059669;">天</span></div>
+                <div class="holiday-kpi-sub">含 ${kpis.total_shift_workdays} 天周末调休上班</div>
             </div>
-            <div style="background:#ffffff; border:1px solid #e2e8f0; border-left:3.5px solid #dc2626; border-radius:8px; padding:10px 14px; box-shadow:0 1px 2px rgba(0,0,0,0.02);">
-                <div style="font-size:11px; font-weight:700; color:#dc2626; display:flex; justify-content:space-between;">
-                    <span>🔴 法定 3 倍节假日</span>
+            <div class="holiday-kpi-card kpi-red">
+                <div class="holiday-kpi-label" style="color:#dc2626;">
+                    <span>法定 3 倍节假日</span>
                     <span style="font-size:9.5px; background:#fee2e2; padding:0 4px; border-radius:4px;">不可倒休</span>
                 </div>
-                <div style="font-size:20px; font-weight:800; color:#dc2626; margin-top:2px;">${kpis.total_legal_3x_holidays} <span style="font-size:12px; font-weight:500; color:#dc2626;">天</span></div>
-                <div style="font-size:10.5px; color:#94a3b8; margin-top:1px;">国家法定节日·强制 300% 工资</div>
+                <div class="holiday-kpi-val" style="color:#dc2626;">${kpis.total_legal_3x_holidays} <span class="holiday-kpi-unit" style="color:#dc2626;">天</span></div>
+                <div class="holiday-kpi-sub">国家法定节日 · 强制 300% 工资</div>
             </div>
-            <div style="background:#ffffff; border:1px solid #e2e8f0; border-left:3.5px solid #8b5cf6; border-radius:8px; padding:10px 14px; box-shadow:0 1px 2px rgba(0,0,0,0.02);">
-                <div style="font-size:11px; font-weight:600; color:#7c3aed; display:flex; justify-content:space-between;">
-                    <span>🌴 调休与公休 (2倍)</span>
+            <div class="holiday-kpi-card kpi-purple">
+                <div class="holiday-kpi-label" style="color:#7c3aed;">
+                    <span>调休与公休 (2倍)</span>
                     <span style="font-size:9.5px; background:#f3e8ff; padding:0 4px; border-radius:4px;">可倒休</span>
                 </div>
-                <div style="font-size:20px; font-weight:800; color:#7c3aed; margin-top:2px;">${kpis.total_compensable_rest_days} <span style="font-size:12px; font-weight:500; color:#7c3aed;">天</span></div>
-                <div style="font-size:10.5px; color:#94a3b8; margin-top:1px;">双休(${kpis.total_weekend_days}) + 调休假(${kpis.total_shift_off_days})</div>
+                <div class="holiday-kpi-val" style="color:#7c3aed;">${kpis.total_compensable_rest_days} <span class="holiday-kpi-unit" style="color:#7c3aed;">天</span></div>
+                <div class="holiday-kpi-sub">双休(${kpis.total_weekend_days}) + 调休假(${kpis.total_shift_off_days})</div>
             </div>
         `;
         $wb.find('#holiday-kpi-container').html(html);
@@ -300,15 +650,15 @@ function render_holiday_workbench(listview) {
             <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,0.02);">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                     <div style="display:flex; align-items:center; gap:8px;">
-                        <button class="btn btn-default btn-xs" id="btn-prev-month" data-month="${m_data.month}">◀ 上月</button>
+                        <button class="btn btn-default btn-xs" id="btn-prev-month" data-month="${m_data.month}">上月</button>
                         <span style="font-size:15px; font-weight:800; color:#0f172a;">${current_year} 年 ${m_data.month} 月详细日历</span>
-                        <button class="btn btn-default btn-xs" id="btn-next-month" data-month="${m_data.month}">下月 ▶</button>
+                        <button class="btn btn-default btn-xs" id="btn-next-month" data-month="${m_data.month}">下月</button>
                     </div>
 
                     <div style="display:flex; align-items:center; gap:8px; font-size:11.5px; font-weight:700;">
-                        <span style="color:#059669; background:#dcfce7; padding:2px 8px; border-radius:6px;">💼 工作日 ${m_data.workdays_count} 天</span>
-                        ${m_data.legal_3x_count > 0 ? `<span style="color:#dc2626; background:#fee2e2; border:1px solid #fca5a5; padding:2px 8px; border-radius:6px;">🔴 法定3倍 ${m_data.legal_3x_count} 天(不可倒休)</span>` : ''}
-                        ${m_data.shift_off_count > 0 ? `<span style="color:#2563eb; background:#eff6ff; padding:2px 8px; border-radius:6px;">🔵 调休假 ${m_data.shift_off_count} 天(2倍)</span>` : ''}
+                        <span style="color:#059669; background:#dcfce7; padding:2px 8px; border-radius:6px;">工作日 ${m_data.workdays_count} 天</span>
+                        ${m_data.legal_3x_count > 0 ? `<span style="color:#dc2626; background:#fee2e2; border:1px solid #fca5a5; padding:2px 8px; border-radius:6px;">法定3倍 ${m_data.legal_3x_count} 天(不可倒休)</span>` : ''}
+                        ${m_data.shift_off_count > 0 ? `<span style="color:#2563eb; background:#eff6ff; padding:2px 8px; border-radius:6px;">调休假 ${m_data.shift_off_count} 天(2倍)</span>` : ''}
                         <span style="color:#64748b; background:#f1f5f9; padding:2px 8px; border-radius:6px;">公休 ${m_data.weekends_count} 天</span>
                     </div>
                 </div>
@@ -336,17 +686,17 @@ function render_holiday_workbench(listview) {
                     if (d.is_legal_holiday) {
                         bg = "#fef2f2";
                         borderColor = "#fca5a5";
-                        tagHtml = `<span style="font-size:10px; font-weight:800; color:#dc2626; background:#fee2e2; border:1px solid #fca5a5; padding:1px 5px; border-radius:4px;">🔴 ${d.holiday_name || '法定3倍'}</span>`;
+                        tagHtml = `<span style="font-size:10px; font-weight:800; color:#dc2626; background:#fee2e2; border:1px solid #fca5a5; padding:1px 5px; border-radius:4px;">${d.holiday_name || '法定3倍'}</span>`;
                         otBadge = `<span style="font-size:10px; font-weight:800; color:#dc2626;">300% (不可倒休)</span>`;
                     } else if (d.is_shift_off) {
                         bg = "#f0f9ff";
                         borderColor = "#bae6fd";
-                        tagHtml = `<span style="font-size:10px; font-weight:700; color:#0284c7; background:#e0f2fe; padding:1px 5px; border-radius:4px;">🔵 调休放假</span>`;
+                        tagHtml = `<span style="font-size:10px; font-weight:700; color:#0284c7; background:#e0f2fe; padding:1px 5px; border-radius:4px;">调休放假</span>`;
                         otBadge = `<span style="font-size:10px; font-weight:700; color:#0284c7;">200% (可倒休)</span>`;
                     } else if (d.is_shift_work) {
                         bg = "#fff7ed";
                         borderColor = "#fdba74";
-                        tagHtml = `<span style="font-size:10px; font-weight:700; color:#ea580c; background:#ffedd5; padding:1px 5px; border-radius:4px;">🟠 补班上班</span>`;
+                        tagHtml = `<span style="font-size:10px; font-weight:700; color:#ea580c; background:#ffedd5; padding:1px 5px; border-radius:4px;">补班上班</span>`;
                         otBadge = `<span style="font-size:9.5px; font-weight:700; color:#ea580c;">工作日出勤</span>`;
                     } else if (d.day_type === '周末公休(2倍工资)') {
                         bg = "#f8fafc";
@@ -397,13 +747,13 @@ function render_holiday_workbench(listview) {
         let html = `
             <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:14px; box-shadow:0 1px 2px rgba(0,0,0,0.02);">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                    <div style="font-size:13px; font-weight:700; color:#0f172a;">📋 ${current_year} 年度 365 天日历明细与法定加班薪酬/倒休对照表 (共 ${filtered.length} 条记录)</div>
+                    <div style="font-size:13px; font-weight:700; color:#0f172a;">${current_year} 年度 365 天日历明细与法定加班薪酬/倒休对照表 (共 ${filtered.length} 条记录)</div>
                     <div class="btn-group btn-group-xs" role="group">
                         <button type="button" class="btn btn-default btn-list-filter ${filter_type==='all'?'active':''}" data-filter="all" style="${filter_type==='all'?'background:#eff6ff; color:#1d4ed8; font-weight:700;':''}">全部 (365天)</button>
-                        <button type="button" class="btn btn-default btn-list-filter ${filter_type==='legal_3x'?'active':''}" data-filter="legal_3x" style="${filter_type==='legal_3x'?'background:#fee2e2; color:#dc2626; font-weight:700;':''}">🔴 法定3倍假 (${calendar_list.filter(d=>d.is_legal_holiday).length}天)</button>
-                        <button type="button" class="btn btn-default btn-list-filter ${filter_type==='shift_off'?'active':''}" data-filter="shift_off" style="${filter_type==='shift_off'?'background:#eff6ff; color:#2563eb; font-weight:700;':''}">🔵 调休放假 (${calendar_list.filter(d=>d.is_shift_off).length}天)</button>
-                        <button type="button" class="btn btn-default btn-list-filter ${filter_type==='shift_work'?'active':''}" data-filter="shift_work" style="${filter_type==='shift_work'?'background:#ffedd5; color:#ea580c; font-weight:700;':''}">🟠 调班工作日 (${calendar_list.filter(d=>d.is_shift_work).length}天)</button>
-                        <button type="button" class="btn btn-default btn-list-filter ${filter_type==='workday'?'active':''}" data-filter="workday" style="${filter_type==='workday'?'background:#f0fdf4; color:#059669; font-weight:700;':''}">💼 全部工作日 (${calendar_list.filter(d=>d.is_workday).length}天)</button>
+                        <button type="button" class="btn btn-default btn-list-filter ${filter_type==='legal_3x'?'active':''}" data-filter="legal_3x" style="${filter_type==='legal_3x'?'background:#fee2e2; color:#dc2626; font-weight:700;':''}">法定3倍假 (${calendar_list.filter(d=>d.is_legal_holiday).length}天)</button>
+                        <button type="button" class="btn btn-default btn-list-filter ${filter_type==='shift_off'?'active':''}" data-filter="shift_off" style="${filter_type==='shift_off'?'background:#eff6ff; color:#2563eb; font-weight:700;':''}">调休放假 (${calendar_list.filter(d=>d.is_shift_off).length}天)</button>
+                        <button type="button" class="btn btn-default btn-list-filter ${filter_type==='shift_work'?'active':''}" data-filter="shift_work" style="${filter_type==='shift_work'?'background:#ffedd5; color:#ea580c; font-weight:700;':''}">调班工作日 (${calendar_list.filter(d=>d.is_shift_work).length}天)</button>
+                        <button type="button" class="btn btn-default btn-list-filter ${filter_type==='workday'?'active':''}" data-filter="workday" style="${filter_type==='workday'?'background:#f0fdf4; color:#059669; font-weight:700;':''}">全部工作日 (${calendar_list.filter(d=>d.is_workday).length}天)</button>
                     </div>
                 </div>
 
@@ -431,24 +781,24 @@ function render_holiday_workbench(listview) {
 
             if (d.is_legal_holiday) {
                 trBg = "#fff5f5";
-                typeBadge = `<span style="font-weight:800; color:#dc2626; background:#fee2e2; border:1px solid #fca5a5; padding:1px 6px; border-radius:4px;">🔴 法定节假日(3倍工资)</span>`;
+                typeBadge = `<span style="font-weight:800; color:#dc2626; background:#fee2e2; border:1px solid #fca5a5; padding:1px 6px; border-radius:4px;">法定节假日 (3倍工资)</span>`;
                 otBadge = `<span style="font-weight:800; color:#dc2626; background:#fee2e2; padding:1px 6px; border-radius:4px;">300% (3倍工资)</span>`;
-                compBadge = `<span style="font-weight:800; color:#b91c1c; background:#fef2f2; border:1px solid #fecaca; padding:1px 6px; border-radius:4px;">⛔ 强制3倍·严禁倒休替代</span>`;
+                compBadge = `<span style="font-weight:800; color:#b91c1c; background:#fef2f2; border:1px solid #fecaca; padding:1px 6px; border-radius:4px;">强制3倍·严禁倒休替代</span>`;
             } else if (d.is_shift_off) {
                 trBg = "#f8fbff";
-                typeBadge = `<span style="font-weight:700; color:#0284c7; background:#e0f2fe; padding:1px 6px; border-radius:4px;">🔵 调休放假(2倍工资)</span>`;
+                typeBadge = `<span style="font-weight:700; color:#0284c7; background:#e0f2fe; padding:1px 6px; border-radius:4px;">调休放假 (2倍工资)</span>`;
                 otBadge = `<span style="font-weight:700; color:#0284c7; background:#e0f2fe; padding:1px 6px; border-radius:4px;">200% (2倍工资)</span>`;
-                compBadge = `<span style="font-weight:600; color:#059669; background:#f0fdf4; border:1px solid #bbf7d0; padding:1px 6px; border-radius:4px;">🟢 可优先安排倒休补休</span>`;
+                compBadge = `<span style="font-weight:600; color:#059669; background:#f0fdf4; border:1px solid #bbf7d0; padding:1px 6px; border-radius:4px;">可优先安排倒休补休</span>`;
             } else if (d.is_shift_work) {
                 trBg = "#fffaf5";
-                typeBadge = `<span style="font-weight:700; color:#ea580c; background:#ffedd5; padding:1px 6px; border-radius:4px;">🟠 调班工作日(补班)</span>`;
+                typeBadge = `<span style="font-weight:700; color:#ea580c; background:#ffedd5; padding:1px 6px; border-radius:4px;">调班工作日 (补班)</span>`;
                 otBadge = `<span style="font-weight:600; color:#ea580c;">100% 正常出勤计薪</span>`;
                 compBadge = `<span style="color:#64748b;">正常上班</span>`;
             } else if (d.day_type === '周末公休(2倍工资)') {
                 trBg = "#fafafa";
-                typeBadge = `<span style="font-weight:600; color:#64748b; background:#f1f5f9; padding:1px 6px; border-radius:4px;">周末公休(2倍工资)</span>`;
+                typeBadge = `<span style="font-weight:600; color:#64748b; background:#f1f5f9; padding:1px 6px; border-radius:4px;">周末公休 (2倍工资)</span>`;
                 otBadge = `<span style="color:#64748b;">200% (2倍工资)</span>`;
-                compBadge = `<span style="font-weight:600; color:#059669; background:#f0fdf4; border:1px solid #bbf7d0; padding:1px 6px; border-radius:4px;">🟢 可优先安排倒休补休</span>`;
+                compBadge = `<span style="font-weight:600; color:#059669; background:#f0fdf4; border:1px solid #bbf7d0; padding:1px 6px; border-radius:4px;">可优先安排倒休补休</span>`;
             }
 
             html += `
@@ -478,7 +828,7 @@ function render_holiday_workbench(listview) {
         if (!months) return;
         let html = `
             <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:12px 14px; box-shadow:0 1px 2px rgba(0,0,0,0.02);">
-                <div style="font-size:12px; font-weight:700; color:#0f172a; margin-bottom:8px;">📊 ${current_year} 年度各月标准出勤天数、法定3倍假与加班核算基准表</div>
+                <div style="font-size:12px; font-weight:700; color:#0f172a; margin-bottom:8px;">${current_year} 年度各月标准出勤天数、法定3倍假与加班核算基准表</div>
                 <div style="overflow-x:auto;">
                     <table class="table table-bordered table-condensed" style="margin-bottom:0; font-size:11px; text-align:center;">
                         <thead style="background:#f8fafc;">
@@ -490,22 +840,22 @@ function render_holiday_workbench(listview) {
                         </thead>
                         <tbody>
                             <tr>
-                                <td style="text-align:left; font-weight:700; color:#059669;">💼 标准应出勤工作日</td>
+                                <td style="text-align:left; font-weight:700; color:#059669;">标准应出勤工作日</td>
                                 ${months.map(m => `<td style="font-weight:700; color:#059669;">${m.workdays_count}</td>`).join('')}
                                 <td style="font-weight:800; background:#f0fdf4; color:#059669;">${months.reduce((acc, m) => acc + m.workdays_count, 0)} 天</td>
                             </tr>
                             <tr style="background:#fff5f5;">
-                                <td style="text-align:left; font-weight:700; color:#dc2626;">🔴 法定3倍节假日 (不可倒休)</td>
+                                <td style="text-align:left; font-weight:700; color:#dc2626;">法定 3 倍节假日 (不可倒休)</td>
                                 ${months.map(m => `<td style="font-weight:700; color:#dc2626;">${m.legal_3x_count}</td>`).join('')}
                                 <td style="font-weight:800; background:#fee2e2; color:#dc2626;">${months.reduce((acc, m) => acc + m.legal_3x_count, 0)} 天</td>
                             </tr>
                             <tr>
-                                <td style="text-align:left; color:#0284c7;">🔵 调休放假天数 (2倍·可倒休)</td>
+                                <td style="text-align:left; color:#0284c7;">调休放假天数 (2倍·可倒休)</td>
                                 ${months.map(m => `<td style="color:#0284c7;">${m.shift_off_count}</td>`).join('')}
                                 <td style="font-weight:700; color:#0284c7;">${months.reduce((acc, m) => acc + m.shift_off_count, 0)} 天</td>
                             </tr>
                             <tr>
-                                <td style="text-align:left; color:#64748b;">🔵 双休与公休天数 (2倍·可倒休)</td>
+                                <td style="text-align:left; color:#64748b;">双休与公休天数 (2倍·可倒休)</td>
                                 ${months.map(m => `<td style="color:#64748b;">${m.weekends_count}</td>`).join('')}
                                 <td style="font-weight:700; color:#64748b;">${months.reduce((acc, m) => acc + m.weekends_count, 0)} 天</td>
                             </tr>
@@ -518,7 +868,7 @@ function render_holiday_workbench(listview) {
     }
 
     // =========================================================================
-    // ✨ 丝滑交互式节假日卡片渲染与点选引擎
+    // 交互式节假日卡片渲染与点选引擎 (Zero-Emoji 标准企业级重构)
     // =========================================================================
 
     function get_dates_between(s_date_str, e_date_str) {
@@ -542,7 +892,7 @@ function render_holiday_workbench(listview) {
         $container.empty();
 
         if (!configs || configs.length === 0) {
-            $container.html(`<div style="text-align:center; color:#94a3b8; padding:30px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px;">暂无配置，请点击右上角“⚡ 载入国务院官方模板”或“➕ 新增节假日排程”</div>`);
+            $container.html(`<div style="text-align:center; color:#94a3b8; padding:30px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px;">暂无配置，请点击右上角“载入国务院官方模板”或“+ 新增节假日排程”</div>`);
             return;
         }
 
@@ -555,26 +905,26 @@ function render_holiday_workbench(listview) {
             let all_range_dates = get_dates_between(s_date, e_date);
 
             let $card = $(`
-                <div class="holiday-config-card" data-idx="${idx}" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:14px 16px; box-shadow:0 1px 3px rgba(0,0,0,0.03); transition:all 0.15s ease;">
+                <div class="holiday-config-card" data-idx="${idx}">
                     
-                    <!-- 卡片顶部排：序号、假期名称、起止日期、天数、删除 -->
-                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-bottom:1px solid #f1f5f9; padding-bottom:10px;">
+                    <!-- 卡片顶部排：序号、假期名称、快速选择、起止日期、统计、删除 -->
+                    <div class="holiday-card-row-top">
                         <div style="display:flex; align-items:center; gap:10px;">
-                            <span style="font-size:12px; font-weight:800; color:#1d4ed8; background:#eff6ff; width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; border-radius:50%;">
+                            <span class="holiday-card-seq">
                                 ${idx + 1}
                             </span>
                             
-                            <!-- 节假日名称快速选择/输入 -->
+                            <!-- 节假日名称输入与快速预设胶囊组 -->
                             <div style="display:flex; align-items:center; gap:6px;">
-                                <input type="text" class="form-control input-sm card-holiday-name" value="${cfg.holiday_name || ''}" placeholder="节假日名称" style="width:110px; font-weight:700; color:#0f172a; height:30px; font-size:12px;">
-                                <div class="btn-group btn-group-xs holiday-quick-picker" role="group">
-                                    <button type="button" class="btn btn-default btn-quick-hname" data-val="元旦">元旦</button>
-                                    <button type="button" class="btn btn-default btn-quick-hname" data-val="春节">春节</button>
-                                    <button type="button" class="btn btn-default btn-quick-hname" data-val="清明节">清明</button>
-                                    <button type="button" class="btn btn-default btn-quick-hname" data-val="劳动节">五一</button>
-                                    <button type="button" class="btn btn-default btn-quick-hname" data-val="端午节">端午</button>
-                                    <button type="button" class="btn btn-default btn-quick-hname" data-val="中秋节">中秋</button>
-                                    <button type="button" class="btn btn-default btn-quick-hname" data-val="国庆节">国庆</button>
+                                <input type="text" class="form-control input-sm card-holiday-name" value="${cfg.holiday_name || ''}" placeholder="节假日名称" style="width:115px; font-weight:700; color:#0f172a; height:30px; font-size:12px;">
+                                <div class="holiday-quick-picker">
+                                    <button type="button" class="btn-quick-hname" data-val="元旦">元旦</button>
+                                    <button type="button" class="btn-quick-hname" data-val="春节">春节</button>
+                                    <button type="button" class="btn-quick-hname" data-val="清明节">清明</button>
+                                    <button type="button" class="btn-quick-hname" data-val="劳动节">五一</button>
+                                    <button type="button" class="btn-quick-hname" data-val="端午节">端午</button>
+                                    <button type="button" class="btn-quick-hname" data-val="中秋节">中秋</button>
+                                    <button type="button" class="btn-quick-hname" data-val="国庆节">国庆</button>
                                 </div>
                             </div>
                         </div>
@@ -584,61 +934,61 @@ function render_holiday_workbench(listview) {
                             <div style="display:flex; align-items:center; gap:6px; font-size:12px;">
                                 <span style="font-weight:600; color:#475569;">放假区间:</span>
                                 <input type="date" class="form-control input-sm card-start-date" value="${s_date}" style="width:130px; height:30px; font-size:11.5px;">
-                                <span style="color:#94a3b8;">~</span>
+                                <span style="color:#94a3b8;">至</span>
                                 <input type="date" class="form-control input-sm card-end-date" value="${e_date}" style="width:130px; height:30px; font-size:11.5px;">
                             </div>
 
                             <!-- 假期总天数与拆分统计 Badge -->
-                            <div class="card-summary-badge" style="font-size:11.5px; font-weight:700; padding:4px 10px; border-radius:6px; background:#f8fafc; border:1px solid #cbd5e1; color:#334155;">
+                            <div class="card-summary-badge holiday-summary-badge">
                                 共 ${all_range_dates.length} 天
                             </div>
 
                             <!-- 删除按钮 -->
-                            <button class="btn btn-default btn-xs btn-del-holiday-card" style="color:#dc2626; border-color:#fca5a5; padding:3px 8px;" title="删除此假期">
-                                🗑️ 删除
+                            <button class="btn btn-default btn-xs btn-del-holiday-card" style="color:#dc2626; border-color:#fca5a5; padding:3px 10px; font-weight:600;" title="删除此假期">
+                                删除
                             </button>
                         </div>
                     </div>
 
-                    <!-- 卡片中部：放假切片点选区 (🔴 3倍 vs 🔵 2倍 一键单击切换) -->
-                    <div style="margin-top:10px; padding:8px 10px; background:#f8fafc; border-radius:6px; border:1px solid #f1f5f9;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                            <div style="font-size:11px; font-weight:700; color:#475569;">
-                                👆 <b>放假天数点选拆分</b>（单击胶囊即刻在 <span style="color:#b91c1c;">🔴 3倍法定</span> 与 <span style="color:#1d4ed8;">🔵 2倍调休</span> 间切换）：
+                    <!-- 卡片中部：放假切片点选区 (3倍法定 vs 2倍调休 一键单击切换) -->
+                    <div class="holiday-card-row-mid">
+                        <div class="holiday-chips-header">
+                            <div class="holiday-chips-label">
+                                放假天数点选拆分（点击日期标签在 <span style="color:#b91c1c;">3倍法定 (不可倒休)</span> 与 <span style="color:#1d4ed8;">2倍调休 (可倒休)</span> 间即时切换）：
                             </div>
                             <div class="btn-group btn-group-xs" role="group">
-                                <button type="button" class="btn btn-default btn-chips-all-3x" style="font-size:10px; padding:1px 6px;">全部设为3倍</button>
-                                <button type="button" class="btn btn-default btn-chips-all-2x" style="font-size:10px; padding:1px 6px;">全部设为2倍</button>
+                                <button type="button" class="btn btn-default btn-chips-all-3x" style="font-size:10.5px; padding:2px 8px;">全部设为3倍</button>
+                                <button type="button" class="btn btn-default btn-chips-all-2x" style="font-size:10.5px; padding:2px 8px;">全部设为2倍</button>
                             </div>
                         </div>
 
                         <!-- 动态胶囊列表 -->
-                        <div class="holiday-day-chips-box" style="display:flex; flex-wrap:wrap; gap:6px;">
-                            <!-- 由 update_chips_html 动态渲染 -->
+                        <div class="holiday-day-chips-box" style="display:flex; flex-wrap:wrap; gap:8px;">
+                            <!-- 由 update_card_ui 动态渲染 -->
                         </div>
                     </div>
 
-                    <!-- 卡片下部：调休补班工作日快捷管理 -->
-                    <div style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+                    <!-- 卡片下部：调休补班工作日管理与备注 -->
+                    <div class="holiday-card-row-bottom">
                         <div style="display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
-                            <span style="font-size:11px; font-weight:700; color:#ea580c; background:#fff7ed; border:1px solid #fdba74; padding:2px 6px; border-radius:4px;">
-                                🟠 调休补班(倒休上班)
+                            <span class="holiday-shift-label">
+                                调休补班 (倒休上班)
                             </span>
                             <div class="shift-work-pills-box" style="display:flex; flex-wrap:wrap; gap:4px;">
-                                <!-- 由 update_shift_pills 动态渲染 -->
+                                <!-- 由 update_card_ui 动态渲染 -->
                             </div>
                             <!-- 极速添加补班日期 -->
                             <div style="display:inline-flex; align-items:center; gap:4px;">
-                                <input type="date" class="form-control input-xs quick-add-shift-date" style="width:115px; height:24px; font-size:10.5px;">
-                                <button type="button" class="btn btn-default btn-xs btn-add-shift-pill" style="height:24px; padding:1px 6px; font-size:10.5px; font-weight:700; color:#ea580c; border-color:#fdba74; background:#fff7ed;">
+                                <input type="date" class="form-control input-xs quick-add-shift-date" style="width:120px; height:26px; font-size:11px;">
+                                <button type="button" class="btn btn-default btn-xs btn-add-shift-pill" style="height:26px; padding:2px 8px; font-size:11px; font-weight:700; color:#ea580c; border-color:#fdba74; background:#fff7ed;">
                                     + 添加补班
                                 </button>
                             </div>
                         </div>
 
                         <!-- 备注说明 -->
-                        <div style="flex:1; min-width:220px;">
-                            <input type="text" class="form-control input-xs card-remarks" value="${cfg.remarks || ''}" placeholder="备注/放假排班说明" style="height:26px; font-size:11px;">
+                        <div style="flex:1; min-width:240px;">
+                            <input type="text" class="form-control input-xs card-remarks" value="${cfg.remarks || ''}" placeholder="排班与放假说明（选填）" style="height:26px; font-size:11px;">
                         </div>
                     </div>
 
@@ -663,7 +1013,7 @@ function render_holiday_workbench(listview) {
         let shift_arr = $card.data('shift_arr') || [];
         let all_dates = get_dates_between(s_date, e_date);
 
-        // 1. 渲染放假日期交互胶囊
+        // 1. 渲染放假日期交互胶囊 (Zero-Emoji 严谨企业级风格)
         let chipsHtml = '';
         let count_3x = 0;
         let count_2x = 0;
@@ -673,17 +1023,19 @@ function render_holiday_workbench(listview) {
             if (is3x) {
                 count_3x++;
                 chipsHtml += `
-                    <div class="day-chip is-3x" data-date="${d.date}" style="cursor:pointer; user-select:none; display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:14px; font-size:11.5px; font-weight:700; background:#fee2e2; border:1.5px solid #ef4444; color:#991b1b; transition:all 0.15s ease;" title="点击切换为2倍调休假">
+                    <div class="holiday-day-chip is-3x" data-date="${d.date}" title="点击切换为2倍调休假">
+                        <span class="chip-dot"></span>
                         <span>${d.monthDay} (${d.weekday})</span>
-                        <span style="font-size:10px; background:#b91c1c; color:#ffffff; padding:0 4px; border-radius:8px;">🔴 3倍法定</span>
+                        <span class="chip-tag">3倍法定</span>
                     </div>
                 `;
             } else {
                 count_2x++;
                 chipsHtml += `
-                    <div class="day-chip is-2x" data-date="${d.date}" style="cursor:pointer; user-select:none; display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:14px; font-size:11.5px; font-weight:600; background:#eff6ff; border:1.5px solid #93c5fd; color:#1e40af; transition:all 0.15s ease;" title="点击切换为3倍法定假日">
+                    <div class="holiday-day-chip is-2x" data-date="${d.date}" title="点击切换为3倍法定假日">
+                        <span class="chip-dot"></span>
                         <span>${d.monthDay} (${d.weekday})</span>
-                        <span style="font-size:10px; background:#2563eb; color:#ffffff; padding:0 4px; border-radius:8px;">🔵 2倍调休</span>
+                        <span class="chip-tag">2倍调休</span>
                     </div>
                 `;
             }
@@ -697,24 +1049,24 @@ function render_holiday_workbench(listview) {
             let curD = new Date(sDate);
             let wDay = isNaN(curD.getDay()) ? '' : ["(周日)", "(周一)", "(周二)", "(周三)", "(周四)", "(周五)", "(周六)"][curD.getDay()];
             shiftHtml += `
-                <span class="shift-pill" data-date="${sDate}" style="display:inline-flex; align-items:center; gap:4px; padding:2px 7px; background:#ffedd5; border:1px solid #fdba74; color:#9a3412; border-radius:4px; font-size:11px; font-weight:700;">
-                    ${sDate} ${wDay}
-                    <span class="btn-remove-shift-pill" style="cursor:pointer; color:#ea580c; font-weight:800; margin-left:2px;" title="移除此补班日">✕</span>
+                <span class="holiday-shift-pill" data-date="${sDate}">
+                    <span>${sDate} ${wDay}</span>
+                    <span class="btn-remove-shift-pill" title="移除此补班日">✕</span>
                 </span>
             `;
         });
         if (shift_arr.length === 0) {
-            shiftHtml = `<span style="font-size:10.5px; color:#94a3b8;">(暂无补班)</span>`;
+            shiftHtml = `<span style="font-size:11px; color:#94a3b8;">(暂无补班)</span>`;
         }
         $card.find('.shift-work-pills-box').html(shiftHtml);
 
-        // 3. 更新统计 Badge 与自动排班说明
+        // 3. 更新统计 Badge
         let total_days = all_dates.length;
         $card.find('.card-summary-badge').html(`
             共 <b style="color:#0f172a;">${total_days}</b> 天 · 
-            <span style="color:#dc2626;">🔴 3倍法定 <b>${count_3x}</b> 天</span> · 
-            <span style="color:#2563eb;">🔵 2倍调休 <b>${count_2x}</b> 天</span> · 
-            <span style="color:#ea580c;">🟠 补班 <b>${shift_arr.length}</b> 天</span>
+            <span style="color:#dc2626;">3倍法定 <b>${count_3x}</b> 天</span> · 
+            <span style="color:#2563eb;">2倍调休 <b>${count_2x}</b> 天</span> · 
+            <span style="color:#ea580c;">调班 <b>${shift_arr.length}</b> 天</span>
         `);
     }
 
@@ -742,7 +1094,7 @@ function render_holiday_workbench(listview) {
         load_calendar_data();
         load_config_cards_data();
         listview.refresh();
-        frappe.show_alert({ message: '🔄 日历与加班倍率表已刷新', indicator: 'green' });
+        frappe.show_alert({ message: '日历与加班倍率表已刷新', indicator: 'green' });
     });
 
     // 3. 一键载入国家官方模板
@@ -752,25 +1104,17 @@ function render_holiday_workbench(listview) {
             args: { year: current_year },
             callback: function(r) {
                 render_interactive_holiday_cards(r.message || []);
-                frappe.show_alert({ message: `⚡ 已载入【${current_year}年度】国务院官方13天法定节假日与调休模板`, indicator: 'green' });
-                $wb.find('.qifu-tab-btn[data-tab="settings"]').click();
+                frappe.show_alert({ message: `已载入【${current_year}年度】国务院官方13天法定节假日与调休模板`, indicator: 'green' });
+                $wb.find('.holiday-nav-btn[data-tab="settings"]').click();
             }
         });
     });
 
     // 4. Tab 切换 (防抖零位移)
-    $wb.on('click', '.qifu-tab-btn', function() {
+    $wb.on('click', '.holiday-nav-btn', function() {
         let tab = $(this).attr('data-tab');
-        $wb.find('.qifu-tab-btn').removeClass('active').css({
-            'color': '#475569',
-            'background': 'transparent',
-            'border-bottom-color': 'transparent'
-        });
-        $(this).addClass('active').css({
-            'color': '#1d4ed8',
-            'background': '#eff6ff',
-            'border-bottom-color': '#2563eb'
-        });
+        $wb.find('.holiday-nav-btn').removeClass('active');
+        $(this).addClass('active');
 
         $wb.find('.holiday-tab-pane').hide();
         $wb.find(`#tab-content-${tab}`).show();
@@ -847,11 +1191,11 @@ function render_holiday_workbench(listview) {
     });
 
     // =========================================================================
-    // ✨ 丝滑点选卡片内交互操作
+    // 节假日卡片内交互操作
     // =========================================================================
 
-    // 9. 单击日期胶囊：在 🔴 3倍 与 🔵 2倍 间切换
-    $wb.on('click', '.day-chip', function() {
+    // 9. 单击日期胶囊：在 3倍法定 与 2倍调休 间切换
+    $wb.on('click', '.holiday-day-chip', function() {
         let $chip = $(this);
         let $card = $chip.closest('.holiday-config-card');
         let dStr = $chip.attr('data-date');
@@ -917,7 +1261,7 @@ function render_holiday_workbench(listview) {
     // 14. 移除补班日
     $wb.on('click', '.btn-remove-shift-pill', function(e) {
         e.stopPropagation();
-        let $pill = $(this).closest('.shift-pill');
+        let $pill = $(this).closest('.holiday-shift-pill');
         let $card = $pill.closest('.holiday-config-card');
         let dStr = $pill.attr('data-date');
         let shift_arr = $card.data('shift_arr') || [];
@@ -945,7 +1289,7 @@ function render_holiday_workbench(listview) {
         $(this).closest('.holiday-config-card').remove();
         // 重新编号
         $wb.find('.holiday-config-card').each(function(i) {
-            $(this).find('span:first').text(i + 1);
+            $(this).find('.holiday-card-seq').text(i + 1);
         });
     });
 
@@ -994,7 +1338,7 @@ function render_holiday_workbench(listview) {
             callback: function(r) {
                 if (r.message && r.message.success) {
                     frappe.show_alert({ message: r.message.message, indicator: 'green' });
-                    $wb.find('.qifu-tab-btn[data-tab="calendar"]').click();
+                    $wb.find('.holiday-nav-btn[data-tab="calendar"]').click();
                     load_calendar_data();
                     listview.refresh();
                 }
