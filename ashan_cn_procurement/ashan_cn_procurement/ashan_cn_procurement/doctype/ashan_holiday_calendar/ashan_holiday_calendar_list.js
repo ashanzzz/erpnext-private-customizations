@@ -356,9 +356,12 @@ function render_holiday_workbench(listview) {
             <!-- 1. 顶部 Header 统一控制栏 -->
             <div class="holiday-header-bar">
                 <div>
-                    <div style="display:flex; align-items:center; gap:8px;">
+                    <div style="display:flex; align-items:center; flex-wrap:wrap; gap:8px;">
                         <span class="holiday-header-title">法定日历与节假日综合中枢</span>
                         <span class="holiday-header-badge">国务院放假办法 · 3倍/2倍加班与倒休合规</span>
+                        <a href="https://www.gov.cn/zhengce/zhengceku/202411/content_6986381.htm" target="_blank" class="holiday-gov-link" title="点击打开中国政府网查看《国务院关于修改〈全国年节及纪念日放假办法〉的决定》官方原文" style="font-size:11px; font-weight:600; color:#1d4ed8; background:#eff6ff; border:1px solid #bfdbfe; padding:2px 8px; border-radius:6px; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+                            国务院关于修改《全国年节及纪念日放假办法》的决定 ↗
+                        </a>
                     </div>
                     <div class="holiday-header-sub">法定3倍工资日强制不可倒休 · 调休/公休2倍工资可倒休 · 年/月/列表三视图全景联动</div>
                 </div>
@@ -954,11 +957,6 @@ function render_holiday_workbench(listview) {
                                 </button>
                             </div>
                         </div>
-
-                        <!-- 备注说明 -->
-                        <div style="flex:1; min-width:240px;">
-                            <input type="text" class="form-control input-xs card-remarks" value="${cfg.remarks || ''}" placeholder="排班与放假说明（选填）" style="height:26px; font-size:11px;">
-                        </div>
                     </div>
 
                 </div>
@@ -1265,7 +1263,7 @@ function render_holiday_workbench(listview) {
             let e_date = $card.find('.card-end-date').val();
             let legal_set = $card.data('legal_set') || new Set();
             let shift_arr = $card.data('shift_arr') || [];
-            let remarks = $card.find('.card-remarks').val();
+            let remarks = $card.find('.card-remarks').val() || "";
 
             if (hname && s_date && e_date) {
                 configs.push({

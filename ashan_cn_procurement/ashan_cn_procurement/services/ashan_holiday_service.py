@@ -23,7 +23,7 @@ NATIONAL_HOLIDAY_TEMPLATES = {
 			"legal_holiday_dates": "2026-01-01",
 			"legal_days_count": 1,
 			"shift_work_dates": "2026-01-04",
-			"remarks": "1月1日(周四)至3日(周六)放假调休共3天。1月1日为法定3倍工资日(不可倒休)。1月4日(周日)上班。"
+			"remarks": ""
 		},
 		{
 			"holiday_name": "春节",
@@ -33,7 +33,7 @@ NATIONAL_HOLIDAY_TEMPLATES = {
 			"legal_holiday_dates": "2026-02-15, 2026-02-16, 2026-02-17, 2026-02-18",
 			"legal_days_count": 4,
 			"shift_work_dates": "2026-02-08, 2026-02-28",
-			"remarks": "2月15日(农历除夕)至23日(初七)放假共9天。2月15~18日(除夕至初三)为法定3倍工资日(不可倒休)。2月8日(周日)、28日(周六)上班。"
+			"remarks": ""
 		},
 		{
 			"holiday_name": "清明节",
@@ -43,7 +43,7 @@ NATIONAL_HOLIDAY_TEMPLATES = {
 			"legal_holiday_dates": "2026-04-05",
 			"legal_days_count": 1,
 			"shift_work_dates": "",
-			"remarks": "4月4日(周六)至4月6日(周一)放假，与周末连休共3天。4月5日(清明当日)为法定3倍工资日(不可倒休)。"
+			"remarks": ""
 		},
 		{
 			"holiday_name": "劳动节",
@@ -53,7 +53,7 @@ NATIONAL_HOLIDAY_TEMPLATES = {
 			"legal_holiday_dates": "2026-05-01, 2026-05-02",
 			"legal_days_count": 2,
 			"shift_work_dates": "2026-04-26, 2026-05-09",
-			"remarks": "5月1日(周五)至5月5日(周二)放假调休共5天。5月1日、5月2日为法定3倍工资日(不可倒休)。4月26日(周日)、5月9日(周六)上班。"
+			"remarks": ""
 		},
 		{
 			"holiday_name": "端午节",
@@ -63,7 +63,7 @@ NATIONAL_HOLIDAY_TEMPLATES = {
 			"legal_holiday_dates": "2026-06-19",
 			"legal_days_count": 1,
 			"shift_work_dates": "",
-			"remarks": "6月19日(周五)至6月21日(周日)放假，与周末连休共3天。6月19日(端午当日)为法定3倍工资日(不可倒休)。"
+			"remarks": ""
 		},
 		{
 			"holiday_name": "中秋节",
@@ -73,7 +73,7 @@ NATIONAL_HOLIDAY_TEMPLATES = {
 			"legal_holiday_dates": "2026-09-25",
 			"legal_days_count": 1,
 			"shift_work_dates": "",
-			"remarks": "9月25日(周五)至9月27日(周日)放假，与周末连休共3天。9月25日(中秋当日)为法定3倍工资日(不可倒休)。"
+			"remarks": ""
 		},
 		{
 			"holiday_name": "国庆节",
@@ -83,7 +83,7 @@ NATIONAL_HOLIDAY_TEMPLATES = {
 			"legal_holiday_dates": "2026-10-01, 2026-10-02, 2026-10-03",
 			"legal_days_count": 3,
 			"shift_work_dates": "2026-09-20, 2026-10-10",
-			"remarks": "10月1日(周四)至10月7日(周三)放假调休共7天。10月1~3日为法定3倍工资日(不可倒休)。9月20日(周日)、10月10日(周六)上班。"
+			"remarks": ""
 		}
 	],
 	2025: [
