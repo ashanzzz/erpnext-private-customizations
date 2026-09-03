@@ -5,7 +5,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
         single_column: true
     });
 
-    let COMPANY = "";
+    let COMPANY = "天津祺富机械加工有限公司";
     const initial_today = (frappe.datetime && frappe.datetime.get_today) ? frappe.datetime.get_today() : new Date().toISOString().slice(0, 10);
     // 薪资工作台核定账期默认取【上一个自然月】：8月打开应默认处理7月账单
     // 当月账期尚未到期，不应作为默认核定月份
@@ -5527,9 +5527,14 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
             method: "ashan_cn_procurement.services.authorization_service.get_module_company_options",
             args: { module: "payroll" },
             callback: function(r) {
-                const companies = r.message || [];
+                let companies = r.message || [];
+                // 铁律：祺富工作台严格物理隔离，仅承载祺富主体，绝对杜绝混入吉众
+                const qifu_companies = companies.filter(c => c.includes("祺富"));
+                if (qifu_companies.length) {
+                    companies = qifu_companies;
+                }
                 if (!companies.length) {
-                    frappe.msgprint("当前账号未获授任何公司范围，无法加载薪酬数据。");
+                    frappe.msgprint("当前账号未获授祺富公司权限，无法加载薪酬数据。");
                     return;
                 }
                 const $companySelect = $("#qifu-company-select");
@@ -5539,7 +5544,7 @@ frappe.pages['qifu-hr-salary-workbench'].on_page_load = function(wrapper) {
                         `<option value="${frappe.utils.escape_html(company)}">${frappe.utils.escape_html(company)}</option>`
                     );
                 });
-                COMPANY = companies[0];
+                COMPANY = companies.includes("天津祺富机械加工有限公司") ? "天津祺富机械加工有限公司" : (companies[0] || "天津祺富机械加工有限公司");
                 $companySelect.val(COMPANY);
                 $("#qifu-company-title").text(`${COMPANY} · 人事薪酬综合中枢`);
                 init_workbench_with_billing_period();
