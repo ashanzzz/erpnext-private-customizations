@@ -438,6 +438,44 @@ def calculate_jizhong_monthly_payroll(company="天津吉众科技有限公司", 
 	}
 
 
+@frappe.whitelist(methods=["POST"])
+def lock_jizhong_monthly_payroll(company="天津吉众科技有限公司", period_month=None):
+	"""
+	核定锁定吉众月度薪酬核定表 (只读封账)
+	"""
+	if not period_month:
+		frappe.throw("必须指定核算月份")
+	doc_name = f"{company}-{period_month}"
+	if not frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
+		frappe.throw(f"未找到【{company}】{period_month} 的薪酬核算记录，无法执行封账！")
+
+	frappe.db.set_value("Ashan Monthly Payroll Settlement", doc_name, {
+		"locked": 1,
+		"status": "已核定锁定"
+	})
+	frappe.db.commit()
+	return {"success": True, "message": f"【{company}】{period_month} 薪酬已成功核定并锁定（只读封账）！"}
+
+
+@frappe.whitelist(methods=["POST"])
+def unlock_jizhong_monthly_payroll(company="天津吉众科技有限公司", period_month=None, reason=""):
+	"""
+	反审核解锁吉众月度薪酬核定表
+	"""
+	if not period_month:
+		frappe.throw("必须指定核算月份")
+	doc_name = f"{company}-{period_month}"
+	if not frappe.db.exists("Ashan Monthly Payroll Settlement", doc_name):
+		frappe.throw(f"未找到【{company}】{period_month} 的薪酬核算记录！")
+
+	frappe.db.set_value("Ashan Monthly Payroll Settlement", doc_name, {
+		"locked": 0,
+		"status": "草稿"
+	})
+	frappe.db.commit()
+	return {"success": True, "message": f"【{company}】{period_month} 薪酬已成功解锁，可重新测算！"}
+
+
 def _get_jizhong_tax_history(company, current_period, tax_cycle_start_month=12):
 	"""
 	从以往已归档/核定的结算单或历史数据中，提取该税收周期内的累计发生数

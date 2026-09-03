@@ -825,6 +825,57 @@ frappe.pages['jizhong-hr-salary-workbench'].on_page_load = function(wrapper) {
         });
     });
 
+    // 核定锁定 (只读封账)
+    $('#btn-jz-lock-payroll').on('click', function() {
+        frappe.confirm(
+            `确定要对【${COMPANY}】${current_month} 月度工资进行最终核定并封账锁定吗？<br><small class="text-muted">锁定后数据将处于只读保护状态，并作为下月算税的历史累计依据。</small>`,
+            function() {
+                frappe.call({
+                    method: 'ashan_cn_procurement.services.jizhong_payroll_service.lock_jizhong_monthly_payroll',
+                    args: { company: COMPANY, period_month: current_month },
+                    callback: function(r) {
+                        if (r.message && r.message.success) {
+                            frappe.show_alert({ message: r.message.message, indicator: 'green' });
+                            load_payroll_data();
+                        }
+                    }
+                });
+            }
+        );
+    });
+
+    // 申请反审核解锁
+    $('#btn-jz-unlock-payroll').on('click', function() {
+        frappe.prompt(
+            [
+                {
+                    fieldname: 'reason',
+                    fieldtype: 'Small Text',
+                    label: '反审核解锁原因 (必填)',
+                    reqd: 1
+                }
+            ],
+            function(vals) {
+                frappe.call({
+                    method: 'ashan_cn_procurement.services.jizhong_payroll_service.unlock_jizhong_monthly_payroll',
+                    args: {
+                        company: COMPANY,
+                        period_month: current_month,
+                        reason: vals.reason
+                    },
+                    callback: function(r) {
+                        if (r.message && r.message.success) {
+                            frappe.show_alert({ message: r.message.message, indicator: 'orange' });
+                            load_payroll_data();
+                        }
+                    }
+                });
+            },
+            `申请反审核解锁 (${current_month})`,
+            '确认解锁'
+        );
+    });
+
     // 2. 加载考勤工时管理
     let attendance_cache = [];
     function load_attendance_data() {
