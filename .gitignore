@@ -21,6 +21,12 @@ temp_screenshots/
 scripts/extracted_*_seed_data.json
 scripts/extracted_vba_macros.txt
 extracted_*
+scripts/jizhong_history_records.json
+scripts/jizhong_db_dump.json
+scripts/parsed_excel_profiles.json
+scripts/jizhong_2026_07_attendance_preview.json
+scripts/jizhong_excel_analysis.txt
+scripts/jizhong_vba_deep_dive.txt
 
 # Python bytecode and caches
 __pycache__/
